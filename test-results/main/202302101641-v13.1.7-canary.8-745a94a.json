@@ -1,0 +1,3108 @@
+{
+  "ref": "1dc67eb5a33174dcbe6cf3a2d3fc727ee268183a",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676044769665,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:47:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "styled-components SWC transform should not have hydration mismatch with styled-components transform enabled",
+                "location": null,
+                "status": "failed",
+                "title": "should not have hydration mismatch with styled-components transform enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should render the page with correct styles",
+                "location": null,
+                "status": "passed",
+                "title": "should render the page with correct styles"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-a79e208ba449ffb19bdb44577ad084ebc91582103909d88423b65bcadf70375b/.next/static/chunks/pages/index.js'"
+                ],
+                "fullName": "styled-components SWC transform should enable the display name transform by default",
+                "location": null,
+                "status": "failed",
+                "title": "should enable the display name transform by default"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should contain styles in initial HTML",
+                "location": null,
+                "status": "passed",
+                "title": "should contain styles in initial HTML"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:98:7)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "styled-components SWC transform should only render once on the server per request",
+                "location": null,
+                "status": "failed",
+                "title": "should only render once on the server per request"
+              }
+            ],
+            "endTime": 1676044824407,
+            "message": "  ● styled-components SWC transform › should not have hydration mismatch with styled-components transform enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      45 |\n      46 |       // Try 4 times to be sure there is no mismatch\n    > 47 |       expect(await matchLogs$(browser)).toBe(false)\n         |                                         ^\n      48 |       await browser.refresh()\n      49 |       expect(await matchLogs$(browser)).toBe(false)\n      50 |       await browser.refresh()\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:47:41)\n\n  ● styled-components SWC transform › should enable the display name transform by default\n\n    ENOENT: no such file or directory, open '/tmp/next-install-a79e208ba449ffb19bdb44577ad084ebc91582103909d88423b65bcadf70375b/.next/static/chunks/pages/index.js'\n\n\n\n  ● styled-components SWC transform › should only render once on the server per request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n       96 |     expect(\n       97 |       outputs.filter((output) => output.trim() === '__render__').length\n    >  98 |     ).toBe(1)\n          |       ^\n       99 |   })\n      100 | })\n      101 |\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:98:7)\n",
+            "name": "/work/test/development/basic/styled-components.test.ts",
+            "startTime": 1676044769764,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-matcher/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 7,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045314112,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not include edge api routes and edge ssr routes into dev middleware manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should not include edge api routes and edge ssr routes into dev middleware manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should sort edge SSR routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should sort edge SSR routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be able to navigate between edge SSR routes without any errors",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to navigate between edge SSR routes without any errors"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssr rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssr rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssg rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssg rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to static rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to static rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not consume server.js file extension",
+                "location": null,
+                "status": "passed",
+                "title": "should not consume server.js file extension"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-3c190bd54b7b8b904bf2c6a23f2ed1f179a7b9af4bae8ef174e9fb8007d84d87/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Switchable runtime Switchable runtime (dev) should build /api/hello and /api/edge as an api route with edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should build /api/hello and /api/edge as an api route with edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in API routes",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in API routes"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in pages",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes with same content",
+                "location": null,
+                "status": "pending",
+                "title": "should be possible to switch between runtimes with same content"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should recover from syntax error when using edge runtime",
+                "location": null,
+                "status": "pending",
+                "title": "should recover from syntax error when using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not crash the dev server when invalid runtime is configured",
+                "location": null,
+                "status": "pending",
+                "title": "should not crash the dev server when invalid runtime is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should give proper errors for invalid runtime in app dir",
+                "location": null,
+                "status": "pending",
+                "title": "should give proper errors for invalid runtime in app dir"
+              }
+            ],
+            "endTime": 1676045352260,
+            "message": "  ● Switchable runtime › Switchable runtime (dev) › should build /api/hello and /api/edge as an api route with edge runtime\n\n    ENOENT: no such file or directory, open '/tmp/next-install-3c190bd54b7b8b904bf2c6a23f2ed1f179a7b9af4bae8ef174e9fb8007d84d87/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/switchable-runtime/index.test.ts",
+            "startTime": 1676045314225,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/repeated-slashes/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 43,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 48,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 8,
+          "total": 8,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045412421,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Import from node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Import from node_modules should fail the build",
+                "location": null,
+                "status": "passed",
+                "title": "should fail the build"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (dev) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (prod) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (prod) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should not execute scripts in any order",
+                "location": null,
+                "status": "passed",
+                "title": "should not execute scripts in any order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should have the correct color (css ordering) during hot reloads",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering) during hot reloads"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (prod) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (prod) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Property Ordering"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Property Ordering should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Property Ordering"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Property Ordering should have the border width (property ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the border width (property ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should've compiled and prefixed",
+                "location": null,
+                "status": "passed",
+                "title": "should've compiled and prefixed"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should've emitted a source map",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a source map"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should've compiled and prefixed",
+                "location": null,
+                "status": "passed",
+                "title": "should've compiled and prefixed"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should've emitted a source map",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a source map"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should not change color on hover",
+                "location": null,
+                "status": "passed",
+                "title": "should not change color on hover"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct CSS injection order",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct CSS injection order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(255, 0, 0)\"\nReceived: \"rgb(0, 0, 0)\"\n    at checkRedTitle (/work/test/integration/css/test/group-2.test.js:509:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:601:11)"
+                ],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(255, 0, 0)\"\nReceived: \"rgb(0, 0, 0)\"\n    at checkRedTitle (/work/test/integration/css/test/group-2.test.js:509:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:614:11)"
+                ],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should not change color on hover",
+                "location": null,
+                "status": "passed",
+                "title": "should not change color on hover"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct CSS injection order",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct CSS injection order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Cleanup on Render Failure",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Cleanup on Render Failure Production Mode not have intermediary page styles on error rendering",
+                "location": null,
+                "status": "passed",
+                "title": "not have intermediary page styles on error rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page reload on CSS missing",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page reload on CSS missing Production Mode should fall back to server-side transition on missing CSS",
+                "location": null,
+                "status": "passed",
+                "title": "should fall back to server-side transition on missing CSS"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should hydrate black without dependencies manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should hydrate black without dependencies manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should hydrate red without dependencies manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should hydrate red without dependencies manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should route from black to red without dependencies",
+                "location": null,
+                "status": "passed",
+                "title": "should route from black to red without dependencies"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:905:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:914:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:926:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on nav)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on nav)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "should handle unresolved files gracefully"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support should handle unresolved files gracefully should build correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should build correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "should handle unresolved files gracefully"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support should handle unresolved files gracefully should have correct file references in CSS output",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct file references in CSS output"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Data URLs"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Data URLs should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Data URLs"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Data URLs should have emitted expected files",
+                "location": null,
+                "status": "passed",
+                "title": "should have emitted expected files"
+              }
+            ],
+            "endTime": 1676045815029,
+            "message": "  ● CSS Support › CSS Modules Composes Ordering › Development Mode › should have correct color on index page (on nav from index)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(255, 0, 0)\"\n    Received: \"rgb(0, 0, 0)\"\n\n      507 |           `window.getComputedStyle(document.querySelector('#red-title')).color`\n      508 |         )\n    > 509 |         expect(titleColor).toBe('rgb(255, 0, 0)')\n          |                            ^\n      510 |       }\n      511 |\n      512 |       it('should have correct color on index page (on load)', async () => {\n\n      at checkRedTitle (integration/css/test/group-2.test.js:509:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:601:11)\n\n  ● CSS Support › CSS Modules Composes Ordering › Development Mode › should have correct color on index page (on nav from other)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(255, 0, 0)\"\n    Received: \"rgb(0, 0, 0)\"\n\n      507 |           `window.getComputedStyle(document.querySelector('#red-title')).color`\n      508 |         )\n    > 509 |         expect(titleColor).toBe('rgb(255, 0, 0)')\n          |                            ^\n      510 |       }\n      511 |\n      512 |       it('should have correct color on index page (on load)', async () => {\n\n      at checkRedTitle (integration/css/test/group-2.test.js:509:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:614:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on load)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:905:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on hover)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:914:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on nav)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:926:11)\n",
+            "name": "/work/test/integration/css/test/group-2.test.js",
+            "startTime": 1676045412522,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676044975879,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676045072716,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676044975973,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045826052,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\n       Process output:········\n       Process error output:\n       file:///tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/.next/build/next_config/load-next-config.js:3\n       require(\\\"./chunks/load-next-config.js\\\");\n       ^········\n       ReferenceError: require is not defined in ES module scope, you can use import instead\n       This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n           at file:///tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/.next/build/next_config/load-next-config.js:3:1\n           at ModuleJob.run (node:internal/modules/esm/module_job:193:25)\n           at async Promise.all (index 0)\n           at async ESMLoader.import (node:internal/modules/esm/loader:530:24)\n           at async loadESM (node:internal/process/esm_loader:91:5)\n           at async handleMainPromise (node:internal/modules/run_main:65:12)\n       \"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1676045846885,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\n           Process output:········\n           Process error output:\n           file:///tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/.next/build/next_config/load-next-config.js:3\n           require(\\\"./chunks/load-next-config.js\\\");\n           ^········\n           ReferenceError: require is not defined in ES module scope, you can use import instead\n           This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n\n      at ../file:/tmp/next-install-94443c955a00d92cbd1902f5b96096565f359baf1946ca08a4b562b4ac792e20/.next/build/next_config/load-next-config.js:3:1\n                 at async Promise.all (index 0)\n             \"\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1676045826144,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/custom-routes-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 37,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 42,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676046788626,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can print telemetry status",
+                "location": null,
+                "status": "passed",
+                "title": "can print telemetry status"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-enable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-enable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-disable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-disable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with env NEXT_TELEMETRY_DISABLED",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with env NEXT_TELEMETRY_DISABLED"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects isSrcDir dir correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits event when swc fails to load",
+                "location": null,
+                "status": "passed",
+                "title": "emits event when swc fails to load"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI logs completed `next build` with warnings",
+                "location": null,
+                "status": "passed",
+                "title": "logs completed `next build` with warnings"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects tests correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects tests correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects correct cli session defaults",
+                "location": null,
+                "status": "passed",
+                "title": "detects correct cli session defaults"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: babel tooling config",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: babel tooling config"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: package.json custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: package.json custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (preset)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (preset)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: next config with webpack",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: next config with webpack"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect static 404 correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect static 404 correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect page counts correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect page counts correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /isSrcDir.*?false/\nReceived string:  \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 40497 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:389:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects isSrcDir dir correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:460:15)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 33207 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:488:7)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev` stopped",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev` stopped"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 43299 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:527:7)"
+                ],
+                "fullName": "Telemetry CLI detects correctly for `next dev` stopped (no turbo)",
+                "location": null,
+                "status": "failed",
+                "title": "detects correctly for `next dev` stopped (no turbo)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI should detect app page counts",
+                "location": null,
+                "status": "passed",
+                "title": "should detect app page counts"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect reportWebVitals correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect reportWebVitals correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects rewrites, headers, and redirects for next build",
+                "location": null,
+                "status": "passed",
+                "title": "detects rewrites, headers, and redirects for next build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:761:13)"
+                ],
+                "fullName": "Telemetry CLI detects i18n and image configs for session start",
+                "location": null,
+                "status": "failed",
+                "title": "detects i18n and image configs for session start"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when '--no-lint' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when '--no-lint' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when 'ignoreDuringBuilds' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when 'ignoreDuringBuilds' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for `next lint`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for `next lint`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemery for usage of optimizeFonts, image, script & dynamic",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemery for usage of optimizeFonts, image, script & dynamic"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `optimizeCss`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `optimizeCss`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `nextScriptWorkers`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `nextScriptWorkers`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of middleware",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc plugins",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc plugins"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of next/legacy/image",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of next/legacy/image"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of @vercel/og",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of @vercel/og"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for transpilePackages",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for transpilePackages"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for middleware related options",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for middleware related options"
+              }
+            ],
+            "endTime": 1676047139977,
+            "message": "  ● Telemetry CLI › detects isSrcDir dir correctly for `next dev`\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /isSrcDir.*?false/\n    Received string:  \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 40497 --root /work --no-open]\n    \"\n\n      387 |     await waitFor(1000)\n      388 |     await killApp(app)\n    > 389 |     expect(stderr).toMatch(/isSrcDir.*?false/)\n          |                    ^\n      390 |\n      391 |     await fs.move(path.join(appDir, 'pages'), path.join(appDir, 'src/pages'))\n      392 |     stderr = ''\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:389:20)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev`\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      458 |       }\n      459 |       const event1 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 460 |         .exec(stderr)\n          |               ^\n      461 |         .pop()\n      462 |\n      463 |       expect(event1).toMatch(/\"pagesDir\": true/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:460:15)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev` stopped\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 33207 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:488:7)\n\n  ● Telemetry CLI › detects correctly for `next dev` stopped (no turbo)\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 43299 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:527:7)\n\n  ● Telemetry CLI › detects i18n and image configs for session start\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      759 |\n      760 |     const event2 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 761 |       .exec(stderr2)\n          |             ^\n      762 |       .pop()\n      763 |     expect(event2).toMatch(/\"i18nEnabled\": true/)\n      764 |     expect(event2).toMatch(/\"locales\": \"en,nl,fr\"/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:761:13)\n",
+            "name": "/work/test/integration/telemetry/test/index.test.js",
+            "startTime": 1676046788720,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676044724473,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:47:41)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "styled-components SWC transform should not have hydration mismatch with styled-components transform enabled",
+                "location": null,
+                "status": "failed",
+                "title": "should not have hydration mismatch with styled-components transform enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should render the page with correct styles",
+                "location": null,
+                "status": "passed",
+                "title": "should render the page with correct styles"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-8d2eb8503ad2617d7b5b010a6edb3a4402e47594c1b5428cf2d2b30493ee2e8d/.next/static/chunks/pages/index.js'"
+                ],
+                "fullName": "styled-components SWC transform should enable the display name transform by default",
+                "location": null,
+                "status": "failed",
+                "title": "should enable the display name transform by default"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should contain styles in initial HTML",
+                "location": null,
+                "status": "passed",
+                "title": "should contain styles in initial HTML"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:98:7)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "styled-components SWC transform should only render once on the server per request",
+                "location": null,
+                "status": "failed",
+                "title": "should only render once on the server per request"
+              }
+            ],
+            "endTime": 1676044780215,
+            "message": "  ● styled-components SWC transform › should not have hydration mismatch with styled-components transform enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      45 |\n      46 |       // Try 4 times to be sure there is no mismatch\n    > 47 |       expect(await matchLogs$(browser)).toBe(false)\n         |                                         ^\n      48 |       await browser.refresh()\n      49 |       expect(await matchLogs$(browser)).toBe(false)\n      50 |       await browser.refresh()\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:47:41)\n\n  ● styled-components SWC transform › should enable the display name transform by default\n\n    ENOENT: no such file or directory, open '/tmp/next-install-8d2eb8503ad2617d7b5b010a6edb3a4402e47594c1b5428cf2d2b30493ee2e8d/.next/static/chunks/pages/index.js'\n\n\n\n  ● styled-components SWC transform › should only render once on the server per request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n       96 |     expect(\n       97 |       outputs.filter((output) => output.trim() === '__render__').length\n    >  98 |     ).toBe(1)\n          |       ^\n       99 |   })\n      100 | })\n      101 |\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:98:7)\n",
+            "name": "/work/test/development/basic/styled-components.test.ts",
+            "startTime": 1676044724573,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-matcher/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 7,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045278719,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not include edge api routes and edge ssr routes into dev middleware manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should not include edge api routes and edge ssr routes into dev middleware manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should sort edge SSR routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should sort edge SSR routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be able to navigate between edge SSR routes without any errors",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to navigate between edge SSR routes without any errors"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssr rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssr rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssg rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssg rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to static rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to static rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not consume server.js file extension",
+                "location": null,
+                "status": "passed",
+                "title": "should not consume server.js file extension"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-38de920d099391daa40eb59ff3be62ecd6ddf1457d2fd6edd60fcfefcec76c6b/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Switchable runtime Switchable runtime (dev) should build /api/hello and /api/edge as an api route with edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should build /api/hello and /api/edge as an api route with edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in API routes",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in API routes"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in pages",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes with same content",
+                "location": null,
+                "status": "pending",
+                "title": "should be possible to switch between runtimes with same content"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should recover from syntax error when using edge runtime",
+                "location": null,
+                "status": "pending",
+                "title": "should recover from syntax error when using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not crash the dev server when invalid runtime is configured",
+                "location": null,
+                "status": "pending",
+                "title": "should not crash the dev server when invalid runtime is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should give proper errors for invalid runtime in app dir",
+                "location": null,
+                "status": "pending",
+                "title": "should give proper errors for invalid runtime in app dir"
+              }
+            ],
+            "endTime": 1676045317074,
+            "message": "  ● Switchable runtime › Switchable runtime (dev) › should build /api/hello and /api/edge as an api route with edge runtime\n\n    ENOENT: no such file or directory, open '/tmp/next-install-38de920d099391daa40eb59ff3be62ecd6ddf1457d2fd6edd60fcfefcec76c6b/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/switchable-runtime/index.test.ts",
+            "startTime": 1676045278828,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/repeated-slashes/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 43,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 48,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 8,
+          "total": 8,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045377008,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Import from node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Import from node_modules should fail the build",
+                "location": null,
+                "status": "passed",
+                "title": "should fail the build"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (dev) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (prod) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with styled-jsx (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with styled-jsx (prod) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should not execute scripts in any order",
+                "location": null,
+                "status": "passed",
+                "title": "should not execute scripts in any order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (dev) should have the correct color (css ordering) during hot reloads",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering) during hot reloads"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (prod) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Ordering with Global CSS and Modules (prod)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Ordering with Global CSS and Modules (prod) should have the correct color (css ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the correct color (css ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Property Ordering"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Property Ordering should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Property Ordering"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Property Ordering should have the border width (property ordering)",
+                "location": null,
+                "status": "passed",
+                "title": "should have the border width (property ordering)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should've compiled and prefixed",
+                "location": null,
+                "status": "passed",
+                "title": "should've compiled and prefixed"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic Tailwind CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic Tailwind CSS should've emitted a source map",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a source map"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should've compiled and prefixed",
+                "location": null,
+                "status": "passed",
+                "title": "should've compiled and prefixed"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Tailwind and Purge CSS"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Tailwind and Purge CSS should've emitted a source map",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a source map"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should not change color on hover",
+                "location": null,
+                "status": "passed",
+                "title": "should not change color on hover"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct CSS injection order",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct CSS injection order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS page transition inject <style> with nonce so it works with CSP header",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS page transition inject <style> with nonce so it works with CSP header Production Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(255, 0, 0)\"\nReceived: \"rgb(0, 0, 0)\"\n    at checkRedTitle (/work/test/integration/css/test/group-2.test.js:509:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:601:11)"
+                ],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(255, 0, 0)\"\nReceived: \"rgb(0, 0, 0)\"\n    at checkRedTitle (/work/test/integration/css/test/group-2.test.js:509:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:614:11)"
+                ],
+                "fullName": "CSS Support CSS Modules Composes Ordering Development Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should not change color on hover",
+                "location": null,
+                "status": "passed",
+                "title": "should not change color on hover"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct CSS injection order",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct CSS injection order"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on nav from index)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from index)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Modules Composes Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Modules Composes Ordering Production Mode should have correct color on index page (on nav from other)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav from other)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "CSS Cleanup on Render Failure",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support CSS Cleanup on Render Failure Production Mode not have intermediary page styles on error rendering",
+                "location": null,
+                "status": "passed",
+                "title": "not have intermediary page styles on error rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page reload on CSS missing",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page reload on CSS missing Production Mode should fall back to server-side transition on missing CSS",
+                "location": null,
+                "status": "passed",
+                "title": "should fall back to server-side transition on missing CSS"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should hydrate black without dependencies manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should hydrate black without dependencies manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should hydrate red without dependencies manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should hydrate red without dependencies manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Page hydrates with CSS and not waiting on dependencies",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Page hydrates with CSS and not waiting on dependencies Production Mode should route from black to red without dependencies",
+                "location": null,
+                "status": "passed",
+                "title": "should route from black to red without dependencies"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:905:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:914:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Development Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"rgb(0, 255, 0)\"\nReceived: \"rgb(255, 105, 180)\"\n    at checkGreenButton (/work/test/integration/css/test/group-2.test.js:892:28)\n    at Object.<anonymous> (/work/test/integration/css/test/group-2.test.js:926:11)"
+                ],
+                "fullName": "CSS Support Basic CSS Modules Ordering Development Mode should have correct color on index page (on nav)",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct color on index page (on nav)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on load)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on load)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on hover)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on hover)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Basic CSS Modules Ordering",
+                  "Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Basic CSS Modules Ordering Production Mode should have correct color on index page (on nav)",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct color on index page (on nav)"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "should handle unresolved files gracefully"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support should handle unresolved files gracefully should build correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should build correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "should handle unresolved files gracefully"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support should handle unresolved files gracefully should have correct file references in CSS output",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct file references in CSS output"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Data URLs"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Data URLs should compile successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should compile successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Support",
+                  "Data URLs"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Support Data URLs should have emitted expected files",
+                "location": null,
+                "status": "passed",
+                "title": "should have emitted expected files"
+              }
+            ],
+            "endTime": 1676045776668,
+            "message": "  ● CSS Support › CSS Modules Composes Ordering › Development Mode › should have correct color on index page (on nav from index)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(255, 0, 0)\"\n    Received: \"rgb(0, 0, 0)\"\n\n      507 |           `window.getComputedStyle(document.querySelector('#red-title')).color`\n      508 |         )\n    > 509 |         expect(titleColor).toBe('rgb(255, 0, 0)')\n          |                            ^\n      510 |       }\n      511 |\n      512 |       it('should have correct color on index page (on load)', async () => {\n\n      at checkRedTitle (integration/css/test/group-2.test.js:509:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:601:11)\n\n  ● CSS Support › CSS Modules Composes Ordering › Development Mode › should have correct color on index page (on nav from other)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(255, 0, 0)\"\n    Received: \"rgb(0, 0, 0)\"\n\n      507 |           `window.getComputedStyle(document.querySelector('#red-title')).color`\n      508 |         )\n    > 509 |         expect(titleColor).toBe('rgb(255, 0, 0)')\n          |                            ^\n      510 |       }\n      511 |\n      512 |       it('should have correct color on index page (on load)', async () => {\n\n      at checkRedTitle (integration/css/test/group-2.test.js:509:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:614:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on load)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:905:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on hover)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:914:11)\n\n  ● CSS Support › Basic CSS Modules Ordering › Development Mode › should have correct color on index page (on nav)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"rgb(0, 255, 0)\"\n    Received: \"rgb(255, 105, 180)\"\n\n      890 |           `window.getComputedStyle(document.querySelector('#link-other')).backgroundColor`\n      891 |         )\n    > 892 |         expect(titleColor).toBe('rgb(0, 255, 0)')\n          |                            ^\n      893 |       }\n      894 |       async function checkPinkButton(browser) {\n      895 |         await browser.waitForElementByCss('#link-index')\n\n      at checkGreenButton (integration/css/test/group-2.test.js:892:28)\n      at Object.<anonymous> (integration/css/test/group-2.test.js:926:11)\n",
+            "name": "/work/test/integration/css/test/group-2.test.js",
+            "startTime": 1676045377109,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045133862,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676045229849,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676045133950,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676045973976,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\n       Process output:········\n       Process error output:\n       file:///tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/.next/build/next_config/load-next-config.js:3\n       require(\\\"./chunks/load-next-config.js\\\");\n       ^········\n       ReferenceError: require is not defined in ES module scope, you can use import instead\n       This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n           at file:///tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/.next/build/next_config/load-next-config.js:3:1\n           at ModuleJob.run (node:internal/modules/esm/module_job:194:25)········\n       Node.js v18.14.0\n       \"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1676045994073,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\n           Process output:········\n           Process error output:\n           file:///tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/.next/build/next_config/load-next-config.js:3\n           require(\\\"./chunks/load-next-config.js\\\");\n           ^········\n           ReferenceError: require is not defined in ES module scope, you can use import instead\n           This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n\n      at ../file:/tmp/next-install-969501477441c6455e03e3f2a1d21ce554c5e84adcc4c39ab0de2a221b61fa65/.next/build/next_config/load-next-config.js:3:1\n      at ModuleJob.run (../node:internal/modules/esm/module_job:194:25)········\n             Node.js v18.14.0\n             \"\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1676045974068,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/custom-routes-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 37,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 42,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676046909044,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can print telemetry status",
+                "location": null,
+                "status": "passed",
+                "title": "can print telemetry status"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-enable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-enable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-disable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-disable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with env NEXT_TELEMETRY_DISABLED",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with env NEXT_TELEMETRY_DISABLED"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects isSrcDir dir correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits event when swc fails to load",
+                "location": null,
+                "status": "passed",
+                "title": "emits event when swc fails to load"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI logs completed `next build` with warnings",
+                "location": null,
+                "status": "passed",
+                "title": "logs completed `next build` with warnings"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects tests correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects tests correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects correct cli session defaults",
+                "location": null,
+                "status": "passed",
+                "title": "detects correct cli session defaults"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: babel tooling config",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: babel tooling config"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: package.json custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: package.json custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (preset)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (preset)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: next config with webpack",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: next config with webpack"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect static 404 correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect static 404 correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect page counts correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect page counts correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /isSrcDir.*?false/\nReceived string:  \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 37237 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:389:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects isSrcDir dir correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:460:15)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 41209 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:488:7)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev` stopped",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev` stopped"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 35677 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:527:7)"
+                ],
+                "fullName": "Telemetry CLI detects correctly for `next dev` stopped (no turbo)",
+                "location": null,
+                "status": "failed",
+                "title": "detects correctly for `next dev` stopped (no turbo)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI should detect app page counts",
+                "location": null,
+                "status": "passed",
+                "title": "should detect app page counts"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect reportWebVitals correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect reportWebVitals correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects rewrites, headers, and redirects for next build",
+                "location": null,
+                "status": "passed",
+                "title": "detects rewrites, headers, and redirects for next build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:761:13)"
+                ],
+                "fullName": "Telemetry CLI detects i18n and image configs for session start",
+                "location": null,
+                "status": "failed",
+                "title": "detects i18n and image configs for session start"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when '--no-lint' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when '--no-lint' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when 'ignoreDuringBuilds' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when 'ignoreDuringBuilds' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for `next lint`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for `next lint`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemery for usage of optimizeFonts, image, script & dynamic",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemery for usage of optimizeFonts, image, script & dynamic"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `optimizeCss`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `optimizeCss`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `nextScriptWorkers`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `nextScriptWorkers`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of middleware",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc plugins",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc plugins"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of next/legacy/image",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of next/legacy/image"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of @vercel/og",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of @vercel/og"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for transpilePackages",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for transpilePackages"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for middleware related options",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for middleware related options"
+              }
+            ],
+            "endTime": 1676047246746,
+            "message": "  ● Telemetry CLI › detects isSrcDir dir correctly for `next dev`\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /isSrcDir.*?false/\n    Received string:  \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 37237 --root /work --no-open]\n    \"\n\n      387 |     await waitFor(1000)\n      388 |     await killApp(app)\n    > 389 |     expect(stderr).toMatch(/isSrcDir.*?false/)\n          |                    ^\n      390 |\n      391 |     await fs.move(path.join(appDir, 'pages'), path.join(appDir, 'src/pages'))\n      392 |     stderr = ''\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:389:20)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev`\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      458 |       }\n      459 |       const event1 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 460 |         .exec(stderr)\n          |               ^\n      461 |         .pop()\n      462 |\n      463 |       expect(event1).toMatch(/\"pagesDir\": true/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:460:15)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev` stopped\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 41209 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:488:7)\n\n  ● Telemetry CLI › detects correctly for `next dev` stopped (no turbo)\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 35677 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:527:7)\n\n  ● Telemetry CLI › detects i18n and image configs for session start\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      759 |\n      760 |     const event2 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 761 |       .exec(stderr2)\n          |             ^\n      762 |       .pop()\n      763 |     expect(event2).toMatch(/\"i18nEnabled\": true/)\n      764 |     expect(event2).toMatch(/\"locales\": \"en,nl,fr\"/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:761:13)\n",
+            "name": "/work/test/integration/telemetry/test/index.test.js",
+            "startTime": 1676046909135,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
