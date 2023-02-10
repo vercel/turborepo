@@ -1,0 +1,2794 @@
+{
+  "ref": "ea808982e82df9a2660bc92978452174f222ffc2",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676055549069,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676055646409,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676055549169,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-custom-matchers-basepath/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056176601,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\n       Process output:········\n       Process error output:\n       file:///tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/.next/build/next_config/load-next-config.js:3\n       require(\\\"./chunks/load-next-config.js\\\");\n       ^········\n       ReferenceError: require is not defined in ES module scope, you can use import instead\n       This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n           at file:///tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/.next/build/next_config/load-next-config.js:3:1\n           at ModuleJob.run (node:internal/modules/esm/module_job:193:25)\n           at async Promise.all (index 0)\n           at async ESMLoader.import (node:internal/modules/esm/loader:530:24)\n           at async loadESM (node:internal/process/esm_loader:91:5)\n           at async handleMainPromise (node:internal/modules/run_main:65:12)\n       \"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1676056197438,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\n           Process output:········\n           Process error output:\n           file:///tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/.next/build/next_config/load-next-config.js:3\n           require(\\\"./chunks/load-next-config.js\\\");\n           ^········\n           ReferenceError: require is not defined in ES module scope, you can use import instead\n           This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n\n      at ../file:/tmp/next-install-b2e4744cfb6a72d840c9e8b536766660d799f893e56d4a22ed175b00d3d82432/.next/build/next_config/load-next-config.js:3:1\n                 at async Promise.all (index 0)\n             \"\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1676056176697,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/config-empty/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056452499,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration",
+                  "MDX-rs Plugin support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello MDX/\nReceived string:  \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>ReferenceError: Component is not defined\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:50:5)\n  at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/index.mdx/server-renderer.tsx (ecmascript) (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:497:3)\n  at instantiateModule (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/index.js:6:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/plugin-mdx-rs/test/index.test.js:19:57)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration MDX-rs Plugin support should render an MDX page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render an MDX page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration",
+                  "MDX-rs Plugin support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Look, a button!/\nReceived string:  \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>ReferenceError: Component is not defined\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:50:5)\n  at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/button.mdx/server-renderer.tsx (ecmascript) (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:497:3)\n  at instantiateModule (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/button/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/button/index.js:6:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/plugin-mdx-rs/test/index.test.js:23:63)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration MDX-rs Plugin support should render an MDX page with component correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render an MDX page with component correctly"
+              }
+            ],
+            "endTime": 1676056461483,
+            "message": "  ● Configuration › MDX-rs Plugin support › should render an MDX page correctly\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello MDX/\n    Received string:  \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>ReferenceError: Component is not defined\n\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:50:5)\n      at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/index.mdx/server-renderer.tsx (ecmascript) (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:497:3)\n      at instantiateModule (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/index.js:6:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/plugin-mdx-rs/test/index.test.js:19:57)\n\n  ● Configuration › MDX-rs Plugin support › should render an MDX page with component correctly\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Look, a button!/\n    Received string:  \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>ReferenceError: Component is not defined\n\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:50:5)\n      at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/button.mdx/server-renderer.tsx (ecmascript) (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:497:3)\n      at instantiateModule (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/button/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/button/index.js:6:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/plugin-mdx-rs/test/index.test.js:23:63)\n",
+            "name": "/work/test/integration/plugin-mdx-rs/test/index.test.js",
+            "startTime": 1676056452618,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676054902542,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676055220811,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676054902637,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056014243,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "swc warnings by default"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Disabled SWC as replacement for Babel because of custom Babel configuration\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:·\n- Babel detected (.babelrc)\n  Babel is not yet supported. To use Turbopack at the moment,\n  you'll need to remove your usage of Babel.·\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649 --is-next-dev-command --root /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649 --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:42661, url: http://localhost:42661\n\u001b[35mevent\u001b[39m - initial compilation 7.523ms\n\"\n    at Object.<anonymous> (/work/test/e2e/swc-warnings/index.test.ts:29:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "swc warnings by default should have warning",
+                "location": null,
+                "status": "failed",
+                "title": "should have warning"
+              },
+              {
+                "ancestorTitles": [
+                  "can force swc"
+                ],
+                "failureMessages": [],
+                "fullName": "can force swc should not have warning",
+                "location": null,
+                "status": "passed",
+                "title": "should not have warning"
+              }
+            ],
+            "endTime": 1676056058833,
+            "message": "  ● swc warnings by default › should have warning\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Disabled SWC as replacement for Babel because of custom Babel configuration\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:·\n    - Babel detected (.babelrc)\n      Babel is not yet supported. To use Turbopack at the moment,\n      you'll need to remove your usage of Babel.·\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649 --is-next-dev-command --root /tmp/next-install-a73d81ef69303002e3e82b37516ae9da4ab9350e140ea0f6533ccb5333635649 --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:42661, url: http://localhost:42661\n    \u001b[35mevent\u001b[39m - initial compilation 7.523ms\n    \"\n\n      27 |   it('should have warning', async () => {\n      28 |     await renderViaHTTP(next.url, '/')\n    > 29 |     expect(next.cliOutput).toContain(\n         |                            ^\n      30 |       'Disabled SWC as replacement for Babel because of custom Babel configuration'\n      31 |     )\n      32 |   })\n\n      at Object.<anonymous> (e2e/swc-warnings/index.test.ts:29:28)\n",
+            "name": "/work/test/e2e/swc-warnings/index.test.ts",
+            "startTime": 1676056014340,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/middleware-dev-update/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 14,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 56,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 70,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056412658,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:99:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:129:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with query",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:153:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with hash",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:241:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle backslashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:266:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/google.com\"\nReceived: \"/\"\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:343:62)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle slashes in router push correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /%2Fgoogle.com\n\n/\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:385:7)"
+                ],
+                "fullName": "404 handling custom _error next dev should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "failed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:99:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:129:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with query",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:153:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with hash",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:241:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle backslashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:266:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/google.com\"\nReceived: \"/\"\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:343:62)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle slashes in router push correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /%2Fgoogle.com\n\n/\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:385:7)"
+                ],
+                "fullName": "404 handling pages/404 next dev should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "failed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              }
+            ],
+            "endTime": 1676056716637,
+            "message": "  ● 404 handling › custom _error › next dev › should handle double slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n       97 |         redirect: 'manual',\n       98 |       })\n    >  99 |       expect(res.status).toBe(308)\n          |                          ^\n      100 |\n      101 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      102 |       expect(parsedUrl.pathname).toBe('/google.com')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:99:26)\n\n  ● 404 handling › custom _error › next dev › should handle double slashes correctly with query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      127 |         }\n      128 |       )\n    > 129 |       expect(res.status).toBe(308)\n          |                          ^\n      130 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      131 |       expect(parsedUrl.pathname).toBe('/google.com')\n      132 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:129:26)\n\n  ● 404 handling › custom _error › next dev › should handle double slashes correctly with hash\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      151 |         redirect: 'manual',\n      152 |       })\n    > 153 |       expect(res.status).toBe(308)\n          |                          ^\n      154 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      155 |       expect(parsedUrl.pathname).toBe('/google.com')\n      156 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:153:26)\n\n  ● 404 handling › custom _error › next dev › should handle backslashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      239 |         redirect: 'manual',\n      240 |       })\n    > 241 |       expect(res.status).toBe(308)\n          |                          ^\n      242 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      243 |       expect(parsedUrl.pathname).toBe('/google.com')\n      244 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:241:26)\n\n  ● 404 handling › custom _error › next dev › should handle mixed backslashes/forward slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      264 |         redirect: 'manual',\n      265 |       })\n    > 266 |       expect(res.status).toBe(308)\n          |                          ^\n      267 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      268 |       expect(parsedUrl.pathname).toBe(isExport ? '//google.com' : '/google.com')\n      269 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:266:26)\n\n  ● 404 handling › custom _error › next dev › should handle slashes in router push correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/google.com\"\n    Received: \"/\"\n\n      341 |         })`\n      342 |       )\n    > 343 |       expect(await browser.eval('window.location.pathname')).toBe(item.pathname)\n          |                                                              ^\n      344 |       expect(await browser.eval('window.location.search')).toBe(\n      345 |         item.search || ''\n      346 |       )\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:343:62)\n\n  ● 404 handling › custom _error › next dev › should have no error from encoded slashes in router push\n\n    TIMED OUT: /%2Fgoogle.com\n\n    /\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:385:7)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n       97 |         redirect: 'manual',\n       98 |       })\n    >  99 |       expect(res.status).toBe(308)\n          |                          ^\n      100 |\n      101 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      102 |       expect(parsedUrl.pathname).toBe('/google.com')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:99:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly with query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      127 |         }\n      128 |       )\n    > 129 |       expect(res.status).toBe(308)\n          |                          ^\n      130 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      131 |       expect(parsedUrl.pathname).toBe('/google.com')\n      132 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:129:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly with hash\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      151 |         redirect: 'manual',\n      152 |       })\n    > 153 |       expect(res.status).toBe(308)\n          |                          ^\n      154 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      155 |       expect(parsedUrl.pathname).toBe('/google.com')\n      156 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:153:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle backslashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      239 |         redirect: 'manual',\n      240 |       })\n    > 241 |       expect(res.status).toBe(308)\n          |                          ^\n      242 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      243 |       expect(parsedUrl.pathname).toBe('/google.com')\n      244 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:241:26)\n\n  ● 404 handling › pages/404 › next dev › should handle mixed backslashes/forward slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      264 |         redirect: 'manual',\n      265 |       })\n    > 266 |       expect(res.status).toBe(308)\n          |                          ^\n      267 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      268 |       expect(parsedUrl.pathname).toBe(isExport ? '//google.com' : '/google.com')\n      269 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:266:26)\n\n  ● 404 handling › pages/404 › next dev › should handle slashes in router push correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/google.com\"\n    Received: \"/\"\n\n      341 |         })`\n      342 |       )\n    > 343 |       expect(await browser.eval('window.location.pathname')).toBe(item.pathname)\n          |                                                              ^\n      344 |       expect(await browser.eval('window.location.search')).toBe(\n      345 |         item.search || ''\n      346 |       )\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:343:62)\n\n  ● 404 handling › pages/404 › next dev › should have no error from encoded slashes in router push\n\n    TIMED OUT: /%2Fgoogle.com\n\n    /\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:385:7)\n",
+            "name": "/work/test/integration/repeated-slashes/test/index.test.js",
+            "startTime": 1676056412752,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676055687782,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676055784409,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676055687872,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-custom-matchers-basepath/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056306914,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\n       Process output:········\n       Process error output:\n       file:///tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/.next/build/next_config/load-next-config.js:3\n       require(\\\"./chunks/load-next-config.js\\\");\n       ^········\n       ReferenceError: require is not defined in ES module scope, you can use import instead\n       This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n           at file:///tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/.next/build/next_config/load-next-config.js:3:1\n           at ModuleJob.run (node:internal/modules/esm/module_job:194:25)········\n       Node.js v18.14.0\n       \"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1676056327374,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\n           Process output:········\n           Process error output:\n           file:///tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/.next/build/next_config/load-next-config.js:3\n           require(\\\"./chunks/load-next-config.js\\\");\n           ^········\n           ReferenceError: require is not defined in ES module scope, you can use import instead\n           This file is being treated as an ES module because it has a '.js' file extension and '/tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/package.json' contains \\\"type\\\": \\\"module\\\". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.\n\n      at ../file:/tmp/next-install-d4fa3d0c8ee7c9c445a5dbc8e3d4de428e4b1fd747aa6504ab9e2235ec7f7592/.next/build/next_config/load-next-config.js:3:1\n      at ModuleJob.run (../node:internal/modules/esm/module_job:194:25)········\n             Node.js v18.14.0\n             \"\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1676056307007,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/config-empty/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056584218,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration",
+                  "MDX-rs Plugin support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello MDX/\nReceived string:  \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>ReferenceError: Component is not defined\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:50:5)\n  at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/index.mdx/server-renderer.tsx (ecmascript) (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:497:3)\n  at instantiateModule (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/index.js:6:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/plugin-mdx-rs/test/index.test.js:19:57)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration MDX-rs Plugin support should render an MDX page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render an MDX page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration",
+                  "MDX-rs Plugin support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Look, a button!/\nReceived string:  \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>ReferenceError: Component is not defined\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:50:5)\n  at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/button.mdx/server-renderer.tsx (ecmascript) (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:497:3)\n  at instantiateModule (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/button/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/button/index.js:6:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/plugin-mdx-rs/test/index.test.js:23:63)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration MDX-rs Plugin support should render an MDX page with component correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render an MDX page with component correctly"
+              }
+            ],
+            "endTime": 1676056593272,
+            "message": "  ● Configuration › MDX-rs Plugin support › should render an MDX page correctly\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello MDX/\n    Received string:  \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>ReferenceError: Component is not defined\n\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:50:5)\n      at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/index.mdx/server-renderer.tsx (ecmascript) (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:497:3)\n      at instantiateModule (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/chunks/[project-with-next]_test_integration_plugin-mdx-rs_929a84._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/index.js:6:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/plugin-mdx-rs/test/index.test.js:19:57)\n\n  ● Configuration › MDX-rs Plugin support › should render an MDX page with component correctly\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Look, a button!/\n    Received string:  \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>ReferenceError: Component is not defined\n\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:50:5)\n      at Object.[project-with-next]/test/integration/plugin-mdx-rs/pages/button.mdx/server-renderer.tsx (ecmascript) (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:497:3)\n      at instantiateModule (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/button/chunks/[project-with-next]_test_integration_plugin-mdx-rs_b5d341._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/button/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/button/index.js:6:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__ea1446._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_7e91fe._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/plugin-mdx-rs/test/index.test.js:23:63)\n",
+            "name": "/work/test/integration/plugin-mdx-rs/test/index.test.js",
+            "startTime": 1676056584314,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676054898939,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676055219569,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676054899037,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056022501,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "swc warnings by default"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Disabled SWC as replacement for Babel because of custom Babel configuration\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:·\n- Babel detected (.babelrc)\n  Babel is not yet supported. To use Turbopack at the moment,\n  you'll need to remove your usage of Babel.·\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d --is-next-dev-command --root /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:42231, url: http://localhost:42231\n\u001b[35mevent\u001b[39m - initial compilation 5.148ms\n\"\n    at Object.<anonymous> (/work/test/e2e/swc-warnings/index.test.ts:29:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "swc warnings by default should have warning",
+                "location": null,
+                "status": "failed",
+                "title": "should have warning"
+              },
+              {
+                "ancestorTitles": [
+                  "can force swc"
+                ],
+                "failureMessages": [],
+                "fullName": "can force swc should not have warning",
+                "location": null,
+                "status": "passed",
+                "title": "should not have warning"
+              }
+            ],
+            "endTime": 1676056067837,
+            "message": "  ● swc warnings by default › should have warning\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Disabled SWC as replacement for Babel because of custom Babel configuration\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:·\n    - Babel detected (.babelrc)\n      Babel is not yet supported. To use Turbopack at the moment,\n      you'll need to remove your usage of Babel.·\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d --is-next-dev-command --root /tmp/next-install-bff97d16b63e374f0546449245b589815d9d14c8e39bb562163355ee258a9b9d --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:42231, url: http://localhost:42231\n    \u001b[35mevent\u001b[39m - initial compilation 5.148ms\n    \"\n\n      27 |   it('should have warning', async () => {\n      28 |     await renderViaHTTP(next.url, '/')\n    > 29 |     expect(next.cliOutput).toContain(\n         |                            ^\n      30 |       'Disabled SWC as replacement for Babel because of custom Babel configuration'\n      31 |     )\n      32 |   })\n\n      at Object.<anonymous> (e2e/swc-warnings/index.test.ts:29:28)\n",
+            "name": "/work/test/e2e/swc-warnings/index.test.ts",
+            "startTime": 1676056022605,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/middleware-dev-update/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 14,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 56,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 70,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056429254,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:99:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:129:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with query",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:153:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with hash",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:241:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle backslashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:266:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error next dev should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/google.com\"\nReceived: \"/\"\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:343:62)"
+                ],
+                "fullName": "404 handling custom _error next dev should handle slashes in router push correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /%2Fgoogle.com\n\n/\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:385:7)"
+                ],
+                "fullName": "404 handling custom _error next dev should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "failed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next start should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "custom _error",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling custom _error production next export should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:99:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:129:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with query",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:153:26)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with hash",
+                "location": null,
+                "status": "failed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:241:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle backslashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:266:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 next dev should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/google.com\"\nReceived: \"/\"\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:343:62)"
+                ],
+                "fullName": "404 handling pages/404 next dev should handle slashes in router push correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /%2Fgoogle.com\n\n/\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/repeated-slashes/test/index.test.js:385:7)"
+                ],
+                "fullName": "404 handling pages/404 next dev should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "failed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should normalize repeated slashes in redirects correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should normalize repeated slashes in redirects correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next start"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next start should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded and query",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and query"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle double slashes correctly with encoded and hash",
+                "location": null,
+                "status": "passed",
+                "title": "should handle double slashes correctly with encoded and hash"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle backslashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle backslashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle mixed backslashes/forward slashes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle mixed backslashes/forward slashes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle slashes in next/link correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in next/link correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should handle slashes in router push correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle slashes in router push correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "404 handling",
+                  "pages/404",
+                  "production",
+                  "next export"
+                ],
+                "failureMessages": [],
+                "fullName": "404 handling pages/404 production next export should have no error from encoded slashes in router push",
+                "location": null,
+                "status": "passed",
+                "title": "should have no error from encoded slashes in router push"
+              }
+            ],
+            "endTime": 1676056735381,
+            "message": "  ● 404 handling › custom _error › next dev › should handle double slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n       97 |         redirect: 'manual',\n       98 |       })\n    >  99 |       expect(res.status).toBe(308)\n          |                          ^\n      100 |\n      101 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      102 |       expect(parsedUrl.pathname).toBe('/google.com')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:99:26)\n\n  ● 404 handling › custom _error › next dev › should handle double slashes correctly with query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      127 |         }\n      128 |       )\n    > 129 |       expect(res.status).toBe(308)\n          |                          ^\n      130 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      131 |       expect(parsedUrl.pathname).toBe('/google.com')\n      132 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:129:26)\n\n  ● 404 handling › custom _error › next dev › should handle double slashes correctly with hash\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      151 |         redirect: 'manual',\n      152 |       })\n    > 153 |       expect(res.status).toBe(308)\n          |                          ^\n      154 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      155 |       expect(parsedUrl.pathname).toBe('/google.com')\n      156 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:153:26)\n\n  ● 404 handling › custom _error › next dev › should handle backslashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      239 |         redirect: 'manual',\n      240 |       })\n    > 241 |       expect(res.status).toBe(308)\n          |                          ^\n      242 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      243 |       expect(parsedUrl.pathname).toBe('/google.com')\n      244 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:241:26)\n\n  ● 404 handling › custom _error › next dev › should handle mixed backslashes/forward slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      264 |         redirect: 'manual',\n      265 |       })\n    > 266 |       expect(res.status).toBe(308)\n          |                          ^\n      267 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      268 |       expect(parsedUrl.pathname).toBe(isExport ? '//google.com' : '/google.com')\n      269 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:266:26)\n\n  ● 404 handling › custom _error › next dev › should handle slashes in router push correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/google.com\"\n    Received: \"/\"\n\n      341 |         })`\n      342 |       )\n    > 343 |       expect(await browser.eval('window.location.pathname')).toBe(item.pathname)\n          |                                                              ^\n      344 |       expect(await browser.eval('window.location.search')).toBe(\n      345 |         item.search || ''\n      346 |       )\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:343:62)\n\n  ● 404 handling › custom _error › next dev › should have no error from encoded slashes in router push\n\n    TIMED OUT: /%2Fgoogle.com\n\n    /\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:385:7)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n       97 |         redirect: 'manual',\n       98 |       })\n    >  99 |       expect(res.status).toBe(308)\n          |                          ^\n      100 |\n      101 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      102 |       expect(parsedUrl.pathname).toBe('/google.com')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:99:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly with query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      127 |         }\n      128 |       )\n    > 129 |       expect(res.status).toBe(308)\n          |                          ^\n      130 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      131 |       expect(parsedUrl.pathname).toBe('/google.com')\n      132 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:129:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle double slashes correctly with hash\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      151 |         redirect: 'manual',\n      152 |       })\n    > 153 |       expect(res.status).toBe(308)\n          |                          ^\n      154 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      155 |       expect(parsedUrl.pathname).toBe('/google.com')\n      156 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:153:26)\n          at runMicrotasks (<anonymous>)\n\n  ● 404 handling › pages/404 › next dev › should handle backslashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      239 |         redirect: 'manual',\n      240 |       })\n    > 241 |       expect(res.status).toBe(308)\n          |                          ^\n      242 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      243 |       expect(parsedUrl.pathname).toBe('/google.com')\n      244 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:241:26)\n\n  ● 404 handling › pages/404 › next dev › should handle mixed backslashes/forward slashes correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      264 |         redirect: 'manual',\n      265 |       })\n    > 266 |       expect(res.status).toBe(308)\n          |                          ^\n      267 |       const parsedUrl = url.parse(res.headers.get('location'), true)\n      268 |       expect(parsedUrl.pathname).toBe(isExport ? '//google.com' : '/google.com')\n      269 |       expect(parsedUrl.hostname).toBe('localhost')\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:266:26)\n\n  ● 404 handling › pages/404 › next dev › should handle slashes in router push correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/google.com\"\n    Received: \"/\"\n\n      341 |         })`\n      342 |       )\n    > 343 |       expect(await browser.eval('window.location.pathname')).toBe(item.pathname)\n          |                                                              ^\n      344 |       expect(await browser.eval('window.location.search')).toBe(\n      345 |         item.search || ''\n      346 |       )\n\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:343:62)\n\n  ● 404 handling › pages/404 › next dev › should have no error from encoded slashes in router push\n\n    TIMED OUT: /%2Fgoogle.com\n\n    /\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/repeated-slashes/test/index.test.js:385:7)\n",
+            "name": "/work/test/integration/repeated-slashes/test/index.test.js",
+            "startTime": 1676056429349,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
