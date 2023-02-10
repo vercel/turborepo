@@ -1,0 +1,1974 @@
+{
+  "ref": "743651aeaefa7caeda6d2da6388fd1b012ba4c55",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056385882,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676056483088,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676056385976,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-fetches-with-any-http-method/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056979000,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document Head"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document Head Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document body"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document body Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: false with no Partytown dependency"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: false with no Partytown dependency Partytown snippet is not injected to head if not enabled in configuration",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown snippet is not injected to head if not enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toEqual(expected) // deep equality\n\nExpected: not null\n\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:224:33)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Partytown snippets are injected to head if enabled in configuration",
+                "location": null,
+                "status": "failed",
+                "title": "Partytown snippets are injected to head if enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:243:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Worker scripts are modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Worker scripts are modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:296:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through children is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through children is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:323:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with config override"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: true with config override Partytown config script is overwritten",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown config script is overwritten"
+              }
+            ],
+            "endTime": 1676057311432,
+            "message": "  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Partytown snippets are injected to head if enabled in configuration\n\n    expect(received).not.toEqual(expected) // deep equality\n\n    Expected: not null\n\n      222 |       )\n      223 |\n    > 224 |       expect(snippetScript).not.toEqual(null)\n          |                                 ^\n      225 |\n      226 |       // A default config is included that points to the correct folder that hosts partytown's static files\n      227 |       expect(configScript).not.toEqual(null)\n\n      at Object.<anonymous> (e2e/next-script/index.test.ts:224:33)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Worker scripts are modified by Partytown to execute on a worker thread\n\n    TIMED OUT: success\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:243:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through children is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:296:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:323:7)\n",
+            "name": "/work/test/e2e/next-script/index.test.ts",
+            "startTime": 1676056979106,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/config-empty/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057952212,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:72:19)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for json API",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for json API"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:79:19)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getStaticProps",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getStaticProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getStaticPaths",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getStaticPaths"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:95:19)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getServerSideProps",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getServerSideProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for json API",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for json API"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getStaticProps",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getStaticProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getStaticPaths",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getStaticPaths"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getServerSideProps",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getServerSideProps"
+              }
+            ],
+            "endTime": 1676058026111,
+            "message": "  ● undici-keep-alive › dev › should send keep-alive for json API\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      70 |       const res = await fetchViaHTTP(appPort, '/api/json')\n      71 |       const obj = await res.json()\n    > 72 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      73 |     })\n      74 |\n      75 |     it('should send keep-alive for getStaticProps', async () => {\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:72:19)\n\n  ● undici-keep-alive › dev › should send keep-alive for getStaticProps\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      77 |       const props = await browser.elementById('props').text()\n      78 |       const obj = JSON.parse(props)\n    > 79 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      80 |       await browser.close()\n      81 |     })\n      82 |\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:79:19)\n\n  ● undici-keep-alive › dev › should send keep-alive for getStaticPaths\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● undici-keep-alive › dev › should send keep-alive for getServerSideProps\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      93 |       const props = await browser.elementById('props').text()\n      94 |       const obj = JSON.parse(props)\n    > 95 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      96 |       await browser.close()\n      97 |     })\n      98 |   }\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:95:19)\n",
+            "name": "/work/test/integration/undici-keep-alive/test/index.test.js",
+            "startTime": 1676057952307,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676055738028,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676055995939,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676055738124,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 15,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056443156,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow rewriting invalid buildId correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should allow rewriting invalid buildId correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should provide original _next/data URL with skipMiddlewareUrlNormalize",
+                "location": null,
+                "status": "failed",
+                "title": "should provide original _next/data URL with skipMiddlewareUrlNormalize"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow response body from middleware with flag",
+                "location": null,
+                "status": "failed",
+                "title": "should allow response body from middleware with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From API\"\nReceived: \"hello=From API\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\nReceived: \"hello=From%20API; Path=/\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and edge API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and edge API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'endsWith')\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should correct skip URL normalizing in middleware",
+                "location": null,
+                "status": "failed",
+                "title": "should correct skip URL normalizing in middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config redirect correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config redirect correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config rewrites correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config rewrites correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (with slash)",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash redirect (with slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (without slash)",
+                "location": null,
+                "status": "passed",
+                "title": "should not apply trailing slash redirect (without slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/another/\"\nReceived: \"/another\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:202:7)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash to links on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash to links on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:215:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash on load on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash on load on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to index correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to index correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to dynamic route correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to dynamic route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should navigate client side correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate client side correctly"
+              }
+            ],
+            "endTime": 1676056535556,
+            "message": "  ● skip-trailing-slash-redirect › should allow rewriting invalid buildId correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      27 |       }\n      28 |     )\n    > 29 |     expect(res.status).toBe(200)\n         |                        ^\n      30 |     expect(await res.text()).toContain('Example Domain')\n      31 |\n      32 |     if (!(global as any).isNextDeploy) {\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n\n  ● skip-trailing-slash-redirect › should provide original _next/data URL with skipMiddlewareUrlNormalize\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      47 |       }\n      48 |     )\n    > 49 |     expect(res.status).toBe(200)\n         |                        ^\n      50 |     expect(await res.text()).toContain('Example Domain')\n      51 |   })\n      52 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n\n  ● skip-trailing-slash-redirect › should allow response body from middleware with flag\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      53 |   it('should allow response body from middleware with flag', async () => {\n      54 |     const res = await fetchViaHTTP(next.url, '/middleware-response-body')\n    > 55 |     expect(res.status).toBe(200)\n         |                        ^\n      56 |     expect(res.headers.get('x-from-middleware')).toBe('true')\n      57 |     expect(await res.text()).toBe('hello from middleware')\n      58 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From API\"\n    Received: \"hello=From API\"\n\n      63 |     })\n      64 |     expect(res.status).toBe(200)\n    > 65 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      66 |       'from-middleware=1; Path=/, hello=From API'\n      67 |     )\n      68 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and edge API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\n    Received: \"hello=From%20API; Path=/\"\n\n      78 |     )\n      79 |     expect(res.status).toBe(200)\n    > 80 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      81 |       'from-middleware=1; Path=/, hello=From%20API; Path=/'\n      82 |     )\n      83 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n\n  ● skip-trailing-slash-redirect › should correct skip URL normalizing in middleware\n\n    TypeError: Cannot read properties of null (reading 'endsWith')\n\n      108 |       { redirect: 'manual', headers: { 'x-nextjs-data': '1' } }\n      109 |     )\n    > 110 |     expect(res.headers.get('x-nextjs-rewrite').endsWith('/another/')).toBe(true)\n          |                            ^\n      111 |\n      112 |     res = await fetchViaHTTP(\n      113 |       next.url,\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash redirect (with slash)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      163 |       redirect: 'manual',\n      164 |     })\n    > 165 |     expect(res.status).toBe(200)\n          |                        ^\n      166 |     expect(await res.text()).toContain('another page')\n      167 |   })\n      168 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash to links on client\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/another/\"\n    Received: \"/another\"\n\n      200 |         'http://n'\n      201 |       ).pathname\n    > 202 |     ).toBe('/another/')\n          |       ^\n      203 |\n      204 |     await browser.elementByCss('#to-another-with-slash').click()\n      205 |     await browser.waitForElementByCss('#another')\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:202:7)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash on load on client\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:215:5)\n",
+            "name": "/work/test/e2e/skip-trailing-slash-redirect/index.test.ts",
+            "startTime": 1676056443255,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/next-image-legacy/asset-prefix/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 22,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057067650,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority afterInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority afterInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority lazyOnload",
+                "location": null,
+                "status": "passed",
+                "title": "priority lazyOnload"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThan(expected)\n\nExpected: > 0\nReceived:   0\n    at test (/work/test/integration/script-loader/test/index.test.js:111:9)\n    at Object.<anonymous> (/work/test/integration/script-loader/test/index.test.js:114:5)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive",
+                "location": null,
+                "status": "failed",
+                "title": "priority beforeInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThan(expected)\n\nExpected: > 0\nReceived:   0\n    at test (/work/test/integration/script-loader/test/index.test.js:132:9)\n    at Object.<anonymous> (/work/test/integration/script-loader/test/index.test.js:135:5)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive - older version",
+                "location": null,
+                "status": "failed",
+                "title": "priority beforeInteractive - older version"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive on navigate",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive on navigate"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onload fires correctly",
+                "location": null,
+                "status": "passed",
+                "title": "onload fires correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive with inline script",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive with inline script should execute",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script should execute"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode Does not duplicate inline scripts",
+                "location": null,
+                "status": "passed",
+                "title": "Does not duplicate inline scripts"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode Error message is shown if Partytown is not installed locally",
+                "location": null,
+                "status": "passed",
+                "title": "Error message is shown if Partytown is not installed locally"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onReady fires after load event and then on every subsequent re-mount",
+                "location": null,
+                "status": "passed",
+                "title": "onReady fires after load event and then on every subsequent re-mount"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onReady should only fires once after loaded (issue #39993)",
+                "location": null,
+                "status": "passed",
+                "title": "onReady should only fires once after loaded (issue #39993)"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority afterInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority afterInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority lazyOnload",
+                "location": null,
+                "status": "passed",
+                "title": "priority lazyOnload"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive - older version",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive - older version"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive on navigate",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive on navigate"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onload fires correctly",
+                "location": null,
+                "status": "passed",
+                "title": "onload fires correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive with inline script",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive with inline script should execute",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script should execute"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode Does not duplicate inline scripts",
+                "location": null,
+                "status": "passed",
+                "title": "Does not duplicate inline scripts"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode Error message is shown if Partytown is not installed locally",
+                "location": null,
+                "status": "passed",
+                "title": "Error message is shown if Partytown is not installed locally"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onReady fires after load event and then on every subsequent re-mount",
+                "location": null,
+                "status": "passed",
+                "title": "onReady fires after load event and then on every subsequent re-mount"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onReady should only fires once after loaded (issue #39993)",
+                "location": null,
+                "status": "passed",
+                "title": "onReady should only fires once after loaded (issue #39993)"
+              }
+            ],
+            "endTime": 1676057199384,
+            "message": "  ● Next.js Script - Primary Strategies - Strict Mode › priority beforeInteractive\n\n    expect(received).toBeGreaterThan(expected)\n\n    Expected: > 0\n    Received:   0\n\n      109 |       expect(\n      110 |         $(`#${id} ~ script[src^=\"/_next/static/chunks/main\"]`).length\n    > 111 |       ).toBeGreaterThan(0)\n          |         ^\n      112 |     }\n      113 |\n      114 |     test('scriptBeforeInteractive')\n\n      at test (integration/script-loader/test/index.test.js:111:9)\n      at Object.<anonymous> (integration/script-loader/test/index.test.js:114:5)\n\n  ● Next.js Script - Primary Strategies - Strict Mode › priority beforeInteractive - older version\n\n    expect(received).toBeGreaterThan(expected)\n\n    Expected: > 0\n    Received:   0\n\n      130 |       expect(\n      131 |         $(`#${id} ~ script[src^=\"/_next/static/chunks/main\"]`).length\n    > 132 |       ).toBeGreaterThan(0)\n          |         ^\n      133 |     }\n      134 |\n      135 |     test('scriptBeforePageRenderOld')\n\n      at test (integration/script-loader/test/index.test.js:132:9)\n      at Object.<anonymous> (integration/script-loader/test/index.test.js:135:5)\n",
+            "name": "/work/test/integration/script-loader/test/index.test.js",
+            "startTime": 1676057067746,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056417618,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676056515813,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676056417715,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-fetches-with-any-http-method/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057021135,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document Head"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document Head Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document body"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document body Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: false with no Partytown dependency"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: false with no Partytown dependency Partytown snippet is not injected to head if not enabled in configuration",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown snippet is not injected to head if not enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toEqual(expected) // deep equality\n\nExpected: not null\n\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:224:33)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Partytown snippets are injected to head if enabled in configuration",
+                "location": null,
+                "status": "failed",
+                "title": "Partytown snippets are injected to head if enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:243:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Worker scripts are modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Worker scripts are modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:296:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through children is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through children is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:323:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with config override"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: true with config override Partytown config script is overwritten",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown config script is overwritten"
+              }
+            ],
+            "endTime": 1676057356334,
+            "message": "  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Partytown snippets are injected to head if enabled in configuration\n\n    expect(received).not.toEqual(expected) // deep equality\n\n    Expected: not null\n\n      222 |       )\n      223 |\n    > 224 |       expect(snippetScript).not.toEqual(null)\n          |                                 ^\n      225 |\n      226 |       // A default config is included that points to the correct folder that hosts partytown's static files\n      227 |       expect(configScript).not.toEqual(null)\n\n      at Object.<anonymous> (e2e/next-script/index.test.ts:224:33)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Worker scripts are modified by Partytown to execute on a worker thread\n\n    TIMED OUT: success\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:243:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through children is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:296:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:323:7)\n",
+            "name": "/work/test/e2e/next-script/index.test.ts",
+            "startTime": 1676057021233,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/config-empty/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057967131,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:72:19)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for json API",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for json API"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:79:19)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getStaticProps",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getStaticProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getStaticPaths",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getStaticPaths"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"connection\": \"keep-alive\",\n+   \"connection\": \"close\",\n  }\n    at Object.<anonymous> (/work/test/integration/undici-keep-alive/test/index.test.js:95:19)"
+                ],
+                "fullName": "undici-keep-alive dev should send keep-alive for getServerSideProps",
+                "location": null,
+                "status": "failed",
+                "title": "should send keep-alive for getServerSideProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for json API",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for json API"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getStaticProps",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getStaticProps"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getStaticPaths",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getStaticPaths"
+              },
+              {
+                "ancestorTitles": [
+                  "undici-keep-alive",
+                  "production"
+                ],
+                "failureMessages": [],
+                "fullName": "undici-keep-alive production should send keep-alive for getServerSideProps",
+                "location": null,
+                "status": "passed",
+                "title": "should send keep-alive for getServerSideProps"
+              }
+            ],
+            "endTime": 1676058055426,
+            "message": "  ● undici-keep-alive › dev › should send keep-alive for json API\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      70 |       const res = await fetchViaHTTP(appPort, '/api/json')\n      71 |       const obj = await res.json()\n    > 72 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      73 |     })\n      74 |\n      75 |     it('should send keep-alive for getStaticProps', async () => {\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:72:19)\n\n  ● undici-keep-alive › dev › should send keep-alive for getStaticProps\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      77 |       const props = await browser.elementById('props').text()\n      78 |       const obj = JSON.parse(props)\n    > 79 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      80 |       await browser.close()\n      81 |     })\n      82 |\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:79:19)\n\n  ● undici-keep-alive › dev › should send keep-alive for getStaticPaths\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● undici-keep-alive › dev › should send keep-alive for getServerSideProps\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"connection\": \"keep-alive\",\n    +   \"connection\": \"close\",\n      }\n\n      93 |       const props = await browser.elementById('props').text()\n      94 |       const obj = JSON.parse(props)\n    > 95 |       expect(obj).toEqual({ connection: 'keep-alive' })\n         |                   ^\n      96 |       await browser.close()\n      97 |     })\n      98 |   }\n\n      at Object.<anonymous> (integration/undici-keep-alive/test/index.test.js:95:19)\n",
+            "name": "/work/test/integration/undici-keep-alive/test/index.test.js",
+            "startTime": 1676057967252,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676055803168,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676056126160,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676055803268,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 15,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056821364,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow rewriting invalid buildId correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should allow rewriting invalid buildId correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should provide original _next/data URL with skipMiddlewareUrlNormalize",
+                "location": null,
+                "status": "failed",
+                "title": "should provide original _next/data URL with skipMiddlewareUrlNormalize"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow response body from middleware with flag",
+                "location": null,
+                "status": "failed",
+                "title": "should allow response body from middleware with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From API\"\nReceived: \"hello=From API\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\nReceived: \"hello=From%20API; Path=/\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and edge API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and edge API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'endsWith')\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should correct skip URL normalizing in middleware",
+                "location": null,
+                "status": "failed",
+                "title": "should correct skip URL normalizing in middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config redirect correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config redirect correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config rewrites correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config rewrites correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (with slash)",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash redirect (with slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (without slash)",
+                "location": null,
+                "status": "passed",
+                "title": "should not apply trailing slash redirect (without slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/another/\"\nReceived: \"/another\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:202:7)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash to links on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash to links on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:215:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash on load on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash on load on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to index correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to index correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to dynamic route correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to dynamic route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should navigate client side correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate client side correctly"
+              }
+            ],
+            "endTime": 1676056914487,
+            "message": "  ● skip-trailing-slash-redirect › should allow rewriting invalid buildId correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      27 |       }\n      28 |     )\n    > 29 |     expect(res.status).toBe(200)\n         |                        ^\n      30 |     expect(await res.text()).toContain('Example Domain')\n      31 |\n      32 |     if (!(global as any).isNextDeploy) {\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n\n  ● skip-trailing-slash-redirect › should provide original _next/data URL with skipMiddlewareUrlNormalize\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      47 |       }\n      48 |     )\n    > 49 |     expect(res.status).toBe(200)\n         |                        ^\n      50 |     expect(await res.text()).toContain('Example Domain')\n      51 |   })\n      52 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n\n  ● skip-trailing-slash-redirect › should allow response body from middleware with flag\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      53 |   it('should allow response body from middleware with flag', async () => {\n      54 |     const res = await fetchViaHTTP(next.url, '/middleware-response-body')\n    > 55 |     expect(res.status).toBe(200)\n         |                        ^\n      56 |     expect(res.headers.get('x-from-middleware')).toBe('true')\n      57 |     expect(await res.text()).toBe('hello from middleware')\n      58 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From API\"\n    Received: \"hello=From API\"\n\n      63 |     })\n      64 |     expect(res.status).toBe(200)\n    > 65 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      66 |       'from-middleware=1; Path=/, hello=From API'\n      67 |     )\n      68 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and edge API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\n    Received: \"hello=From%20API; Path=/\"\n\n      78 |     )\n      79 |     expect(res.status).toBe(200)\n    > 80 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      81 |       'from-middleware=1; Path=/, hello=From%20API; Path=/'\n      82 |     )\n      83 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n\n  ● skip-trailing-slash-redirect › should correct skip URL normalizing in middleware\n\n    TypeError: Cannot read properties of null (reading 'endsWith')\n\n      108 |       { redirect: 'manual', headers: { 'x-nextjs-data': '1' } }\n      109 |     )\n    > 110 |     expect(res.headers.get('x-nextjs-rewrite').endsWith('/another/')).toBe(true)\n          |                            ^\n      111 |\n      112 |     res = await fetchViaHTTP(\n      113 |       next.url,\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash redirect (with slash)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      163 |       redirect: 'manual',\n      164 |     })\n    > 165 |     expect(res.status).toBe(200)\n          |                        ^\n      166 |     expect(await res.text()).toContain('another page')\n      167 |   })\n      168 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash to links on client\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/another/\"\n    Received: \"/another\"\n\n      200 |         'http://n'\n      201 |       ).pathname\n    > 202 |     ).toBe('/another/')\n          |       ^\n      203 |\n      204 |     await browser.elementByCss('#to-another-with-slash').click()\n      205 |     await browser.waitForElementByCss('#another')\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:202:7)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash on load on client\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:215:5)\n",
+            "name": "/work/test/e2e/skip-trailing-slash-redirect/index.test.ts",
+            "startTime": 1676056821475,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/next-image-legacy/asset-prefix/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 22,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057434249,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority afterInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority afterInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority lazyOnload",
+                "location": null,
+                "status": "passed",
+                "title": "priority lazyOnload"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThan(expected)\n\nExpected: > 0\nReceived:   0\n    at test (/work/test/integration/script-loader/test/index.test.js:111:9)\n    at Object.<anonymous> (/work/test/integration/script-loader/test/index.test.js:114:5)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive",
+                "location": null,
+                "status": "failed",
+                "title": "priority beforeInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThan(expected)\n\nExpected: > 0\nReceived:   0\n    at test (/work/test/integration/script-loader/test/index.test.js:132:9)\n    at Object.<anonymous> (/work/test/integration/script-loader/test/index.test.js:135:5)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive - older version",
+                "location": null,
+                "status": "failed",
+                "title": "priority beforeInteractive - older version"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive on navigate",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive on navigate"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onload fires correctly",
+                "location": null,
+                "status": "passed",
+                "title": "onload fires correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive with inline script",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode priority beforeInteractive with inline script should execute",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script should execute"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode Does not duplicate inline scripts",
+                "location": null,
+                "status": "passed",
+                "title": "Does not duplicate inline scripts"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode Error message is shown if Partytown is not installed locally",
+                "location": null,
+                "status": "passed",
+                "title": "Error message is shown if Partytown is not installed locally"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onReady fires after load event and then on every subsequent re-mount",
+                "location": null,
+                "status": "passed",
+                "title": "onReady fires after load event and then on every subsequent re-mount"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Strict Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Strict Mode onReady should only fires once after loaded (issue #39993)",
+                "location": null,
+                "status": "passed",
+                "title": "onReady should only fires once after loaded (issue #39993)"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority afterInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority afterInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority lazyOnload",
+                "location": null,
+                "status": "passed",
+                "title": "priority lazyOnload"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive - older version",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive - older version"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive on navigate",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive on navigate"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onload fires correctly",
+                "location": null,
+                "status": "passed",
+                "title": "onload fires correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive with inline script",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode priority beforeInteractive with inline script should execute",
+                "location": null,
+                "status": "passed",
+                "title": "priority beforeInteractive with inline script should execute"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode Does not duplicate inline scripts",
+                "location": null,
+                "status": "passed",
+                "title": "Does not duplicate inline scripts"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode Error message is shown if Partytown is not installed locally",
+                "location": null,
+                "status": "passed",
+                "title": "Error message is shown if Partytown is not installed locally"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onReady fires after load event and then on every subsequent re-mount",
+                "location": null,
+                "status": "passed",
+                "title": "onReady fires after load event and then on every subsequent re-mount"
+              },
+              {
+                "ancestorTitles": [
+                  "Next.js Script - Primary Strategies - Production Mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Next.js Script - Primary Strategies - Production Mode onReady should only fires once after loaded (issue #39993)",
+                "location": null,
+                "status": "passed",
+                "title": "onReady should only fires once after loaded (issue #39993)"
+              }
+            ],
+            "endTime": 1676057567219,
+            "message": "  ● Next.js Script - Primary Strategies - Strict Mode › priority beforeInteractive\n\n    expect(received).toBeGreaterThan(expected)\n\n    Expected: > 0\n    Received:   0\n\n      109 |       expect(\n      110 |         $(`#${id} ~ script[src^=\"/_next/static/chunks/main\"]`).length\n    > 111 |       ).toBeGreaterThan(0)\n          |         ^\n      112 |     }\n      113 |\n      114 |     test('scriptBeforeInteractive')\n\n      at test (integration/script-loader/test/index.test.js:111:9)\n      at Object.<anonymous> (integration/script-loader/test/index.test.js:114:5)\n\n  ● Next.js Script - Primary Strategies - Strict Mode › priority beforeInteractive - older version\n\n    expect(received).toBeGreaterThan(expected)\n\n    Expected: > 0\n    Received:   0\n\n      130 |       expect(\n      131 |         $(`#${id} ~ script[src^=\"/_next/static/chunks/main\"]`).length\n    > 132 |       ).toBeGreaterThan(0)\n          |         ^\n      133 |     }\n      134 |\n      135 |     test('scriptBeforePageRenderOld')\n\n      at test (integration/script-loader/test/index.test.js:132:9)\n      at Object.<anonymous> (integration/script-loader/test/index.test.js:135:5)\n",
+            "name": "/work/test/integration/script-loader/test/index.test.js",
+            "startTime": 1676057434350,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
