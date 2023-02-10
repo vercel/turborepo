@@ -203,7 +203,7 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
         }
     }
 
-    for (from, to, strong) in g.g.inner.all_edges() {
+    for (from, to, strong) in g.g.idx_graph.all_edges() {
         writeln!(
             mermaid,
             "    Item{} -{}-> Item{};",
@@ -236,7 +236,7 @@ where
         .unwrap();
     }
 
-    for (from, to, strong) in g.inner.all_edges() {
+    for (from, to, strong) in g.idx_graph.all_edges() {
         writeln!(
             mermaid,
             "    N{} -{}-> N{};",

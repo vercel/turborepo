@@ -99,7 +99,7 @@ where
     T: Eq + Hash + Clone,
 {
     /// `bool`: Strong
-    pub(super) inner: DiGraphMap<u32, bool>,
+    pub(super) idx_graph: DiGraphMap<u32, bool>,
     pub(super) graph_ix: IndexSet<T, FxBuildHasher>,
 }
 
@@ -109,7 +109,7 @@ where
 {
     fn default() -> Self {
         Self {
-            inner: Default::default(),
+            idx_graph: Default::default(),
             graph_ix: Default::default(),
         }
     }
@@ -139,7 +139,7 @@ where
     {
         let ix = self.graph_ix.into_iter().map(|v| map(v)).collect();
         InternedGraph {
-            inner: self.inner,
+            idx_graph: self.idx_graph,
             graph_ix: ix,
         }
     }
@@ -177,13 +177,13 @@ impl DepGraph {
 
             // Check deps of `start`.
             for dep_ix in graph
-                .inner
+                .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
                 // Check if the the only dependant of dep is start
 
                 if graph
-                    .inner
+                    .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
                     .filter(|&dependant_ix| {
                         start_ix == dependant_ix || !done.contains(&dependant_ix)
@@ -198,7 +198,7 @@ impl DepGraph {
             }
         }
 
-        let mut cycles = kosaraju_scc(&self.g.inner);
+        let mut cycles = kosaraju_scc(&self.g.idx_graph);
         cycles.retain(|v| v.len() > 1);
 
         // If a node have two or more dependants, it should be in a separate
@@ -232,7 +232,7 @@ impl DepGraph {
 
             if self
                 .g
-                .inner
+                .idx_graph
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
                 .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
@@ -271,7 +271,7 @@ impl DepGraph {
 
                 for item_dep_ix in self
                     .g
-                    .inner
+                    .idx_graph
                     .neighbors_directed(item_ix, petgraph::Direction::Outgoing)
                 {
                     let dep_group_ix = group_ix_by_item_ix.get(&item_dep_ix);
@@ -279,7 +279,7 @@ impl DepGraph {
                         if group_ix == dep_group_ix {
                             continue;
                         }
-                        new_graph.inner.add_edge(group_ix, dep_group_ix, true);
+                        new_graph.idx_graph.add_edge(group_ix, dep_group_ix, true);
                     }
                 }
             }
@@ -537,16 +537,16 @@ impl DepGraph {
         let from = self.g.node(item);
         let to = self.g.node(dep);
 
-        self.g.inner.add_edge(from, to, true);
+        self.g.idx_graph.add_edge(from, to, true);
     }
 
     pub(super) fn add_weak_dep(&mut self, item: &ItemId, dep: &ItemId) {
         let from = self.g.node(item);
         let to = self.g.node(dep);
 
-        if let Some(true) = self.g.inner.edge_weight(from, to) {
+        if let Some(true) = self.g.idx_graph.edge_weight(from, to) {
             return;
         }
-        self.g.inner.add_edge(from, to, false);
+        self.g.idx_graph.add_edge(from, to, false);
     }
 }
