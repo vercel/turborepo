@@ -168,19 +168,19 @@ impl NodeJsPoolProcess {
                         match status {
                             Ok(status) => {
                                 let (stdout, stderr) = get_output(&mut child).await?;
-                                bail!("node process exited before we could connect to it with {}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}", status);
+                                bail!("node process exited before we could connect to it with {status}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}");
                             }
                             Err(err) => {
                                 let _ = child.start_kill();
                                 let (stdout, stderr) = get_output(&mut child).await?;
-                                bail!("node process exited before we could connect to it: {:?}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}", err);
+                                bail!("node process exited before we could connect to it: {err:?}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}");
                             },
                         }
                     },
                     _ = sleep(timeout) => {
                         let _ = child.start_kill();
                         let (stdout, stderr) = get_output(&mut child).await?;
-                        bail!("timed out waiting for the Node.js process to connect ({:?} timeout)\nProcess output:\n{stdout}\nProcess error output:\n{stderr}", timeout);
+                        bail!("timed out waiting for the Node.js process to connect ({timeout:?} timeout)\nProcess output:\n{stdout}\nProcess error output:\n{stderr}");
                     },
                 };
 
