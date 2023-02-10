@@ -245,7 +245,7 @@ impl RunningNodeJsPoolProcess {
             stderr(),
         );
         select! {
-            result = recv_future => return result,
+            result = recv_future => result,
             _ = stdout_future => bail!("stdout stream ended unexpectedly"),
             _ = stderr_future => bail!("stderr stream ended unexpectedly"),
         }
