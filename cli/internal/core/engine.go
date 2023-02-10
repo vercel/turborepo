@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -95,13 +94,11 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	pipeline, err := e.completeGraph.GetPipelineFromWorkspace(pkg, e.isSinglePackage)
 
+	// An error here means there was no turbo.json in the workspace.
+	// Fallback to the root pipeline to find the task.
 	if err != nil {
-		// If the error is that there was no turbo.json in the worksapce,
-		// and we were looking in the non-root workspace, fallback to the root workspace
-		if os.IsNotExist(err) {
-			if pkg != util.RootPkgName {
-				return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
-			}
+		if pkg != util.RootPkgName {
+			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
 		}
 
 		// Otherwise bubble up the error
