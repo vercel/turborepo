@@ -74,6 +74,21 @@
     },
     "persistent-task-4-parent": {
       "dependsOn": ["persistent-task-4"]
+    },
+
+    "cached-task-1": {
+      "cache": false,
+      "outputs": ["out/**"]
+    },
+    "cached-task-2": {
+      "cache": true,
+      "outputs": ["out/**"]
+    },
+    "cached-task-3": {
+      "outputs": ["out/**"]
+    },
+    "cached-task-4": {
+      "outputs": ["out/**"]
     }
   }
 }

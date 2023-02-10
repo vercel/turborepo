@@ -320,7 +320,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 			mergedTaskDefinition.Outputs = taskDef.Outputs
 		}
 
-		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		if bookkeepingTaskDef.hasField("ShouldCache") {
+			mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		}
+
 		if bookkeepingTaskDef.hasField("EnvVarDependencies") {
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
@@ -385,6 +388,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	if task.Cache == nil {
 		btd.TaskDefinition.ShouldCache = true
 	} else {
+		btd.definedFields.Add("ShouldCache")
 		btd.TaskDefinition.ShouldCache = *task.Cache
 	}
 

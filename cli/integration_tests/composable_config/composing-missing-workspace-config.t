@@ -84,3 +84,4 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+5. Assert that task with cache:false doesn't get cached
