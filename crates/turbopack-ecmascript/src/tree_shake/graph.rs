@@ -219,6 +219,12 @@ impl DepGraph {
             }
         }
 
+        for group in &mut groups {
+            let start = group[0].clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
 
@@ -230,6 +236,7 @@ impl DepGraph {
                 .g
                 .inner
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
+                .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
                 >= 2
             {
@@ -269,11 +276,13 @@ impl DepGraph {
                     .inner
                     .neighbors_directed(item_ix, petgraph::Direction::Outgoing)
                 {
-                    let dep_group_ix = group_ix_by_item_ix[&item_dep_ix];
-                    if group_ix == dep_group_ix {
-                        continue;
+                    let dep_group_ix = group_ix_by_item_ix.get(&item_dep_ix);
+                    if let Some(&dep_group_ix) = dep_group_ix {
+                        if group_ix == dep_group_ix {
+                            continue;
+                        }
+                        new_graph.inner.add_edge(group_ix, dep_group_ix, true);
                     }
-                    new_graph.inner.add_edge(group_ix, dep_group_ix, true);
                 }
             }
         }
