@@ -26,27 +26,43 @@ axum-server = "0.4.4"
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+command-group = { version = "2.0.1", features = ["with-tokio"] }
 config = "0.13"
 console = { workspace = true }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 env_logger = "0.10.0"
+futures = "0.3.26"
 glob-match = "0.2.1"
+hex = "0.4.3"
 hostname = "0.3.1"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
+notify = "5.1.0"
+pidlock = { version = "0.1.4", path = "../../../pidlock" }
 predicates = { workspace = true }
+prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+sha2 = "0.10.6"
+sysinfo = "0.27.7"
+thiserror = "1.0.38"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tonic = "0.8.3"
+tower = "0.4.13"
+url = "2.3.1"
 webbrowser = { workspace = true }
 
 const_format = "0.2.30"
 turbo-updater = { workspace = true }
+
+[build-dependencies]
+tonic-build = "0.8.4"
+

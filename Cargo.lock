@@ -875,6 +875,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "command-group"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5080df6b0f0ecb76cab30808f00d937ba725cebe266a3da8cd89dff92f2a9916"
+dependencies = [
+ "async-trait",
+ "nix",
+ "tokio",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "common-path"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1799,7 +1811,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ab7d1bd1bd33cc98b0889831b72da23c0aa4df9cec7e0702f46ecea04b35db6"
 dependencies = [
  "bitflags",
- "fsevent-sys",
+ "fsevent-sys 2.0.1",
 ]
 
 [[package]]
@@ -1807,6 +1819,15 @@ name = "fsevent-sys"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f41b048a94555da0f42f1d632e2e19510084fb8e303b0daa2816e733fb3644a0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "fsevent-sys"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
 dependencies = [
  "libc",
 ]
@@ -2436,6 +2457,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "inotify"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8069d3ec154eb856955c1c0fbffefbf5f3c40a104ec912d4797314c1801abff"
+dependencies = [
+ "bitflags",
+ "inotify-sys",
+ "libc",
+]
+
+[[package]]
 name = "inotify-sys"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2639,6 +2671,26 @@ checksum = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
+]
+
+[[package]]
+name = "kqueue"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c8fc60ba15bf51257aa9807a48a61013db043fcf3a78cb0d916e8e396dcad98"
+dependencies = [
+ "kqueue-sys",
+ "libc",
+]
+
+[[package]]
+name = "kqueue-sys"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8367585489f01bc55dd27404dcf56b95e6da061a256a666ab23be9ba96a2e587"
+dependencies = [
+ "bitflags",
+ "libc",
 ]
 
 [[package]]
@@ -3222,12 +3274,39 @@ dependencies = [
  "bitflags",
  "filetime",
  "fsevent",
- "fsevent-sys",
- "inotify",
+ "fsevent-sys 2.0.1",
+ "inotify 0.7.1",
  "libc",
  "mio 0.6.23",
  "mio-extras",
  "walkdir",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "notify"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58ea850aa68a06e48fdb069c0ec44d0d64c8dbffa49bf3b6f7f0a901fdea1ba9"
+dependencies = [
+ "bitflags",
+ "crossbeam-channel",
+ "filetime",
+ "fsevent-sys 4.1.0",
+ "inotify 0.9.6",
+ "kqueue",
+ "libc",
+ "mio 0.8.6",
+ "walkdir",
+ "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc51db7b362b205941f71232e56c625156eb9a929f8cf74a428fd5bc094a4afc"
+dependencies = [
  "winapi 0.3.9",
 ]
 
@@ -3612,6 +3691,15 @@ name = "pico-args"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
+
+[[package]]
+name = "pidlock"
+version = "0.1.4"
+dependencies = [
+ "libc",
+ "log",
+ "windows-sys 0.45.0",
+]
 
 [[package]]
 name = "pin-project"
@@ -5753,6 +5841,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
 
 [[package]]
+name = "sysinfo"
+version = "0.27.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a902e9050fca0a5d6877550b769abd2bd1ce8c04634b941dbe2809735e1a1e33"
+dependencies = [
+ "cfg-if 1.0.0",
+ "core-foundation-sys",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "rayon",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "tabled"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6132,6 +6235,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-build"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bf5e9b9c0f7e0a7c027dcfaba7b2c60816c7049171f679d99ee2ff65d0de8c4"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6305,6 +6421,7 @@ dependencies = [
  "build-target",
  "clap 4.1.8",
  "clap_complete",
+ "command-group",
  "ctrlc",
  "dunce",
  "itertools",
@@ -6316,6 +6433,7 @@ dependencies = [
  "serde_yaml",
  "shared_child",
  "tiny-gradient",
+ "tracing-subscriber",
  "turborepo-lib",
 ]
 
@@ -6416,7 +6534,7 @@ dependencies = [
  "indexmap",
  "jsonc-parser",
  "mime",
- "notify",
+ "notify 4.0.17",
  "parking_lot",
  "rstest",
  "serde",
@@ -6840,6 +6958,7 @@ dependencies = [
  "chrono",
  "clap 4.1.8",
  "clap_complete",
+ "command-group",
  "config",
  "console",
  "const_format",
@@ -6847,14 +6966,19 @@ dependencies = [
  "dirs-next",
  "dunce",
  "env_logger",
+ "futures",
  "glob-match",
+ "hex",
  "hostname",
  "indicatif",
  "itertools",
  "lazy_static",
  "log",
+ "notify 5.1.0",
+ "pidlock",
  "predicates",
  "pretty_assertions",
+ "prost",
  "rand",
  "reqwest",
  "rustc_version_runtime",
@@ -6862,10 +6986,17 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
+ "sysinfo",
  "tempfile",
+ "thiserror",
  "tiny-gradient",
  "tokio",
+ "tonic",
+ "tonic-build",
+ "tower",
  "turbo-updater",
+ "url",
  "webbrowser",
 ]
 
