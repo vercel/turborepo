@@ -160,13 +160,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	turboJSON, err := fs.LoadTurboConfig(r.base.RepoRoot, rootPackageJSON, r.opts.runOpts.singlePackage)
-	if err != nil {
-		return err
-	}
-
-	// TODO: these values come from a config file, hopefully viper can help us merge these
-	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
 
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.singlePackage {
@@ -201,7 +194,26 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
+	// TODO: consolidate some of these arguments
+	// Note: not all properties are set here. GlobalHash and Pipeline keys are set later
+	g := &graph.CompleteGraph{
+		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
+		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
+		RootNode:        pkgDepGraph.RootNode,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		RepoRoot:        r.base.RepoRoot,
+	}
+
+	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.singlePackage)
+	if err != nil {
+		return err
+	}
+
+	// TODO: these values come from a config file, hopefully viper can help us merge these
+	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+
 	pipeline := turboJSON.Pipeline
+	g.Pipeline = pipeline
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
@@ -225,6 +237,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
+
 	globalHash, err := calculateGlobalHash(
 		r.base.RepoRoot,
 		rootPackageJSON,
@@ -236,22 +249,15 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		r.base.Logger,
 		os.Environ(),
 	)
+
+	g.GlobalHash = globalHash
+
 	if err != nil {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
 	r.base.Logger.Debug("global hash", "value", globalHash)
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
-	// TODO: consolidate some of these arguments
-	g := &graph.CompleteGraph{
-		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
-		Pipeline:        pipeline,
-		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
-		GlobalHash:      globalHash,
-		RootNode:        pkgDepGraph.RootNode,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
-		RepoRoot:        r.base.RepoRoot,
-	}
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,

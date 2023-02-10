@@ -33,11 +33,6 @@ type Engine struct {
 
 	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
 	completeGraph *graph.CompleteGraph
-
-	// Map of packageName to pipeline. We resolve task definitions from here
-	// but we don't want to read from the filesystem every time
-	pipelines map[string]fs.Pipeline
-
 	// isSinglePackage is used to load turbo.json correctly
 	isSinglePackage bool
 }
@@ -52,7 +47,6 @@ func NewEngine(
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
-		pipelines:        map[string]fs.Pipeline{},
 		isSinglePackage:  isSinglePackage,
 	}
 }
@@ -98,7 +92,7 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 }
 
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
-	pipeline, err := e.getPipelineFromWorkspace(pkg)
+	pipeline, err := e.completeGraph.GetPipelineFromWorkspace(pkg, e.isSinglePackage)
 
 	if err != nil {
 		// Fallback to the root workspace to look for a pipeline if one wasn't
@@ -173,22 +167,16 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
-		var pkgDefinition *fs.PackageJSON
-		if pkg == ROOT_NODE_NAME {
-			pkgDefinition = &fs.PackageJSON{}
-		} else {
-			pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
-			if !ok {
+		if pkg != ROOT_NODE_NAME {
+			if _, ok := e.completeGraph.WorkspaceInfos.PackageJSONs[pkg]; !ok {
 				// If we have a pkg it should be in WorkspaceInfos.
 				// If we're hitting this error something has gone wrong earlier when building WorkspaceInfos
 				// or the workspace really doesn't exist and turbo.json is misconfigured.
 				return fmt.Errorf("Could not find workspace \"%s\" from task \"%s\" in project", pkg, taskID)
 			}
-
-			pkgDefinition = pkgJSON
 		}
 
-		taskDefinitions, err := e.getTaskDefinitionChain(&e.completeGraph.Pipeline, pkgDefinition, taskID, taskName)
+		taskDefinitions, err := e.getTaskDefinitionChain(taskID, taskName)
 		if err != nil {
 			return err
 		}
@@ -381,7 +369,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.WorkspaceInfos[packageName]
+			pkg, pkgExists := graph.WorkspaceInfos.PackageJSONs[packageName]
 			if !pkgExists {
 				return fmt.Errorf("Cannot find package %v", packageName)
 			}
@@ -413,9 +401,16 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
 // These definitions should be merged by the consumer.
 // TODO(mehulkar): Can we use getPipelineFromWorkspace() here instead of reading configs again and passing around rootPipeline as an arg?
-func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
+func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
 	// Start a list of TaskDefinitions we've found for this TaskID
 	taskDefinitions := []fs.BookkeepingTaskDefinition{}
+
+	rootPipeline, err := e.completeGraph.GetPipelineFromWorkspace(util.RootPkgName, e.isSinglePackage)
+	if err != nil {
+		// It should be very unlikely that we can't find a root pipeline. Even for single package repos
+		// the pipeline is synthesized from package.json, so there should be _something_ here.
+		return nil, err
+	}
 
 	// Look for the taskDefinition in the root pipeline.
 	if rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName); err == nil {
@@ -435,16 +430,13 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	// for a workspace task, since these can only be defined in the root turbo.json.
 	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
 	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
-		// Look up task definition in turbo.json in the workspace directory
-		workspaceConfigPath := pkg.Dir.Join("turbo.json").RestoreAnchor(e.completeGraph.RepoRoot)
-
 		// If there is an error, we can ignore it, since turbo.json config is not required in the workspace.
-		if workspaceTurboJSON, err := fs.ReadTurboConfig(workspaceConfigPath); err == nil {
+		if workspaceTurboJSON, err := e.completeGraph.GetTurboConfigFromWorkspace(taskIDPackage, e.isSinglePackage); err == nil {
 			// TODO(mehulkar): Enable extending from more than one workspace.
 			if len(workspaceTurboJSON.Extends) > 1 {
 				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from %v",
-					pkg.Name,
+					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
+					taskIDPackage,
 					workspaceTurboJSON.Extends,
 				)
 			}
@@ -462,14 +454,14 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			if len(workspaceTurboJSON.Extends) == 0 {
 				// For turbo.jsons in workspaces that don't have an extends key, throw an error
 				// We don't support this right now.
-				return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
+				return nil, fmt.Errorf("No \"extends\" key found in %s", taskIDPackage)
 			}
 
 			// TODO(mehulkar): Enable extending from non-root workspace.
 			if workspaceTurboJSON.Extends[0] != util.RootPkgName {
 				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from %v",
-					pkg.Name,
+					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
+					taskIDPackage,
 					workspaceTurboJSON.Extends,
 				)
 			}
@@ -477,7 +469,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	}
 
 	if len(taskDefinitions) == 0 {
-		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, pkg.Dir)
+		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, taskIDPackage)
 	}
 
 	return taskDefinitions, nil
@@ -519,44 +511,4 @@ func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
 	}
 	sort.Strings(stringDescendents)
 	return stringDescendents, nil
-}
-
-func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, error) {
-	cachedPipeline, ok := e.pipelines[workspaceName]
-	if ok {
-		return cachedPipeline, nil
-	}
-
-	// Note: dir for the root workspace will be an empty string, and for
-	// other workspaces, it will be a relative path.
-	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
-	repoRoot := e.completeGraph.RepoRoot
-	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
-
-	// We need to a PackageJSON, because LoadTurboConfig requires it as an argument
-	// so it can synthesize tasks for single-package repos.
-	// In the root workspace, actually get and use the root package.json.
-	// For all other workspaces, we don't need the synthesis feature, so we can proceed
-	// with a default/blank PackageJSON
-	pkgJSON := &fs.PackageJSON{}
-
-	if workspaceName == util.RootPkgName {
-		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
-		rootPkgJSON, err := fs.ReadPackageJSON(rootPkgJSONPath)
-		if err != nil {
-			return nil, err
-		}
-		pkgJSON = rootPkgJSON
-	}
-
-	turboConfig, err := fs.LoadTurboConfig(dirAbsolutePath, pkgJSON, e.isSinglePackage)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add to internal cache so we don't have to read file system for every task
-	e.pipelines[workspaceName] = turboConfig.Pipeline
-
-	// Return the config from the workspace.
-	return e.pipelines[workspaceName], nil
 }

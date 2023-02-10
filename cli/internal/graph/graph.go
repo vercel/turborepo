@@ -14,7 +14,10 @@ import (
 )
 
 // WorkspaceInfos holds information about each workspace in the monorepo.
-type WorkspaceInfos map[string]*fs.PackageJSON
+type WorkspaceInfos struct {
+	PackageJSONs map[string]*fs.PackageJSON
+	TurboConfigs map[string]*fs.TurboJSON
+}
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
@@ -44,7 +47,7 @@ type CompleteGraph struct {
 func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
-		pkg, ok := g.WorkspaceInfos[packageName]
+		pkg, ok := g.WorkspaceInfos.PackageJSONs[packageName]
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
@@ -73,6 +76,57 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 
 		return visitor(ctx, packageTask)
 	}
+}
+
+// GetPipelineFromWorkspace returns the Unmarshaled fs.Pipeline struct from turbo.json in the given workspace.
+func (g *CompleteGraph) GetPipelineFromWorkspace(workspaceName string, isSinglePackage bool) (fs.Pipeline, error) {
+	turboConfig, err := g.GetTurboConfigFromWorkspace(workspaceName, isSinglePackage)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return turboConfig.Pipeline, nil
+}
+
+// GetTurboConfigFromWorkspace returns the Unmarshaled fs.TurboJSON from turbo.json in the given workspace.
+func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSinglePackage bool) (*fs.TurboJSON, error) {
+	cachedTurboConfig, ok := g.WorkspaceInfos.TurboConfigs[workspaceName]
+
+	if ok {
+		return cachedTurboConfig, nil
+	}
+
+	// Note: dir for the root workspace will be an empty string, and for
+	// other workspaces, it will be a relative path.
+	pkgJSON, err := g.GetPackageJSONFromWorkspace(workspaceName)
+	if err != nil {
+		return &fs.TurboJSON{}, nil
+	}
+
+	workspaceAbsolutePath := pkgJSON.Dir.RestoreAnchor(g.RepoRoot)
+	turboConfig, err := fs.LoadTurboConfig(workspaceAbsolutePath, pkgJSON, isSinglePackage)
+
+	// If we failed to load a TurboConfig, return the error
+	if err != nil {
+		return nil, err
+	}
+
+	// add to cache
+	g.WorkspaceInfos.TurboConfigs[workspaceName] = turboConfig
+
+	return g.WorkspaceInfos.TurboConfigs[workspaceName], nil
+}
+
+// GetPackageJSONFromWorkspace returns an Unmarshaled struct of the package.json in the given workspace
+func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.PackageJSON, error) {
+	pkgJSON, ok := g.WorkspaceInfos.PackageJSONs[workspaceName]
+
+	if !ok {
+		return &fs.PackageJSON{}, nil
+	}
+
+	return pkgJSON, nil
 }
 
 // repoRelativeLogFile returns the path to the log file for this task execution as a
