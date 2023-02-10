@@ -143,28 +143,36 @@ pub async fn evaluate(
 
     let args = args.into_iter().try_join().await?;
 
-    // Sending to workers can fail if reused workers are in a bad state.
-    // To we retry picking workers from the pools until we succeed.
-    let mut i = 1;
-    let mut operation = loop {
-        let mut operation = pool.operation().await?;
-        let result = operation
-            .send(EvalJavaScriptOutgoingMessage::Evaluate {
-                args: args.iter().map(|v| &**v).collect(),
-            })
-            .await;
-        match result {
-            Ok(_) => break operation,
-            Err(err) if i == 10 => {
-                return Err(err);
+    // Workers in the pool could be in a bad state that we didn't detect yet.
+    // The bad state might even be unnoticable until we actually send the job to the
+    // worker. So we retry picking workers from the pools until we succeed
+    // sending the job.
+    /// Number of attempts before we start slowing down the retry.
+    const MAX_FAST_ATTEMPTS: u8 = 5;
+    /// Total number of attempts.
+    const MAX_ATTEMPTS: u8 = MAX_FAST_ATTEMPTS * 2;
+    let mut attempt = 0;
+    let mut operation = FutureRetry::new(
+        || async {
+            let mut operation = pool.operation().await?;
+            operation
+                .send(EvalJavaScriptOutgoingMessage::Evaluate {
+                    args: args.iter().map(|v| &**v).collect(),
+                })
+                .await
+        },
+        |err| {
+            attempt += 1;
+            if attempt >= MAX_ATTEMPTS {
+                RetryPolicy::ForwardError(err)
+            } else if attempt >= MAX_FAST_ATTEMPTS {
+                RetryPolicy::WaitRetry(Duration::from_secs(1))
+            } else {
+                RetryPolicy::Repeat
             }
-            Err(_) => {
-                // retry
-                i += 1;
-                continue;
-            }
-        }
-    };
+        },
+    )
+    .await?;
 
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
