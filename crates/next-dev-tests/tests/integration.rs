@@ -123,8 +123,7 @@ fn test(resource: &str) {
 
 #[test_resources("crates/next-dev-tests/tests/integration/*/*/__skipped__/*")]
 #[should_panic]
-#[tokio::main(flavor = "current_thread")]
-async fn test_skipped_fails(resource: &str) {
+fn test_skipped_fails(resource: &str) {
     let run_result = run_async_test(run_test(resource));
 
     // Assert that this skipped test itself has at least one browser test which
