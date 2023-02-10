@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    future::Future,
     mem::take,
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
@@ -193,6 +194,7 @@ impl NodeJsPoolProcess {
 
                 let stdout = BufReader::new(child.stdout.take().unwrap());
                 let stderr = BufReader::new(child.stderr.take().unwrap());
+
                 RunningNodeJsPoolProcess {
                     child: Some(child),
                     connection,
@@ -344,6 +346,7 @@ impl NodeJsPool {
             process: Some(process.run().await?),
             permit,
             processes: self.processes.clone(),
+            allow_process_reuse: true,
         })
     }
 }
@@ -354,23 +357,42 @@ pub struct NodeJsOperation {
     #[allow(dead_code)]
     permit: OwnedSemaphorePermit,
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
+    allow_process_reuse: bool,
 }
 
 impl NodeJsOperation {
-    fn process_mut(&mut self) -> Result<&mut RunningNodeJsPoolProcess> {
-        self.process
+    async fn with_process<'a, F: Future<Output = Result<T>> + Send + 'a, T>(
+        &'a mut self,
+        f: impl FnOnce(&'a mut RunningNodeJsPoolProcess) -> F,
+    ) -> Result<T> {
+        let process = self
+            .process
             .as_mut()
-            .context("Node.js operation already finished")
+            .context("Node.js operation already finished")?;
+
+        if !self.allow_process_reuse {
+            bail!("Node.js process is no longer usable");
+        }
+
+        let result = f(process).await;
+        if result.is_err() {
+            self.allow_process_reuse = false;
+        }
+        result
     }
 
     pub async fn recv<M>(&mut self) -> Result<M>
     where
         M: DeserializeOwned,
     {
-        let message = timeout(Duration::from_secs(30), self.process_mut()?.recv())
-            .await
-            .context("timeout while receiving message from process")?
-            .context("failed to receive message")?;
+        let message = self
+            .with_process(|process| async move {
+                timeout(Duration::from_secs(30), process.recv())
+                    .await
+                    .context("timeout while receiving message from process")?
+                    .context("failed to receive message")
+            })
+            .await?;
         serde_json::from_slice(&message).context("failed to deserialize message")
     }
 
@@ -378,14 +400,15 @@ impl NodeJsOperation {
     where
         M: Serialize,
     {
-        timeout(
-            Duration::from_secs(30),
-            self.process_mut()?
-                .send(serde_json::to_vec(&message).context("failed to serialize message")?),
-        )
+        let message = serde_json::to_vec(&message).context("failed to serialize message")?;
+        self.with_process(|process| async move {
+            timeout(Duration::from_secs(30), process.send(message))
+                .await
+                .context("timeout while sending message")?
+                .context("failed to send message")?;
+            Ok(())
+        })
         .await
-        .context("timeout while sending message")?
-        .context("failed to send message")
     }
 
     pub async fn wait_or_kill(mut self) -> Result<ExitStatus> {
@@ -408,15 +431,21 @@ impl NodeJsOperation {
 
         Ok(status)
     }
+
+    pub fn disallow_reuse(&mut self) {
+        self.allow_process_reuse = false;
+    }
 }
 
 impl Drop for NodeJsOperation {
     fn drop(&mut self) {
-        if let Some(process) = self.process.take() {
-            self.processes
-                .lock()
-                .unwrap()
-                .push(NodeJsPoolProcess::Running(process));
+        if self.allow_process_reuse {
+            if let Some(process) = self.process.take() {
+                self.processes
+                    .lock()
+                    .unwrap()
+                    .push(NodeJsPoolProcess::Running(process));
+            }
         }
     }
 }
