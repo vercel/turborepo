@@ -68,10 +68,6 @@ impl Lockfile for NpmLockfile {
             .filter_map(|key| {
                 self.packages.get(&key).map(|pkg| {
                     let version = pkg.version.clone().unwrap_or_default();
-                    /*
-                    .ok_or_else(|| {
-                        Error::MissingVersion(workspace_path.to_string(), key.clone())
-                    })?; */
                     Ok(Package { key, version })
                 })
             })
