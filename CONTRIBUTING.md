@@ -40,6 +40,11 @@ Building
 - Building `turbo` CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
+### TLS Implementation
+
+Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls` is a wrapper around OpenSSL. Turborepo requires users to select
+one of them by building with the `rustls-tls` or `native-tls` feature, respectively. To do so, pass either `--features rustls-tls` or `--features native-tls` to `cargo build` or `cargo test`. The Makefile already passes `rustls-tls` by default.
+
 ### Running Turborepo Tests
 
 #### Go Tests
@@ -54,7 +59,7 @@ To run a single Go test, you can run `go test ./[path/to/package/]`. See more [i
 
 #### Rust Tests
 
-The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib --features rustls-tls`.
 You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
 
 You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.

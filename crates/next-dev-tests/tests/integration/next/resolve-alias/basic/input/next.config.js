@@ -1,8 +1,10 @@
 module.exports = {
   experimental: {
-    resolveAlias: {
-      foo: ["bar"],
-      foo2: { browser: "bar" },
+    turbo: {
+      resolveAlias: {
+        foo: ["bar"],
+        foo2: { browser: "bar" },
+      },
     },
   },
 };

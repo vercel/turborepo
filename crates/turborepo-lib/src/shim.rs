@@ -211,6 +211,7 @@ impl LocalTurboState {
         let package_json: PackageJson =
             serde_json::from_reader(File::open(local_turbo_package_path).ok()?).ok()?;
 
+        debug!("Local turbo version: {}", package_json.version);
         Some(Self {
             bin_path: local_turbo_path,
             version: package_json.version,
@@ -510,6 +511,7 @@ pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
     init_env_logger(args.verbosity);
+    debug!("Global turbo version: {}", get_version());
 
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any

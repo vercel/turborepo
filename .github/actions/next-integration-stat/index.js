@@ -16096,6 +16096,18 @@
             "No PR number found in context, will not try to post comment."
           );
         }
+        console.log(
+          "getInputs: these inputs will be used to collect test results",
+          {
+            token: !!token,
+            shouldDiffWithMain,
+            prNumber,
+            sha,
+            diff_base: (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+              "diff_base"
+            ),
+          }
+        );
         return {
           token,
           shouldDiffWithMain,
@@ -16337,7 +16349,7 @@
         (acc, value) => {
           const { data, name } = value;
           acc.currentTestFailedSuiteCount += data.numFailedTestSuites;
-          acc.currentTestPassedCaseCount += data.numPassedTestSuites;
+          acc.currentTestPassedSuiteCount += data.numPassedTestSuites;
           acc.currentTestTotalSuiteCount += data.numTotalTestSuites;
           acc.currentTestFailedCaseCount += data.numFailedTests;
           acc.currentTestPassedCaseCount += data.numPassedTests;

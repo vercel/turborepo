@@ -1,5 +1,5 @@
-//go:build go
-// +build go
+//go:build go || !rust
+// +build go !rust
 
 package fs
 
