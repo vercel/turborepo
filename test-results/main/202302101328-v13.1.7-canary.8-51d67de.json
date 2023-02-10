@@ -1,0 +1,2651 @@
+{
+  "ref": "e43b386b513c5811162a613165de50c47cdc690f",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 13,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 20,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 36,
+        "openHandles": [],
+        "snapshot": {
+          "added": 4,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 1,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 4,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676032765911,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default should strip whitespace correctly with newline",
+                "location": null,
+                "status": "pending",
+                "title": "should strip whitespace correctly with newline"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default module init error not shown",
+                "location": null,
+                "status": "pending",
+                "title": "module init error not shown"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default boundaries",
+                "location": null,
+                "status": "pending",
+                "title": "boundaries"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default internal package errors",
+                "location": null,
+                "status": "pending",
+                "title": "internal package errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default unterminated JSX",
+                "location": null,
+                "status": "pending",
+                "title": "unterminated JSX"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default conversion to class component (1)",
+                "location": null,
+                "status": "pending",
+                "title": "conversion to class component (1)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default css syntax errors",
+                "location": null,
+                "status": "pending",
+                "title": "css syntax errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default logbox: anchors links in error messages",
+                "location": null,
+                "status": "pending",
+                "title": "logbox: anchors links in error messages"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default non-Error errors are handled properly",
+                "location": null,
+                "status": "pending",
+                "title": "non-Error errors are handled properly"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Should not show __webpack_exports__ when exporting anonymous arrow function",
+                "location": null,
+                "status": "pending",
+                "title": "Should not show __webpack_exports__ when exporting anonymous arrow function"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Unhandled errors and rejections opens up in the minimized state",
+                "location": null,
+                "status": "pending",
+                "title": "Unhandled errors and rejections opens up in the minimized state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Call stack count is correct for server error",
+                "location": null,
+                "status": "pending",
+                "title": "Call stack count is correct for server error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Call stack count is correct for client error",
+                "location": null,
+                "status": "pending",
+                "title": "Call stack count is correct for client error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Server component errors should open up in fullscreen",
+                "location": null,
+                "status": "pending",
+                "title": "Server component errors should open up in fullscreen"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Import trace when module not found in layout",
+                "location": null,
+                "status": "pending",
+                "title": "Import trace when module not found in layout"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Can't resolve @import in CSS file",
+                "location": null,
+                "status": "pending",
+                "title": "Can't resolve @import in CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default server component can recover from error thrown in the module",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default client component can recover from error thrown in the module",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo should strip whitespace correctly with newline",
+                "location": null,
+                "status": "passed",
+                "title": "should strip whitespace correctly with newline"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:95:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo module init error not shown",
+                "location": null,
+                "status": "failed",
+                "title": "module init error not shown"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo boundaries",
+                "location": null,
+                "status": "passed",
+                "title": "boundaries"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo internal package errors",
+                "location": null,
+                "status": "pending",
+                "title": "internal package errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:213:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo unterminated JSX",
+                "location": null,
+                "status": "failed",
+                "title": "unterminated JSX"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:279:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo conversion to class component (1)",
+                "location": null,
+                "status": "failed",
+                "title": "conversion to class component (1)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:323:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo css syntax errors",
+                "location": null,
+                "status": "failed",
+                "title": "css syntax errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo logbox: anchors links in error messages",
+                "location": null,
+                "status": "failed",
+                "title": "logbox: anchors links in error messages"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo non-Error errors are handled properly",
+                "location": null,
+                "status": "pending",
+                "title": "non-Error errors are handled properly"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:668:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Should not show __webpack_exports__ when exporting anonymous arrow function",
+                "location": null,
+                "status": "failed",
+                "title": "Should not show __webpack_exports__ when exporting anonymous arrow function"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('.nextjs-toast-errors')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Unhandled errors and rejections opens up in the minimized state",
+                "location": null,
+                "status": "failed",
+                "title": "Unhandled errors and rejections opens up in the minimized state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Call stack count is correct for server error",
+                "location": null,
+                "status": "failed",
+                "title": "Call stack count is correct for server error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Call stack count is correct for client error",
+                "location": null,
+                "status": "failed",
+                "title": "Call stack count is correct for client error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#text')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Server component errors should open up in fullscreen",
+                "location": null,
+                "status": "failed",
+                "title": "Server component errors should open up in fullscreen"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:863:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Import trace when module not found in layout",
+                "location": null,
+                "status": "failed",
+                "title": "Import trace when module not found in layout"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:895:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Can't resolve @import in CSS file",
+                "location": null,
+                "status": "failed",
+                "title": "Can't resolve @import in CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo server component can recover from error thrown in the module",
+                "location": null,
+                "status": "passed",
+                "title": "server component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at /work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:924:47"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo client component can recover from error thrown in the module",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from error thrown in the module"
+              }
+            ],
+            "endTime": 1676033422889,
+            "message": "  ● ReactRefreshLogBox app turbo › module init error not shown\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      93 |       )\n      94 |\n    > 95 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      96 |       if (process.platform === 'win32') {\n      97 |         expect(await session.getRedboxSource()).toMatchSnapshot()\n      98 |       } else {\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:95:45)\n\n  ● ReactRefreshLogBox app turbo › unterminated JSX\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:213:7)\n\n  ● ReactRefreshLogBox app turbo › conversion to class component (1)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      277 |       )\n      278 |\n    > 279 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      280 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      281 |\n      282 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:279:45)\n\n  ● ReactRefreshLogBox app turbo › css syntax errors\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:323:7)\n\n  ● ReactRefreshLogBox app turbo › logbox: anchors links in error messages\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Should not show __webpack_exports__ when exporting anonymous arrow function\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      666 |       )\n      667 |\n    > 668 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      669 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      670 |\n      671 |       await cleanup()\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:668:45)\n\n  ● ReactRefreshLogBox app turbo › Unhandled errors and rejections opens up in the minimized state\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('.nextjs-toast-errors')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Call stack count is correct for server error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Call stack count is correct for client error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Server component errors should open up in fullscreen\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#text')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Import trace when module not found in layout\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:863:7)\n\n  ● ReactRefreshLogBox app turbo › Can't resolve @import in CSS file\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:895:7)\n\n  ● ReactRefreshLogBox app turbo › client component can recover from error thrown in the module\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      922 |\n      923 |         await next.patchFile('index.js', \"throw new Error('module error')\")\n    > 924 |         expect(await session.hasRedbox(true)).toBe(true)\n          |                                               ^\n      925 |         await next.patchFile(\n      926 |           'index.js',\n      927 |           'export default function Page() {return <p>hello world</p>}'\n\n      at development/acceptance-app/ReactRefreshLogBox.test.ts:924:47\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts",
+            "startTime": 1676032766004,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/manual-client-base-path/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676034456368,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "@next/font/google with-font-declarations-file"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 4\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/with-font-declarations-file.test.ts:59:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google with-font-declarations-file preload correct files at /inter",
+                "location": null,
+                "status": "failed",
+                "title": "preload correct files at /inter"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google with-font-declarations-file"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 4\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/with-font-declarations-file.test.ts:93:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google with-font-declarations-file preload correct files at /roboto",
+                "location": null,
+                "status": "failed",
+                "title": "preload correct files at /roboto"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google with-font-declarations-file"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 4\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/with-font-declarations-file.test.ts:127:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google with-font-declarations-file preload correct files at /local-font",
+                "location": null,
+                "status": "failed",
+                "title": "preload correct files at /local-font"
+              }
+            ],
+            "endTime": 1676034479417,
+            "message": "  ● @next/font/google with-font-declarations-file › preload correct files at /inter\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 4\n    Received: 0\n\n      57 |     if (isDev) {\n      58 |       // In dev all fonts will be preloaded since it's before DCE\n    > 59 |       expect($('link[as=\"font\"]').length).toBe(4)\n         |                                           ^\n      60 |     } else {\n      61 |       // Preload\n      62 |       expect($('link[as=\"font\"]').length).toBe(2)\n\n      at Object.<anonymous> (e2e/next-font/with-font-declarations-file.test.ts:59:43)\n\n  ● @next/font/google with-font-declarations-file › preload correct files at /roboto\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 4\n    Received: 0\n\n      91 |     if (isDev) {\n      92 |       // In dev all fonts will be preloaded since it's before DCE\n    > 93 |       expect($('link[as=\"font\"]').length).toBe(4)\n         |                                           ^\n      94 |     } else {\n      95 |       // Preload\n      96 |       expect($('link[as=\"font\"]').length).toBe(2)\n\n      at Object.<anonymous> (e2e/next-font/with-font-declarations-file.test.ts:93:43)\n\n  ● @next/font/google with-font-declarations-file › preload correct files at /local-font\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 4\n    Received: 0\n\n      125 |     if (isDev) {\n      126 |       // In dev all fonts will be preloaded since it's before DCE\n    > 127 |       expect($('link[as=\"font\"]').length).toBe(4)\n          |                                           ^\n      128 |     } else {\n      129 |       // Preload\n      130 |       expect($('link[as=\"font\"]').length).toBe(2)\n\n      at Object.<anonymous> (e2e/next-font/with-font-declarations-file.test.ts:127:43)\n",
+            "name": "/work/test/e2e/next-font/with-font-declarations-file.test.ts",
+            "startTime": 1676034456466,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 8,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676034922109,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on size api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on basename api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on basename api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: {\"size\": 30079}\nReceived: false\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:69:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on size api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n+   \"basename\": \"7d4cde3a64338232.png\",\n  }\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:77:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on basename api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on basename api"
+              }
+            ],
+            "endTime": 1676035068350,
+            "message": "  ● Handle new URL asset references in next dev › should render the /static page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /static page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssr page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssr page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssg page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssg page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should respond on size api\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: {\"size\": 30079}\n    Received: false\n\n      67 |       )\n      68 |\n    > 69 |       expect(data).toEqual({ size: 30079 })\n         |                    ^\n      70 |     })\n      71 |\n      72 |     it('should respond on basename api', async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:69:20)\n\n  ● Handle new URL asset references in next dev › should respond on basename api\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n    +   \"basename\": \"7d4cde3a64338232.png\",\n      }\n\n      75 |       )\n      76 |\n    > 77 |       expect(data).toEqual({\n         |                    ^\n      78 |         basename: expect.stringMatching(/^vercel\\.[0-9a-f]{8}\\.png$/),\n      79 |       })\n      80 |     })\n\n      at Object.<anonymous> (integration/url/test/index.test.js:77:20)\n",
+            "name": "/work/test/integration/url/test/index.test.js",
+            "startTime": 1676034922204,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/define-class-fields.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 11,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 11,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676033007335,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:32:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when getServerSideProps is used",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when getServerSideProps is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:56:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when getStaticProps is used",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when getStaticProps is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:76:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error for styled-jsx imports on server side",
+                "location": null,
+                "status": "failed",
+                "title": "should error for styled-jsx imports on server side"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:104:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error when page component export is not valid",
+                "location": null,
+                "status": "failed",
+                "title": "should error when page component export is not valid"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:124:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when \"use client\" is on the top level but after other expressions",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when \"use client\" is on the top level but after other expressions"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:145:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when \"Component\" is imported in server components",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when \"Component\" is imported in server components"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \\\"use client\\\", so they're Server Components by default.\"\nReceived:\n  \"error - [resolve] [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js  Error resolving EcmaScript Modules request\n  unable to resolve module \\\"client-only\\\"···\n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \\\"client-only\\\"\n  | Path where resolving has started: [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  |·\n\"\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:172:47)"
+                ],
+                "fullName": "Error overlay - RSC build errors should allow to use and handle rsc poisoning client-only",
+                "location": null,
+                "status": "failed",
+                "title": "should allow to use and handle rsc poisoning client-only"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:194:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should allow to use and handle rsc poisoning server-only",
+                "location": null,
+                "status": "failed",
+                "title": "should allow to use and handle rsc poisoning server-only"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:218:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error for invalid undefined module retuning from next dynamic",
+                "location": null,
+                "status": "failed",
+                "title": "should error for invalid undefined module retuning from next dynamic"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:239:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when error file is a server component",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when error file is a server component"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:303:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should be possible to open the import trace files in your editor",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open the import trace files in your editor"
+              }
+            ],
+            "endTime": 1676033531154,
+            "message": "  ● Error overlay - RSC build errors › should throw an error when getServerSideProps is used\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      30 |       await session.patch(pageFile, uncomment)\n      31 |\n    > 32 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      33 |       expect(await session.getRedboxSource()).toInclude(\n      34 |         '\"getServerSideProps\" is not supported in app/'\n      35 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:32:45)\n\n  ● Error overlay - RSC build errors › should throw an error when getStaticProps is used\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      54 |       await next.patchFile(pageFile, content)\n      55 |\n    > 56 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      57 |       expect(await session.getRedboxSource()).toInclude(\n      58 |         '\"getStaticProps\" is not supported in app/'\n      59 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:56:45)\n\n  ● Error overlay - RSC build errors › should error for styled-jsx imports on server side\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      74 |       await session.patch(pageFile, withoutUseClient)\n      75 |\n    > 76 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      77 |       expect(await session.getRedboxSource()).toMatchInlineSnapshot(`\n      78 |         \"app/server-with-errors/styled-jsx/comp2.js\n      79 |         'client-only' cannot be imported from a Server Component module. It should only be used from a Client Component.\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:76:45)\n\n  ● Error overlay - RSC build errors › should error when page component export is not valid\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      102 |       )\n      103 |\n    > 104 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      105 |       expect(await session.getRedboxDescription()).toInclude(\n      106 |         'The default export is not a React Component in page:'\n      107 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:104:45)\n\n  ● Error overlay - RSC build errors › should throw an error when \"use client\" is on the top level but after other expressions\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      122 |       await next.patchFile(pageFile, uncomment)\n      123 |\n    > 124 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      125 |       expect(await session.getRedboxSource()).toInclude(\n      126 |         'directive must be placed before other expressions'\n      127 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:124:45)\n\n  ● Error overlay - RSC build errors › should throw an error when \"Component\" is imported in server components\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:145:7)\n\n  ● Error overlay - RSC build errors › should allow to use and handle rsc poisoning client-only\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \\\"use client\\\", so they're Server Components by default.\"\n    Received:\n      \"error - [resolve] [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js  Error resolving EcmaScript Modules request\n      unable to resolve module \\\"client-only\\\"···\n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \\\"client-only\\\"\n      | Path where resolving has started: [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |·\n    \"\n\n      170 |\n      171 |       expect(await session.hasRedbox(true)).toBe(true)\n    > 172 |       expect(await session.getRedboxSource()).toInclude(\n          |                                               ^\n      173 |         `You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \"use client\", so they're Server Components by default.`\n      174 |       )\n      175 |\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:172:47)\n\n  ● Error overlay - RSC build errors › should allow to use and handle rsc poisoning server-only\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:194:7)\n\n  ● Error overlay - RSC build errors › should error for invalid undefined module retuning from next dynamic\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      216 |       )\n      217 |\n    > 218 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      219 |       expect(await session.getRedboxDescription()).toInclude(\n      220 |         `Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.`\n      221 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:218:45)\n\n  ● Error overlay - RSC build errors › should throw an error when error file is a server component\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      237 |       )\n      238 |\n    > 239 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      240 |       expect(await session.getRedboxSource()).toMatchInlineSnapshot(`\n      241 |         \"./app/server-with-errors/error-file/error.js\n      242 |         ReactServerComponentsError:\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:239:45)\n\n  ● Error overlay - RSC build errors › should be possible to open the import trace files in your editor\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:303:7)\n",
+            "name": "/work/test/development/acceptance-app/rsc-build-errors.test.ts",
+            "startTime": 1676033007429,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676034307088,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Requests not effected when middleware used"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 240000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at sendRequest (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n    at /work/test/e2e/proxy-request-with-middleware/test/index.test.ts:51:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)\n    at jestAdapter (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:13)\n    at runTestInternal (/work/node_modules/.pnpm/jest-runner@27.0.6/node_modules/jest-runner/build/runTest.js:389:16)"
+                ],
+                "fullName": "Requests not effected when middleware used should proxy GET request ",
+                "location": null,
+                "status": "failed",
+                "title": "should proxy GET request "
+              },
+              {
+                "ancestorTitles": [
+                  "Requests not effected when middleware used"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 240000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at sendRequest (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n    at /work/test/e2e/proxy-request-with-middleware/test/index.test.ts:52:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)\n    at jestAdapter (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:13)\n    at runTestInternal (/work/node_modules/.pnpm/jest-runner@27.0.6/node_modules/jest-runner/build/runTest.js:389:16)"
+                ],
+                "fullName": "Requests not effected when middleware used should proxy POST request with body",
+                "location": null,
+                "status": "failed",
+                "title": "should proxy POST request with body"
+              }
+            ],
+            "endTime": 1676034809924,
+            "message": "  ● Requests not effected when middleware used › should proxy GET request \n\n    thrown: \"Exceeded timeout of 240000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      28 |         })\n      29 |       : undefined\n    > 30 |     it(`should proxy ${method} request ${\n         |     ^\n      31 |       body ? 'with body' : ''\n      32 |     }`, async () => {\n      33 |       const headers = {\n\n      at sendRequest (e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n      at e2e/proxy-request-with-middleware/test/index.test.ts:51:3\n      at Object.<anonymous> (e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n\n  ● Requests not effected when middleware used › should proxy POST request with body\n\n    thrown: \"Exceeded timeout of 240000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      28 |         })\n      29 |       : undefined\n    > 30 |     it(`should proxy ${method} request ${\n         |     ^\n      31 |       body ? 'with body' : ''\n      32 |     }`, async () => {\n      33 |       const headers = {\n\n      at sendRequest (e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n      at e2e/proxy-request-with-middleware/test/index.test.ts:52:3\n      at Object.<anonymous> (e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n",
+            "name": "/work/test/e2e/proxy-request-with-middleware/test/index.test.ts",
+            "startTime": 1676034307183,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/custom-routes-i18n/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 12,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 13,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676035356983,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash dev mode should route to /blog/another/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /blog/another/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash dev mode should route to /blog/first-post/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /blog/first-post/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash dev mode should route to /catch-all/hello/world/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /catch-all/hello/world/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash dev mode should route to /catch-all/first/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /catch-all/first/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash dev mode should route to /another/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /another/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#slug')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "href resolving trailing-slash dev mode should route to /top-level-slug/ correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should route to /top-level-slug/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /blog/another/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /blog/another/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /blog/first-post/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /blog/first-post/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /catch-all/hello/world/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /catch-all/hello/world/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /catch-all/first/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /catch-all/first/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /another/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /another/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should route to /top-level-slug/ correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should route to /top-level-slug/ correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "href resolving trailing-slash",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "href resolving trailing-slash production mode should preload SSG routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should preload SSG routes correctly"
+              }
+            ],
+            "endTime": 1676035476667,
+            "message": "  ● href resolving trailing-slash › dev mode › should route to /top-level-slug/ correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#slug')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/trailing-slashes-href-resolving/test/index.test.js",
+            "startTime": 1676035357078,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 13,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 20,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 36,
+        "openHandles": [],
+        "snapshot": {
+          "added": 4,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 1,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 4,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676032829356,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default should strip whitespace correctly with newline",
+                "location": null,
+                "status": "pending",
+                "title": "should strip whitespace correctly with newline"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default module init error not shown",
+                "location": null,
+                "status": "pending",
+                "title": "module init error not shown"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default boundaries",
+                "location": null,
+                "status": "pending",
+                "title": "boundaries"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default internal package errors",
+                "location": null,
+                "status": "pending",
+                "title": "internal package errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default unterminated JSX",
+                "location": null,
+                "status": "pending",
+                "title": "unterminated JSX"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default conversion to class component (1)",
+                "location": null,
+                "status": "pending",
+                "title": "conversion to class component (1)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default css syntax errors",
+                "location": null,
+                "status": "pending",
+                "title": "css syntax errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default logbox: anchors links in error messages",
+                "location": null,
+                "status": "pending",
+                "title": "logbox: anchors links in error messages"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default non-Error errors are handled properly",
+                "location": null,
+                "status": "pending",
+                "title": "non-Error errors are handled properly"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Should not show __webpack_exports__ when exporting anonymous arrow function",
+                "location": null,
+                "status": "pending",
+                "title": "Should not show __webpack_exports__ when exporting anonymous arrow function"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Unhandled errors and rejections opens up in the minimized state",
+                "location": null,
+                "status": "pending",
+                "title": "Unhandled errors and rejections opens up in the minimized state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Call stack count is correct for server error",
+                "location": null,
+                "status": "pending",
+                "title": "Call stack count is correct for server error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Call stack count is correct for client error",
+                "location": null,
+                "status": "pending",
+                "title": "Call stack count is correct for client error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Server component errors should open up in fullscreen",
+                "location": null,
+                "status": "pending",
+                "title": "Server component errors should open up in fullscreen"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Import trace when module not found in layout",
+                "location": null,
+                "status": "pending",
+                "title": "Import trace when module not found in layout"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default Can't resolve @import in CSS file",
+                "location": null,
+                "status": "pending",
+                "title": "Can't resolve @import in CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default server component can recover from error thrown in the module",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app default client component can recover from error thrown in the module",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo should strip whitespace correctly with newline",
+                "location": null,
+                "status": "passed",
+                "title": "should strip whitespace correctly with newline"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:95:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo module init error not shown",
+                "location": null,
+                "status": "failed",
+                "title": "module init error not shown"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo boundaries",
+                "location": null,
+                "status": "passed",
+                "title": "boundaries"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo internal package errors",
+                "location": null,
+                "status": "pending",
+                "title": "internal package errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:213:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo unterminated JSX",
+                "location": null,
+                "status": "failed",
+                "title": "unterminated JSX"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:279:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo conversion to class component (1)",
+                "location": null,
+                "status": "failed",
+                "title": "conversion to class component (1)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:323:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo css syntax errors",
+                "location": null,
+                "status": "failed",
+                "title": "css syntax errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo logbox: anchors links in error messages",
+                "location": null,
+                "status": "failed",
+                "title": "logbox: anchors links in error messages"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo non-Error errors are handled properly",
+                "location": null,
+                "status": "pending",
+                "title": "non-Error errors are handled properly"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:668:45)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Should not show __webpack_exports__ when exporting anonymous arrow function",
+                "location": null,
+                "status": "failed",
+                "title": "Should not show __webpack_exports__ when exporting anonymous arrow function"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('.nextjs-toast-errors')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Unhandled errors and rejections opens up in the minimized state",
+                "location": null,
+                "status": "failed",
+                "title": "Unhandled errors and rejections opens up in the minimized state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Call stack count is correct for server error",
+                "location": null,
+                "status": "failed",
+                "title": "Call stack count is correct for server error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Call stack count is correct for client error",
+                "location": null,
+                "status": "failed",
+                "title": "Call stack count is correct for client error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#text')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Server component errors should open up in fullscreen",
+                "location": null,
+                "status": "failed",
+                "title": "Server component errors should open up in fullscreen"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:863:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Import trace when module not found in layout",
+                "location": null,
+                "status": "failed",
+                "title": "Import trace when module not found in layout"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:895:7)"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo Can't resolve @import in CSS file",
+                "location": null,
+                "status": "failed",
+                "title": "Can't resolve @import in CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox app turbo server component can recover from error thrown in the module",
+                "location": null,
+                "status": "passed",
+                "title": "server component can recover from error thrown in the module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox app turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at /work/test/development/acceptance-app/ReactRefreshLogBox.test.ts:924:47"
+                ],
+                "fullName": "ReactRefreshLogBox app turbo client component can recover from error thrown in the module",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from error thrown in the module"
+              }
+            ],
+            "endTime": 1676033491997,
+            "message": "  ● ReactRefreshLogBox app turbo › module init error not shown\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      93 |       )\n      94 |\n    > 95 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      96 |       if (process.platform === 'win32') {\n      97 |         expect(await session.getRedboxSource()).toMatchSnapshot()\n      98 |       } else {\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:95:45)\n\n  ● ReactRefreshLogBox app turbo › unterminated JSX\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:213:7)\n\n  ● ReactRefreshLogBox app turbo › conversion to class component (1)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      277 |       )\n      278 |\n    > 279 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      280 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      281 |\n      282 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:279:45)\n\n  ● ReactRefreshLogBox app turbo › css syntax errors\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:323:7)\n\n  ● ReactRefreshLogBox app turbo › logbox: anchors links in error messages\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Should not show __webpack_exports__ when exporting anonymous arrow function\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      666 |       )\n      667 |\n    > 668 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      669 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      670 |\n      671 |       await cleanup()\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:668:45)\n\n  ● ReactRefreshLogBox app turbo › Unhandled errors and rejections opens up in the minimized state\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('.nextjs-toast-errors')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Call stack count is correct for server error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Call stack count is correct for client error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-data-runtime-error-collapsed-action]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Server component errors should open up in fullscreen\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#text')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● ReactRefreshLogBox app turbo › Import trace when module not found in layout\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:863:7)\n\n  ● ReactRefreshLogBox app turbo › Can't resolve @import in CSS file\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshLogBox.test.ts:895:7)\n\n  ● ReactRefreshLogBox app turbo › client component can recover from error thrown in the module\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      922 |\n      923 |         await next.patchFile('index.js', \"throw new Error('module error')\")\n    > 924 |         expect(await session.hasRedbox(true)).toBe(true)\n          |                                               ^\n      925 |         await next.patchFile(\n      926 |           'index.js',\n      927 |           'export default function Page() {return <p>hello world</p>}'\n\n      at development/acceptance-app/ReactRefreshLogBox.test.ts:924:47\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshLogBox.test.ts",
+            "startTime": 1676032829452,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676034855673,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "prerender native module"
+                ],
+                "failureMessages": [],
+                "fullName": "prerender native module should render index correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render index correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "prerender native module"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#blog')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "prerender native module should render /blog/first correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render /blog/first correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "prerender native module"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#blog')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "prerender native module should render /blog/second correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render /blog/second correctly"
+              }
+            ],
+            "endTime": 1676034971623,
+            "message": "  ● prerender native module › should render /blog/first correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#blog')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● prerender native module › should render /blog/second correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#blog')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/prerender-native-module.test.ts",
+            "startTime": 1676034855771,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/build-indicator/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 4,
+          "total": 4,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676035625678,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Node.js runtime dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at onData (/work/test/integration/react-streaming/test/streaming.js:37:31)\n    at PassThrough.<anonymous> (/work/test/integration/react-streaming/test/streaming.js:17:7)\n    at PassThrough.emit (node:events:513:28)\n    at PassThrough.Readable.read (node:internal/streams/readable:527:10)\n    at flow (node:internal/streams/readable:1011:34)\n    at resume_ (node:internal/streams/readable:992:3)\n    at processTicksAndRejections (node:internal/process/task_queues:83:21)"
+                ],
+                "fullName": "Node.js runtime dev should support streaming for fizz response",
+                "location": null,
+                "status": "failed",
+                "title": "should support streaming for fizz response"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime dev should not stream to crawlers or google pagerender bot",
+                "location": null,
+                "status": "passed",
+                "title": "should not stream to crawlers or google pagerender bot"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime dev should render 500 error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render 500 error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime dev should render fallback if error raised from suspense during streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render fallback if error raised from suspense during streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime prod should support streaming for fizz response",
+                "location": null,
+                "status": "passed",
+                "title": "should support streaming for fizz response"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime prod should not stream to crawlers or google pagerender bot",
+                "location": null,
+                "status": "passed",
+                "title": "should not stream to crawlers or google pagerender bot"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime prod should render 500 error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render 500 error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Node.js runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Node.js runtime prod should render fallback if error raised from suspense during streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render fallback if error raised from suspense during streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at onData (/work/test/integration/react-streaming/test/streaming.js:37:31)\n    at PassThrough.<anonymous> (/work/test/integration/react-streaming/test/streaming.js:17:7)\n    at PassThrough.emit (node:events:513:28)\n    at PassThrough.Readable.read (node:internal/streams/readable:527:10)\n    at flow (node:internal/streams/readable:1011:34)\n    at resume_ (node:internal/streams/readable:992:3)\n    at processTicksAndRejections (node:internal/process/task_queues:83:21)"
+                ],
+                "fullName": "Edge runtime dev should support streaming for fizz response",
+                "location": null,
+                "status": "failed",
+                "title": "should support streaming for fizz response"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime dev should not stream to crawlers or google pagerender bot",
+                "location": null,
+                "status": "passed",
+                "title": "should not stream to crawlers or google pagerender bot"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime dev should render 500 error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render 500 error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime dev"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime dev should render fallback if error raised from suspense during streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render fallback if error raised from suspense during streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime prod should support streaming for fizz response",
+                "location": null,
+                "status": "passed",
+                "title": "should support streaming for fizz response"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime prod should not stream to crawlers or google pagerender bot",
+                "location": null,
+                "status": "passed",
+                "title": "should not stream to crawlers or google pagerender bot"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime prod should render 500 error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render 500 error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge runtime prod"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge runtime prod should render fallback if error raised from suspense during streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render fallback if error raised from suspense during streaming"
+              }
+            ],
+            "endTime": 1676035676253,
+            "message": "  ● Node.js runtime dev › should support streaming for fizz response\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      35 |             gotFallback = result.includes('next_streaming_fallback')\n      36 |             if (gotFallback) {\n    > 37 |               expect(gotData).toBe(false)\n         |                               ^\n      38 |             }\n      39 |           }\n      40 |         })\n\n      at onData (integration/react-streaming/test/streaming.js:37:31)\n      at PassThrough.<anonymous> (integration/react-streaming/test/streaming.js:17:7)\n\n  ● Edge runtime dev › should support streaming for fizz response\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      35 |             gotFallback = result.includes('next_streaming_fallback')\n      36 |             if (gotFallback) {\n    > 37 |               expect(gotData).toBe(false)\n         |                               ^\n      38 |             }\n      39 |           }\n      40 |         })\n\n      at onData (integration/react-streaming/test/streaming.js:37:31)\n      at PassThrough.<anonymous> (integration/react-streaming/test/streaming.js:17:7)\n",
+            "name": "/work/test/integration/react-streaming/test/index.test.js",
+            "startTime": 1676035625775,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 11,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 11,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676033013609,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:32:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when getServerSideProps is used",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when getServerSideProps is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:56:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when getStaticProps is used",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when getStaticProps is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:76:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error for styled-jsx imports on server side",
+                "location": null,
+                "status": "failed",
+                "title": "should error for styled-jsx imports on server side"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:104:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error when page component export is not valid",
+                "location": null,
+                "status": "failed",
+                "title": "should error when page component export is not valid"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:124:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when \"use client\" is on the top level but after other expressions",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when \"use client\" is on the top level but after other expressions"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:145:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when \"Component\" is imported in server components",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when \"Component\" is imported in server components"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \\\"use client\\\", so they're Server Components by default.\"\nReceived:\n  \"error - [resolve] [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js  Error resolving EcmaScript Modules request\n  unable to resolve module \\\"client-only\\\"···\n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \\\"client-only\\\"\n  | Path where resolving has started: [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  |·\n\"\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:172:47)"
+                ],
+                "fullName": "Error overlay - RSC build errors should allow to use and handle rsc poisoning client-only",
+                "location": null,
+                "status": "failed",
+                "title": "should allow to use and handle rsc poisoning client-only"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:194:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should allow to use and handle rsc poisoning server-only",
+                "location": null,
+                "status": "failed",
+                "title": "should allow to use and handle rsc poisoning server-only"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.\"\nReceived:\n  \"unexpected export *\"\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:219:52)"
+                ],
+                "fullName": "Error overlay - RSC build errors should error for invalid undefined module retuning from next dynamic",
+                "location": null,
+                "status": "failed",
+                "title": "should error for invalid undefined module retuning from next dynamic"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:239:45)"
+                ],
+                "fullName": "Error overlay - RSC build errors should throw an error when error file is a server component",
+                "location": null,
+                "status": "failed",
+                "title": "should throw an error when error file is a server component"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - RSC build errors"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/rsc-build-errors.test.ts:303:7)"
+                ],
+                "fullName": "Error overlay - RSC build errors should be possible to open the import trace files in your editor",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open the import trace files in your editor"
+              }
+            ],
+            "endTime": 1676033505581,
+            "message": "  ● Error overlay - RSC build errors › should throw an error when getServerSideProps is used\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      30 |       await session.patch(pageFile, uncomment)\n      31 |\n    > 32 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      33 |       expect(await session.getRedboxSource()).toInclude(\n      34 |         '\"getServerSideProps\" is not supported in app/'\n      35 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:32:45)\n\n  ● Error overlay - RSC build errors › should throw an error when getStaticProps is used\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      54 |       await next.patchFile(pageFile, content)\n      55 |\n    > 56 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      57 |       expect(await session.getRedboxSource()).toInclude(\n      58 |         '\"getStaticProps\" is not supported in app/'\n      59 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:56:45)\n\n  ● Error overlay - RSC build errors › should error for styled-jsx imports on server side\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      74 |       await session.patch(pageFile, withoutUseClient)\n      75 |\n    > 76 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      77 |       expect(await session.getRedboxSource()).toMatchInlineSnapshot(`\n      78 |         \"app/server-with-errors/styled-jsx/comp2.js\n      79 |         'client-only' cannot be imported from a Server Component module. It should only be used from a Client Component.\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:76:45)\n\n  ● Error overlay - RSC build errors › should error when page component export is not valid\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      102 |       )\n      103 |\n    > 104 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      105 |       expect(await session.getRedboxDescription()).toInclude(\n      106 |         'The default export is not a React Component in page:'\n      107 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:104:45)\n\n  ● Error overlay - RSC build errors › should throw an error when \"use client\" is on the top level but after other expressions\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      122 |       await next.patchFile(pageFile, uncomment)\n      123 |\n    > 124 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      125 |       expect(await session.getRedboxSource()).toInclude(\n      126 |         'directive must be placed before other expressions'\n      127 |       )\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:124:45)\n\n  ● Error overlay - RSC build errors › should throw an error when \"Component\" is imported in server components\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:145:7)\n\n  ● Error overlay - RSC build errors › should allow to use and handle rsc poisoning client-only\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \\\"use client\\\", so they're Server Components by default.\"\n    Received:\n      \"error - [resolve] [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js  Error resolving EcmaScript Modules request\n      unable to resolve module \\\"client-only\\\"···\n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \\\"client-only\\\"\n      | Path where resolving has started: [project-with-next]/app/server-with-errors/client-only-in-server/client-only-lib.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |·\n    \"\n\n      170 |\n      171 |       expect(await session.hasRedbox(true)).toBe(true)\n    > 172 |       expect(await session.getRedboxSource()).toInclude(\n          |                                               ^\n      173 |         `You're importing a component that imports client-only. It only works in a Client Component but none of its parents are marked with \"use client\", so they're Server Components by default.`\n      174 |       )\n      175 |\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:172:47)\n\n  ● Error overlay - RSC build errors › should allow to use and handle rsc poisoning server-only\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:194:7)\n\n  ● Error overlay - RSC build errors › should error for invalid undefined module retuning from next dynamic\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.\"\n    Received:\n      \"unexpected export *\"\n\n      217 |\n      218 |       expect(await session.hasRedbox(true)).toBe(true)\n    > 219 |       expect(await session.getRedboxDescription()).toInclude(\n          |                                                    ^\n      220 |         `Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.`\n      221 |       )\n      222 |\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:219:52)\n\n  ● Error overlay - RSC build errors › should throw an error when error file is a server component\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      237 |       )\n      238 |\n    > 239 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      240 |       expect(await session.getRedboxSource()).toMatchInlineSnapshot(`\n      241 |         \"./app/server-with-errors/error-file/error.js\n      242 |         ReactServerComponentsError:\n\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:239:45)\n\n  ● Error overlay - RSC build errors › should be possible to open the import trace files in your editor\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/rsc-build-errors.test.ts:303:7)\n",
+            "name": "/work/test/development/acceptance-app/rsc-build-errors.test.ts",
+            "startTime": 1676033013701,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676034277971,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Requests not effected when middleware used"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 240000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at sendRequest (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n    at /work/test/e2e/proxy-request-with-middleware/test/index.test.ts:51:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)\n    at jestAdapter (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:13)\n    at runTestInternal (/work/node_modules/.pnpm/jest-runner@27.0.6/node_modules/jest-runner/build/runTest.js:389:16)"
+                ],
+                "fullName": "Requests not effected when middleware used should proxy GET request ",
+                "location": null,
+                "status": "failed",
+                "title": "should proxy GET request "
+              },
+              {
+                "ancestorTitles": [
+                  "Requests not effected when middleware used"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 240000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at sendRequest (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n    at /work/test/e2e/proxy-request-with-middleware/test/index.test.ts:52:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)\n    at jestAdapter (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:13)\n    at runTestInternal (/work/node_modules/.pnpm/jest-runner@27.0.6/node_modules/jest-runner/build/runTest.js:389:16)"
+                ],
+                "fullName": "Requests not effected when middleware used should proxy POST request with body",
+                "location": null,
+                "status": "failed",
+                "title": "should proxy POST request with body"
+              }
+            ],
+            "endTime": 1676034780646,
+            "message": "  ● Requests not effected when middleware used › should proxy GET request \n\n    thrown: \"Exceeded timeout of 240000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      28 |         })\n      29 |       : undefined\n    > 30 |     it(`should proxy ${method} request ${\n         |     ^\n      31 |       body ? 'with body' : ''\n      32 |     }`, async () => {\n      33 |       const headers = {\n\n      at sendRequest (e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n      at e2e/proxy-request-with-middleware/test/index.test.ts:51:3\n      at Object.<anonymous> (e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n\n  ● Requests not effected when middleware used › should proxy POST request with body\n\n    thrown: \"Exceeded timeout of 240000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      28 |         })\n      29 |       : undefined\n    > 30 |     it(`should proxy ${method} request ${\n         |     ^\n      31 |       body ? 'with body' : ''\n      32 |     }`, async () => {\n      33 |       const headers = {\n\n      at sendRequest (e2e/proxy-request-with-middleware/test/index.test.ts:30:5)\n      at e2e/proxy-request-with-middleware/test/index.test.ts:52:3\n      at Object.<anonymous> (e2e/proxy-request-with-middleware/test/index.test.ts:8:1)\n",
+            "name": "/work/test/e2e/proxy-request-with-middleware/test/index.test.ts",
+            "startTime": 1676034278063,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/telemetry/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 37,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 42,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676035265402,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can print telemetry status",
+                "location": null,
+                "status": "passed",
+                "title": "can print telemetry status"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can enable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can enable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-enable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-enable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry without flag",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry without flag"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can re-disable telemetry",
+                "location": null,
+                "status": "passed",
+                "title": "can re-disable telemetry"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI can disable telemetry with env NEXT_TELEMETRY_DISABLED",
+                "location": null,
+                "status": "passed",
+                "title": "can disable telemetry with env NEXT_TELEMETRY_DISABLED"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects isSrcDir dir correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits event when swc fails to load",
+                "location": null,
+                "status": "passed",
+                "title": "emits event when swc fails to load"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI logs completed `next build` with warnings",
+                "location": null,
+                "status": "passed",
+                "title": "logs completed `next build` with warnings"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects tests correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detects tests correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects correct cli session defaults",
+                "location": null,
+                "status": "passed",
+                "title": "detects correct cli session defaults"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: babel tooling config",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: babel tooling config"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: package.json custom babel config (plugin)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: package.json custom babel config (plugin)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: custom babel config (preset)",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: custom babel config (preset)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI cli session: next config with webpack",
+                "location": null,
+                "status": "passed",
+                "title": "cli session: next config with webpack"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect static 404 correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect static 404 correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect page counts correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect page counts correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /isSrcDir.*?false/\nReceived string:  \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 34045 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:389:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects isSrcDir dir correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects isSrcDir dir correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:460:15)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev`",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 36465 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:488:7)"
+                ],
+                "fullName": "Telemetry CLI detects --turbo correctly for `next dev` stopped",
+                "location": null,
+                "status": "failed",
+                "title": "detects --turbo correctly for `next dev` stopped"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 34209 --root /work --no-open]\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:527:7)"
+                ],
+                "fullName": "Telemetry CLI detects correctly for `next dev` stopped (no turbo)",
+                "location": null,
+                "status": "failed",
+                "title": "detects correctly for `next dev` stopped (no turbo)"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI should detect app page counts",
+                "location": null,
+                "status": "passed",
+                "title": "should detect app page counts"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detect reportWebVitals correctly for `next build`",
+                "location": null,
+                "status": "passed",
+                "title": "detect reportWebVitals correctly for `next build`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI detects rewrites, headers, and redirects for next build",
+                "location": null,
+                "status": "passed",
+                "title": "detects rewrites, headers, and redirects for next build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'pop')\n    at Object.<anonymous> (/work/test/integration/telemetry/test/index.test.js:761:13)"
+                ],
+                "fullName": "Telemetry CLI detects i18n and image configs for session start",
+                "location": null,
+                "status": "failed",
+                "title": "detects i18n and image configs for session start"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when '--no-lint' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when '--no-lint' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for lint during build when 'ignoreDuringBuilds' is specified",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for lint during build when 'ignoreDuringBuilds' is specified"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for `next lint`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for `next lint`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemery for usage of optimizeFonts, image, script & dynamic",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemery for usage of optimizeFonts, image, script & dynamic"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `optimizeCss`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `optimizeCss`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of `nextScriptWorkers`",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of `nextScriptWorkers`"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of middleware",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of swc plugins",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of swc plugins"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of next/legacy/image",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of next/legacy/image"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for usage of @vercel/og",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for usage of @vercel/og"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for transpilePackages",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for transpilePackages"
+              },
+              {
+                "ancestorTitles": [
+                  "Telemetry CLI"
+                ],
+                "failureMessages": [],
+                "fullName": "Telemetry CLI emits telemetry for middleware related options",
+                "location": null,
+                "status": "passed",
+                "title": "emits telemetry for middleware related options"
+              }
+            ],
+            "endTime": 1676035615136,
+            "message": "  ● Telemetry CLI › detects isSrcDir dir correctly for `next dev`\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /isSrcDir.*?false/\n    Received string:  \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 34045 --root /work --no-open]\n    \"\n\n      387 |     await waitFor(1000)\n      388 |     await killApp(app)\n    > 389 |     expect(stderr).toMatch(/isSrcDir.*?false/)\n          |                    ^\n      390 |\n      391 |     await fs.move(path.join(appDir, 'pages'), path.join(appDir, 'src/pages'))\n      392 |     stderr = ''\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:389:20)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev`\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      458 |       }\n      459 |       const event1 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 460 |         .exec(stderr)\n          |               ^\n      461 |         .pop()\n      462 |\n      463 |       expect(event1).toMatch(/\"pagesDir\": true/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:460:15)\n\n  ● Telemetry CLI › detects --turbo correctly for `next dev` stopped\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 36465 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:488:7)\n\n  ● Telemetry CLI › detects correctly for `next dev` stopped (no turbo)\n\n    TIMED OUT: /NEXT_CLI_SESSION_STARTED/\n\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/telemetry --is-next-dev-command --port 34209 --root /work --no-open]\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:527:7)\n\n  ● Telemetry CLI › detects i18n and image configs for session start\n\n    TypeError: Cannot read properties of null (reading 'pop')\n\n      759 |\n      760 |     const event2 = /NEXT_CLI_SESSION_STARTED[\\s\\S]+?{([\\s\\S]+?)}/\n    > 761 |       .exec(stderr2)\n          |             ^\n      762 |       .pop()\n      763 |     expect(event2).toMatch(/\"i18nEnabled\": true/)\n      764 |     expect(event2).toMatch(/\"locales\": \"en,nl,fr\"/)\n\n      at Object.<anonymous> (integration/telemetry/test/index.test.js:761:13)\n",
+            "name": "/work/test/integration/telemetry/test/index.test.js",
+            "startTime": 1676035265492,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
