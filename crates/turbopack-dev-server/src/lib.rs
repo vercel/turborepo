@@ -51,19 +51,6 @@ where
     }
 }
 
-pub trait IssueReporterProvider: Send + Sync + 'static {
-    fn get_issue_reporter(&self) -> IssueReporterVc;
-}
-
-impl<T> IssueReporterProvider for T
-where
-    T: Fn() -> IssueReporterVc + Send + Sync + Clone + 'static,
-{
-    fn get_issue_reporter(&self) -> IssueReporterVc {
-        self()
-    }
-}
-
 #[derive(TraceRawVcs, Debug)]
 pub struct DevServerBuilder {
     #[turbo_tasks(trace_ignore)]
@@ -86,14 +73,17 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     operation: &str,
     issue_reporter: IssueReporterVc,
 ) -> Result<()> {
-    let issues_vc = IssueVc::peek_issues_with_path(source).await?;
-    let issues = issues_vc.strongly_consistent().await?;
+    let issues = IssueVc::peek_issues_with_path(source)
+        .await?
+        .strongly_consistent()
+        .await?;
+
     issue_reporter.report_issues(
-        TransientInstance::new(issues),
+        TransientInstance::new(issues.clone()),
         TransientValue::new(source.into()),
     );
 
-    if *issues_vc.has_fatal().await? {
+    if issues.has_fatal().await? {
         Err(anyhow!("Fatal issue(s) occurred in {path} ({operation})"))
     } else {
         Ok(())

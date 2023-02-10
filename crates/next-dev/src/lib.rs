@@ -46,7 +46,7 @@ use turbopack_dev_server::{
         source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
         ContentSourceVc,
     },
-    DevServer, DevServerBuilder, IssueReporterProvider,
+    DevServer, DevServerBuilder,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
@@ -240,14 +240,17 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     source: T,
     issue_reporter: IssueReporterVc,
 ) -> Result<()> {
-    let issues_vc = IssueVc::peek_issues_with_path(source).await?;
-    let issues = issues_vc.strongly_consistent().await?;
+    let issues = IssueVc::peek_issues_with_path(source)
+        .await?
+        .strongly_consistent()
+        .await?;
+
     issue_reporter.report_issues(
-        TransientInstance::new(issues),
+        TransientInstance::new(issues.clone()),
         TransientValue::new(source.into()),
     );
 
-    if *issues_vc.has_fatal().await? {
+    if issues.has_fatal().await? {
         Err(anyhow!("Fatal issue(s) occurred"))
     } else {
         Ok(())
@@ -570,4 +573,17 @@ fn profile_timeout<T>(
     future: impl Future<Output = T>,
 ) -> impl Future<Output = T> {
     future
+}
+
+pub trait IssueReporterProvider: Send + Sync + 'static {
+    fn get_issue_reporter(&self) -> IssueReporterVc;
+}
+
+impl<T> IssueReporterProvider for T
+where
+    T: Fn() -> IssueReporterVc + Send + Sync + Clone + 'static,
+{
+    fn get_issue_reporter(&self) -> IssueReporterVc {
+        self()
+    }
 }
