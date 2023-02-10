@@ -1,5 +1,8 @@
 name: Turobpack Nightly Release
 
+env:
+  ACTIONS_STEP_DEBUG: true
+
 on:
   schedule:
     - cron: "15 8 * * *" # Run every day at 00:15 PST
