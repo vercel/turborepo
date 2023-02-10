@@ -117,6 +117,27 @@ pub async fn get_evaluate_pool(
     Ok(pool.cell())
 }
 
+struct PoolErrorHandler;
+
+/// Number of attempts before we start slowing down the retry.
+const MAX_FAST_ATTEMPTS: usize = 5;
+/// Total number of attempts.
+const MAX_ATTEMPTS: usize = MAX_FAST_ATTEMPTS * 2;
+
+impl futures_retry::ErrorHandler<anyhow::Error> for PoolErrorHandler {
+    type OutError = anyhow::Error;
+
+    fn handle(&mut self, attempt: usize, err: anyhow::Error) -> RetryPolicy<Self::OutError> {
+        if attempt >= MAX_ATTEMPTS {
+            RetryPolicy::ForwardError(err)
+        } else if attempt >= MAX_FAST_ATTEMPTS {
+            RetryPolicy::WaitRetry(Duration::from_secs(1))
+        } else {
+            RetryPolicy::Repeat
+        }
+    }
+}
+
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 #[turbo_tasks::function]
@@ -148,32 +169,21 @@ pub async fn evaluate(
     // The bad state might even be unnoticable until we actually send the job to the
     // worker. So we retry picking workers from the pools until we succeed
     // sending the job.
-    /// Number of attempts before we start slowing down the retry.
-    const MAX_FAST_ATTEMPTS: u8 = 5;
-    /// Total number of attempts.
-    const MAX_ATTEMPTS: u8 = MAX_FAST_ATTEMPTS * 2;
-    let mut attempt = 0;
-    let mut operation = FutureRetry::new(
+
+    let (mut operation, _) = FutureRetry::new(
         || async {
             let mut operation = pool.operation().await?;
             operation
                 .send(EvalJavaScriptOutgoingMessage::Evaluate {
                     args: args.iter().map(|v| &**v).collect(),
                 })
-                .await
+                .await?;
+            Ok(operation)
         },
-        |err| {
-            attempt += 1;
-            if attempt >= MAX_ATTEMPTS {
-                RetryPolicy::ForwardError(err)
-            } else if attempt >= MAX_FAST_ATTEMPTS {
-                RetryPolicy::WaitRetry(Duration::from_secs(1))
-            } else {
-                RetryPolicy::Repeat
-            }
-        },
+        PoolErrorHandler,
     )
-    .await?;
+    .await
+    .map_err(|(e, _)| e)?;
 
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
