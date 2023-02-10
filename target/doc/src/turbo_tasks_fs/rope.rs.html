@@ -569,12 +569,116 @@
 <span id="569">569</span>
 <span id="570">570</span>
 <span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::min,
     fmt::Debug,
     io::{<span class="self">self</span>, BufRead, Read, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
-    mem, ops,
+    mem,
+    ops::{AddAssign, Deref},
     pin::Pin,
     sync::Arc,
     task::{Context <span class="kw">as </span>TaskContext, Poll},
@@ -602,14 +706,14 @@
     </span>length: usize,
 
     <span class="doccomment">/// A shareable container holding the rope&#39;s bytes.
+    </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     </span>data: InnerRope,
 }
 
 <span class="doccomment">/// An Arc container for ropes. This indirection allows for easily sharing the
 /// contents between Ropes (and also RopeBuilders/RopeReaders).
-</span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
-#[derive(Clone, Debug, Default)]
-</span><span class="kw">struct </span>InnerRope(<span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)] </span>Arc&lt;Vec&lt;RopeElem&gt;&gt;);
+</span><span class="attr">#[derive(Clone, Debug, Default)]
+</span><span class="kw">struct </span>InnerRope(Arc&lt;Box&lt;[RopeElem]&gt;&gt;);
 
 <span class="doccomment">/// Differentiates the types of stored bytes in a rope.
 </span><span class="attr">#[derive(Clone, Debug)]
@@ -677,29 +781,21 @@
 
     <span class="doccomment">/// Returns a String instance of all bytes.
     </span><span class="kw">pub fn </span>to_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, str&gt;&gt; {
-        <span class="kw">if </span><span class="self">self</span>.data.len() == <span class="number">1 </span>{
-            <span class="kw">if let </span>Local(bytes) = <span class="kw-2">&amp;</span><span class="self">self</span>.data[<span class="number">0</span>] {
-                <span class="kw">let </span>utf8 = std::str::from_utf8(bytes);
-                <span class="kw">return </span>utf8
-                    .context(<span class="string">&quot;failed to convert rope into string&quot;</span>)
-                    .map(Cow::Borrowed);
-            }
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>read = <span class="self">self</span>.read();
-        <span class="kw">let </span><span class="kw-2">mut </span>string = String::with_capacity(<span class="self">self</span>.len());
-        <span class="kw">let </span>res = read.read_to_string(<span class="kw-2">&amp;mut </span>string);
-        res.context(<span class="string">&quot;failed to convert rope into string&quot;</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(Cow::Owned(string))
+        <span class="self">self</span>.data.to_str()
     }
 }
 
 <span class="kw">impl</span>&lt;T: Into&lt;Bytes&gt;&gt; From&lt;T&gt; <span class="kw">for </span>Rope {
     <span class="kw">fn </span>from(bytes: T) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>bytes = bytes.into();
-        Rope {
-            length: bytes.len(),
-            data: InnerRope::from(bytes),
+        <span class="comment">// We can&#39;t have an InnerRope which contains an empty Local section.
+        </span><span class="kw">if </span>bytes.is_empty() {
+            Default::default()
+        } <span class="kw">else </span>{
+            Rope {
+                length: bytes.len(),
+                data: InnerRope::from(Box::from([Local(bytes)])),
+            }
         }
     }
 }
@@ -710,6 +806,10 @@
     /// If possible use [push_static_bytes] or `+=` operation instead, as they
     /// will create a reference to shared memory instead of cloning the bytes.
     </span><span class="kw">pub fn </span>push_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) {
+        <span class="kw">if </span>bytes.is_empty() {
+            <span class="kw">return</span>;
+        }
+
         <span class="self">self</span>.uncommited.push_bytes(bytes);
     }
 
@@ -718,6 +818,10 @@
     /// This is more efficient than pushing owned bytes, because the internal
     /// data does not need to be copied when the rope is read.
     </span><span class="kw">pub fn </span>push_static_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8]) {
+        <span class="kw">if </span>bytes.is_empty() {
+            <span class="kw">return</span>;
+        }
+
         <span class="comment">// If the string is smaller than the cost of a Bytes reference (4 usizes), then
         // it&#39;s more efficient to own the bytes in a new buffer. We may be able to reuse
         // that buffer when more bytes are pushed.
@@ -737,6 +841,10 @@
     /// This is much more efficient than pushing actual bytes, since we can
     /// share the other Rope&#39;s references without copying the underlying data.
     </span><span class="kw">pub fn </span>concat(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Rope) {
+        <span class="kw">if </span>other.is_empty() {
+            <span class="kw">return</span>;
+        }
+
         <span class="comment">// We may have pending bytes from a prior push.
         </span><span class="self">self</span>.finish();
 
@@ -749,6 +857,7 @@
     /// This may be called multiple times without issue.
     </span><span class="kw">pub fn </span>finish(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(b) = <span class="self">self</span>.uncommited.finish() {
+            <span class="macro">debug_assert!</span>(!b.is_empty(), <span class="string">&quot;must not have empty uncommitted bytes&quot;</span>);
             <span class="self">self</span>.length += b.len();
             <span class="self">self</span>.committed.push(Local(b));
         }
@@ -767,7 +876,7 @@
         <span class="self">self</span>.finish();
         Rope {
             length: <span class="self">self</span>.length,
-            data: InnerRope::from(<span class="self">self</span>.committed),
+            data: InnerRope::from(<span class="self">self</span>.committed.into_boxed_slice()),
         }
     }
 }
@@ -775,7 +884,7 @@
 <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>RopeBuilder {
     default <span class="kw">fn </span>from(bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>r = RopeBuilder::default();
-        r.push_static_bytes(bytes.as_bytes());
+        r += bytes;
         r
     }
 }
@@ -783,7 +892,8 @@
 <span class="kw">impl </span>From&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>RopeBuilder {
     <span class="kw">fn </span>from(bytes: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
         RopeBuilder {
-            uncommited: Uncommitted::from(bytes),
+            <span class="comment">// Directly constructing the Uncommitted allows us to skip copying the bytes.
+            </span>uncommited: Uncommitted::from(bytes),
             ..Default::default()
         }
     }
@@ -801,7 +911,7 @@
     }
 }
 
-<span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>RopeBuilder {
+<span class="kw">impl </span>AddAssign&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>RopeBuilder {
     <span class="doccomment">/// Pushes a reference to static memory onto the rope.
     ///
     /// This is more efficient than pushing owned bytes, because the internal
@@ -811,7 +921,7 @@
     }
 }
 
-<span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span>Rope&gt; <span class="kw">for </span>RopeBuilder {
+<span class="kw">impl </span>AddAssign&lt;<span class="kw-2">&amp;</span>Rope&gt; <span class="kw">for </span>RopeBuilder {
     <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span>Rope) {
         <span class="self">self</span>.concat(rhs);
     }
@@ -829,6 +939,7 @@
     <span class="doccomment">/// Pushes owned bytes, converting the current representation to an Owned if
     /// it&#39;s not already.
     </span><span class="kw">fn </span>push_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) {
+        <span class="macro">debug_assert!</span>(!bytes.is_empty(), <span class="string">&quot;must not push empty uncommitted bytes&quot;</span>);
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::None =&gt; <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Owned(bytes.to_vec()),
             <span class="self">Self</span>::Static(s) =&gt; {
@@ -845,6 +956,7 @@
     <span class="doccomment">/// Pushes static lifetime bytes, but only if the current representation is
     /// None. Else, it coverts to an Owned.
     </span><span class="kw">fn </span>push_static_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8]) {
+        <span class="macro">debug_assert!</span>(!bytes.is_empty(), <span class="string">&quot;must not push empty uncommitted bytes&quot;</span>);
         <span class="kw">match </span><span class="self">self </span>{
             <span class="comment">// If we&#39;ve not already pushed static bytes, we attempt to store the bytes for later. If
             // we push owned bytes or another static bytes, then this attempt will fail and we&#39;ll
@@ -898,7 +1010,33 @@
 
 <span class="kw">impl </span>From&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>Uncommitted {
     <span class="kw">fn </span>from(bytes: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
-        Uncommitted::Owned(bytes)
+        <span class="kw">if </span>bytes.is_empty() {
+            Uncommitted::None
+        } <span class="kw">else </span>{
+            Uncommitted::Owned(bytes)
+        }
+    }
+}
+
+<span class="kw">impl </span>InnerRope {
+    <span class="doccomment">/// Returns a String instance of all bytes.
+    </span><span class="kw">pub fn </span>to_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, str&gt;&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>[..] {
+            [] =&gt; <span class="prelude-val">Ok</span>(Cow::Borrowed(<span class="string">&quot;&quot;</span>)),
+            [Shared(inner)] =&gt; inner.to_str(),
+            [Local(bytes)] =&gt; {
+                <span class="kw">let </span>utf8 = std::str::from_utf8(bytes);
+                utf8.context(<span class="string">&quot;failed to convert rope into string&quot;</span>)
+                    .map(Cow::Borrowed)
+            }
+            <span class="kw">_ </span>=&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>read = RopeReader::new(<span class="self">self</span>);
+                <span class="kw">let </span><span class="kw-2">mut </span>string = String::with_capacity(<span class="self">self</span>.len());
+                <span class="kw">let </span>res = read.read_to_string(<span class="kw-2">&amp;mut </span>string);
+                res.context(<span class="string">&quot;failed to convert rope into string&quot;</span>)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(Cow::Owned(string))
+            }
+        }
     }
 }
 
@@ -914,19 +1052,23 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;Bytes&gt; <span class="kw">for </span>InnerRope {
-    <span class="kw">fn </span>from(bytes: Bytes) -&gt; <span class="self">Self </span>{
-        InnerRope::from(<span class="macro">vec!</span>[Local(bytes)])
-    }
-}
-
-<span class="kw">impl </span>From&lt;Vec&lt;RopeElem&gt;&gt; <span class="kw">for </span>InnerRope {
-    <span class="kw">fn </span>from(<span class="kw-2">mut </span>els: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
-        <span class="comment">// The RopeBuilder likely over-allocated the vec so we could insert more
-        // RopeElems into it. But we&#39;re constructing a immutable Rope which may
-        // stay alive forever, so we need to trim any excess capacity to save
-        // memory.
-        </span>els.shrink_to_fit();
+<span class="kw">impl </span>From&lt;Box&lt;[RopeElem]&gt;&gt; <span class="kw">for </span>InnerRope {
+    <span class="kw">fn </span>from(els: Box&lt;[RopeElem]&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
+            <span class="comment">// It&#39;s important that an InnerRope never contain an empty Bytes section.
+            </span><span class="kw">for </span>el <span class="kw">in </span>els.iter() {
+                <span class="kw">match </span>el {
+                    Local(b) =&gt; <span class="macro">debug_assert!</span>(!b.is_empty(), <span class="string">&quot;must not have empty Bytes&quot;</span>),
+                    Shared(s) =&gt; {
+                        <span class="comment">// We check whether the shared slice is empty, and not its elements. The
+                        // only way to construct the Shared&#39;s InnerRope is
+                        // in this mod, and we have already checked that
+                        // none of its elements are empty.
+                        </span><span class="macro">debug_assert!</span>(!s.is_empty(), <span class="string">&quot;must not have empty InnerRope&quot;</span>);
+                    }
+                }
+            }
+        }
         InnerRope(Arc::new(els))
     }
 }
@@ -964,10 +1106,11 @@
         }
     }
 }
+
 <span class="kw">impl </span>Eq <span class="kw">for </span>InnerRope {}
 
-<span class="kw">impl </span>ops::Deref <span class="kw">for </span>InnerRope {
-    <span class="kw">type </span>Target = Arc&lt;Vec&lt;RopeElem&gt;&gt;;
+<span class="kw">impl </span>Deref <span class="kw">for </span>InnerRope {
+    <span class="kw">type </span>Target = Arc&lt;Box&lt;[RopeElem]&gt;&gt;;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
@@ -987,6 +1130,7 @@
 }
 
 <span class="doccomment">/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
+</span><span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>RopeReader {
     <span class="doccomment">/// The Rope&#39;s tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
@@ -996,6 +1140,7 @@
 <span class="doccomment">/// A StackElem holds the current index into either a Bytes or a shared Rope.
 /// When the index reaches the end of the associated data, it is removed and we
 /// continue onto the next item in the stack.
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">enum </span>StackElem {
     Local(Bytes),
     Shared(InnerRope, usize),
@@ -1003,8 +1148,14 @@
 
 <span class="kw">impl </span>RopeReader {
     <span class="kw">fn </span>new(rope: <span class="kw-2">&amp;</span>InnerRope) -&gt; <span class="self">Self </span>{
-        RopeReader {
-            stack: <span class="macro">vec!</span>[StackElem::from(rope)],
+        <span class="comment">// Only a Rope&#39;s root InnerRope can contain an empty slice. Any empty InnerRopes
+        // we concat will be skipped.
+        </span><span class="kw">if </span>rope.is_empty() {
+            Default::default()
+        } <span class="kw">else </span>{
+            RopeReader {
+                stack: <span class="macro">vec!</span>[StackElem::from(rope)],
+            }
         }
     }
 
@@ -1037,13 +1188,16 @@
 <span class="kw">impl </span>Iterator <span class="kw">for </span>RopeReader {
     <span class="kw">type </span>Item = Bytes;
 
-    <span class="doccomment">/// Iterates the rope&#39;s elements recursively until we find the next Local
-    /// section, returning its Bytes.
-    </span><span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
-        <span class="kw">loop </span>{
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="comment">// Iterates the rope&#39;s elements recursively until we find the next Local
+        // section, returning its Bytes.
+        </span><span class="kw">loop </span>{
             <span class="kw">let </span>(inner, <span class="kw-2">mut </span>index) = <span class="kw">match </span><span class="self">self</span>.stack.pop() {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-                <span class="prelude-val">Some</span>(StackElem::Local(b)) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(b),
+                <span class="prelude-val">Some</span>(StackElem::Local(b)) =&gt; {
+                    <span class="macro">debug_assert!</span>(!b.is_empty(), <span class="string">&quot;must not have empty Bytes section&quot;</span>);
+                    <span class="kw">return </span><span class="prelude-val">Some</span>(b);
+                }
                 <span class="prelude-val">Some</span>(StackElem::Shared(r, i)) =&gt; (r, i),
             };
 
@@ -1059,15 +1213,13 @@
 }
 
 <span class="kw">impl </span>Read <span class="kw">for </span>RopeReader {
-    <span class="doccomment">/// Reads the Rope into the provided buffer.
-    </span><span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.read_internal(buf.len(), <span class="kw-2">&amp;mut </span>ReadBuf::new(buf)))
     }
 }
 
 <span class="kw">impl </span>AsyncRead <span class="kw">for </span>RopeReader {
-    <span class="doccomment">/// Reads the Rope into the provided buffer, asynchronously.
-    </span><span class="kw">fn </span>poll_read(
+    <span class="kw">fn </span>poll_read(
         <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;,
         buf: <span class="kw-2">&amp;mut </span>ReadBuf&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1079,13 +1231,10 @@
 }
 
 <span class="kw">impl </span>BufRead <span class="kw">for </span>RopeReader {
-    <span class="doccomment">/// Returns the full buffer without coping any data. The same bytes will
-    /// continue to be returned until [consume] is called to either consume a
-    /// partial amount of bytes (in which case the Bytes will advance beyond
-    /// them) or the full amount of bytes (in which case the next Bytes will be
-    /// returned).
-    </span><span class="kw">fn </span>fill_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IoResult&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
-        <span class="kw">let </span>bytes = <span class="kw">match </span><span class="self">self</span>.next() {
+    <span class="kw">fn </span>fill_buf(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IoResult&lt;<span class="kw-2">&amp;</span>[u8]&gt; {
+        <span class="comment">// Returns the full buffer without coping any data. The same bytes will
+        // continue to be returned until [consume] is called.
+        </span><span class="kw">let </span>bytes = <span class="kw">match </span><span class="self">self</span>.next() {
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(EMPTY_BUF),
             <span class="prelude-val">Some</span>(b) =&gt; b,
         };
@@ -1095,31 +1244,32 @@
         // slice reference.
         </span><span class="self">self</span>.stack.push(StackElem::Local(bytes));
         <span class="kw">let </span><span class="prelude-val">Some</span>(StackElem::Local(bytes)) = <span class="self">self</span>.stack.last() <span class="kw">else </span>{
-             <span class="macro">unreachable!</span>()
+            <span class="macro">unreachable!</span>()
         };
+
         <span class="prelude-val">Ok</span>(bytes)
     }
 
-    <span class="doccomment">/// Consumes some amount of bytes from the current Bytes instance, ensuring
-    /// those bytes are not returned on the next call to [fill_buf].
-    </span><span class="kw">fn </span>consume(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: usize) {
+    <span class="kw">fn </span>consume(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: usize) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(StackElem::Local(b)) = <span class="self">self</span>.stack.last_mut() {
             <span class="kw">if </span>amt == b.len() {
                 <span class="self">self</span>.stack.pop();
             } <span class="kw">else </span>{
-                b.advance(amt);
+                <span class="comment">// Consume some amount of bytes from the current Bytes instance, ensuring
+                // those bytes are not returned on the next call to [fill_buf].
+                </span>b.advance(amt);
             }
         }
     }
 }
 
 <span class="kw">impl </span>Stream <span class="kw">for </span>RopeReader {
-    <span class="doccomment">/// The Result&lt;Bytes&gt; item type is required for this to be streamable into a
-    /// [Hyper::Body].
+    <span class="comment">// The Result&lt;Bytes&gt; item type is required for this to be streamable into a
+    // [Hyper::Body].
     </span><span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;Bytes&gt;;
 
-    <span class="doccomment">/// Returns a &quot;result&quot; of reading the next shared bytes reference. This
-    /// differs from [Read::read] by not copying any memory.
+    <span class="comment">// Returns a &quot;result&quot; of reading the next shared bytes reference. This
+    // differs from [Read::read] by not copying any memory.
     </span><span class="kw">fn </span>poll_next(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.get_mut();
         Poll::Ready(this.next().map(<span class="prelude-val">Ok</span>))
@@ -1138,6 +1288,62 @@
             Local(bytes) =&gt; <span class="self">Self</span>::Local(bytes),
             Shared(inner) =&gt; <span class="self">Self</span>::Shared(inner, <span class="number">0</span>),
         }
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>test {
+    <span class="kw">use super</span>::{Rope, RopeBuilder};
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_build_without_pushes() {
+        <span class="kw">let </span>empty = RopeBuilder::default().build();
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_build_with_empty_static_push() {
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = RopeBuilder::default();
+        builder += <span class="string">&quot;&quot;</span>;
+
+        <span class="kw">let </span>empty = builder.build();
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_build_with_empty_bytes_push() {
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = RopeBuilder::default();
+        builder.push_bytes(<span class="kw-2">&amp;</span>[]);
+
+        <span class="kw">let </span>empty = builder.build();
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_build_with_empty_concat() {
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = RopeBuilder::default();
+        builder += <span class="kw-2">&amp;</span>RopeBuilder::default().build();
+
+        <span class="kw">let </span>empty = builder.build();
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_from_empty_static_str() {
+        <span class="kw">let </span>empty = Rope::from(<span class="string">&quot;&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>empty_from_empty_string() {
+        <span class="kw">let </span>empty = Rope::from(<span class="string">&quot;&quot;</span>.to_string());
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = empty.read();
+        <span class="macro">assert!</span>(reader.next().is_none());
     }
 }
 </code></pre></div>
