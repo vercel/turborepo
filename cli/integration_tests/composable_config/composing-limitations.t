@@ -3,4 +3,6 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
   $ ${TURBO} run build --filter=package-task
-  should throw an error
+   ERROR  run failed: error preparing engine: Detected "package-task#build" in "package-task". Declare "build" instead
+  Turbo error: error preparing engine: Detected "package-task#build" in "package-task". Declare "build" instead
+  [1]
