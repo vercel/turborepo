@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,6 +98,9 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 	// An error here means there was no turbo.json in the workspace.
 	// Fallback to the root pipeline to find the task.
 	if err != nil {
+		if errors.Is(err, graph.TurboJSONValidationError) {
+			return nil, err
+		}
 		if pkg != util.RootPkgName {
 			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
 		}
@@ -147,6 +151,13 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				taskID := util.GetTaskId(pkg, taskName)
 				// Skip tasks that don't have a definition
 				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
+					// Faile earily if validation failed. This validation error could be for _any_
+					// task in the config, since we lazily read turbo.json here. So it's a bit
+					// weird to throw this error while looping through taskNames passed by the user
+					// for execution. Upstream places swallow the error / bubble it up.
+					if errors.Is(err, graph.TurboJSONValidationError) {
+						return err
+					}
 					// Initially, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.

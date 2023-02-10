@@ -3,6 +3,7 @@ package graph
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -40,6 +41,9 @@ type CompleteGraph struct {
 	TaskDefinitions map[string]*fs.TaskDefinition
 	RepoRoot        turbopath.AbsoluteSystemPath
 }
+
+// TODO(mehulkar): make it possible to append info into this error
+var TurboJSONValidationError = errors.New("turbo.json failed validation")
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
 // during execution (or dry-runs). The function returned here does not execute any tasks itself,
@@ -112,6 +116,13 @@ func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSing
 		return nil, err
 	}
 
+	if workspaceName != util.RootPkgName {
+		// TODO(mehulkar) pass in validation functions and group errors
+		if err := validateTurboConfig(turboConfig, workspaceName); err != nil {
+			return nil, TurboJSONValidationError
+		}
+	}
+
 	// add to cache
 	g.WorkspaceInfos.TurboConfigs[workspaceName] = turboConfig
 
@@ -133,4 +144,15 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 // relative path from the root of the monorepo.
 func repoRelativeLogFile(pt *nodes.PackageTask) string {
 	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
+}
+
+func validateTurboConfig(turboConfig *fs.TurboJSON, workspaceName string) error {
+	for taskIdOrName, _ := range turboConfig.Pipeline {
+		if util.IsPackageTask(taskIdOrName) {
+			taskName := util.StripPackageName(taskIdOrName)
+			return fmt.Errorf("xxDetected %s in %s, use %s instead", taskIdOrName, workspaceName, taskName)
+		}
+	}
+
+	return nil
 }
