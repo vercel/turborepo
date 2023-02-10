@@ -1,0 +1,1536 @@
+{
+  "ref": "1b689c828bd6e867f5198aee175ab280bc62f4c8",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676056977896,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676057075530,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676056977988,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-fetches-with-any-http-method/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057577409,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document Head"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document Head Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document body"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document body Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: false with no Partytown dependency"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: false with no Partytown dependency Partytown snippet is not injected to head if not enabled in configuration",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown snippet is not injected to head if not enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toEqual(expected) // deep equality\n\nExpected: not null\n\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:224:33)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Partytown snippets are injected to head if enabled in configuration",
+                "location": null,
+                "status": "failed",
+                "title": "Partytown snippets are injected to head if enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:243:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Worker scripts are modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Worker scripts are modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:296:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through children is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through children is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:323:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with config override"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: true with config override Partytown config script is overwritten",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown config script is overwritten"
+              }
+            ],
+            "endTime": 1676057910261,
+            "message": "  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Partytown snippets are injected to head if enabled in configuration\n\n    expect(received).not.toEqual(expected) // deep equality\n\n    Expected: not null\n\n      222 |       )\n      223 |\n    > 224 |       expect(snippetScript).not.toEqual(null)\n          |                                 ^\n      225 |\n      226 |       // A default config is included that points to the correct folder that hosts partytown's static files\n      227 |       expect(configScript).not.toEqual(null)\n\n      at Object.<anonymous> (e2e/next-script/index.test.ts:224:33)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Worker scripts are modified by Partytown to execute on a worker thread\n\n    TIMED OUT: success\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:243:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through children is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:296:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:323:7)\n",
+            "name": "/work/test/e2e/next-script/index.test.ts",
+            "startTime": 1676057577506,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676058470110,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:52:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for gsp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for gsp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at runNextTicks (node:internal/process/task_queues:61:5)\n    at processTimers (node:internal/timers:499:9)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:84:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for gssp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for gssp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:116:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for dynamic gssp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for dynamic gssp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:148:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for api route correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for api route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:180:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for dynamic api route correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for dynamic api route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:205:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught rejection correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught rejection correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:221:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught empty rejection correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught empty rejection correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:237:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught exception correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught exception correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:253:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught empty exception correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught empty exception correctly"
+              }
+            ],
+            "endTime": 1676058822115,
+            "message": "  ● server-side dev errors › should show server-side error for gsp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:52:7)\n\n  ● server-side dev errors › should show server-side error for gssp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:84:7)\n\n  ● server-side dev errors › should show server-side error for dynamic gssp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:116:7)\n\n  ● server-side dev errors › should show server-side error for api route correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:148:7)\n\n  ● server-side dev errors › should show server-side error for dynamic api route correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:180:7)\n\n  ● server-side dev errors › should show server-side error for uncaught rejection correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:205:5)\n\n  ● server-side dev errors › should show server-side error for uncaught empty rejection correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:221:5)\n\n  ● server-side dev errors › should show server-side error for uncaught exception correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:237:5)\n\n  ● server-side dev errors › should show server-side error for uncaught empty exception correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:253:5)\n",
+            "name": "/work/test/integration/server-side-dev-errors/test/index.test.js",
+            "startTime": 1676058470203,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676056271655,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676056558412,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676056271746,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 15,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057669491,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow rewriting invalid buildId correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should allow rewriting invalid buildId correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should provide original _next/data URL with skipMiddlewareUrlNormalize",
+                "location": null,
+                "status": "failed",
+                "title": "should provide original _next/data URL with skipMiddlewareUrlNormalize"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow response body from middleware with flag",
+                "location": null,
+                "status": "failed",
+                "title": "should allow response body from middleware with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From API\"\nReceived: \"hello=From API\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\nReceived: \"hello=From%20API; Path=/\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and edge API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and edge API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'endsWith')\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should correct skip URL normalizing in middleware",
+                "location": null,
+                "status": "failed",
+                "title": "should correct skip URL normalizing in middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config redirect correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config redirect correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config rewrites correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config rewrites correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (with slash)",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash redirect (with slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (without slash)",
+                "location": null,
+                "status": "passed",
+                "title": "should not apply trailing slash redirect (without slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/another/\"\nReceived: \"/another\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:202:7)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash to links on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash to links on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:215:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash on load on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash on load on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to index correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to index correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to dynamic route correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to dynamic route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should navigate client side correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate client side correctly"
+              }
+            ],
+            "endTime": 1676057760805,
+            "message": "  ● skip-trailing-slash-redirect › should allow rewriting invalid buildId correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      27 |       }\n      28 |     )\n    > 29 |     expect(res.status).toBe(200)\n         |                        ^\n      30 |     expect(await res.text()).toContain('Example Domain')\n      31 |\n      32 |     if (!(global as any).isNextDeploy) {\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n\n  ● skip-trailing-slash-redirect › should provide original _next/data URL with skipMiddlewareUrlNormalize\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      47 |       }\n      48 |     )\n    > 49 |     expect(res.status).toBe(200)\n         |                        ^\n      50 |     expect(await res.text()).toContain('Example Domain')\n      51 |   })\n      52 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n\n  ● skip-trailing-slash-redirect › should allow response body from middleware with flag\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      53 |   it('should allow response body from middleware with flag', async () => {\n      54 |     const res = await fetchViaHTTP(next.url, '/middleware-response-body')\n    > 55 |     expect(res.status).toBe(200)\n         |                        ^\n      56 |     expect(res.headers.get('x-from-middleware')).toBe('true')\n      57 |     expect(await res.text()).toBe('hello from middleware')\n      58 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From API\"\n    Received: \"hello=From API\"\n\n      63 |     })\n      64 |     expect(res.status).toBe(200)\n    > 65 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      66 |       'from-middleware=1; Path=/, hello=From API'\n      67 |     )\n      68 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and edge API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\n    Received: \"hello=From%20API; Path=/\"\n\n      78 |     )\n      79 |     expect(res.status).toBe(200)\n    > 80 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      81 |       'from-middleware=1; Path=/, hello=From%20API; Path=/'\n      82 |     )\n      83 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n\n  ● skip-trailing-slash-redirect › should correct skip URL normalizing in middleware\n\n    TypeError: Cannot read properties of null (reading 'endsWith')\n\n      108 |       { redirect: 'manual', headers: { 'x-nextjs-data': '1' } }\n      109 |     )\n    > 110 |     expect(res.headers.get('x-nextjs-rewrite').endsWith('/another/')).toBe(true)\n          |                            ^\n      111 |\n      112 |     res = await fetchViaHTTP(\n      113 |       next.url,\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash redirect (with slash)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      163 |       redirect: 'manual',\n      164 |     })\n    > 165 |     expect(res.status).toBe(200)\n          |                        ^\n      166 |     expect(await res.text()).toContain('another page')\n      167 |   })\n      168 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash to links on client\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/another/\"\n    Received: \"/another\"\n\n      200 |         'http://n'\n      201 |       ).pathname\n    > 202 |     ).toBe('/another/')\n          |       ^\n      203 |\n      204 |     await browser.elementByCss('#to-another-with-slash').click()\n      205 |     await browser.waitForElementByCss('#another')\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:202:7)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash on load on client\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:215:5)\n",
+            "name": "/work/test/e2e/skip-trailing-slash-redirect/index.test.ts",
+            "startTime": 1676057669585,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/compression/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676058239911,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Trailing slash in distDir",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n    at Object.openSync (node:fs:590:3)\n    at readFileSync (node:fs:458:35)\n    at readJson (/work/test/lib/next-test-utils.js:738:33)\n    at getBuildManifest (/work/test/lib/next-test-utils.js:742:10)\n    at getPageFileFromBuildManifest (/work/test/lib/next-test-utils.js:746:25)\n    at Object.<anonymous> (/work/test/integration/trailing-slash-dist/test/index.test.js:22:46)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Trailing slash in distDir dev mode supports trailing slash",
+                "location": null,
+                "status": "failed",
+                "title": "supports trailing slash"
+              }
+            ],
+            "endTime": 1676058245045,
+            "message": "  ● Trailing slash in distDir › dev mode › supports trailing slash\n\n    ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n\n      736 |\n      737 | function readJson(path) {\n    > 738 |   return JSON.parse(readFileSync(path))\n          |                                 ^\n      739 | }\n      740 |\n      741 | export function getBuildManifest(dir) {\n\n      at readJson (lib/next-test-utils.js:738:33)\n      at getBuildManifest (lib/next-test-utils.js:742:10)\n      at getPageFileFromBuildManifest (lib/next-test-utils.js:746:25)\n      at Object.<anonymous> (integration/trailing-slash-dist/test/index.test.js:22:46)\n",
+            "name": "/work/test/integration/trailing-slash-dist/test/index.test.js",
+            "startTime": 1676058240011,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057041005,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676057137430,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676057041098,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-fetches-with-any-http-method/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057627899,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document Head"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document Head Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "beforeInteractive in document body"
+                ],
+                "failureMessages": [],
+                "fullName": "beforeInteractive in document body Script is injected server-side",
+                "location": null,
+                "status": "passed",
+                "title": "Script is injected server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: false with no Partytown dependency"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: false with no Partytown dependency Partytown snippet is not injected to head if not enabled in configuration",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown snippet is not injected to head if not enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toEqual(expected) // deep equality\n\nExpected: not null\n\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:224:33)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Partytown snippets are injected to head if enabled in configuration",
+                "location": null,
+                "status": "failed",
+                "title": "Partytown snippets are injected to head if enabled in configuration"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for external script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:243:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for external script Worker scripts are modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Worker scripts are modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:296:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through children is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through children is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with required Partytown dependency for inline script"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: 1\n\n0\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/next-script/index.test.ts:323:7)"
+                ],
+                "fullName": "experimental.nextScriptWorkers: true with required Partytown dependency for inline script Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread",
+                "location": null,
+                "status": "failed",
+                "title": "Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread"
+              },
+              {
+                "ancestorTitles": [
+                  "experimental.nextScriptWorkers: true with config override"
+                ],
+                "failureMessages": [],
+                "fullName": "experimental.nextScriptWorkers: true with config override Partytown config script is overwritten",
+                "location": null,
+                "status": "passed",
+                "title": "Partytown config script is overwritten"
+              }
+            ],
+            "endTime": 1676057954217,
+            "message": "  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Partytown snippets are injected to head if enabled in configuration\n\n    expect(received).not.toEqual(expected) // deep equality\n\n    Expected: not null\n\n      222 |       )\n      223 |\n    > 224 |       expect(snippetScript).not.toEqual(null)\n          |                                 ^\n      225 |\n      226 |       // A default config is included that points to the correct folder that hosts partytown's static files\n      227 |       expect(configScript).not.toEqual(null)\n\n      at Object.<anonymous> (e2e/next-script/index.test.ts:224:33)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for external script › Worker scripts are modified by Partytown to execute on a worker thread\n\n    TIMED OUT: success\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:243:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through children is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:296:7)\n\n  ● experimental.nextScriptWorkers: true with required Partytown dependency for inline script › Inline worker script through dangerouslySetInnerHtml is modified by Partytown to execute on a worker thread\n\n    TIMED OUT: 1\n\n    0\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/next-script/index.test.ts:323:7)\n",
+            "name": "/work/test/e2e/next-script/index.test.ts",
+            "startTime": 1676057627997,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676058507261,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:52:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for gsp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for gsp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at runNextTicks (node:internal/process/task_queues:61:5)\n    at processTimers (node:internal/timers:499:9)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:84:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for gssp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for gssp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:116:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for dynamic gssp page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for dynamic gssp page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:148:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for api route correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for api route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:180:7)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for dynamic api route correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for dynamic api route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:205:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught rejection correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught rejection correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:221:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught empty rejection correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught empty rejection correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:237:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught exception correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught exception correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "server-side dev errors"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/server-side-dev-errors/test/index.test.js:253:5)"
+                ],
+                "fullName": "server-side dev errors should show server-side error for uncaught empty exception correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should show server-side error for uncaught empty exception correctly"
+              }
+            ],
+            "endTime": 1676058859050,
+            "message": "  ● server-side dev errors › should show server-side error for gsp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:52:7)\n\n  ● server-side dev errors › should show server-side error for gssp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:84:7)\n\n  ● server-side dev errors › should show server-side error for dynamic gssp page correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:116:7)\n\n  ● server-side dev errors › should show server-side error for api route correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:148:7)\n\n  ● server-side dev errors › should show server-side error for dynamic api route correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:180:7)\n\n  ● server-side dev errors › should show server-side error for uncaught rejection correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:205:5)\n\n  ● server-side dev errors › should show server-side error for uncaught empty rejection correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:221:5)\n\n  ● server-side dev errors › should show server-side error for uncaught exception correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:237:5)\n\n  ● server-side dev errors › should show server-side error for uncaught empty exception correctly\n\n    TIMED OUT: success\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/server-side-dev-errors/test/index.test.js:253:5)\n",
+            "name": "/work/test/integration/server-side-dev-errors/test/index.test.js",
+            "startTime": 1676058507353,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676056324533,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app styled-components hydration mismatch",
+                "location": null,
+                "status": "pending",
+                "title": "styled-components hydration mismatch"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with static generation",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with static generation"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with dynamic rendering",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with dynamic rendering"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRegression app can fast refresh a page with config",
+                "location": null,
+                "status": "passed",
+                "title": "can fast refresh a page with config"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:287:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for anonymous function server-side error",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for anonymous function server-side error"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'split')\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:306:19)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in server component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in server component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n- Snapshot  - 3\n+ Received  + 3\n\n-   1 | 'use client'\n- > 2 | export default function Page() { throw new Error('boom'); }\n-     |                                       ^\n+   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n+   \n+\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:326:56)"
+                ],
+                "fullName": "ReactRefreshRegression app shows an overlay for server-side error in client component",
+                "location": null,
+                "status": "failed",
+                "title": "shows an overlay for server-side error in client component"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRegression app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Hello World!\"\nReceived: null\n    at Object.<anonymous> (/work/test/development/acceptance-app/ReactRefreshRegression.test.ts:366:7)"
+                ],
+                "fullName": "ReactRefreshRegression app custom loader mdx should have Fast Refresh enabled",
+                "location": null,
+                "status": "failed",
+                "title": "custom loader mdx should have Fast Refresh enabled"
+              }
+            ],
+            "endTime": 1676056642155,
+            "message": "  ● ReactRefreshRegression app › shows an overlay for anonymous function server-side error\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      285 |\n      286 |     const source = await session.getRedboxSource()\n    > 287 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      288 |       \"> 1 | export default function () { throw new Error('boom'); }\n      289 |           |                                   ^\"\n      290 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:287:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in server component\n\n    TypeError: Cannot read properties of null (reading 'split')\n\n      304 |\n      305 |     const source = await session.getRedboxSource()\n    > 306 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                   ^\n      307 |       \"> 1 | export default function Page() { throw new Error('boom'); }\n      308 |           |                                       ^\"\n      309 |     `)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:306:19)\n\n  ● ReactRefreshRegression app › shows an overlay for server-side error in client component\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshRegression app shows an overlay for server-side error in client component 1`\n\n    - Snapshot  - 3\n    + Received  + 3\n\n    -   1 | 'use client'\n    - > 2 | export default function Page() { throw new Error('boom'); }\n    -     |                                       ^\n    +   Typescript only: Did you want to export only types with `export type { ... } from \"...\"`?\n    +   \n    +\n\n      324 |\n      325 |     const source = await session.getRedboxSource()\n    > 326 |     expect(source.split(/\\r?\\n/g).slice(2).join('\\n')).toMatchInlineSnapshot(`\n          |                                                        ^\n      327 |       \"  1 | 'use client'\n      328 |       > 2 | export default function Page() { throw new Error('boom'); }\n      329 |           |                                       ^\"\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:326:56)\n\n  ● ReactRefreshRegression app › custom loader mdx should have Fast Refresh enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Hello World!\"\n    Received: null\n\n      364 |         () => document.querySelector('#content').textContent\n      365 |       )\n    > 366 |     ).toBe('Hello World!')\n          |       ^\n      367 |\n      368 |     let didNotReload = await session.patch('app/content.mdx', `Hello Foo!`)\n      369 |     expect(didNotReload).toBe(true)\n\n      at Object.<anonymous> (development/acceptance-app/ReactRefreshRegression.test.ts:366:7)\n",
+            "name": "/work/test/development/acceptance-app/ReactRefreshRegression.test.ts",
+            "startTime": 1676056324623,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 15,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676057758344,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow rewriting invalid buildId correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should allow rewriting invalid buildId correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should provide original _next/data URL with skipMiddlewareUrlNormalize",
+                "location": null,
+                "status": "failed",
+                "title": "should provide original _next/data URL with skipMiddlewareUrlNormalize"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should allow response body from middleware with flag",
+                "location": null,
+                "status": "failed",
+                "title": "should allow response body from middleware with flag"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From API\"\nReceived: \"hello=From API\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\nReceived: \"hello=From%20API; Path=/\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should merge cookies from middleware and edge API routes correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should merge cookies from middleware and edge API routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'endsWith')\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should correct skip URL normalizing in middleware",
+                "location": null,
+                "status": "failed",
+                "title": "should correct skip URL normalizing in middleware"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config redirect correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config redirect correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should apply config rewrites correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply config rewrites correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (with slash)",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash redirect (with slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash redirect (without slash)",
+                "location": null,
+                "status": "passed",
+                "title": "should not apply trailing slash redirect (without slash)"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/another/\"\nReceived: \"/another\"\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:202:7)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash to links on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash to links on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/skip-trailing-slash-redirect/index.test.ts:215:5)"
+                ],
+                "fullName": "skip-trailing-slash-redirect should not apply trailing slash on load on client",
+                "location": null,
+                "status": "failed",
+                "title": "should not apply trailing slash on load on client"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to index correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to index correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should respond to dynamic route correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to dynamic route correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "skip-trailing-slash-redirect"
+                ],
+                "failureMessages": [],
+                "fullName": "skip-trailing-slash-redirect should navigate client side correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate client side correctly"
+              }
+            ],
+            "endTime": 1676057850356,
+            "message": "  ● skip-trailing-slash-redirect › should allow rewriting invalid buildId correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      27 |       }\n      28 |     )\n    > 29 |     expect(res.status).toBe(200)\n         |                        ^\n      30 |     expect(await res.text()).toContain('Example Domain')\n      31 |\n      32 |     if (!(global as any).isNextDeploy) {\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:29:24)\n\n  ● skip-trailing-slash-redirect › should provide original _next/data URL with skipMiddlewareUrlNormalize\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      47 |       }\n      48 |     )\n    > 49 |     expect(res.status).toBe(200)\n         |                        ^\n      50 |     expect(await res.text()).toContain('Example Domain')\n      51 |   })\n      52 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:49:24)\n\n  ● skip-trailing-slash-redirect › should allow response body from middleware with flag\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      53 |   it('should allow response body from middleware with flag', async () => {\n      54 |     const res = await fetchViaHTTP(next.url, '/middleware-response-body')\n    > 55 |     expect(res.status).toBe(200)\n         |                        ^\n      56 |     expect(res.headers.get('x-from-middleware')).toBe('true')\n      57 |     expect(await res.text()).toBe('hello from middleware')\n      58 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:55:24)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From API\"\n    Received: \"hello=From API\"\n\n      63 |     })\n      64 |     expect(res.status).toBe(200)\n    > 65 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      66 |       'from-middleware=1; Path=/, hello=From API'\n      67 |     )\n      68 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:65:43)\n\n  ● skip-trailing-slash-redirect › should merge cookies from middleware and edge API routes correctly\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"from-middleware=1; Path=/, hello=From%20API; Path=/\"\n    Received: \"hello=From%20API; Path=/\"\n\n      78 |     )\n      79 |     expect(res.status).toBe(200)\n    > 80 |     expect(res.headers.get('set-cookie')).toEqual(\n         |                                           ^\n      81 |       'from-middleware=1; Path=/, hello=From%20API; Path=/'\n      82 |     )\n      83 |   })\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:80:43)\n\n  ● skip-trailing-slash-redirect › should correct skip URL normalizing in middleware\n\n    TypeError: Cannot read properties of null (reading 'endsWith')\n\n      108 |       { redirect: 'manual', headers: { 'x-nextjs-data': '1' } }\n      109 |     )\n    > 110 |     expect(res.headers.get('x-nextjs-rewrite').endsWith('/another/')).toBe(true)\n          |                            ^\n      111 |\n      112 |     res = await fetchViaHTTP(\n      113 |       next.url,\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:110:28)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash redirect (with slash)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      163 |       redirect: 'manual',\n      164 |     })\n    > 165 |     expect(res.status).toBe(200)\n          |                        ^\n      166 |     expect(await res.text()).toContain('another page')\n      167 |   })\n      168 |\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:165:24)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash to links on client\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/another/\"\n    Received: \"/another\"\n\n      200 |         'http://n'\n      201 |       ).pathname\n    > 202 |     ).toBe('/another/')\n          |       ^\n      203 |\n      204 |     await browser.elementByCss('#to-another-with-slash').click()\n      205 |     await browser.waitForElementByCss('#another')\n\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:202:7)\n\n  ● skip-trailing-slash-redirect › should not apply trailing slash on load on client\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/skip-trailing-slash-redirect/index.test.ts:215:5)\n",
+            "name": "/work/test/e2e/skip-trailing-slash-redirect/index.test.ts",
+            "startTime": 1676057758436,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/compression/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676058332401,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Trailing slash in distDir",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n    at Object.openSync (node:fs:590:3)\n    at readFileSync (node:fs:458:35)\n    at readJson (/work/test/lib/next-test-utils.js:738:33)\n    at getBuildManifest (/work/test/lib/next-test-utils.js:742:10)\n    at getPageFileFromBuildManifest (/work/test/lib/next-test-utils.js:746:25)\n    at Object.<anonymous> (/work/test/integration/trailing-slash-dist/test/index.test.js:22:46)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Trailing slash in distDir dev mode supports trailing slash",
+                "location": null,
+                "status": "failed",
+                "title": "supports trailing slash"
+              }
+            ],
+            "endTime": 1676058337577,
+            "message": "  ● Trailing slash in distDir › dev mode › supports trailing slash\n\n    ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n\n      736 |\n      737 | function readJson(path) {\n    > 738 |   return JSON.parse(readFileSync(path))\n          |                                 ^\n      739 | }\n      740 |\n      741 | export function getBuildManifest(dir) {\n\n      at readJson (lib/next-test-utils.js:738:33)\n      at getBuildManifest (lib/next-test-utils.js:742:10)\n      at getPageFileFromBuildManifest (lib/next-test-utils.js:746:25)\n      at Object.<anonymous> (integration/trailing-slash-dist/test/index.test.js:22:46)\n",
+            "name": "/work/test/integration/trailing-slash-dist/test/index.test.js",
+            "startTime": 1676058332489,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
