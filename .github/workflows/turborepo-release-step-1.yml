@@ -7,7 +7,7 @@
 #    with a commit incrementing version.go as well as version.txt.
 #    For more detail, see `stage-release` in cli/Makefile
 # 2. Stage two takes the newly-created staging branch and compiles
-#    a production go build, the artifacts for which are stored
+#    a production Go build, the artifacts for which are stored
 #    in the build cache
 # 3. Stage three, if it has not successfully run before, builds
 #    the rust binaries, and then finally loads both of them
