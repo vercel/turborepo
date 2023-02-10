@@ -78,8 +78,6 @@ default-members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack",
   "crates/turbopack-tests",
-  "crates/turborepo-lib",
-  "crates/turbo-updater",
   "xtask",
 ]
 
@@ -96,7 +94,7 @@ opt-level = 3
 indexmap = { version = "1.9.2" }
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-swc_core = { version = "0.59.21" }
+swc_core = { version = "0.59.24" }
 testing = { version = "0.31.31" }
 swc_emotion = { version = "0.29.4" }
 styled_jsx = { version = "0.30.4" }
