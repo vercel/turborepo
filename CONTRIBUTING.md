@@ -99,7 +99,6 @@ Here's a checklist of testing strategies to cover:
   - `npx create-turbo --use-pnpm prune-test && cd prune-test`
   - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
   - `turbo --skip-infer build`
-- Test every command with `--skip-infer`.
 - Test `--dry-run` and `--graph`.
 - Test with and without daemon.
 
@@ -113,7 +112,7 @@ There are also multiple installation scenarios worth testing:
 
 Here are a few repositories that you can test on:
 
-- [Next.js](https://github.com/vercel/next.js)
+- [next.js](https://github.com/vercel/next.js)
 - [tldraw](https://github.com/tldraw/tldraw)
 - [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
 - [vercel](https://github.com/vercel/vercel)
