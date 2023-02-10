@@ -448,7 +448,7 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 
 			// TODO: can we print all the error messages instead of just the first one?
 			for _, err := range errors {
-				return nil, fmt.Errorf("turbo.json in \"%s\" workspace is invalid. Error: %s", taskIDPackage, err)
+				return nil, fmt.Errorf("Invalid turbo.json in \"%s\" workspace. Error: %s", taskIDPackage, err)
 			}
 
 			// If there are no errors, we can (try to) add the TaskDefinition to our list.
