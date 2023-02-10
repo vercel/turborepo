@@ -107,8 +107,6 @@ There are also multiple installation scenarios worth testing:
 - Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
 - Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
 - Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
-- npx. `turbo` is invoked via `npx turbo`.
-- npx + local. `turbo` is invoked via `npx turbo` in a repository with a local `turbo` binary.
 
 Here are a few repositories that you can test on:
 
