@@ -54,6 +54,6 @@ var nodejsNpm = PackageManager{
 	},
 
 	UnmarshalLockfile: func(contents []byte) (lockfile.Lockfile, error) {
-		return lockfile.DecodeRustNpmLockfile(contents)
+		return lockfile.DecodeNpmLockfile(contents)
 	},
 }

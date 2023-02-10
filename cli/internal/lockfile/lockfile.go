@@ -8,9 +8,8 @@ import (
 	"sort"
 
 	mapset "github.com/deckarep/golang-set"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"golang.org/x/sync/errgroup"
 )
 
 // Lockfile Interface for general operations that work across all lockfiles
@@ -61,19 +60,6 @@ func (p ByKey) Less(i, j int) bool {
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)
-
-// TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(
-	workspaceDir turbopath.AnchoredUnixPath,
-	unresolvedDeps map[string]string,
-	lockFile Lockfile,
-) (mapset.Set, error) {
-	if lf, ok := lockFile.(*NpmLockfileRust); ok {
-		// We special case as Rust implementations have their own dep crawl
-		return NpmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
-	}
-	return transitiveClosure(workspaceDir, unresolvedDeps, lockFile)
-}
 
 func transitiveClosure(
 	workspaceDir turbopath.AnchoredUnixPath,
