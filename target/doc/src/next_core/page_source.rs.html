@@ -724,9 +724,7 @@
 <span id="724">724</span>
 <span id="725">725</span>
 <span id="726">726</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc, StringsVc},
@@ -823,7 +821,9 @@
         src_pages
     } <span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
-    };
+    }
+    .resolve()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>client_ty = Value::new(ClientContextType::Pages { pages_dir });
     <span class="kw">let </span>server_ty = Value::new(ServerContextType::Pages { pages_dir });
@@ -839,13 +839,6 @@
     );
     <span class="kw">let </span>client_resolve_options_context =
         get_client_resolve_options_context(project_path, client_ty, next_config);
-    <span class="kw">let </span>client_context: AssetContextVc = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(HashMap::new()),
-        client_environment,
-        client_module_options_context,
-        client_resolve_options_context,
-    )
-    .into();
 
     <span class="kw">let </span>client_chunking_context =
         get_client_chunking_context(project_path, server_root, client_environment, client_ty);
@@ -897,7 +890,15 @@
 
     <span class="kw">let </span>server_module_options_context =
         get_server_module_options_context(project_path, execution_context, server_ty, next_config);
-    <span class="kw">let </span>server_transitions = TransitionsByNameVc::cell(
+
+    <span class="kw">let </span>server_data_module_options_context = get_server_module_options_context(
+        project_path,
+        execution_context,
+        server_data_ty,
+        next_config,
+    );
+
+    <span class="kw">let </span>transitions = TransitionsByNameVc::cell(
         [
             (<span class="string">&quot;next-edge&quot;</span>.to_string(), next_edge_transition),
             (<span class="string">&quot;next-client&quot;</span>.to_string(), next_client_transition),
@@ -908,7 +909,7 @@
                     execution_context,
                     client_ty,
                     server_root,
-                    browserslist_query,
+                    client_environment,
                     next_config,
                 )
                 .into(),
@@ -918,23 +919,22 @@
         .collect(),
     );
 
+    <span class="kw">let </span>client_context: AssetContextVc = ModuleAssetContextVc::new(
+        transitions,
+        client_environment,
+        client_module_options_context,
+        client_resolve_options_context,
+    )
+    .into();
     <span class="kw">let </span>server_context: AssetContextVc = ModuleAssetContextVc::new(
-        server_transitions,
+        transitions,
         server_environment,
         server_module_options_context,
         server_resolve_options_context,
     )
     .into();
-
-    <span class="kw">let </span>server_data_module_options_context = get_server_module_options_context(
-        project_path,
-        execution_context,
-        server_data_ty,
-        next_config,
-    );
-
     <span class="kw">let </span>server_data_context: AssetContextVc = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(HashMap::new()),
+        transitions,
         server_environment,
         server_data_module_options_context,
         server_resolve_options_context,
@@ -952,7 +952,7 @@
         execution_context,
         server_root,
         env,
-        browserslist_query,
+        client_environment,
         next_config,
     );
 

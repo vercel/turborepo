@@ -713,6 +713,8 @@
 <span id="713">713</span>
 <span id="714">714</span>
 <span id="715">715</span>
+<span id="716">716</span>
+<span id="717">717</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -736,7 +738,7 @@
 <span class="kw">use </span>turbopack_core::{
     chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
-    environment::ServerAddrVc,
+    environment::{EnvironmentVc, ServerAddrVc},
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -793,11 +795,10 @@
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: <span class="kw-2">&amp;</span>str,
+    client_environment: EnvironmentVc,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
-    <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
     <span class="kw">let </span>client_chunking_context =
         get_client_chunking_context(project_path, server_root, client_environment, ty);
     <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
@@ -887,7 +888,7 @@
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: <span class="kw-2">&amp;</span>str,
+    client_environment: EnvironmentVc,
     ssr: bool,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
@@ -919,7 +920,7 @@
             server_root,
             app_dir,
             env,
-            browserslist_query,
+            client_environment,
             next_config,
         ),
     );
@@ -931,7 +932,7 @@
             execution_context,
             client_ty,
             server_root,
-            browserslist_query,
+            client_environment,
             next_config,
         )
         .into(),
@@ -985,7 +986,10 @@
         src_app
     } <span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
-    };
+    }
+    .resolve()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
 
     <span class="kw">let </span>context_ssr = app_context(
         project_path,
@@ -993,7 +997,7 @@
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_environment,
         <span class="bool-val">true</span>,
         next_config,
         server_addr,
@@ -1004,7 +1008,7 @@
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_environment,
         <span class="bool-val">false</span>,
         next_config,
         server_addr,
@@ -1021,7 +1025,7 @@
         execution_context,
         server_root,
         env,
-        browserslist_query,
+        client_environment,
         next_config,
     );
 
