@@ -157,7 +157,7 @@ impl DepGraph {
         let mut modules = vec![];
 
         for group in groups.graph_ix {
-            let mut module = Module {
+            let mut chunk = Module {
                 span: module.span,
                 body: vec![],
                 shebang: None,
@@ -168,11 +168,11 @@ impl DepGraph {
                     // TODO: Special modules
                 } else {
                     // TODO: Kind
-                    module.body.push(module.body[g.index].clone());
+                    chunk.body.push(module.body[g.index].clone());
                 }
             }
 
-            modules.push(module);
+            modules.push(chunk);
         }
 
         modules
