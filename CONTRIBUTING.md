@@ -94,6 +94,34 @@ TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 
 If you're using a different package manager replace npm accordingly.
 
+## Manually testing `turbo`
+
+Before releasing, it's recommended to test the `turbo` binary manually.
+Here's a checklist of testing strategies to cover:
+
+- Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test `prune` (Note `turbo` here is the unreleased turbo binary)
+  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
+  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer build`
+- Test `--dry-run` and `--graph`.
+- Test with and without daemon.
+
+There are also multiple installation scenarios worth testing:
+
+- Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+
+Here are a few repositories that you can test on:
+
+- [next.js](https://github.com/vercel/next.js)
+- [tldraw](https://github.com/tldraw/tldraw)
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [vercel](https://github.com/vercel/vercel)
+
+These lists are by no means exhaustive. Feel free to add to them with other strategies.
+
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./release.md#release-turborepo).
