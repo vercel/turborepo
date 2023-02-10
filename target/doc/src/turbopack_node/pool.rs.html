@@ -371,6 +371,22 @@
 <span id="371">371</span>
 <span id="372">372</span>
 <span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     mem::take,
@@ -401,34 +417,16 @@
 }
 
 <span class="kw">struct </span>SpawnedNodeJsPoolProcess {
-    child: <span class="prelude-ty">Option</span>&lt;Child&gt;,
+    child: Child,
     listener: TcpListener,
+    shared_stdout: SharedOutputSet,
+    shared_stderr: SharedOutputSet,
     debug: bool,
 }
 
 <span class="kw">struct </span>RunningNodeJsPoolProcess {
     child: <span class="prelude-ty">Option</span>&lt;Child&gt;,
     connection: TcpStream,
-}
-
-<span class="kw">impl </span>Drop <span class="kw">for </span>SpawnedNodeJsPoolProcess {
-    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = <span class="self">self</span>.child.take() {
-            tokio::spawn(<span class="kw">async move </span>{
-                <span class="kw">let _ </span>= child.kill().<span class="kw">await</span>;
-            });
-        }
-    }
-}
-
-<span class="kw">impl </span>Drop <span class="kw">for </span>RunningNodeJsPoolProcess {
-    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = <span class="self">self</span>.child.take() {
-            tokio::spawn(<span class="kw">async move </span>{
-                <span class="kw">let _ </span>= child.kill().<span class="kw">await</span>;
-            });
-        }
-    }
 }
 
 <span class="kw">const </span>CONNECT_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
@@ -507,53 +505,87 @@
         cmd.envs(env);
         cmd.stderr(Stdio::piped());
         cmd.stdout(Stdio::piped());
+        cmd.kill_on_drop(<span class="bool-val">true</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>child = cmd.spawn().context(<span class="string">&quot;spawning node pooled process&quot;</span>)<span class="question-mark">?</span>;
-
-        tokio::spawn(handle_output_stream(
-            child.stdout.take().unwrap(),
-            shared_stdout,
-            stdout(),
-        ));
-        tokio::spawn(handle_output_stream(
-            child.stderr.take().unwrap(),
-            shared_stderr,
-            stderr(),
-        ));
+        <span class="kw">let </span>child = cmd.spawn().context(<span class="string">&quot;spawning node pooled process&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::Spawned(SpawnedNodeJsPoolProcess {
             listener,
-            child: <span class="prelude-val">Some</span>(child),
+            child,
             debug,
+            shared_stdout,
+            shared_stderr,
         }))
     }
 
     <span class="kw">async fn </span>run(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RunningNodeJsPoolProcess&gt; {
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
-            NodeJsPoolProcess::Spawned(<span class="kw-2">mut </span>spawned) =&gt; {
-                <span class="kw">let </span>timeout = <span class="kw">if </span>spawned.debug {
+            NodeJsPoolProcess::Spawned(SpawnedNodeJsPoolProcess {
+                <span class="kw-2">mut </span>child,
+                listener,
+                shared_stdout,
+                shared_stderr,
+                debug,
+            }) =&gt; {
+                <span class="kw">let </span>timeout = <span class="kw">if </span>debug {
                     Duration::MAX
                 } <span class="kw">else </span>{
                     CONNECT_TIMEOUT
                 };
 
+                <span class="kw">async fn </span>get_output(child: <span class="kw-2">&amp;mut </span>Child) -&gt; <span class="prelude-ty">Result</span>&lt;(String, String)&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>stdout = Vec::new();
+                    <span class="kw">let </span><span class="kw-2">mut </span>stderr = Vec::new();
+                    child
+                        .stdout
+                        .take()
+                        .unwrap()
+                        .read_to_end(<span class="kw-2">&amp;mut </span>stdout)
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    child
+                        .stderr
+                        .take()
+                        .unwrap()
+                        .read_to_end(<span class="kw-2">&amp;mut </span>stderr)
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>((String::from_utf8(stdout)<span class="question-mark">?</span>, String::from_utf8(stderr)<span class="question-mark">?</span>))
+                }
+
                 <span class="kw">let </span>(connection, <span class="kw">_</span>) = <span class="macro">select! </span>{
-                    connection = spawned.listener.accept() =&gt; connection.context(<span class="string">&quot;accepting connection&quot;</span>)<span class="question-mark">?</span>,
-                    status = spawned.child.as_mut().unwrap().wait() =&gt; {
+                    connection = listener.accept() =&gt; connection.context(<span class="string">&quot;accepting connection&quot;</span>)<span class="question-mark">?</span>,
+                    status = child.wait() =&gt; {
                         <span class="kw">match </span>status {
                             <span class="prelude-val">Ok</span>(status) =&gt; {
-                                <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it with {}&quot;</span>, status);
+                                <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
+                                <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it with {status}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                             }
                             <span class="prelude-val">Err</span>(err) =&gt; {
-                                <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it: {:?}&quot;</span>, err);
+                                <span class="kw">let _ </span>= child.start_kill();
+                                <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
+                                <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it: {err:?}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                             },
                         }
                     },
-                    <span class="kw">_ </span>= sleep(timeout) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;timed out waiting for the Node.js process to connect ({:?} timeout)&quot;</span>, timeout),
+                    <span class="kw">_ </span>= sleep(timeout) =&gt; {
+                        <span class="kw">let _ </span>= child.start_kill();
+                        <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="macro">bail!</span>(<span class="string">&quot;timed out waiting for the Node.js process to connect ({timeout:?} timeout)\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
+                    },
                 };
 
+                tokio::spawn(handle_output_stream(
+                    child.stdout.take().unwrap(),
+                    shared_stdout,
+                    stdout(),
+                ));
+                tokio::spawn(handle_output_stream(
+                    child.stderr.take().unwrap(),
+                    shared_stderr,
+                    stderr(),
+                ));
+
                 RunningNodeJsPoolProcess {
-                    child: spawned.child.take(),
+                    child: <span class="prelude-val">Some</span>(child),
                     connection,
                 }
             }
