@@ -313,6 +313,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 	// Start with an empty definition
 	mergedTaskDefinition := &TaskDefinition{}
 
+	// Set the default, because the 0-value will be false, and if no turbo.jsons had
+	// this field set for this task, we want it to be true.
+	mergedTaskDefinition.ShouldCache = true
+
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
