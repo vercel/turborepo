@@ -162,6 +162,14 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
+        let modules = analyzer.g.split_module(&module);
+
+        writeln!(s, "# Modules").unwrap();
+        for (i, module) in modules.iter().enumerate() {
+            writeln!(s, "## Module {}", i + 1).unwrap();
+            writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
+        }
+
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
             .unwrap();
