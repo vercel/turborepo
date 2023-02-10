@@ -708,7 +708,6 @@
 <span id="708">708</span>
 <span id="709">709</span>
 <span id="710">710</span>
-<span id="711">711</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -1117,7 +1116,6 @@
         <span class="comment">// This method checks if everything was cleaned up correctly
         // no more tasks should be attached to this scope in any way
 
-        // println!(&quot;assert_unused {:?}&quot;, self);
         </span><span class="macro">assert_eq!</span>(
             <span class="self">self</span>.tasks.load(Ordering::Acquire),
             <span class="number">0</span>,

@@ -1222,6 +1222,70 @@
 <span id="1222">1222</span>
 <span id="1223">1223</span>
 <span id="1224">1224</span>
+<span id="1225">1225</span>
+<span id="1226">1226</span>
+<span id="1227">1227</span>
+<span id="1228">1228</span>
+<span id="1229">1229</span>
+<span id="1230">1230</span>
+<span id="1231">1231</span>
+<span id="1232">1232</span>
+<span id="1233">1233</span>
+<span id="1234">1234</span>
+<span id="1235">1235</span>
+<span id="1236">1236</span>
+<span id="1237">1237</span>
+<span id="1238">1238</span>
+<span id="1239">1239</span>
+<span id="1240">1240</span>
+<span id="1241">1241</span>
+<span id="1242">1242</span>
+<span id="1243">1243</span>
+<span id="1244">1244</span>
+<span id="1245">1245</span>
+<span id="1246">1246</span>
+<span id="1247">1247</span>
+<span id="1248">1248</span>
+<span id="1249">1249</span>
+<span id="1250">1250</span>
+<span id="1251">1251</span>
+<span id="1252">1252</span>
+<span id="1253">1253</span>
+<span id="1254">1254</span>
+<span id="1255">1255</span>
+<span id="1256">1256</span>
+<span id="1257">1257</span>
+<span id="1258">1258</span>
+<span id="1259">1259</span>
+<span id="1260">1260</span>
+<span id="1261">1261</span>
+<span id="1262">1262</span>
+<span id="1263">1263</span>
+<span id="1264">1264</span>
+<span id="1265">1265</span>
+<span id="1266">1266</span>
+<span id="1267">1267</span>
+<span id="1268">1268</span>
+<span id="1269">1269</span>
+<span id="1270">1270</span>
+<span id="1271">1271</span>
+<span id="1272">1272</span>
+<span id="1273">1273</span>
+<span id="1274">1274</span>
+<span id="1275">1275</span>
+<span id="1276">1276</span>
+<span id="1277">1277</span>
+<span id="1278">1278</span>
+<span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+<span id="1284">1284</span>
+<span id="1285">1285</span>
+<span id="1286">1286</span>
+<span id="1287">1287</span>
+<span id="1288">1288</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1251,7 +1315,7 @@
     pattern::QueryMapVc,
 };
 <span class="kw">use crate</span>::{
-    asset::{AssetOptionVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
     issue::{
         package_json::{PackageJsonIssue, PackageJsonIssueVc},
         resolve::{ResolvingIssue, ResolvingIssueVc},
@@ -1269,6 +1333,7 @@
 
 <span class="kw">mod </span>alias_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>exports;
+<span class="kw">pub mod </span>node;
 <span class="kw">pub mod </span>options;
 <span class="kw">pub mod </span>origin;
 <span class="kw">pub mod </span>parse;
@@ -1832,6 +1897,78 @@
     request: RequestVc,
     options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">let </span>raw_result = resolve_internal(context, request, options);
+    <span class="kw">let </span>result = handle_resolve_plugins(context, request, options, raw_result);
+    <span class="prelude-val">Ok</span>(result)
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>handle_resolve_plugins(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    options: ResolveOptionsVc,
+    result: ResolveResultVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">async fn </span>apply_plugins_to_path(
+        path: FileSystemPathVc,
+        context: FileSystemPathVc,
+        request: RequestVc,
+        options: ResolveOptionsVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ResolveResultVc&gt;&gt; {
+        <span class="kw">for </span>plugin <span class="kw">in </span><span class="kw-2">&amp;</span>options.<span class="kw">await</span><span class="question-mark">?</span>.plugins {
+            <span class="kw">if </span><span class="kw-2">*</span>plugin.after_resolve_condition().matches(path).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = <span class="kw-2">*</span>plugin.after_resolve(path, context, request).<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(result));
+                }
+            }
+        }
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>changed = <span class="bool-val">false</span>;
+    <span class="kw">let </span>result_value = result.<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>new_primary = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>new_references = Vec::new();
+
+    <span class="kw">for </span>primary <span class="kw">in </span>result_value.primary.iter() {
+        <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = primary {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_result) =
+                apply_plugins_to_path(asset.path().resolve().<span class="kw">await</span><span class="question-mark">?</span>, context, request, options)
+                    .<span class="kw">await</span><span class="question-mark">?
+            </span>{
+                <span class="kw">let </span>new_result = new_result.<span class="kw">await</span><span class="question-mark">?</span>;
+                changed = <span class="bool-val">true</span>;
+                new_primary.extend(new_result.primary.iter().cloned());
+                new_references.extend(new_result.references.iter().copied());
+            } <span class="kw">else </span>{
+                new_primary.push(primary.clone());
+            }
+        } <span class="kw">else </span>{
+            new_primary.push(primary.clone());
+        }
+    }
+
+    <span class="kw">if </span>!changed {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>references = result_value.references.clone();
+    references.append(<span class="kw-2">&amp;mut </span>new_references);
+
+    <span class="prelude-val">Ok</span>(ResolveResult {
+        primary: new_primary,
+        references,
+    }
+    .cell())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>resolve_internal(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    options: ResolveOptionsVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="comment">// This explicit deref of `options` is necessary
     </span><span class="attr">#[allow(clippy::explicit_auto_deref)]
     </span><span class="kw">let </span>options_value: <span class="kw-2">&amp;</span>ResolveOptions = <span class="kw-2">&amp;*</span>options.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1861,7 +1998,7 @@
         Request::Alternatives { requests } =&gt; {
             <span class="kw">let </span>results = requests
                 .iter()
-                .map(|req| resolve(context, <span class="kw-2">*</span>req, options))
+                .map(|req| resolve_internal(context, <span class="kw-2">*</span>req, options))
                 .collect();
             merge_results(results)
         }
@@ -1907,7 +2044,7 @@
             }
             <span class="kw">let </span>new_pat = Pattern::alternatives(patterns);
 
-            resolve(
+            resolve_internal(
                 context,
                 RequestVc::raw(Value::new(new_pat), <span class="kw-2">*</span>force_in_context),
                 options,
@@ -1937,7 +2074,7 @@
             .into();
             issue.as_issue().emit();
 
-            resolve(context.root(), relative, options)
+            resolve_internal(context.root(), relative, options)
         }
         Request::Windows { path: <span class="kw">_ </span>} =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
@@ -2020,7 +2157,7 @@
                         </span>)
                     })<span class="question-mark">?</span>;
                 <span class="kw">let </span>request = RequestVc::parse(Value::new(str.into()));
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve(package_path, request, options));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) =&gt; {
                 <span class="kw">if let </span>FileJsonContent::Content(package_json) = <span class="kw-2">&amp;*</span>package_json.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -2028,7 +2165,7 @@
                         <span class="kw">let </span>request =
                             RequestVc::parse(Value::new(normalize_request(field_value).into()));
 
-                        <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>resolve(package_path, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>resolve_internal(package_path, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="comment">// we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         </span><span class="kw">if </span>!result.is_unresolveable() {
@@ -2151,7 +2288,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>new_pat = path.clone();
             new_pat.push_front(<span class="string">&quot;.&quot;</span>.to_string().into());
             <span class="kw">let </span>relative = RequestVc::relative(Value::new(new_pat), <span class="bool-val">true</span>);
-            results.push(resolve(<span class="kw-2">*</span>package_path, relative, options));
+            results.push(resolve_internal(<span class="kw-2">*</span>package_path, relative, options));
         }
     }
 
@@ -2188,7 +2325,7 @@
                 issue.as_issue().emit();
                 ResolveResult::unresolveable().cell()
             } <span class="kw">else </span>{
-                resolve(context, request, options)
+                resolve_internal(context, request, options)
             }
         }
         ImportMapResult::Alternatives(list) =&gt; {
@@ -2239,7 +2376,7 @@
         );
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = result.as_str() {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve(
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_internal(
             package_path,
             RequestVc::parse(Value::new(Pattern::Constant(value.to_string()))),
             resolve_options,
@@ -2265,7 +2402,6 @@
     ResolveOptions {
         resolved_map,
         in_package,
-        plugins,
         ..
     }: <span class="kw-2">&amp;</span>ResolveOptions,
     options: ResolveOptionsVc,
@@ -2299,14 +2435,6 @@
                         }
                     }
                 }
-            }
-        }
-    }
-
-    <span class="kw">for </span>plugin <span class="kw">in </span>plugins {
-        <span class="kw">if </span><span class="kw-2">*</span>plugin.condition().matches(<span class="kw-2">*</span>path).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = <span class="kw-2">*</span>plugin.after_resolve(<span class="kw-2">*</span>path, original_request).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
             }
         }
     }
@@ -2368,7 +2496,7 @@
     <span class="kw">for </span>path <span class="kw">in </span>results {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = normalize_path(path) {
             <span class="kw">let </span>request = RequestVc::relative(Value::new(<span class="macro">format!</span>(<span class="string">&quot;./{}&quot;</span>, path).into()), <span class="bool-val">false</span>);
-            resolved_results.push(resolve(package_path, request, options));
+            resolved_results.push(resolve_internal(package_path, request, options));
         }
     }
     <span class="comment">// other options do not apply anymore when an exports field exist

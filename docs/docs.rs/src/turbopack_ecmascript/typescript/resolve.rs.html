@@ -414,6 +414,7 @@
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
+        node::node_cjs_resolve_options,
         options::{
             ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveIntoPackage,
             ResolveModules, ResolveOptionsVc,
@@ -540,12 +541,11 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>tsconfig_resolve_options(
     tsconfig: FileSystemPathVc,
-    resolve_in_tsconfig_options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TsConfigResolveOptionsVc&gt; {
     <span class="kw">let </span>configs = read_tsconfigs(
         tsconfig.read(),
         SourceAssetVc::new(tsconfig).into(),
-        resolve_in_tsconfig_options,
+        node_cjs_resolve_options(tsconfig.root()),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -271,9 +271,6 @@
 <span id="271">271</span>
 <span id="272">272</span>
 <span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
-<span id="276">276</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -286,9 +283,8 @@
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
-<span class="kw">use </span>turbopack_ecmascript::{
-    resolve::apply_cjs_specific_options,
-    typescript::resolve::{apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options},
+<span class="kw">use </span>turbopack_ecmascript::typescript::resolve::{
+    apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::resolve_options_context::ResolveOptionsContextVc;
@@ -522,12 +518,10 @@
 
     <span class="kw">let </span>resolve_options = <span class="kw">if </span>options_context_value.enable_typescript {
         <span class="kw">let </span>tsconfig = find_context_file(context, tsconfig()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>cjs_resolve_options = apply_cjs_specific_options(resolve_options);
         <span class="kw">match </span><span class="kw-2">*</span>tsconfig {
-            FindContextFileResult::Found(path, <span class="kw">_</span>) =&gt; apply_tsconfig_resolve_options(
-                resolve_options,
-                tsconfig_resolve_options(path, cjs_resolve_options),
-            ),
+            FindContextFileResult::Found(path, <span class="kw">_</span>) =&gt; {
+                apply_tsconfig_resolve_options(resolve_options, tsconfig_resolve_options(path))
+            }
             FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; resolve_options,
         }
     } <span class="kw">else </span>{

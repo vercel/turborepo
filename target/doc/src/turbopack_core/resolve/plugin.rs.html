@@ -47,6 +47,10 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::BoolVc;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
@@ -68,7 +72,7 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>matches(<span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+    </span><span class="kw">pub async fn </span>matches(<span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>root = this.root.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>glob = this.glob.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -88,13 +92,17 @@
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ResolvePlugin {
     <span class="doccomment">/// A condition which determines if the hooks gets called.
-    </span><span class="kw">fn </span>condition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolvePluginConditionVc;
+    </span><span class="kw">fn </span>after_resolve_condition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolvePluginConditionVc;
 
     <span class="doccomment">/// This hook gets called when a full filepath has been resolved and the
     /// condition matches. If a value is returned it replaces the resolve
     /// result.
-    </span><span class="kw">fn </span>after_resolve(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc, request: RequestVc)
-        -&gt; ResolveResultOptionVc;
+    </span><span class="kw">fn </span>after_resolve(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        fs_path: FileSystemPathVc,
+        context: FileSystemPathVc,
+        request: RequestVc,
+    ) -&gt; ResolveResultOptionVc;
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

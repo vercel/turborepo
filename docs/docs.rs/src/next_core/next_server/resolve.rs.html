@@ -103,14 +103,76 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::primitives::StringsVc;
+<span class="kw">use </span>once_cell::sync::Lazy;
+<span class="kw">use </span>regex::Regex;
+<span class="kw">use </span>turbo_tasks::primitives::{BoolVc, StringsVc};
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileJsonContent, FileSystemPathVc};
-<span class="kw">use </span>turbopack_core::resolve::{
-    find_context_file, package_json,
-    parse::RequestVc,
-    plugin::{ResolvePlugin, ResolvePluginConditionVc, ResolvePluginVc},
-    FindContextFileResult, PrimaryResolveResult, ResolveResult, ResolveResultOptionVc,
+<span class="kw">use </span>turbopack_core::{
+    asset::Asset,
+    resolve::{
+        find_context_file,
+        node::node_cjs_resolve_options,
+        package_json,
+        parse::{Request, RequestVc},
+        plugin::{ResolvePlugin, ResolvePluginConditionVc, ResolvePluginVc},
+        resolve, FindContextFileResult, PrimaryResolveResult, ResolveResult, ResolveResultOptionVc,
+    },
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -131,19 +193,55 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>is_node_resolveable(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    expected: FileSystemPathVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+    <span class="kw">let </span>node_resolve_result = resolve(context, request, node_cjs_resolve_options(context.root()));
+    <span class="kw">let </span>primary_node_assets = node_resolve_result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="prelude-val">Some</span>(node_asset) = primary_node_assets.first() <span class="kw">else </span>{
+        <span class="comment">// can&#39;t resolve request with node.js options
+        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
+    };
+
+    <span class="kw">if </span>node_asset.path().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= expected.resolve().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="comment">// node.js resolves to a different file
+        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
+    }
+
+    <span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">true</span>))
+}
+
+<span class="kw">static </span>PNPM: Lazy&lt;Regex&gt; = Lazy::new(|| Regex::new(<span class="string">r&quot;(?:/|^)node_modules/(.pnpm/.+)&quot;</span>).unwrap());
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>condition(root: FileSystemPathVc) -&gt; ResolvePluginConditionVc {
+    ResolvePluginConditionVc::new(root.root(), GlobVc::new(<span class="string">&quot;**/node_modules/**&quot;</span>))
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ResolvePlugin <span class="kw">for </span>ExternalCjsModulesResolvePlugin {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>condition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolvePluginConditionVc {
-        ResolvePluginConditionVc::new(<span class="self">self</span>.root, GlobVc::new(<span class="string">&quot;**/node_modules&quot;</span>))
+    </span><span class="kw">fn </span>after_resolve_condition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolvePluginConditionVc {
+        condition(<span class="self">self</span>.root)
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>after_resolve(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         fs_path: FileSystemPathVc,
-        _request: RequestVc,
+        context: FileSystemPathVc,
+        request: RequestVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultOptionVc&gt; {
+        <span class="kw">if </span><span class="kw-2">*</span>condition(<span class="self">self</span>.root).matches(context).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
+        }
+        <span class="kw">if </span>!<span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">?</span>, Request::Module { .. }) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
+        }
+
         <span class="kw">let </span>raw_fs_path = <span class="kw-2">&amp;*</span>fs_path.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// always bundle transpiled modules
@@ -152,8 +250,12 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
         }
 
-        <span class="comment">// mjs -&gt; esm module
-        </span><span class="kw">if </span><span class="prelude-val">Some</span>(<span class="string">&quot;mjs&quot;</span>) == raw_fs_path.extension() {
+        <span class="comment">// node.js only supports these file extensions
+        // mjs is an esm module and we can&#39;t bundle that yet
+        </span><span class="kw">if </span>!<span class="macro">matches!</span>(
+            raw_fs_path.extension(),
+            <span class="prelude-val">Some</span>(<span class="string">&quot;cjs&quot; </span>| <span class="string">&quot;js&quot; </span>| <span class="string">&quot;node&quot; </span>| <span class="string">&quot;json&quot;</span>)
+        ) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
         }
 
@@ -173,31 +275,39 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
         }
 
-        <span class="comment">// make sure we have a full package
-        </span><span class="kw">let </span><span class="prelude-val">Some</span>(package_name) = package[<span class="string">&quot;name&quot;</span>].as_str() <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
-        };
-
-        <span class="comment">// check if we can resolve the package from the root dir (might be hidden by
-        // pnpm)
-        </span><span class="kw">let </span>FileJsonContent::Content(resolved_package) = <span class="kw-2">&amp;*</span><span class="self">self
-            </span>.root
-            .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;node_modules/{}/package.json&quot;</span>, package_name))
-            .read_json()
-            .<span class="kw">await</span><span class="question-mark">?
-        </span><span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
-        };
-
-        <span class="comment">// only mark external if the package.json files are the same
-        </span><span class="kw">if </span>resolved_package != package {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::none());
+        <span class="comment">// check if we can resolve the package from the project dir with node.js resolve
+        // options (might be hidden by pnpm)
+        </span><span class="kw">if </span><span class="kw-2">*</span>is_node_resolveable(<span class="self">self</span>.root.root(), request, fs_path).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="comment">// mark as external
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::some(
+                ResolveResult::primary(PrimaryResolveResult::OriginalReferenceExternal).cell(),
+            ));
         }
 
-        <span class="comment">// mark as external
-        </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::some(
-            ResolveResult::primary(PrimaryResolveResult::OriginalReferenceExternal).cell(),
-        ))
+        <span class="comment">// Special behavior for pnpm as we could reference all .pnpm modules by
+        // referencing the `.pnpm` folder as module, e. g.
+        // /node_modules/.pnpm/some-package@2.29.2/node_modules/some-package/dir/file.js
+        // becomes
+        // .pnpm/some-package@2.29.2/node_modules/some-package/dir/file.js
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(captures) = PNPM.captures(<span class="kw-2">&amp;</span>fs_path.<span class="kw">await</span><span class="question-mark">?</span>.path) {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(import_path) = captures.get(<span class="number">1</span>) {
+                <span class="comment">// we could load it directly as external, but we want to make sure node.js would
+                // resolve it the same way e. g. that we didn&#39;t follow any special resolve
+                // options, to come here like the `module` field in package.json
+                </span><span class="kw">if </span><span class="kw-2">*</span>is_node_resolveable(context, request, fs_path).<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="comment">// mark as external
+                    </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResultOptionVc::some(
+                        ResolveResult::primary(
+                            PrimaryResolveResult::OriginalReferenceTypeExternal(
+                                import_path.as_str().to_string(),
+                            ),
+                        )
+                        .cell(),
+                    ));
+                }
+            }
+        }
+        <span class="prelude-val">Ok</span>(ResolveResultOptionVc::none())
     }
 }
 

@@ -1678,8 +1678,6 @@
 <span id="1678">1678</span>
 <span id="1679">1679</span>
 <span id="1680">1680</span>
-<span id="1681">1681</span>
-<span id="1682">1682</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2188,8 +2186,7 @@
                             })<span class="question-mark">?</span>;
                     }
                 }
-                <span class="comment">// println!(&quot;write {} bytes to {}&quot;, buffer.len(), full_path.display());
-                </span><span class="kw">let </span>full_path_to_write = full_path.clone();
+                <span class="kw">let </span>full_path_to_write = full_path.clone();
                 retry_future(<span class="kw">move </span>|| {
                     <span class="kw">let </span>full_path = full_path_to_write.clone();
                     <span class="kw">async move </span>{
@@ -2204,8 +2201,7 @@
                 </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;failed to write to {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
             }
             FileContent::NotFound =&gt; {
-                <span class="comment">// println!(&quot;remove {}&quot;, full_path.display());
-                </span>retry_future(|| fs::remove_file(full_path.clone()))
+                retry_future(|| fs::remove_file(full_path.clone()))
                     .<span class="kw">await
                     </span>.or_else(|err| {
                         <span class="kw">if </span>err.kind() == ErrorKind::NotFound {
