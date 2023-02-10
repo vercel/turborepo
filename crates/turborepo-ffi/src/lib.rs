@@ -8,7 +8,7 @@ use std::{mem::ManuallyDrop, path::PathBuf};
 
 pub use lockfile::{npm_subgraph, npm_transitive_closure};
 
-use turborepo_lockfiles::{npm_subgraph as real_npm_subgraph, transitive_closure, NpmLockfile};
+pub use lockfile::{npm_subgraph, npm_transitive_closure};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
