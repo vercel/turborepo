@@ -20,14 +20,84 @@ use rand::Rng;
 #[cfg(not(test))]
 use crate::ui::CYAN;
 use crate::{
-    client::{CachingStatus, Team, UserClient},
+    client::{APIClient, CachingStatus, Team},
     commands::CommandBase,
     ui::{BOLD, GREY, UNDERLINE},
 };
 
-enum SelectedTeam<'a> {
+#[derive(Clone)]
+pub(crate) enum SelectedTeam<'a> {
     User,
     Team(&'a Team),
+}
+
+pub(crate) const REMOTE_CACHING_INFO: &str = "  Remote Caching shares your cached Turborepo task \
+                                              outputs and logs across
+  all your team’s Vercel projects. It also can share outputs
+  with other services that enable Remote Caching, like CI/CD systems.
+  This results in faster build times and deployments for your team.";
+pub(crate) const REMOTE_CACHING_URL: &str =
+    "https://turbo.build/repo/docs/core-concepts/remote-caching";
+
+/// Verifies that caching status for a team is enabled, or prompts the user to
+/// enable it.
+///
+/// # Arguments
+///
+/// * `team_id`: ID for team selected
+/// * `token`: API token
+/// * `selected_team`: The team selected
+///
+/// returns: Result<(), Error>
+pub(crate) async fn verify_caching_enabled<'a>(
+    api_client: &APIClient,
+    team_id: &str,
+    token: &str,
+    selected_team: Option<SelectedTeam<'a>>,
+) -> Result<()> {
+    let team_slug = selected_team.as_ref().and_then(|team| match team {
+        SelectedTeam::Team(team) => Some(team.slug.as_str()),
+        SelectedTeam::User => None,
+    });
+    let response = api_client
+        .get_caching_status(token, team_id, team_slug)
+        .await?;
+    match response.status {
+        CachingStatus::Disabled => {
+            let should_enable = should_enable_caching()?;
+            if should_enable {
+                match selected_team {
+                    Some(SelectedTeam::Team(team)) if team.is_owner() => {
+                        let url =
+                            format!("https://vercel.com/teams/{}/settings/billing", team.slug);
+
+                        enable_caching(&url)?;
+                    }
+                    Some(SelectedTeam::User) => {
+                        let url = "https://vercel.com/account/billing";
+
+                        enable_caching(url)?;
+                    }
+                    None => {
+                        let team = api_client
+                            .get_team(token, team_id)
+                            .await?
+                            .ok_or_else(|| anyhow!("unable to find team {}", team_id))?;
+                        let url =
+                            format!("https://vercel.com/teams/{}/settings/billing", team.slug);
+
+                        enable_caching(&url)?;
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(())
+        }
+        CachingStatus::OverLimit => Err(anyhow!("usage limit")),
+        CachingStatus::Paused => Err(anyhow!("spending paused")),
+        CachingStatus::Enabled => Ok(()),
+    }
 }
 
 pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> {
@@ -35,15 +105,10 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
     let homedir = homedir_path.to_string_lossy();
     println!(
         ">>> Remote Caching
-  Remote Caching shares your cached Turborepo task outputs and logs across
-  all your team’s Vercel projects. It also can share outputs
-  with other services that enable Remote Caching, like CI/CD systems.
-  This results in faster build times and deployments for your team.
-  For more info, see {}
-",
-        base.ui.apply(
-            UNDERLINE.apply_to("https://turbo.build/repo/docs/core-concepts/remote-caching")
-        )
+{}
+  For more info, see {}",
+        REMOTE_CACHING_INFO,
+        base.ui.apply(UNDERLINE.apply_to(REMOTE_CACHING_URL))
     );
 
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
@@ -52,7 +117,8 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         return Err(anyhow!("canceled"));
     }
 
-    let api_client = base.api_client()?.ok_or_else(|| {
+    let api_client = base.api_client()?;
+    let token = base.user_config()?.token().ok_or_else(|| {
         anyhow!(
             "User not found. Please login to Turborepo first by running {}.",
             BOLD.apply_to("`npx turbo login`")
@@ -60,12 +126,12 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
     })?;
 
     let teams_response = api_client
-        .get_teams()
+        .get_teams(token)
         .await
         .context("could not get team information")?;
 
     let user_response = api_client
-        .get_user()
+        .get_user(token)
         .await
         .context("could not get user information")?;
 
@@ -81,31 +147,8 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         SelectedTeam::User => user_response.user.id.as_str(),
         SelectedTeam::Team(team) => team.id.as_str(),
     };
-    let response = api_client.get_caching_status(team_id).await?;
-    match response.status {
-        CachingStatus::Disabled => {
-            let should_enable = should_enable_caching()?;
-            if should_enable {
-                match selected_team {
-                    SelectedTeam::Team(team) if team.is_owner() => {
-                        let url =
-                            format!("https://vercel.com/teams/{}/settings/billing", team.slug);
 
-                        enable_caching(&url)?;
-                    }
-                    SelectedTeam::User => {
-                        let url = "https://vercel.com/account/billing";
-
-                        enable_caching(url)?;
-                    }
-                    _ => {}
-                }
-            }
-        }
-        CachingStatus::OverLimit => return Err(anyhow!("usage limit")),
-        CachingStatus::Paused => return Err(anyhow!("spending paused")),
-        CachingStatus::Enabled => {}
-    }
+    verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone())).await?;
 
     fs::create_dir_all(base.repo_root.join(".turbo"))
         .context("could not create .turbo directory")?;
@@ -322,7 +365,7 @@ mod test {
                             username: "my_username".to_string(),
                             email: "my_email".to_string(),
                             name: None,
-                            created_at: 0,
+                            created_at: Some(0),
                         },
                     })
                 }),

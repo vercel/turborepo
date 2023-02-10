@@ -449,14 +449,16 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
-            // We haven't implemented sso_team yet so we delegate to Go
-            if sso_team.is_some() {
-                return Ok(Payload::Go(Box::new(clap_args)));
-            }
+
+            let sso_team = sso_team.clone();
 
             let mut base = CommandBase::new(clap_args, repo_root)?;
 
-            login::login(&mut base).await?;
+            if let Some(sso_team) = sso_team {
+                login::sso_login(&mut base, &sso_team).await?;
+            } else {
+                login::login(&mut base).await?;
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }

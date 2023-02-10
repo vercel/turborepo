@@ -92,14 +92,9 @@ impl CommandBase {
         Ok(self.user_config.get().unwrap())
     }
 
-    pub fn api_client(&mut self) -> Result<Option<APIClient>> {
+    pub fn api_client(&mut self) -> Result<APIClient> {
         let repo_config = self.repo_config()?;
         let api_url = repo_config.api_url();
-        let user_config = self.user_config()?;
-        if let Some(token) = user_config.token() {
-            Ok(Some(APIClient::new(token, api_url)?))
-        } else {
-            Ok(None)
-        }
+        APIClient::new(api_url)
     }
 }
