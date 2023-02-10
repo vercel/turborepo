@@ -16,10 +16,10 @@ use tokio::{
         BufReader,
     },
     net::{TcpListener, TcpStream},
-    process::{Child, Command},
+    process::{Child, ChildStderr, ChildStdout, Command},
     select,
     sync::{OwnedSemaphorePermit, Semaphore},
-    time::sleep,
+    time::{sleep, timeout},
 };
 
 enum NodeJsPoolProcess {
@@ -38,6 +38,14 @@ struct SpawnedNodeJsPoolProcess {
 struct RunningNodeJsPoolProcess {
     child: Option<Child>,
     connection: TcpStream,
+    stdout_buf: Vec<u8>,
+    stdout: BufReader<ChildStdout>,
+    shared_stdout: SharedOutputSet,
+    stdout_occurences: HashMap<Arc<[u8]>, u32>,
+    stderr_buf: Vec<u8>,
+    stderr: BufReader<ChildStderr>,
+    shared_stderr: SharedOutputSet,
+    stderr_occurences: HashMap<Arc<[u8]>, u32>,
 }
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -48,15 +56,14 @@ type SharedOutputSet = Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>;
 /// lines that has beem emitted by other `handle_output_stream` instances with
 /// the same `shared` before.
 async fn handle_output_stream(
-    stream: impl AsyncRead + Unpin,
-    shared: SharedOutputSet,
+    buffer: &mut Vec<u8>,
+    stream: &mut BufReader<impl AsyncRead + Unpin>,
+    shared: &mut SharedOutputSet,
+    own_output: &mut HashMap<Arc<[u8]>, u32>,
     mut final_stream: impl AsyncWrite + Unpin,
 ) {
-    let mut buffered = BufReader::new(stream);
-    let mut own_output = HashMap::<Arc<[u8]>, u32>::new();
-    let mut buffer = Vec::new();
     loop {
-        match buffered.read_until(b'\n', &mut buffer).await {
+        match stream.read_until(b'\n', buffer).await {
             Ok(0) => {
                 break;
             }
@@ -66,7 +73,7 @@ async fn handle_output_stream(
             }
             Ok(_) => {}
         }
-        let line = Arc::from(take(&mut buffer).into_boxed_slice());
+        let line = Arc::from(take(buffer).into_boxed_slice());
         let occurance_number = *own_output
             .entry(Arc::clone(&line))
             .and_modify(|c| *c += 1)
@@ -184,20 +191,19 @@ impl NodeJsPoolProcess {
                     },
                 };
 
-                tokio::spawn(handle_output_stream(
-                    child.stdout.take().unwrap(),
-                    shared_stdout,
-                    stdout(),
-                ));
-                tokio::spawn(handle_output_stream(
-                    child.stderr.take().unwrap(),
-                    shared_stderr,
-                    stderr(),
-                ));
-
+                let stdout = BufReader::new(child.stdout.take().unwrap());
+                let stderr = BufReader::new(child.stderr.take().unwrap());
                 RunningNodeJsPoolProcess {
                     child: Some(child),
                     connection,
+                    stdout,
+                    stdout_buf: Vec::new(),
+                    stdout_occurences: HashMap::new(),
+                    shared_stdout,
+                    stderr,
+                    stderr_buf: Vec::new(),
+                    stderr_occurences: HashMap::new(),
+                    shared_stderr,
                 }
             }
             NodeJsPoolProcess::Running(running) => running,
@@ -207,19 +213,40 @@ impl NodeJsPoolProcess {
 
 impl RunningNodeJsPoolProcess {
     async fn recv(&mut self) -> Result<Vec<u8>> {
-        let packet_len = self
-            .connection
-            .read_u32()
-            .await
-            .context("reading packet length")?
-            .try_into()
-            .context("storing packet length")?;
-        let mut packet_data = vec![0; packet_len];
-        self.connection
-            .read_exact(&mut packet_data)
-            .await
-            .context("reading packet data")?;
-        Ok(packet_data)
+        let connection = &mut self.connection;
+        let recv_future = async move {
+            let packet_len = connection
+                .read_u32()
+                .await
+                .context("reading packet length")?
+                .try_into()
+                .context("storing packet length")?;
+            let mut packet_data = vec![0; packet_len];
+            connection
+                .read_exact(&mut packet_data)
+                .await
+                .context("reading packet data")?;
+            Ok(packet_data)
+        };
+        let stdout_future = handle_output_stream(
+            &mut self.stdout_buf,
+            &mut self.stdout,
+            &mut self.shared_stdout,
+            &mut self.stdout_occurences,
+            stdout(),
+        );
+        let stderr_future = handle_output_stream(
+            &mut self.stderr_buf,
+            &mut self.stderr,
+            &mut self.shared_stderr,
+            &mut self.stderr_occurences,
+            stderr(),
+        );
+        select! {
+            result = recv_future => return result,
+            _ = stdout_future => bail!("stdout stream ended unexpectedly"),
+            _ = stderr_future => bail!("stderr stream ended unexpectedly"),
+        }
     }
 
     async fn send(&mut self, packet_data: Vec<u8>) -> Result<()> {
@@ -340,22 +367,25 @@ impl NodeJsOperation {
     where
         M: DeserializeOwned,
     {
-        let message = self
-            .process_mut()?
-            .recv()
+        let message = timeout(Duration::from_secs(30), self.process_mut()?.recv())
             .await
-            .context("receiving message")?;
-        serde_json::from_slice(&message).context("deserializing message")
+            .context("timeout while receiving message from process")?
+            .context("failed to receive message")?;
+        serde_json::from_slice(&message).context("failed to deserialize message")
     }
 
     pub async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Serialize,
     {
-        self.process_mut()?
-            .send(serde_json::to_vec(&message).context("serializing message")?)
-            .await
-            .context("sending message")
+        timeout(
+            Duration::from_secs(30),
+            self.process_mut()?
+                .send(serde_json::to_vec(&message).context("failed to serialize message")?),
+        )
+        .await
+        .context("timeout while sending message")?
+        .context("failed to send message")
     }
 
     pub async fn wait_or_kill(mut self) -> Result<ExitStatus> {
@@ -371,7 +401,10 @@ impl NodeJsOperation {
 
         // Ignore error since we are not sure if the process is still alive
         let _ = child.start_kill();
-        let status = child.wait().await.context("waiting for process end")?;
+        let status = timeout(Duration::from_secs(30), child.wait())
+            .await
+            .context("timeout while waiting for process end")?
+            .context("waiting for process end")?;
 
         Ok(status)
     }
