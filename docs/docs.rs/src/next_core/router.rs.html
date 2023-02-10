@@ -195,7 +195,6 @@
 <span id="195">195</span>
 <span id="196">196</span>
 <span id="197">197</span>
-<span id="198">198</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>turbo_tasks::{
@@ -210,7 +209,6 @@
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
 };
-<span class="kw">use </span>turbopack_dev_server::source::{headers::Headers, query::Query};
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
     EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
@@ -241,8 +239,8 @@
 </span><span class="kw">pub struct </span>RouterRequest {
     <span class="kw">pub </span>method: String,
     <span class="kw">pub </span>pathname: String,
-    <span class="kw">pub </span>query: Query,
-    <span class="kw">pub </span>headers: Headers,
+    <span class="kw">pub </span>raw_query: String,
+    <span class="kw">pub </span>raw_headers: Vec&lt;(String, String)&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]

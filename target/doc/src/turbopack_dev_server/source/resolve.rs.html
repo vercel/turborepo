@@ -153,6 +153,18 @@
 <span id="153">153</span>
 <span id="154">154</span>
 <span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
@@ -267,6 +279,18 @@
     }
     <span class="kw">if </span>vary.body {
         data.body = <span class="prelude-val">Some</span>(request.body.clone().into());
+    }
+    <span class="kw">if </span>vary.raw_query {
+        data.raw_query = <span class="prelude-val">Some</span>(request.uri.query().unwrap_or(<span class="string">&quot;&quot;</span>).to_string());
+    }
+    <span class="kw">if </span>vary.raw_headers {
+        data.raw_headers = <span class="prelude-val">Some</span>(
+            request
+                .headers
+                .iter()
+                .map(|(name, value)| <span class="prelude-val">Ok</span>((name.to_string(), value.to_str()<span class="question-mark">?</span>.to_string())))
+                .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
+        );
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(filter) = vary.query.as_ref() {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(query) = request.uri.query() {

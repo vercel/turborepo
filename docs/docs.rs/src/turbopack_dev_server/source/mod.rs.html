@@ -498,6 +498,34 @@
 <span id="498">498</span>
 <span id="499">499</span>
 <span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -707,18 +735,23 @@
 </span><span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 </span><span class="kw">pub struct </span>ContentSourceData {
-    <span class="doccomment">/// http method, if requested
+    <span class="doccomment">/// HTTP method, if requested.
     </span><span class="kw">pub </span>method: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="doccomment">/// The full url (including query string), if requested
+    <span class="doccomment">/// The full url (including query string), if requested.
     </span><span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="doccomment">/// query string items, if requested
+    <span class="doccomment">/// Query string items, if requested.
     </span><span class="kw">pub </span>query: <span class="prelude-ty">Option</span>&lt;Query&gt;,
-    <span class="doccomment">/// http headers, might contain multiple headers with the same name, if
-    /// requested
+    <span class="doccomment">/// raw query string, if requested. Does not include the `?`.
+    </span><span class="kw">pub </span>raw_query: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="doccomment">/// HTTP headers, might contain multiple headers with the same name, if
+    /// requested.
     </span><span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;Headers&gt;,
-    <span class="doccomment">/// request body, if requested
+    <span class="doccomment">/// Raw HTTP headers, might contain multiple headers with the same name, if
+    /// requested.
+    </span><span class="kw">pub </span>raw_headers: <span class="prelude-ty">Option</span>&lt;Vec&lt;(String, String)&gt;&gt;,
+    <span class="doccomment">/// Request body, if requested.
     </span><span class="kw">pub </span>body: <span class="prelude-ty">Option</span>&lt;BodyVc&gt;,
-    <span class="doccomment">/// see [ContentSourceDataVary::cache_buster]
+    <span class="doccomment">/// See [ContentSourceDataVary::cache_buster].
     </span><span class="kw">pub </span>cache_buster: u64,
 }
 
@@ -854,7 +887,9 @@
     <span class="kw">pub </span>method: bool,
     <span class="kw">pub </span>url: bool,
     <span class="kw">pub </span>query: <span class="prelude-ty">Option</span>&lt;ContentSourceDataFilter&gt;,
+    <span class="kw">pub </span>raw_query: bool,
     <span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;ContentSourceDataFilter&gt;,
+    <span class="kw">pub </span>raw_headers: bool,
     <span class="kw">pub </span>body: bool,
     <span class="doccomment">/// When true, a `cache_buster` value is added to the [ContentSourceData].
     /// This value will be different on every request, which ensures the
@@ -867,12 +902,25 @@
     <span class="doccomment">/// Merges two vary specification to create a combination of both that cover
     /// all information requested by either one
     </span><span class="kw">pub fn </span>extend(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ContentSourceDataVary) {
-        <span class="self">self</span>.method = <span class="self">self</span>.method || other.method;
-        <span class="self">self</span>.url = <span class="self">self</span>.url || other.url;
-        <span class="self">self</span>.body = <span class="self">self</span>.body || other.body;
-        <span class="self">self</span>.cache_buster = <span class="self">self</span>.cache_buster || other.cache_buster;
-        ContentSourceDataFilter::extend_options(<span class="kw-2">&amp;mut </span><span class="self">self</span>.query, <span class="kw-2">&amp;</span>other.query);
-        ContentSourceDataFilter::extend_options(<span class="kw-2">&amp;mut </span><span class="self">self</span>.headers, <span class="kw-2">&amp;</span>other.headers);
+        <span class="kw">let </span>ContentSourceDataVary {
+            method,
+            url,
+            query,
+            raw_query,
+            headers,
+            raw_headers,
+            body,
+            cache_buster,
+            placeholder_for_future_extensions: <span class="kw">_</span>,
+        } = <span class="self">self</span>;
+        <span class="kw-2">*</span>method = <span class="kw-2">*</span>method || other.method;
+        <span class="kw-2">*</span>url = <span class="kw-2">*</span>url || other.url;
+        <span class="kw-2">*</span>body = <span class="kw-2">*</span>body || other.body;
+        <span class="kw-2">*</span>cache_buster = <span class="kw-2">*</span>cache_buster || other.cache_buster;
+        <span class="kw-2">*</span>raw_query = <span class="kw-2">*</span>raw_query || other.raw_query;
+        <span class="kw-2">*</span>raw_headers = <span class="kw-2">*</span>raw_headers || other.raw_headers;
+        ContentSourceDataFilter::extend_options(query, <span class="kw-2">&amp;</span>other.query);
+        ContentSourceDataFilter::extend_options(headers, <span class="kw-2">&amp;</span>other.headers);
     }
 
     <span class="doccomment">/// Returns true if `self` at least contains all values that the
@@ -883,7 +931,9 @@
             method,
             url,
             query,
+            raw_query,
             headers,
+            raw_headers,
             body,
             cache_buster,
             placeholder_for_future_extensions: <span class="kw">_</span>,
@@ -895,6 +945,12 @@
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="kw">if </span>other.body &amp;&amp; !body {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+        <span class="kw">if </span>other.raw_query &amp;&amp; !raw_query {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+        <span class="kw">if </span>other.raw_headers &amp;&amp; !raw_headers {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="kw">if </span>other.cache_buster &amp;&amp; !cache_buster {

@@ -275,7 +275,6 @@
 <span id="275">275</span>
 <span id="276">276</span>
 <span id="277">277</span>
-<span id="278">278</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -298,9 +297,8 @@
         lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
         specificity::SpecificityVc,
         ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-        ContentSourceDataFilter, ContentSourceDataVary, ContentSourceDataVaryVc,
-        ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-        GetContentSourceContentVc,
+        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
+        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
     },
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
@@ -455,8 +453,8 @@
         ContentSourceDataVary {
             method: <span class="bool-val">true</span>,
             url: <span class="bool-val">true</span>,
-            headers: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
-            query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
+            raw_headers: <span class="bool-val">true</span>,
+            raw_query: <span class="bool-val">true</span>,
             ..Default::default()
         }
         .cell()
@@ -471,8 +469,8 @@
         <span class="kw">let </span>ContentSourceData {
             method: <span class="prelude-val">Some</span>(method),
             url: <span class="prelude-val">Some</span>(url),
-            headers: <span class="prelude-val">Some</span>(headers),
-            query: <span class="prelude-val">Some</span>(query),
+            raw_headers: <span class="prelude-val">Some</span>(raw_headers),
+            raw_query: <span class="prelude-val">Some</span>(raw_query),
             ..
         } = <span class="kw-2">&amp;*</span>data <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Missing request data&quot;</span>));
@@ -490,8 +488,8 @@
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
-                query: query.clone(),
-                headers: headers.clone(),
+                raw_query: raw_query.clone(),
+                raw_headers: raw_headers.clone(),
                 path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, this.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),

@@ -127,12 +127,6 @@
 <span id="127">127</span>
 <span id="128">128</span>
 <span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
-<span id="132">132</span>
-<span id="133">133</span>
-<span id="134">134</span>
-<span id="135">135</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -171,13 +165,13 @@
         path: <span class="kw-2">&amp;</span>str,
         data: Value&lt;ContentSourceData&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-        <span class="kw">let </span>url = <span class="kw">match </span><span class="kw-2">&amp;</span>data.url {
+        <span class="kw">let </span>raw_query = <span class="kw">match </span><span class="kw-2">&amp;</span>data.raw_query {
             <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
                     source: self_vc.into(),
                     path: path.to_string(),
                     vary: ContentSourceDataVary {
-                        url: <span class="bool-val">true</span>,
+                        raw_query: <span class="bool-val">true</span>,
                         ..Default::default()
                     },
                 })));
@@ -185,13 +179,7 @@
             <span class="prelude-val">Some</span>(query) =&gt; query,
         };
 
-        <span class="comment">// TODO: It&#39;d be nice if the data.query value contained the unparsed query, so I
-        // could convert it into my struct.
-        </span><span class="kw">let </span>query_idx = <span class="kw">match </span>url.find(<span class="string">&#39;?&#39;</span>) {
-            <span class="prelude-val">Some</span>(i) =&gt; i,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-        <span class="kw">let </span>frame: StackFrame = <span class="kw">match </span>serde_qs::from_str(<span class="kw-2">&amp;</span>url[query_idx + <span class="number">1</span>..]) {
+        <span class="kw">let </span>frame: StackFrame = <span class="kw">match </span>serde_qs::from_str(raw_query) {
             <span class="prelude-val">Ok</span>(f) =&gt; f,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };

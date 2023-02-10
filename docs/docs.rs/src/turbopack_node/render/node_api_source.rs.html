@@ -198,7 +198,6 @@
 <span id="198">198</span>
 <span id="199">199</span>
 <span id="200">200</span>
-<span id="201">201</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -209,9 +208,8 @@
 };
 <span class="kw">use </span>turbopack_dev_server::source::{
     specificity::SpecificityVc, ContentSource, ContentSourceContent, ContentSourceContentVc,
-    ContentSourceData, ContentSourceDataFilter, ContentSourceDataVary, ContentSourceDataVaryVc,
-    ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc,
+    ContentSourceData, ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult,
+    ContentSourceResultVc, ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
@@ -306,8 +304,8 @@
         ContentSourceDataVary {
             method: <span class="bool-val">true</span>,
             url: <span class="bool-val">true</span>,
-            headers: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
-            query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
+            raw_headers: <span class="bool-val">true</span>,
+            raw_query: <span class="bool-val">true</span>,
             body: <span class="bool-val">true</span>,
             cache_buster: <span class="bool-val">true</span>,
             ..Default::default()
@@ -323,8 +321,8 @@
         <span class="kw">let </span>ContentSourceData {
             method: <span class="prelude-val">Some</span>(method),
             url: <span class="prelude-val">Some</span>(url),
-            headers: <span class="prelude-val">Some</span>(headers),
-            query: <span class="prelude-val">Some</span>(query),
+            raw_headers: <span class="prelude-val">Some</span>(raw_headers),
+            raw_query: <span class="prelude-val">Some</span>(raw_query),
             body: <span class="prelude-val">Some</span>(body),
             ..
         } = <span class="kw-2">&amp;*</span>data <span class="kw">else </span>{
@@ -342,8 +340,8 @@
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
-                query: query.clone(),
-                headers: headers.clone(),
+                raw_query: raw_query.clone(),
+                raw_headers: raw_headers.clone(),
                 path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="self">self</span>.path),
             }
             .cell(),

@@ -58,7 +58,6 @@
 <span id="58">58</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbopack_dev_server::source::{headers::Headers, query::Query};
 
 <span class="kw">use crate</span>::{ResponseHeaders, StructuredError};
 
@@ -69,12 +68,13 @@
 <span class="kw">pub mod </span>rendered_source;
 
 <span class="attr">#[turbo_tasks::value(shared)]
+#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>RenderData {
     params: IndexMap&lt;String, String&gt;,
     method: String,
     url: String,
-    query: Query,
-    headers: Headers,
+    raw_query: String,
+    raw_headers: Vec&lt;(String, String)&gt;,
     path: String,
 }
 
