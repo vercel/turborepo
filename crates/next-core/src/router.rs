@@ -131,7 +131,7 @@ async fn extra_configs(
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .as_ecmascript_chunk_placeable();
     Ok(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]))
@@ -144,7 +144,7 @@ fn route_executor(context: AssetContextVc, project_path: FileSystemPathVc) -> As
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .into()
 }
