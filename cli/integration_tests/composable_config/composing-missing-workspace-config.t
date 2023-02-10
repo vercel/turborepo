@@ -85,3 +85,24 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 5. Assert that task with cache:false doesn't get cached
+  $ ${TURBO} run cached-task-4 --filter=missing-workspace-config > tmp.log
+  $ cat tmp.log
+  \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
+  \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  missing-workspace-config:cached-task-4: cache bypass, force executing 758e0d6b9978d214
+  missing-workspace-config:cached-task-4: 
+  missing-workspace-config:cached-task-4: > cached-task-4
+  missing-workspace-config:cached-task-4: > echo 'cached-task-4' > out/foo.min.txt
+  missing-workspace-config:cached-task-4: 
+  
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+  $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:cached-task-4.* executing .*" | awk '{print $6}')
+  $ echo $HASH
+  [a-z0-9]{16} (re)
+  $ ls $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  ls: .*.tar.zst: No such file or directory (re)
+  [1]
