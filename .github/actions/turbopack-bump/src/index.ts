@@ -19,7 +19,7 @@ type Tag = {
  */
 async function run() {
   const githubToken = core.getInput("github_token", { required: true });
-  const prefix = core.getInput("prefix", { required: true });
+  const prefix = core.getInput("prefix");
   const commitSha = core.getInput("commit_sha") || process.env.GITHUB_SHA!;
 
   const octokit = getOctokit(githubToken) as unknown as Octokit;
