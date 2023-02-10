@@ -94,9 +94,9 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	pipeline, err := e.completeGraph.GetPipelineFromWorkspace(pkg, e.isSinglePackage)
 
+	// An error here means there was no turbo.json in the workspace.
+	// Fallback to the root pipeline to find the task.
 	if err != nil {
-		// Fallback to the root workspace to look for a pipeline if one wasn't
-		// found in the target workspace.
 		if pkg != util.RootPkgName {
 			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
 		}
@@ -118,6 +118,12 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 		}, nil
 	}
 
+	// An error here means turbo.json exists, but didn't define the task.
+	// Fallback to the root pipeline to find the task.
+	if pkg != util.RootPkgName {
+		return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+	}
+
 	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in workspace \"%s\"", taskName, taskID, pkg)
 }
 
@@ -134,7 +140,6 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
-
 		for _, taskName := range taskNames {
 			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
 			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
