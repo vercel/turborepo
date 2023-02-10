@@ -22,7 +22,7 @@ Firstly, Turbopack for Next.js does not require loaders nor loader configuration
 If you need loader support beyond what's built in, some webpack loaders, including [`@mdx-js/loader`](https://mdxjs.com/packages/loader/) already work with Turbopack! There are currently some limitations:
 
 - At the moment, only a core subset of the webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
-- Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values. For an interim solution, check out
+- Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
 
 Configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbo.loaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
 
