@@ -20,16 +20,6 @@ type DaemonPayload struct {
 	JSON        bool   `json:"json"`
 }
 
-// LinkPayload is the extra flags passed for the `link` subcommand
-type LinkPayload struct {
-	DontModifyGitIgnore bool `json:"no_gitignore"`
-}
-
-// LoginPayload is the extra flags passed for the `login` subcommand
-type LoginPayload struct {
-	SsoTeam string `json:"sso_team"`
-}
-
 // PrunePayload is the extra flags passed for the `prune` subcommand
 type PrunePayload struct {
 	Scope     []string `json:"scope"`
@@ -76,9 +66,6 @@ type RunPayload struct {
 // Only one of these fields should be initialized at a time.
 type Command struct {
 	Daemon *DaemonPayload `json:"daemon"`
-	Link   *LinkPayload   `json:"link"`
-	Login  *LoginPayload  `json:"login"`
-	Logout *struct{}      `json:"logout"`
 	Prune  *PrunePayload  `json:"prune"`
 	Run    *RunPayload    `json:"run"`
 	Unlink *struct{}      `json:"unlink"`

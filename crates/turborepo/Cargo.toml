@@ -5,16 +5,17 @@ edition = "2021"
 license = "MPL-2.0"
 
 [features]
+# By default, we enable native-tls for reqwest via downstream transitive features.
+# This is for the convenience of running daily dev workflows, i.e running
+# `cargo xxx` without explicitly specifying features, not that we want to
+# promote this as default backend.
+default = ["native-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
 build-target = "0.4.0"
-
-# we do not actually depend on this, but need
-# to build it before our build.rs script is run
-turborepo-ffi = { path = "../turborepo-ffi" }
 
 [dev-dependencies]
 assert_cmd = "2.0.7"
