@@ -474,13 +474,17 @@ To view CPU profile, outputs the profile to the given file, drop the file into [
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
 
-#### `-v`, `-vv`, `-vvv`
+#### `--verbosity`
 
-To specify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
+To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
+
+- `Info `: `--verbosity=1`, or `-v`
+- `Debug`: `--verbosity=2`, or `-vv`
+- `Trace`: `--verbosity=3`, or `-vvv`
 
 ```sh
 turbo run build -v
-turbo run build -vv
+turbo run build --verbosity=2
 turbo run build -vvv
 ```
 
