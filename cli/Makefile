@@ -25,15 +25,14 @@ SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
 turbo: go-turbo$(EXT)
-	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+	cargo build --manifest-path ../crates/turborepo/Cargo.toml --features rustls-tls
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
-turborepo-ffi-install: turborepo-ffi turborepo-ffi-proto
+turborepo-ffi-install: turborepo-ffi
 	cp -r ../crates/turborepo-ffi/bindings.h \
-	      ../crates/turborepo-ffi/ffi/proto \
 	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
 	      ./internal/ffi
 
@@ -43,7 +42,7 @@ turborepo-ffi:
 
 .PHONY: turborepo-ffi-proto
 turborepo-ffi-proto:
-	cd ../crates/turborepo-ffi && protoc --go_out=. messages.proto
+	protoc -I../crates/ ../crates/turborepo-ffi/messages.proto --go_out=./internal/
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
