@@ -126,3 +126,31 @@ graph TD
     N1 --> N3;
     N2 --> N3;
 ```
+
+# Modules
+
+## Module 1
+
+```js
+
+```
+
+## Module 2
+
+```js
+export const DOG = dog;
+```
+
+## Module 3
+
+```js
+export const CHIMERA = cat + dog;
+const cat = "cat";
+const dog = "dog";
+```
+
+## Module 4
+
+```js
+const dog = "dog";
+```

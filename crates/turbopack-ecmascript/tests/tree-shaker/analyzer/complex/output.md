@@ -409,3 +409,80 @@ graph TD
     N10 --> N7;
     N10 --> N9;
 ```
+
+# Modules
+
+## Module 1
+
+```js
+
+```
+
+## Module 2
+
+```js
+
+```
+
+## Module 3
+
+```js
+
+```
+
+## Module 4
+
+```js
+export const initialCat = cat;
+```
+
+## Module 5
+
+```js
+export function getChimera() {
+  return cat + dog;
+}
+export let cat = "cat";
+```
+
+## Module 6
+
+```js
+let dog = "dog";
+```
+
+## Module 7
+
+```js
+dog += "!";
+```
+
+## Module 8
+
+```js
+console.log(dog);
+```
+
+## Module 9
+
+```js
+dog += "!";
+```
+
+## Module 10
+
+```js
+console.log(dog);
+```
+
+## Module 11
+
+```js
+dog += "!";
+```
+
+## Module 12
+
+```js
+export let cat = "cat";
+```

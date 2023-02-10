@@ -395,3 +395,84 @@ graph TD
     N11 --> N8;
     N11 --> N10;
 ```
+
+# Modules
+
+## Module 1
+
+```js
+
+```
+
+## Module 2
+
+```js
+export function external1() {
+  return internal() + foobar;
+}
+```
+
+## Module 3
+
+```js
+
+```
+
+## Module 4
+
+```js
+
+```
+
+## Module 5
+
+```js
+export function external2() {
+  foobar += ".";
+}
+```
+
+## Module 6
+
+```js
+import { upper } from "module";
+```
+
+## Module 7
+
+```js
+export let foobar = "foo";
+```
+
+## Module 8
+
+```js
+export const foo = foobar;
+```
+
+## Module 9
+
+```js
+foobar += bar;
+const bar = "bar";
+```
+
+## Module 10
+
+```js
+let foobarCopy = foobar;
+```
+
+## Module 11
+
+```js
+foobar += "foo";
+```
+
+## Module 12
+
+```js
+function internal() {
+  return upper(foobar);
+}
+```
