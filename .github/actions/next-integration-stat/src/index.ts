@@ -163,7 +163,7 @@ function collectFailedTestResults(
   splittedLogs: Array<string>,
   job: Job
 ): Array<FailedJobResult> {
-  return splittedLogs
+  const ret = splittedLogs
     .filter((logs) => {
       if (
         !logs.includes(`failed to pass within`) ||
@@ -177,35 +177,46 @@ function collectFailedTestResults(
       return true;
     })
     .map((logs) => {
-      let failedTest = logs.split(`failed to pass within`).shift();
+      let failedSplitLogs = logs.split(`failed to pass within`);
+      const ret = [];
 
-      // Look for the failed test file name
-      failedTest = failedTest?.includes("test/")
-        ? failedTest?.split("\n").pop()?.trim()
-        : "";
+      while (!!failedSplitLogs && failedSplitLogs.length >= 1) {
+        let failedTest = failedSplitLogs.shift();
+        // Look for the failed test file name
+        failedTest = failedTest?.includes("test/")
+          ? failedTest?.split("\n").pop()?.trim()
+          : "";
 
-      console.log("Failed test: ", { job: job.name, failedTest });
+        // Parse JSON-stringified test output between marker
+        try {
+          const testData = logs
+            ?.split("--test output start--")
+            .pop()
+            ?.split("--test output end--")
+            ?.shift()
+            ?.trim()!;
 
-      // Parse JSON-stringified test output between marker
-      try {
-        const testData = logs
-          ?.split("--test output start--")
-          .pop()
-          ?.split("--test output end--")
-          ?.shift()
-          ?.trim()!;
-
-        return {
-          job: job.name,
-          name: failedTest,
-          data: JSON.parse(testData),
-        };
-      } catch (_) {
-        console.log(`Failed to parse test data`);
-        return null;
+          ret.push({
+            job: job.name,
+            name: failedTest,
+            data: JSON.parse(testData),
+          });
+        } catch (_) {
+          console.log(`Failed to parse test data`);
+        }
       }
+
+      return ret;
     })
+    .flatMap((x) => x)
     .filter(Boolean) as Array<FailedJobResult>;
+
+  console.log(`Found failed test results from job`, {
+    job: job.name,
+    failedTests: ret.map((x) => x.name),
+  });
+
+  return ret;
 }
 
 // Collect necessary inputs to run actions,

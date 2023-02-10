@@ -15990,7 +15990,7 @@
     }
     // Filter out logs that does not contain failed tests, then parse test results into json
     function collectFailedTestResults(splittedLogs, job) {
-      return splittedLogs
+      const ret = splittedLogs
         .filter((logs) => {
           if (
             !logs.includes(`failed to pass within`) ||
@@ -16005,48 +16005,58 @@
         })
         .map((logs) => {
           var _a, _b, _c, _d;
-          let failedTest = logs.split(`failed to pass within`).shift();
-          // Look for the failed test file name
-          failedTest = (
-            failedTest === null || failedTest === void 0
-              ? void 0
-              : failedTest.includes("test/")
-          )
-            ? (_a =
-                failedTest === null || failedTest === void 0
-                  ? void 0
-                  : failedTest.split("\n").pop()) === null || _a === void 0
-              ? void 0
-              : _a.trim()
-            : "";
-          console.log("Failed test: ", { job: job.name, failedTest });
-          // Parse JSON-stringified test output between marker
-          try {
-            const testData =
-              (_d =
-                (_c =
-                  (_b =
-                    logs === null || logs === void 0
-                      ? void 0
-                      : logs.split("--test output start--").pop()) === null ||
-                  _b === void 0
-                    ? void 0
-                    : _b.split("--test output end--")) === null || _c === void 0
-                  ? void 0
-                  : _c.shift()) === null || _d === void 0
+          let failedSplitLogs = logs.split(`failed to pass within`);
+          const ret = [];
+          while (!!failedSplitLogs && failedSplitLogs.length >= 1) {
+            let failedTest = failedSplitLogs.shift();
+            // Look for the failed test file name
+            failedTest = (
+              failedTest === null || failedTest === void 0
                 ? void 0
-                : _d.trim();
-            return {
-              job: job.name,
-              name: failedTest,
-              data: JSON.parse(testData),
-            };
-          } catch (_) {
-            console.log(`Failed to parse test data`);
-            return null;
+                : failedTest.includes("test/")
+            )
+              ? (_a =
+                  failedTest === null || failedTest === void 0
+                    ? void 0
+                    : failedTest.split("\n").pop()) === null || _a === void 0
+                ? void 0
+                : _a.trim()
+              : "";
+            // Parse JSON-stringified test output between marker
+            try {
+              const testData =
+                (_d =
+                  (_c =
+                    (_b =
+                      logs === null || logs === void 0
+                        ? void 0
+                        : logs.split("--test output start--").pop()) === null ||
+                    _b === void 0
+                      ? void 0
+                      : _b.split("--test output end--")) === null ||
+                  _c === void 0
+                    ? void 0
+                    : _c.shift()) === null || _d === void 0
+                  ? void 0
+                  : _d.trim();
+              ret.push({
+                job: job.name,
+                name: failedTest,
+                data: JSON.parse(testData),
+              });
+            } catch (_) {
+              console.log(`Failed to parse test data`);
+            }
           }
+          return ret;
         })
+        .flatMap((x) => x)
         .filter(Boolean);
+      console.log(`Found failed test results from job`, {
+        job: job.name,
+        failedTests: ret.map((x) => x.name),
+      });
+      return ret;
     }
     // Collect necessary inputs to run actions,
     function getInputs() {
