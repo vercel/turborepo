@@ -1,10 +1,7 @@
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
-    ValueToString,
-};
+use turbo_tasks::primitives::{BoolVc, StringsVc};
 use turbo_tasks_fs::{glob::GlobVc, FileJsonContent, FileSystemPathVc};
 use turbopack_core::{
     asset::Asset,
@@ -121,11 +118,6 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         // check if we can resolve the package from the project dir with node.js resolve
         // options (might be hidden by pnpm)
         if *is_node_resolveable(self.root.root(), request, fs_path).await? {
-            println!(
-                "{} is external ({})",
-                fs_path.to_string().await?,
-                request.to_string().await?
-            );
             // mark as external
             return Ok(ResolveResultOptionVc::some(
                 ResolveResult::primary(PrimaryResolveResult::OriginalReferenceExternal).cell(),
@@ -143,12 +135,6 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
                 // resolve it the same way e. g. that we didn't follow any special resolve
                 // options, to come here like the `module` field in package.json
                 if *is_node_resolveable(context, request, fs_path).await? {
-                    println!(
-                        "{} is pnpm external ({} => {})",
-                        fs_path.to_string().await?,
-                        request.to_string().await?,
-                        r#match.as_str(),
-                    );
                     // mark as external
                     return Ok(ResolveResultOptionVc::some(
                         ResolveResult::primary(
