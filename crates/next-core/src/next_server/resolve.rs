@@ -130,7 +130,7 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         // becomes
         // .pnpm/some-package@2.29.2/node_modules/some-package/dir/file.js
         if let Some(captures) = PNPM.captures(&fs_path.await?.path) {
-            if let Some(r#match) = captures.get(1) {
+            if let Some(import_path) = captures.get(1) {
                 // we could load it directly as external, but we want to make sure node.js would
                 // resolve it the same way e. g. that we didn't follow any special resolve
                 // options, to come here like the `module` field in package.json
@@ -139,7 +139,7 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
                     return Ok(ResolveResultOptionVc::some(
                         ResolveResult::primary(
                             PrimaryResolveResult::OriginalReferenceTypeExternal(
-                                r#match.as_str().to_string(),
+                                import_path.as_str().to_string(),
                             ),
                         )
                         .cell(),
