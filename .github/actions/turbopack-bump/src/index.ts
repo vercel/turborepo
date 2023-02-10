@@ -25,7 +25,9 @@ async function run() {
 
   const octokit = getOctokit(githubToken);
 
-  const tagFilter = new RegExp(`^${prefix}(?<date>\d{6})\.(?<patch>\d+)$`);
+  const tagFilter = new RegExp(
+    String.raw`^${prefix}(?<date>\d{6})\.(?<patch>\d+)$`
+  );
   const tags = await getTags(octokit, tagFilter);
 
   core.info("found tags:");
