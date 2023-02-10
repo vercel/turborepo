@@ -207,23 +207,23 @@ impl From<VersionedContentVc> for ContentSourceContentVc {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 pub struct ContentSourceData {
-    /// http method, if requested
+    /// HTTP method, if requested.
     pub method: Option<String>,
-    /// The full url (including query string), if requested
+    /// The full url (including query string), if requested.
     pub url: Option<String>,
-    /// query string items, if requested
+    /// Query string items, if requested.
     pub query: Option<Query>,
-    /// raw query string, if requested
+    /// raw query string, if requested. Does not include the `?`.
     pub raw_query: Option<String>,
-    /// http headers, might contain multiple headers with the same name, if
-    /// requested
+    /// HTTP headers, might contain multiple headers with the same name, if
+    /// requested.
     pub headers: Option<Headers>,
-    /// raw HTTP headers, might contain multiple headers with the same name, if
-    /// requested
+    /// Raw HTTP headers, might contain multiple headers with the same name, if
+    /// requested.
     pub raw_headers: Option<Vec<(String, String)>>,
-    /// request body, if requested
+    /// Request body, if requested.
     pub body: Option<BodyVc>,
-    /// see [ContentSourceDataVary::cache_buster]
+    /// See [ContentSourceDataVary::cache_buster].
     pub cache_buster: u64,
 }
 
