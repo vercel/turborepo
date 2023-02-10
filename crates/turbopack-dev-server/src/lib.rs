@@ -23,11 +23,10 @@ use hyper::{
     Request, Response, Server,
 };
 use turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc, TransientValue,
-    TurboTasksApi,
+    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
+    TransientInstance, TransientValue, TurboTasksApi,
 };
-use turbopack_cli_utils::issue::LogOptions;
-use turbopack_core::issue::{Issue, IssueReporter, IssueReporterVc, IssueSeverity, IssueVc};
+use turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
 
 use self::{
     source::{ContentSourceResultVc, ContentSourceVc},
@@ -53,15 +52,15 @@ where
 }
 
 pub trait IssueReporterProvider: Send + Sync + 'static {
-    fn get_issue_reporter(&self, log_options: LogOptions) -> IssueReporterVc;
+    fn get_issue_reporter(&self) -> IssueReporterVc;
 }
 
 impl<T> IssueReporterProvider for T
 where
-    T: Fn(LogOptions) -> IssueReporterVc + Send + Sync + Clone + 'static,
+    T: Fn() -> IssueReporterVc + Send + Sync + Clone + 'static,
 {
-    fn get_issue_reporter(&self, log_options: LogOptions) -> IssueReporterVc {
-        self(log_options)
+    fn get_issue_reporter(&self) -> IssueReporterVc {
+        self()
     }
 }
 
@@ -87,19 +86,14 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     operation: &str,
     issue_reporter: IssueReporterVc,
 ) -> Result<()> {
-    let issues = IssueVc::peek_issues_with_path(source).await?;
-    issue_reporter.report_issues(issues, TransientValue::new(source.into()));
+    let issues_vc = IssueVc::peek_issues_with_path(source).await?;
+    let issues = issues_vc.strongly_consistent().await?;
+    issue_reporter.report_issues(
+        TransientInstance::new(issues),
+        TransientValue::new(source.into()),
+    );
 
-    let mut has_fatal = false;
-    for issue in issues.strongly_consistent().await?.iter() {
-        let severity = *issue.severity().await?;
-        if severity == IssueSeverity::Fatal {
-            has_fatal = true;
-            break;
-        }
-    }
-
-    if has_fatal {
+    if *issues_vc.has_fatal().await? {
         Err(anyhow!("Fatal issue(s) occurred in {path} ({operation})"))
     } else {
         Ok(())

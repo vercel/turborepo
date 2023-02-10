@@ -17,8 +17,8 @@ use futures::FutureExt;
 use turbo_tasks::{
     emit,
     primitives::{BoolVc, StringVc, U64Vc},
-    CollectiblesSource, RawVc, ReadRef, TransientValue, TryJoinIterExt, ValueToString,
-    ValueToStringVc,
+    CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
+    ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
     FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
@@ -347,6 +347,20 @@ impl CapturedIssuesVc {
     pub async fn is_empty(self) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_empty()))
     }
+
+    #[turbo_tasks::function]
+    pub async fn has_fatal(self) -> Result<BoolVc> {
+        let mut has_fatal = false;
+
+        for issue in self.strongly_consistent().await?.iter() {
+            let severity = *issue.severity().await?;
+            if severity == IssueSeverity::Fatal {
+                has_fatal = true;
+                break;
+            }
+        }
+        Ok(BoolVc::cell(has_fatal))
+    }
 }
 
 impl CapturedIssues {
@@ -572,5 +586,9 @@ impl PlainAssetVc {
 
 #[turbo_tasks::value_trait]
 pub trait IssueReporter {
-    fn report_issues(&self, issues: CapturedIssuesVc, source: TransientValue<RawVc>);
+    fn report_issues(
+        &self,
+        issues: TransientInstance<ReadRef<CapturedIssues>>,
+        source: TransientValue<RawVc>,
+    );
 }

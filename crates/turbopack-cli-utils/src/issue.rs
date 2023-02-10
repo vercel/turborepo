@@ -10,15 +10,17 @@ use std::{
 use anyhow::{anyhow, Result};
 use crossterm::style::{StyledContent, Stylize};
 use owo_colors::{OwoColorize as _, Style};
-use turbo_tasks::{RawVc, TransientValue, TryJoinIterExt, ValueToString};
+use turbo_tasks::{
+    RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, ValueToString,
+};
 use turbo_tasks_fs::{
     attach::AttachedFileSystemVc,
     source_context::{get_source_context, SourceContextLine},
     to_sys_path, FileLinesContent, FileSystemPathVc,
 };
 use turbopack_core::issue::{
-    CapturedIssuesVc, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc,
-    IssueSeverity, OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
+    CapturedIssues, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc, IssueSeverity,
+    OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -412,12 +414,15 @@ impl PartialEq for ConsoleUi {
     }
 }
 
-impl ConsoleUi {
-    pub fn new(options: LogOptions) -> Self {
+#[turbo_tasks::value_impl]
+impl ConsoleUiVc {
+    #[turbo_tasks::function]
+    pub fn new(options: TransientInstance<LogOptions>) -> Self {
         ConsoleUi {
-            options,
+            options: (*options).clone(),
             seen: Arc::new(Mutex::new(SeenIssues::new())),
         }
+        .cell()
     }
 }
 
@@ -426,10 +431,10 @@ impl IssueReporter for ConsoleUi {
     #[turbo_tasks::function]
     async fn report_issues(
         &self,
-        issues: CapturedIssuesVc,
+        issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
     ) -> Result<()> {
-        let issues = issues.await?;
+        let issues = &*issues;
         let LogOptions {
             ref current_dir,
             show_all,

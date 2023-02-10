@@ -23,7 +23,6 @@ use next_core::{
     next_image::NextImageContentSourceVc, router_source::NextRouterContentSourceVc,
     source_map::NextSourceMapTraceContentSourceVc,
 };
-use once_cell::sync::Lazy;
 use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
@@ -33,10 +32,10 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
-use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
 use turbopack_core::{
     environment::ServerAddr,
-    issue::{Issue, IssueReporter, IssueReporterVc, IssueSeverity, IssueVc},
+    issue::{IssueReporter, IssueReporterVc, IssueSeverity, IssueVc},
     resolve::{parse::RequestVc, pattern::QueryMapVc},
     server_fs::ServerFileSystemVc,
 };
@@ -204,24 +203,21 @@ impl NextDevServerBuilder {
         let show_all = self.show_all;
         let log_detail = self.log_detail;
         let browserslist_query = self.browserslist_query;
-        let log_options = LogOptions {
+        let log_options = Arc::new(LogOptions {
             current_dir: current_dir().unwrap(),
             show_all,
             log_detail,
             log_level: self.log_level,
-        };
+        });
         let entry_requests = Arc::new(self.entry_requests);
         let server_addr = Arc::new(server.addr);
         let tasks = turbo_tasks.clone();
-        let issue_reporter_once = Arc::new(Lazy::new(|| {
-            self.issue_reporter
-                .unwrap_or_else(|| {
-                    // Initialize a ConsoleUi reporter if no custom reporter was provided
-                    Box::new(|log_options| ConsoleUi::new(log_options).cell().into())
-                })
-                .get_issue_reporter(log_options)
-        }));
-        let issue_reporter_arc = Arc::new(move || **issue_reporter_once);
+        let issue_provider = self.issue_reporter.unwrap_or_else(|| {
+            // Initialize a ConsoleUi reporter if no custom reporter was provided
+            Box::new(move || ConsoleUiVc::new(log_options.clone().into()).into())
+        });
+        let issue_reporter_arc = Arc::new(move || issue_provider.get_issue_reporter());
+
         let get_issue_reporter = issue_reporter_arc.clone();
         let source = move || {
             source(
@@ -244,19 +240,14 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     source: T,
     issue_reporter: IssueReporterVc,
 ) -> Result<()> {
-    let issues = IssueVc::peek_issues_with_path(source).await?;
-    issue_reporter.report_issues(issues, TransientValue::new(source.into()));
+    let issues_vc = IssueVc::peek_issues_with_path(source).await?;
+    let issues = issues_vc.strongly_consistent().await?;
+    issue_reporter.report_issues(
+        TransientInstance::new(issues),
+        TransientValue::new(source.into()),
+    );
 
-    let mut has_fatal = false;
-    for issue in issues.strongly_consistent().await?.iter() {
-        let severity = *issue.severity().await?;
-        if severity == IssueSeverity::Fatal {
-            has_fatal = true;
-            break;
-        }
-    }
-
-    if has_fatal {
+    if *issues_vc.has_fatal().await? {
         Err(anyhow!("Fatal issue(s) occurred"))
     } else {
         Ok(())
