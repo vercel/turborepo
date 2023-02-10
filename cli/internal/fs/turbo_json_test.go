@@ -120,7 +120,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "TopologicalDependencies"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
