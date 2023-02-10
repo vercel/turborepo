@@ -715,6 +715,10 @@
 <span id="715">715</span>
 <span id="716">716</span>
 <span id="717">717</span>
+<span id="718">718</span>
+<span id="719">719</span>
+<span id="720">720</span>
+<span id="721">721</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -1041,6 +1045,7 @@
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         server_root,
+        server_root,
         LayoutSegmentsVc::cell(Vec::new()),
         output_path,
     )
@@ -1061,6 +1066,7 @@
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
     target: FileSystemPathVc,
+    url: FileSystemPathVc,
     layouts: LayoutSegmentsVc,
     intermediate_output_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CombinedContentSourceVc&gt; {
@@ -1143,7 +1149,7 @@
     layouts = LayoutSegmentsVc::cell(list);
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
-        <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
+        <span class="kw">let </span>pathname = pathname_for_path(server_root, url, <span class="bool-val">false</span>);
         <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname);
 
         sources.push(create_node_rendered_source(
@@ -1183,12 +1189,13 @@
             specificity
         };
 
-        <span class="kw">let </span>(new_target, position) = <span class="kw">if </span>name.starts_with(<span class="string">&#39;(&#39;</span>) &amp;&amp; name.ends_with(<span class="string">&#39;)&#39;</span>) {
+        <span class="kw">let </span>new_target = target.join(name);
+        <span class="kw">let </span>(new_url, position) = <span class="kw">if </span>name.starts_with(<span class="string">&#39;(&#39;</span>) &amp;&amp; name.ends_with(<span class="string">&#39;)&#39;</span>) {
             <span class="comment">// This doesn&#39;t affect the url
-            </span>(target, position)
+            </span>(url, position)
         } <span class="kw">else </span>{
             <span class="comment">// This adds to the url
-            </span>(target.join(name), position + <span class="number">1</span>)
+            </span>(url.join(name), position + <span class="number">1</span>)
         };
 
         sources.push(
@@ -1204,6 +1211,7 @@
                 runtime_entries,
                 fallback_page,
                 new_target,
+                new_url,
                 layouts,
                 intermediate_output_path,
             )
