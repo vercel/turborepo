@@ -1,6 +1,7 @@
-use std::{borrow::Cow, collections::HashMap, thread::available_parallelism};
+use std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
 
 use anyhow::Result;
+use futures_retry::{FutureRetry, RetryPolicy};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
