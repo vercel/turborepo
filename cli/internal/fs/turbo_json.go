@@ -217,6 +217,20 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	return turboJSON, nil
 }
 
+// Validate calls an array of validation functions on the pipeline
+// The validations can be customized by the caller.
+func (tj *TurboJSON) Validate(validations []func(*Pipeline) error) []error {
+	errors := []error{}
+	for _, v := range validations {
+		err := v(&tj.Pipeline)
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	return errors
+}
+
 // TaskOutputs represents the patterns for including and excluding files from outputs
 type TaskOutputs struct {
 	Inclusions []string

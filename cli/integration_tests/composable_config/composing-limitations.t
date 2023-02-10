@@ -3,6 +3,6 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
   $ ${TURBO} run build --filter=package-task
-   ERROR  run failed: error preparing engine: Detected "package-task#build" in "package-task". Declare "build" instead
-  Turbo error: error preparing engine: Detected "package-task#build" in "package-task". Declare "build" instead
+   ERROR  run failed: error preparing engine: turbo.json failed validation
+  Turbo error: error preparing engine: turbo.json failed validation
   [1]

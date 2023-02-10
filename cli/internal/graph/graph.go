@@ -112,6 +112,16 @@ func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSing
 		return nil, err
 	}
 
+	var validations []func(*fs.Pipeline) error
+	if workspaceName != util.RootPkgName {
+		validations = append(validations, validateNoPackageTaskSyntax)
+	}
+
+	errors := turboConfig.Validate(validations)
+	for _, err := range errors {
+		return nil, fmt.Errorf("Failed validation: %v", err)
+	}
+
 	// add to cache
 	g.WorkspaceInfos.TurboConfigs[workspaceName] = turboConfig
 
@@ -133,4 +143,14 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 // relative path from the root of the monorepo.
 func repoRelativeLogFile(pt *nodes.PackageTask) string {
 	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
+}
+
+func validateNoPackageTaskSyntax(pipeline *fs.Pipeline) error {
+	for taskIdOrName, _ := range *pipeline {
+		if util.IsPackageTask(taskIdOrName) {
+			taskName := util.StripPackageName(taskIdOrName)
+			return fmt.Errorf("Detected %s, use %s instead", taskIdOrName, taskName)
+		}
+	}
+	return nil
 }

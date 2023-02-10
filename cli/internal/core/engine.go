@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -94,13 +95,16 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	pipeline, err := e.completeGraph.GetPipelineFromWorkspace(pkg, e.isSinglePackage)
 
-	// An error here means there was no turbo.json in the workspace.
-	// Fallback to the root pipeline to find the task.
 	if err != nil {
-		if pkg != util.RootPkgName {
-			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+		// If the error is that there was no turbo.json in the worksapce,
+		// and we were looking in the non-root workspace, fallback to the root workspace
+		if os.IsNotExist(err) {
+			if pkg != util.RootPkgName {
+				return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+			}
 		}
 
+		// Otherwise bubble up the error
 		return nil, err
 	}
 
@@ -448,14 +452,6 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 
 			if workspaceDefinition, ok := workspaceTurboJSON.Pipeline[taskName]; ok {
 				taskDefinitions = append(taskDefinitions, workspaceDefinition)
-			} else {
-				// If the workspace doesn't have the taskName defined, but we detect that
-				// it defines the package#task syntax, throw an error. This is a misconfiguration
-				// and we actively want to prevent it.
-				// TODO(mehulkar): Should we validate this upfront when reading a worksapce turbo.jsoN?
-				if _, ok := workspaceTurboJSON.Pipeline[taskID]; ok {
-					return nil, fmt.Errorf("Detected \"%s\" in \"%s\". Declare \"%s\" instead", taskID, taskIDPackage, taskName)
-				}
 			}
 
 			// If there is no Extends key, we are in a workspace that didn't extend from anything.
