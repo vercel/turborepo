@@ -1,5 +1,5 @@
 import type { Octokit } from "@octokit/rest";
-import core from "@actions/core";
+import * as core from "@actions/core";
 import { context, getOctokit } from "@actions/github";
 
 type Tag = {
