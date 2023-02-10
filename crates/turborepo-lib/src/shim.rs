@@ -324,13 +324,13 @@ impl RepoState {
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
-            try_check_for_updates(&shim_args, version, false);
+            try_check_for_updates(&shim_args, version);
             let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
-            try_check_for_updates(&shim_args, get_version(), true);
+            try_check_for_updates(&shim_args, get_version());
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
             env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
@@ -477,7 +477,7 @@ fn init_env_logger(verbosity: usize) {
     builder.init();
 }
 
-fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo: bool) {
+fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
     if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
@@ -502,7 +502,6 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo
             // use default for timeout (800ms)
             None,
             interval,
-            is_global_turbo,
         );
     }
 }
