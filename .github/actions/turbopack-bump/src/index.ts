@@ -1,6 +1,7 @@
-import type { Octokit } from "@octokit/rest";
-import core from "@actions/core";
+import * as core from "@actions/core";
 import { context, getOctokit } from "@actions/github";
+
+type Octokit = ReturnType<typeof getOctokit>;
 
 type Tag = {
   name: string;
@@ -22,10 +23,15 @@ async function run() {
   const prefix = core.getInput("prefix");
   const commitSha = core.getInput("commit_sha") || process.env.GITHUB_SHA!;
 
-  const octokit = getOctokit(githubToken) as unknown as Octokit;
+  const octokit = getOctokit(githubToken);
 
-  const tagFilter = new RegExp(`^${prefix}(?<date>\d{6})\.(?<patch>\d+)$`);
+  const tagFilter = new RegExp(
+    String.raw`^${prefix}(?<date>\d{6})\.(?<patch>\d+)$`
+  );
   const tags = await getTags(octokit, tagFilter);
+
+  core.info("found tags:");
+  core.info(JSON.stringify(tags, null, 2));
 
   const lastTag =
     tags.pop() ||
@@ -40,6 +46,8 @@ async function run() {
   const today = getToday();
   const nextPatch = today === lastTag.date ? lastTag.patch + 1 : 1;
   const nextTag = `${prefix}${today}.${nextPatch}`;
+
+  core.info(JSON.stringify({ today, lastTag, nextTag }));
 
   core.setOutput("new_tag", nextTag);
   await createTag(octokit, nextTag, commitSha);
@@ -65,7 +73,7 @@ async function getTags(
   filter: RegExp,
   page = 0
 ): Promise<Tag[]> {
-  const resp = await octokit.repos.listTags({
+  const resp = await octokit.rest.repos.listTags({
     ...context.repo,
     per_page: 100,
     page,
@@ -102,7 +110,7 @@ async function getTags(
  * Creates a light tag by creating a new reference in `refs/tags/`
  */
 async function createTag(octokit: Octokit, newTag: string, sha: string) {
-  await octokit.git.createRef({
+  await octokit.rest.git.createRef({
     ...context.repo,
     ref: `refs/tags/${newTag}`,
     sha,
