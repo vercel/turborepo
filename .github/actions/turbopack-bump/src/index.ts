@@ -28,8 +28,8 @@ async function run() {
   const tagFilter = new RegExp(`^${prefix}(?<date>\d{6})\.(?<patch>\d+)$`);
   const tags = await getTags(octokit, tagFilter);
 
-  core.debug("found tags:");
-  core.debug(JSON.stringify(tags, null, 2));
+  core.info("found tags:");
+  core.info(JSON.stringify(tags, null, 2));
 
   const lastTag =
     tags.pop() ||
@@ -45,7 +45,7 @@ async function run() {
   const nextPatch = today === lastTag.date ? lastTag.patch + 1 : 1;
   const nextTag = `${prefix}${today}.${nextPatch}`;
 
-  core.debug(JSON.stringify({ today, lastTag, nextTag }));
+  core.info(JSON.stringify({ today, lastTag, nextTag }));
 
   core.setOutput("new_tag", nextTag);
   await createTag(octokit, nextTag, commitSha);
