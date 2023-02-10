@@ -1,0 +1,1526 @@
+{
+  "ref": "4fe96c47225a028ea7484203cd19407087c9de3b",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676047858978,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:47:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "styled-components SWC transform should not have hydration mismatch with styled-components transform enabled",
+                "location": null,
+                "status": "failed",
+                "title": "should not have hydration mismatch with styled-components transform enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should render the page with correct styles",
+                "location": null,
+                "status": "passed",
+                "title": "should render the page with correct styles"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-3ccc78e8f6b7743161a86df6169a5da673a295bfa02f240037096272952ea43c/.next/static/chunks/pages/index.js'"
+                ],
+                "fullName": "styled-components SWC transform should enable the display name transform by default",
+                "location": null,
+                "status": "failed",
+                "title": "should enable the display name transform by default"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should contain styles in initial HTML",
+                "location": null,
+                "status": "passed",
+                "title": "should contain styles in initial HTML"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:98:7)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "styled-components SWC transform should only render once on the server per request",
+                "location": null,
+                "status": "failed",
+                "title": "should only render once on the server per request"
+              }
+            ],
+            "endTime": 1676047913902,
+            "message": "  ● styled-components SWC transform › should not have hydration mismatch with styled-components transform enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      45 |\n      46 |       // Try 4 times to be sure there is no mismatch\n    > 47 |       expect(await matchLogs$(browser)).toBe(false)\n         |                                         ^\n      48 |       await browser.refresh()\n      49 |       expect(await matchLogs$(browser)).toBe(false)\n      50 |       await browser.refresh()\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:47:41)\n\n  ● styled-components SWC transform › should enable the display name transform by default\n\n    ENOENT: no such file or directory, open '/tmp/next-install-3ccc78e8f6b7743161a86df6169a5da673a295bfa02f240037096272952ea43c/.next/static/chunks/pages/index.js'\n\n\n\n  ● styled-components SWC transform › should only render once on the server per request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n       96 |     expect(\n       97 |       outputs.filter((output) => output.trim() === '__render__').length\n    >  98 |     ).toBe(1)\n          |       ^\n       99 |   })\n      100 | })\n      101 |\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:98:7)\n",
+            "name": "/work/test/development/basic/styled-components.test.ts",
+            "startTime": 1676047859074,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049312614,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without fonts",
+                "location": null,
+                "status": "passed",
+                "title": "without fonts"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without fonts",
+                "location": null,
+                "status": "failed",
+                "title": "without fonts"
+              }
+            ],
+            "endTime": 1676049355205,
+            "message": "  ● @next/font/google without-preloaded-fonts without _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      45 |\n      46 |     // Preconnect\n    > 47 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n         |                                                ^\n      48 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      49 |       crossorigin: 'anonymous',\n      50 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n\n  ● @next/font/google no preloads with _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      105 |\n      106 |     // Preconnect\n    > 107 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      108 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      109 |       crossorigin: 'anonymous',\n      110 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n          at runMicrotasks (<anonymous>)\n\n  ● @next/font/google no preloads with _app › without fonts\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      122 |\n      123 |     // Preconnect\n    > 124 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      125 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      126 |       crossorigin: 'anonymous',\n      127 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n          at runMicrotasks (<anonymous>)\n",
+            "name": "/work/test/e2e/next-font/without-preloaded-fonts.test.ts",
+            "startTime": 1676049312710,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/basepath-root-catch-all/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049577278,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using withRouter",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using withRouter"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using top level Router",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using top level Router"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using top level Router deprecated behavior",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using top level Router deprecated behavior"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter SSR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected substring: \"No router instance found. you should only use \\\"next/router\\\" inside the client side of your app. https://\"\nReceived string:    \"1 Turbopack Issue\n \"\n    at Object.<anonymous> (/work/test/integration/with-router/test/index.test.js:109:44)"
+                ],
+                "fullName": "withRouter SSR should show an error when trying to use router methods during SSR",
+                "location": null,
+                "status": "failed",
+                "title": "should show an error when trying to use router methods during SSR"
+              }
+            ],
+            "endTime": 1676049604888,
+            "message": "  ● withRouter SSR › should show an error when trying to use router methods during SSR\n\n    expect(received).toMatch(expected)\n\n    Expected substring: \"No router instance found. you should only use \\\"next/router\\\" inside the client side of your app. https://\"\n    Received string:    \"1 Turbopack Issue\n     \"\n\n      107 |     const browser = await webdriver(port, '/router-method-ssr')\n      108 |     expect(await hasRedbox(browser, true)).toBe(true)\n    > 109 |     expect(await getRedboxHeader(browser)).toMatch(\n          |                                            ^\n      110 |       `No router instance found. you should only use \"next/router\" inside the client side of your app. https://`\n      111 |     )\n      112 |     await browser.close()\n\n      at Object.<anonymous> (integration/with-router/test/index.test.js:109:44)\n",
+            "name": "/work/test/integration/with-router/test/index.test.js",
+            "startTime": 1676049577372,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676048113844,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676048210249,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676048113938,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049059090,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [],
+                "fullName": "Prerender crawler handling should return prerendered page for correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should return prerendered page for correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Loading...\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/node_modules_.pnpm_e225dc._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/_f097bd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_blog_%5Bslug%5D.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p id=\\\"page\\\">slug page</p><p id=\\\"slug\\\">test-1</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/blog/[slug]\\\",\\\"query\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/prerender-crawler.test.ts:68:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Prerender crawler handling should return fallback for non-crawler correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should return fallback for non-crawler correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [],
+                "fullName": "Prerender crawler handling should block for crawler correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should block for crawler correctly"
+              }
+            ],
+            "endTime": 1676049083133,
+            "message": "  ● Prerender crawler handling › should return fallback for non-crawler correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Loading...\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/node_modules_.pnpm_e225dc._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/_f097bd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_blog_%5Bslug%5D.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p id=\\\"page\\\">slug page</p><p id=\\\"slug\\\">test-1</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/blog/[slug]\\\",\\\"query\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      66 |       },\n      67 |     })\n    > 68 |     expect(html).toContain('Loading...')\n         |                  ^\n      69 |   })\n      70 |\n      71 |   it('should block for crawler correctly', async () => {\n\n      at Object.<anonymous> (e2e/prerender-crawler.test.ts:68:18)\n",
+            "name": "/work/test/e2e/prerender-crawler.test.ts",
+            "startTime": 1676049059186,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 24,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 2,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 28,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 13,
+          "total": 14,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676049617842,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Development"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\nSnapshot: \"rgb(255, 0, 0)\"\nReceived: null\n    at Object.<anonymous> (/work/test/integration/scss-modules/test/index.test.js:152:26)"
+                ],
+                "fullName": "Has CSS Module in computed styles in Development should have CSS for page",
+                "location": null,
+                "status": "failed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have CSS for page",
+                "location": null,
+                "status": "passed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Can hot reload CSS Module without losing state"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#text-input')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Can hot reload CSS Module without losing state should update CSS color without remounting <input>",
+                "location": null,
+                "status": "failed",
+                "title": "should update CSS color without remounting <input>"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Global Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Global Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              }
+            ],
+            "endTime": 1676049828020,
+            "message": "  ● Has CSS Module in computed styles in Development › should have CSS for page\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\n    Snapshot: \"rgb(255, 0, 0)\"\n    Received: null\n\n      150 |       `window.getComputedStyle(document.querySelector('#verify-red')).color`\n      151 |     )\n    > 152 |     expect(currentColor).toMatchInlineSnapshot(`\"rgb(255, 0, 0)\"`)\n          |                          ^\n      153 |   })\n      154 | })\n      155 |\n\n      at Object.<anonymous> (integration/scss-modules/test/index.test.js:152:26)\n\n  ● Can hot reload CSS Module without losing state › should update CSS color without remounting <input>\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#text-input')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/scss-modules/test/index.test.js",
+            "startTime": 1676049617938,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676047866495,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: true\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:47:41)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "styled-components SWC transform should not have hydration mismatch with styled-components transform enabled",
+                "location": null,
+                "status": "failed",
+                "title": "should not have hydration mismatch with styled-components transform enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should render the page with correct styles",
+                "location": null,
+                "status": "passed",
+                "title": "should render the page with correct styles"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-6ee22917cd739b46f53286afeeb34ea63a91f121451793296faffad960a69190/.next/static/chunks/pages/index.js'"
+                ],
+                "fullName": "styled-components SWC transform should enable the display name transform by default",
+                "location": null,
+                "status": "failed",
+                "title": "should enable the display name transform by default"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [],
+                "fullName": "styled-components SWC transform should contain styles in initial HTML",
+                "location": null,
+                "status": "passed",
+                "title": "should contain styles in initial HTML"
+              },
+              {
+                "ancestorTitles": [
+                  "styled-components SWC transform"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/development/basic/styled-components.test.ts:98:7)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "styled-components SWC transform should only render once on the server per request",
+                "location": null,
+                "status": "failed",
+                "title": "should only render once on the server per request"
+              }
+            ],
+            "endTime": 1676047921488,
+            "message": "  ● styled-components SWC transform › should not have hydration mismatch with styled-components transform enabled\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: false\n    Received: true\n\n      45 |\n      46 |       // Try 4 times to be sure there is no mismatch\n    > 47 |       expect(await matchLogs$(browser)).toBe(false)\n         |                                         ^\n      48 |       await browser.refresh()\n      49 |       expect(await matchLogs$(browser)).toBe(false)\n      50 |       await browser.refresh()\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:47:41)\n\n  ● styled-components SWC transform › should enable the display name transform by default\n\n    ENOENT: no such file or directory, open '/tmp/next-install-6ee22917cd739b46f53286afeeb34ea63a91f121451793296faffad960a69190/.next/static/chunks/pages/index.js'\n\n\n\n  ● styled-components SWC transform › should only render once on the server per request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n       96 |     expect(\n       97 |       outputs.filter((output) => output.trim() === '__render__').length\n    >  98 |     ).toBe(1)\n          |       ^\n       99 |   })\n      100 | })\n      101 |\n\n      at Object.<anonymous> (development/basic/styled-components.test.ts:98:7)\n",
+            "name": "/work/test/development/basic/styled-components.test.ts",
+            "startTime": 1676047866590,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049320821,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without fonts",
+                "location": null,
+                "status": "passed",
+                "title": "without fonts"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without fonts",
+                "location": null,
+                "status": "failed",
+                "title": "without fonts"
+              }
+            ],
+            "endTime": 1676049363969,
+            "message": "  ● @next/font/google without-preloaded-fonts without _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      45 |\n      46 |     // Preconnect\n    > 47 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n         |                                                ^\n      48 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      49 |       crossorigin: 'anonymous',\n      50 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n\n  ● @next/font/google no preloads with _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      105 |\n      106 |     // Preconnect\n    > 107 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      108 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      109 |       crossorigin: 'anonymous',\n      110 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n\n  ● @next/font/google no preloads with _app › without fonts\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      122 |\n      123 |     // Preconnect\n    > 124 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      125 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      126 |       crossorigin: 'anonymous',\n      127 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n",
+            "name": "/work/test/e2e/next-font/without-preloaded-fonts.test.ts",
+            "startTime": 1676049320917,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/basepath-root-catch-all/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049586233,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using withRouter",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using withRouter"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using top level Router",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using top level Router"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter"
+                ],
+                "failureMessages": [],
+                "fullName": "withRouter allows observation of navigation events using top level Router deprecated behavior",
+                "location": null,
+                "status": "passed",
+                "title": "allows observation of navigation events using top level Router deprecated behavior"
+              },
+              {
+                "ancestorTitles": [
+                  "withRouter SSR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected substring: \"No router instance found. you should only use \\\"next/router\\\" inside the client side of your app. https://\"\nReceived string:    \"1 Turbopack Issue\n \"\n    at Object.<anonymous> (/work/test/integration/with-router/test/index.test.js:109:44)"
+                ],
+                "fullName": "withRouter SSR should show an error when trying to use router methods during SSR",
+                "location": null,
+                "status": "failed",
+                "title": "should show an error when trying to use router methods during SSR"
+              }
+            ],
+            "endTime": 1676049614010,
+            "message": "  ● withRouter SSR › should show an error when trying to use router methods during SSR\n\n    expect(received).toMatch(expected)\n\n    Expected substring: \"No router instance found. you should only use \\\"next/router\\\" inside the client side of your app. https://\"\n    Received string:    \"1 Turbopack Issue\n     \"\n\n      107 |     const browser = await webdriver(port, '/router-method-ssr')\n      108 |     expect(await hasRedbox(browser, true)).toBe(true)\n    > 109 |     expect(await getRedboxHeader(browser)).toMatch(\n          |                                            ^\n      110 |       `No router instance found. you should only use \"next/router\" inside the client side of your app. https://`\n      111 |     )\n      112 |     await browser.close()\n\n      at Object.<anonymous> (integration/with-router/test/index.test.js:109:44)\n",
+            "name": "/work/test/integration/with-router/test/index.test.js",
+            "startTime": 1676049586330,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676048156116,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1676048253763,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1676048156220,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1676049110512,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [],
+                "fullName": "Prerender crawler handling should return prerendered page for correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should return prerendered page for correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Loading...\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/node_modules_.pnpm_1a40cb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/_83a534._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_blog_%5Bslug%5D.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p id=\\\"page\\\">slug page</p><p id=\\\"slug\\\">test-1</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/blog/[slug]\\\",\\\"query\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/prerender-crawler.test.ts:68:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Prerender crawler handling should return fallback for non-crawler correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should return fallback for non-crawler correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Prerender crawler handling"
+                ],
+                "failureMessages": [],
+                "fullName": "Prerender crawler handling should block for crawler correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should block for crawler correctly"
+              }
+            ],
+            "endTime": 1676049133507,
+            "message": "  ● Prerender crawler handling › should return fallback for non-crawler correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Loading...\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/node_modules_.pnpm_1a40cb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/_83a534._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_blog_%5Bslug%5D.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p id=\\\"page\\\">slug page</p><p id=\\\"slug\\\">test-1</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/blog/[slug]\\\",\\\"query\\\":{\\\"slug\\\":\\\"test-1\\\"},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      66 |       },\n      67 |     })\n    > 68 |     expect(html).toContain('Loading...')\n         |                  ^\n      69 |   })\n      70 |\n      71 |   it('should block for crawler correctly', async () => {\n\n      at Object.<anonymous> (e2e/prerender-crawler.test.ts:68:18)\n",
+            "name": "/work/test/e2e/prerender-crawler.test.ts",
+            "startTime": 1676049110613,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 24,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 2,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 28,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 13,
+          "total": 14,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1676049672656,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Development"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\nSnapshot: \"rgb(255, 0, 0)\"\nReceived: null\n    at Object.<anonymous> (/work/test/integration/scss-modules/test/index.test.js:152:26)"
+                ],
+                "fullName": "Has CSS Module in computed styles in Development should have CSS for page",
+                "location": null,
+                "status": "failed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have CSS for page",
+                "location": null,
+                "status": "passed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Can hot reload CSS Module without losing state"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#text-input')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Can hot reload CSS Module without losing state should update CSS color without remounting <input>",
+                "location": null,
+                "status": "failed",
+                "title": "should update CSS color without remounting <input>"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Global Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Global Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              }
+            ],
+            "endTime": 1676049886339,
+            "message": "  ● Has CSS Module in computed styles in Development › should have CSS for page\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\n    Snapshot: \"rgb(255, 0, 0)\"\n    Received: null\n\n      150 |       `window.getComputedStyle(document.querySelector('#verify-red')).color`\n      151 |     )\n    > 152 |     expect(currentColor).toMatchInlineSnapshot(`\"rgb(255, 0, 0)\"`)\n          |                          ^\n      153 |   })\n      154 | })\n      155 |\n\n      at Object.<anonymous> (integration/scss-modules/test/index.test.js:152:26)\n\n  ● Can hot reload CSS Module without losing state › should update CSS color without remounting <input>\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#text-input')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/scss-modules/test/index.test.js",
+            "startTime": 1676049672756,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
