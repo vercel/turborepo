@@ -203,6 +203,9 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	for scriptName := range rootPackageJSON.Scripts {
 		if !turboJSON.Pipeline.HasTask(scriptName) {
 			taskName := util.RootTaskID(scriptName)
+			// Explicitly set ShouldCache to false in this definition and add the bookkeeping fields
+			// so downstream we can pretend that it was set on purpose (as if read from a config file)
+			// rather than defaulting to the 0-value of a boolean field.
 			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{
 				definedFields: util.SetFromStrings([]string{"ShouldCache"}),
 				TaskDefinition: TaskDefinition{
