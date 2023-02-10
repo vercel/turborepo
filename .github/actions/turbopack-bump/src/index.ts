@@ -79,6 +79,9 @@ async function getTags(
 
   if (resp.data.length === 0) return [];
 
+  core.info("received tags:");
+  core.info(JSON.stringify(resp.data, null, 2));
+
   const tags = resp.data.filter((tag) => filter.test(tag.name));
 
   // If we had tags on this page, but none passed the filter, then continue on
