@@ -203,14 +203,12 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	for scriptName := range rootPackageJSON.Scripts {
 		if !turboJSON.Pipeline.HasTask(scriptName) {
 			taskName := util.RootTaskID(scriptName)
-
-			btd := BookkeepingTaskDefinition{
+			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{
 				definedFields: util.SetFromStrings([]string{"ShouldCache"}),
 				TaskDefinition: TaskDefinition{
 					ShouldCache: false,
 				},
 			}
-			turboJSON.Pipeline[taskName] = btd
 		}
 	}
 	return turboJSON, nil
