@@ -322,6 +322,7 @@ pub async fn create_app_source(
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         server_root,
+        server_root,
         LayoutSegmentsVc::cell(Vec::new()),
         output_path,
     )
@@ -342,6 +343,7 @@ async fn create_app_source_for_directory(
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
     target: FileSystemPathVc,
+    url: FileSystemPathVc,
     layouts: LayoutSegmentsVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<CombinedContentSourceVc> {
@@ -424,7 +426,7 @@ async fn create_app_source_for_directory(
     layouts = LayoutSegmentsVc::cell(list);
 
     if let Some(page_path) = page {
-        let pathname = pathname_for_path(server_root, target, false);
+        let pathname = pathname_for_path(server_root, url, false);
         let params_matcher = NextParamsMatcherVc::new(pathname);
 
         sources.push(create_node_rendered_source(
@@ -464,12 +466,13 @@ async fn create_app_source_for_directory(
             specificity
         };
 
-        let (new_target, position) = if name.starts_with('(') && name.ends_with(')') {
+        let new_target = target.join(name);
+        let (new_url, position) = if name.starts_with('(') && name.ends_with(')') {
             // This doesn't affect the url
-            (target, position)
+            (url, position)
         } else {
             // This adds to the url
-            (target.join(name), position + 1)
+            (url.join(name), position + 1)
         };
 
         sources.push(
@@ -485,6 +488,7 @@ async fn create_app_source_for_directory(
                 runtime_entries,
                 fallback_page,
                 new_target,
+                new_url,
                 layouts,
                 intermediate_output_path,
             )
