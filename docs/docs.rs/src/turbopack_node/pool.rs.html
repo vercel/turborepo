@@ -387,8 +387,34 @@
 <span id="387">387</span>
 <span id="388">388</span>
 <span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
+    future::Future,
     mem::take,
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
@@ -706,6 +732,7 @@
             process: <span class="prelude-val">Some</span>(process.run().<span class="kw">await</span><span class="question-mark">?</span>),
             permit,
             processes: <span class="self">self</span>.processes.clone(),
+            allow_process_reuse: <span class="bool-val">true</span>,
         })
     }
 }
@@ -716,13 +743,28 @@
     </span><span class="attr">#[allow(dead_code)]
     </span>permit: OwnedSemaphorePermit,
     processes: Arc&lt;Mutex&lt;Vec&lt;NodeJsPoolProcess&gt;&gt;&gt;,
+    allow_process_reuse: bool,
 }
 
 <span class="kw">impl </span>NodeJsOperation {
-    <span class="kw">fn </span>process_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;mut </span>RunningNodeJsPoolProcess&gt; {
-        <span class="self">self</span>.process
+    <span class="kw">async fn </span>with_process&lt;<span class="lifetime">&#39;a</span>, F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt; + Send + <span class="lifetime">&#39;a</span>, T&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>,
+        f: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>RunningNodeJsPoolProcess) -&gt; F,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
+        <span class="kw">let </span>process = <span class="self">self
+            </span>.process
             .as_mut()
-            .context(<span class="string">&quot;Node.js operation already finished&quot;</span>)
+            .context(<span class="string">&quot;Node.js operation already finished&quot;</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>!<span class="self">self</span>.allow_process_reuse {
+            <span class="macro">bail!</span>(<span class="string">&quot;Node.js process is no longer usable&quot;</span>);
+        }
+
+        <span class="kw">let </span>result = f(process).<span class="kw">await</span>;
+        <span class="kw">if </span>result.is_err() {
+            <span class="self">self</span>.allow_process_reuse = <span class="bool-val">false</span>;
+        }
+        result
     }
 
     <span class="kw">pub async fn </span>recv&lt;M&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;M&gt;
@@ -730,10 +772,10 @@
         </span>M: DeserializeOwned,
     {
         <span class="kw">let </span>message = <span class="self">self
-            </span>.process_mut()<span class="question-mark">?
-            </span>.recv()
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;receiving message&quot;</span>)<span class="question-mark">?</span>;
+            </span>.with_process(
+                |process| <span class="kw">async move </span>{ process.recv().<span class="kw">await</span>.context(<span class="string">&quot;receiving message&quot;</span>) },
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         serde_json::from_slice(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;deserializing message&quot;</span>)
     }
 
@@ -741,11 +783,13 @@
     <span class="kw">where
         </span>M: Serialize,
     {
-        <span class="self">self</span>.process_mut()<span class="question-mark">?
-            </span>.send(serde_json::to_vec(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;serializing message&quot;</span>)<span class="question-mark">?</span>)
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;sending message&quot;</span>)
-    }
+        <span class="kw">let </span>message = serde_json::to_vec(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;serializing message&quot;</span>)<span class="question-mark">?</span>;
+        <span class="self">self</span>.with_process(|process| <span class="kw">async move </span>{
+            process.send(message).<span class="kw">await</span>.context(<span class="string">&quot;sending message&quot;</span>)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>wait_or_kill(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ExitStatus&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>process = <span class="self">self
@@ -764,15 +808,21 @@
 
         <span class="prelude-val">Ok</span>(status)
     }
+
+    <span class="kw">pub fn </span>disallow_reuse(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.allow_process_reuse = <span class="bool-val">false</span>;
+    }
 }
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>NodeJsOperation {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(process) = <span class="self">self</span>.process.take() {
-            <span class="self">self</span>.processes
-                .lock()
-                .unwrap()
-                .push(NodeJsPoolProcess::Running(process));
+        <span class="kw">if </span><span class="self">self</span>.allow_process_reuse {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(process) = <span class="self">self</span>.process.take() {
+                <span class="self">self</span>.processes
+                    .lock()
+                    .unwrap()
+                    .push(NodeJsPoolProcess::Running(process));
+            }
         }
     }
 }

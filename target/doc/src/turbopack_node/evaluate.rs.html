@@ -310,9 +310,50 @@
 <span id="310">310</span>
 <span id="311">311</span>
 <span id="312">312</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism};
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -428,6 +469,27 @@
     <span class="prelude-val">Ok</span>(pool.cell())
 }
 
+<span class="kw">struct </span>PoolErrorHandler;
+
+<span class="doccomment">/// Number of attempts before we start slowing down the retry.
+</span><span class="kw">const </span>MAX_FAST_ATTEMPTS: usize = <span class="number">5</span>;
+<span class="doccomment">/// Total number of attempts.
+</span><span class="kw">const </span>MAX_ATTEMPTS: usize = MAX_FAST_ATTEMPTS * <span class="number">2</span>;
+
+<span class="kw">impl </span>futures_retry::ErrorHandler&lt;anyhow::Error&gt; <span class="kw">for </span>PoolErrorHandler {
+    <span class="kw">type </span>OutError = anyhow::Error;
+
+    <span class="kw">fn </span>handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, attempt: usize, err: anyhow::Error) -&gt; RetryPolicy&lt;<span class="self">Self</span>::OutError&gt; {
+        <span class="kw">if </span>attempt &gt;= MAX_ATTEMPTS {
+            RetryPolicy::ForwardError(err)
+        } <span class="kw">else if </span>attempt &gt;= MAX_FAST_ATTEMPTS {
+            RetryPolicy::WaitRetry(Duration::from_secs(<span class="number">1</span>))
+        } <span class="kw">else </span>{
+            RetryPolicy::Repeat
+        }
+    }
+}
+
 <span class="doccomment">/// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 </span><span class="attr">#[turbo_tasks::function]
@@ -452,13 +514,29 @@
         debug,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>operation = pool.operation().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">let </span>args = args.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-    operation
-        .send(EvalJavaScriptOutgoingMessage::Evaluate {
-            args: args.iter().map(|v| <span class="kw-2">&amp;**</span>v).collect(),
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Workers in the pool could be in a bad state that we didn&#39;t detect yet.
+    // The bad state might even be unnoticable until we actually send the job to the
+    // worker. So we retry picking workers from the pools until we succeed
+    // sending the job.
+
+    </span><span class="kw">let </span>(<span class="kw-2">mut </span>operation, <span class="kw">_</span>) = FutureRetry::new(
+        || <span class="kw">async </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>operation = pool.operation().<span class="kw">await</span><span class="question-mark">?</span>;
+            operation
+                .send(EvalJavaScriptOutgoingMessage::Evaluate {
+                    args: args.iter().map(|v| <span class="kw-2">&amp;**</span>v).collect(),
+                })
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(operation)
+        },
+        PoolErrorHandler,
+    )
+    .<span class="kw">await
+    </span>.map_err(|(e, <span class="kw">_</span>)| e)<span class="question-mark">?</span>;
+
     <span class="kw">let </span><span class="kw-2">mut </span>file_dependencies = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>dir_dependencies = Vec::new();
     <span class="kw">let </span>output = <span class="kw">loop </span>{
@@ -471,10 +549,17 @@
                 .cell()
                 .as_issue()
                 .emit();
+                <span class="comment">// Do not reuse the process in case of error
+                </span>operation.disallow_reuse();
                 <span class="kw">break </span>JavaScriptValue::Error;
             }
             EvalJavaScriptIncomingMessage::JsonValue { data } =&gt; {
-                <span class="kw">break </span>JavaScriptValue::Value(data.into())
+                <span class="kw">if </span>args.is_empty() {
+                    <span class="comment">// Assume this is a one-off operation, so we can kill the process
+                    // TODO use a better way to decide that.
+                    </span>operation.wait_or_kill().<span class="kw">await</span><span class="question-mark">?</span>;
+                }
+                <span class="kw">break </span>JavaScriptValue::Value(data.into());
             }
             EvalJavaScriptIncomingMessage::FileDependency { path } =&gt; {
                 <span class="comment">// TODO We might miss some changes that happened during execution
@@ -505,11 +590,6 @@
     }
     <span class="kw">for </span>dep <span class="kw">in </span>dir_dependencies {
         dep.<span class="kw">await</span><span class="question-mark">?</span>;
-    }
-    <span class="kw">if </span>args.is_empty() {
-        <span class="comment">// Assume this is a one-off operation, so we can kill the process
-        // TODO use a better way to decide that.
-        </span>operation.wait_or_kill().<span class="kw">await</span><span class="question-mark">?</span>;
     }
     <span class="prelude-val">Ok</span>(output.cell())
 }
