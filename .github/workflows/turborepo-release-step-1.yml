@@ -5,7 +5,7 @@
 # 1. Kick off the release flow with a manual workflow_dispatch
 #    which increments the version and creates a new branch,
 #    with a commit incrementing version.go as well as version.txt.
-#    For more detail, see stage-release in cli/Makefile
+#    For more detail, see `stage-release` in cli/Makefile
 # 2. Stage two takes the newly-created staging branch and compiles
 #    a production go build, the artifacts for which are stored
 #    in the build cache
