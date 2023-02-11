@@ -473,10 +473,10 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 func validateNoPackageTaskSyntax(turboJSON *fs.TurboJSON) []error {
 	errors := []error{}
 
-	for taskIdOrName, _ := range turboJSON.Pipeline {
-		if util.IsPackageTask(taskIdOrName) {
-			taskName := util.StripPackageName(taskIdOrName)
-			errors = append(errors, fmt.Errorf("\"%s\". Use \"%s\" instead", taskIdOrName, taskName))
+	for taskIDOrName := range turboJSON.Pipeline {
+		if util.IsPackageTask(taskIDOrName) {
+			taskName := util.StripPackageName(taskIDOrName)
+			errors = append(errors, fmt.Errorf("\"%s\". Use \"%s\" instead", taskIDOrName, taskName))
 		}
 	}
 
