@@ -102,7 +102,6 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
 		}
 
-		// Otherwise bubble up the error
 		return nil, err
 	}
 
