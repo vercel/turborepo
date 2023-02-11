@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -441,14 +442,19 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 
 			// Run some validations on a workspace turbo.json. Note that these validations are on
 			// the whole struct, and not relevant to the taskID we're looking at right now.
-			errors := workspaceTurboJSON.Validate([]fs.TurboJSONValidation{
+			validationErrors := workspaceTurboJSON.Validate([]fs.TurboJSONValidation{
 				validateNoPackageTaskSyntax,
 				validateExtends,
 			})
 
 			// TODO: can we print all the error messages instead of just the first one?
-			for _, err := range errors {
-				return nil, fmt.Errorf("Invalid turbo.json in \"%s\" workspace. Error: %s", taskIDPackage, err)
+			if len(validationErrors) > 0 {
+				fullError := errors.New("Invalid turbo.json")
+				for _, validationErr := range validationErrors {
+					fullError = fmt.Errorf("%w\n - %s", fullError, validationErr)
+				}
+
+				return nil, fullError
 			}
 
 			// If there are no errors, we can (try to) add the TaskDefinition to our list.
@@ -465,33 +471,38 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	return taskDefinitions, nil
 }
 
-func validateNoPackageTaskSyntax(turboJSON *fs.TurboJSON) error {
+func validateNoPackageTaskSyntax(turboJSON *fs.TurboJSON) []error {
+	errors := []error{}
+
 	for taskIdOrName, _ := range turboJSON.Pipeline {
 		if util.IsPackageTask(taskIdOrName) {
 			taskName := util.StripPackageName(taskIdOrName)
-			return fmt.Errorf("Detected \"%s\", use \"%s\" instead", taskIdOrName, taskName)
+			errors = append(errors, fmt.Errorf("\"%s\". Use \"%s\" instead", taskIdOrName, taskName))
 		}
 	}
-	return nil
+
+	return errors
 }
 
-func validateExtends(turboJSON *fs.TurboJSON) error {
+func validateExtends(turboJSON *fs.TurboJSON) []error {
+	extendErrors := []error{}
+	extends := turboJSON.Extends
 	// TODO(mehulkar): Enable extending from more than one workspace.
-	if len(turboJSON.Extends) > 1 {
-		return fmt.Errorf("You can only extend from the root workspace")
+	if len(extends) > 1 {
+		extendErrors = append(extendErrors, fmt.Errorf("You can only extend from the root workspace"))
 	}
 
 	// We don't support this right now
-	if len(turboJSON.Extends) == 0 {
-		return fmt.Errorf("No \"extends\" key found")
+	if len(extends) == 0 {
+		extendErrors = append(extendErrors, fmt.Errorf("No \"extends\" key found"))
 	}
 
 	// TODO(mehulkar): Enable extending from non-root workspace.
-	if turboJSON.Extends[0] != util.RootPkgName {
-		return fmt.Errorf("You can only extend from the root workspace")
+	if len(extends) == 1 && extends[0] != util.RootPkgName {
+		extendErrors = append(extendErrors, fmt.Errorf("You can only extend from the root workspace"))
 	}
 
-	return nil
+	return extendErrors
 }
 
 // GetTaskGraphAncestors gets all the ancestors for a given task in the graph.

@@ -1,9 +1,9 @@
 {
-  "extends": ["//"],
   "pipeline": {
     "package-task#build": {
       "outputs": ["out/**", "lib/**"]
     },
+    "//#some-root-task": {},
     "valid-task": {}
   }
 }
