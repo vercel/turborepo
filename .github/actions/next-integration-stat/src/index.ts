@@ -177,11 +177,12 @@ function collectFailedTestResults(
       return true;
     })
     .map((logs) => {
-      let failedSplitLogs = logs.split(`failed to pass within`);
+      const failedSplitLogs = logs.split(`failed to pass within`);
+      let logLine = failedSplitLogs.shift();
       const ret = [];
 
-      while (!!failedSplitLogs && failedSplitLogs.length >= 1) {
-        let failedTest = failedSplitLogs.shift();
+      while (logLine) {
+        let failedTest = logLine;
         // Look for the failed test file name
         failedTest = failedTest?.includes("test/")
           ? failedTest?.split("\n").pop()?.trim()
@@ -201,6 +202,7 @@ function collectFailedTestResults(
             name: failedTest,
             data: JSON.parse(testData),
           });
+          logLine = failedSplitLogs.shift();
         } catch (_) {
           console.log(`Failed to parse test data`);
         }
@@ -652,11 +654,15 @@ function getTestSummary(
     (name) => !baseTestFailedNames.includes(name)
   );
 
+  /*
+  //NOTE: upstream test can be flaky, so this can appear intermittently
+  //even if there aren't actual fix. To avoid confusion, do not display this
+  //for now.
   if (fixedTests.length > 0) {
     ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
       .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
-  }
+  }*/
 
   if (newFailedTests.length > 0) {
     ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests

@@ -16005,10 +16005,11 @@
         })
         .map((logs) => {
           var _a, _b, _c, _d;
-          let failedSplitLogs = logs.split(`failed to pass within`);
+          const failedSplitLogs = logs.split(`failed to pass within`);
+          let logLine = failedSplitLogs.shift();
           const ret = [];
-          while (!!failedSplitLogs && failedSplitLogs.length >= 1) {
-            let failedTest = failedSplitLogs.shift();
+          while (logLine) {
+            let failedTest = logLine;
             // Look for the failed test file name
             failedTest = (
               failedTest === null || failedTest === void 0
@@ -16044,6 +16045,7 @@
                 name: failedTest,
                 data: JSON.parse(testData),
               });
+              logLine = failedSplitLogs.shift();
             } catch (_) {
               console.log(`Failed to parse test data`);
             }
@@ -16549,11 +16551,15 @@
       const newFailedTests = currentTestFailedNames.filter(
         (name) => !baseTestFailedNames.includes(name)
       );
-      if (fixedTests.length > 0) {
-        ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
-          .map((t) => (t.length > 5 ? `\t- ${t}` : t))
-          .join(" \n")}`;
-      }
+      /*
+    //NOTE: upstream test can be flaky, so this can appear intermittently
+    //even if there aren't actual fix. To avoid confusion, do not display this
+    //for now.
+    if (fixedTests.length > 0) {
+      ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
+        .map((t) => (t.length > 5 ? `\t- ${t}` : t))
+        .join(" \n")}`;
+    }*/
       if (newFailedTests.length > 0) {
         ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
           .map((t) => (t.length > 5 ? `\t- ${t}` : t))
