@@ -423,7 +423,7 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	}
 
 	// If we're in a single package repo, we can just exit with the TaskDefinition in the root pipeline
-	// since there are now workspaces, and we don't need to follow any extends keys.
+	// since there are no workspaces, and we don't need to follow any extends keys.
 	if e.isSinglePackage {
 		if len(taskDefinitions) == 0 {
 			return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json", taskID)
