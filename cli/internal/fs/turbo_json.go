@@ -217,6 +217,21 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	return turboJSON, nil
 }
 
+// TurboJSONValidation is the signature for a validation function passed to Validate()
+type TurboJSONValidation func(*TurboJSON) []error
+
+// Validate calls an array of validation functions on the TurboJSON struct.
+// The validations can be customized by the caller.
+func (tj *TurboJSON) Validate(validations []TurboJSONValidation) []error {
+	allErrors := []error{}
+	for _, validation := range validations {
+		errors := validation(tj)
+		allErrors = append(allErrors, errors...)
+	}
+
+	return allErrors
+}
+
 // TaskOutputs represents the patterns for including and excluding files from outputs
 type TaskOutputs struct {
 	Inclusions []string
