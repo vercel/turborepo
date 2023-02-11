@@ -168,7 +168,8 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// If the file didn't exist, throw a custom error here instead of propagating
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turbo.build/repo/docs to create one: file does not exist", configFile)
+			return nil, errors.Wrap(err, fmt.Sprintf("Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile))
+
 		}
 
 		// There was an error, and we don't have any chance of recovering
@@ -262,7 +263,7 @@ func ReadTurboConfig(turboJSONPath turbopath.AbsoluteSystemPath) (*TurboJSON, er
 	}
 
 	// If there's no turbo.json, return an error.
-	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s", configFile)
+	return nil, os.ErrNotExist
 }
 
 // readTurboJSON reads the configFile in to a struct

@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -92,14 +93,30 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
+// MissingTaskError is a specialized Error thrown in the case that we can't find a task.
+// We want to allow this error when getting task definitions, so we have to special case it.
+type MissingTaskError struct {
+	workspaceName string
+	taskID        string
+	taskName      string
+}
+
+func (m *MissingTaskError) Error() string {
+	return fmt.Sprintf("Could not find \"%s\" or \"%s\" in workspace \"%s\"", m.taskName, m.taskID, m.workspaceName)
+}
+
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	pipeline, err := e.completeGraph.GetPipelineFromWorkspace(pkg, e.isSinglePackage)
 
-	// An error here means there was no turbo.json in the workspace.
-	// Fallback to the root pipeline to find the task.
 	if err != nil {
 		if pkg != util.RootPkgName {
-			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+			// If there was no turbo.json in the workspace, fallback to the root turbo.json
+			if errors.Is(err, os.ErrNotExist) {
+				return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+			}
+
+			// otherwise bubble it up
+			return nil, err
 		}
 
 		return nil, err
@@ -125,7 +142,12 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 		return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
 	}
 
-	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in workspace \"%s\"", taskName, taskID, pkg)
+	// Return this as a custom type so we can ignore it specifically
+	return nil, &MissingTaskError{
+		taskName:      taskName,
+		taskID:        taskID,
+		workspaceName: pkg,
+	}
 }
 
 // Prepare constructs the Task Graph for a list of packages and tasks
@@ -148,10 +170,15 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				taskID := util.GetTaskId(pkg, taskName)
 				// Skip tasks that don't have a definition
 				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
-					// Initially, non-package tasks are not required to exist, as long as some
-					// package in the list packages defines it as a package-task. Dependencies
-					// *are* required to have a definition.
-					continue
+					var e *MissingTaskError
+					if errors.As(err, &e) {
+						// Initially, non-package tasks are not required to exist, as long as some
+						// package in the list packages defines it as a package-task. Dependencies
+						// *are* required to have a definition.
+						continue
+					}
+
+					return err
 				}
 
 				traversalQueue = append(traversalQueue, taskID)
@@ -436,8 +463,12 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
 	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
 		// If there is an error, we can ignore it, since turbo.json config is not required in the workspace.
-		if workspaceTurboJSON, err := e.completeGraph.GetTurboConfigFromWorkspace(taskIDPackage, e.isSinglePackage); err == nil {
-
+		if workspaceTurboJSON, err := e.completeGraph.GetTurboConfigFromWorkspace(taskIDPackage, e.isSinglePackage); err != nil {
+			// swallow the error where the config file doesn't exist, but bubble up other things
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+		} else {
 			// Run some validations on a workspace turbo.json. Note that these validations are on
 			// the whole struct, and not relevant to the taskID we're looking at right now.
 			validationErrors := workspaceTurboJSON.Validate([]fs.TurboJSONValidation{
