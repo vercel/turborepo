@@ -29,7 +29,7 @@ use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
     RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
+use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
 use turbopack_core::{
@@ -331,6 +331,7 @@ async fn source(
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
     let manifest_source = DevManifestContentSource {
         page_roots: vec![app_source, page_source],
+        next_config,
     }
     .cell()
     .into();

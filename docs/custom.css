@@ -6,6 +6,15 @@ code {
   filter: invert(1) brightness(1.8);
 }
 
+/*
+ * Increase the contrast of this text (used in the left sidebar) in dark mode to be WCAG AA compliant.
+ * Nextra does not expose a way of customizing just this color without creating a new theme, so use custom
+ * css. Includes the class name in the selector twice to increase specificity without using `!important`.
+ */
+html[class~="dark"] .dark\:nx-text-neutral-500.dark\:nx-text-neutral-500 {
+  color: rgba(150, 150, 150, var(--tw-text-opacity));
+}
+
 @font-face {
   font-family: "Space Grotesk";
   font-style: normal;

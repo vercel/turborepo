@@ -2,12 +2,12 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::{
     introspect::{Introspectable, IntrospectableVc},
-    source_map::GenerateSourceMapVc,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc},
 };
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc, ContentSourceVc,
-    ContentSourcesVc, NeededData,
+    ContentSourcesVc, GetContentSourceContent, NeededData,
 };
 use url::Url;
 
@@ -36,13 +36,13 @@ impl ContentSource for NextSourceMapTraceContentSource {
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        let url = match &data.url {
+        let raw_query = match &data.raw_query {
             None => {
                 return Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
                     source: self_vc.into(),
                     path: path.to_string(),
                     vary: ContentSourceDataVary {
-                        url: true,
+                        raw_query: true,
                         ..Default::default()
                     },
                 })));
@@ -50,13 +50,7 @@ impl ContentSource for NextSourceMapTraceContentSource {
             Some(query) => query,
         };
 
-        // TODO: It'd be nice if the data.query value contained the unparsed query, so I
-        // could convert it into my struct.
-        let query_idx = match url.find('?') {
-            Some(i) => i,
-            _ => return Ok(ContentSourceResultVc::not_found()),
-        };
-        let frame: StackFrame = match serde_qs::from_str(&url[query_idx + 1..]) {
+        let frame: StackFrame = match serde_qs::from_str(raw_query) {
             Ok(f) => f,
             _ => return Ok(ContentSourceResultVc::not_found()),
         };

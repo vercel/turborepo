@@ -1,0 +1,27 @@
+# Used to auto generate turborepo release notes
+
+changelog:
+  exclude:
+    labels:
+      - "team: turbopack"
+      - "area: ci"
+  categories:
+    - title: Changelog
+      labels:
+        - "*"
+    - title: turbo-ignore
+      labels:
+        - "pkg: turbo-ignore"
+    - title: "@turbo/codemod"
+      labels:
+        - "pkg: turbo-codemod"
+    - title: create-turbo
+      labels:
+        - "pkg: create-turbo"
+    - title: Examples
+      labels:
+        - "area: examples"
+    - title: Docs
+      labels:
+        - "area: docs"
+        - "area: site"
