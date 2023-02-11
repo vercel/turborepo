@@ -6,6 +6,7 @@ use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
+use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
     glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
@@ -46,6 +47,7 @@ pub async fn get_evaluate_pool(
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
@@ -131,7 +133,11 @@ pub async fn get_evaluate_pool(
     let pool = NodeJsPool::new(
         cwd,
         entrypoint,
-        HashMap::new(),
+        env.read_all()
+            .await?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     );
@@ -166,6 +172,7 @@ pub async fn evaluate(
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context_path_for_issue: FileSystemPathVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -177,6 +184,7 @@ pub async fn evaluate(
         context_path,
         module_asset,
         cwd,
+        env,
         context,
         intermediate_output_path,
         runtime_entries,
