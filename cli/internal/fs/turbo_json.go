@@ -220,7 +220,7 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 // TurboJSONValidation is the signature for a validation function passed to Validate()
 type TurboJSONValidation func(*TurboJSON) []error
 
-// Validate calls an array of validation functions on the pipeline
+// Validate calls an array of validation functions on the TurboJSON struct.
 // The validations can be customized by the caller.
 func (tj *TurboJSON) Validate(validations []TurboJSONValidation) []error {
 	allErrors := []error{}
