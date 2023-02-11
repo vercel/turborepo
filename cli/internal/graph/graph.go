@@ -3,7 +3,9 @@ package graph
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/pyr-sh/dag"
@@ -97,18 +99,25 @@ func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSing
 		return cachedTurboConfig, nil
 	}
 
-	// Note: dir for the root workspace will be an empty string, and for
-	// other workspaces, it will be a relative path.
-	pkgJSON, err := g.GetPackageJSONFromWorkspace(workspaceName)
-	if err != nil {
-		return &fs.TurboJSON{}, nil
+	var workspacePackageJSON *fs.PackageJSON
+	if pkgJSON, err := g.GetPackageJSONFromWorkspace(workspaceName); err == nil {
+		workspacePackageJSON = pkgJSON
+	} else {
+		return nil, err
 	}
 
-	workspaceAbsolutePath := pkgJSON.Dir.RestoreAnchor(g.RepoRoot)
-	turboConfig, err := fs.LoadTurboConfig(workspaceAbsolutePath, pkgJSON, isSinglePackage)
+	// Note: pkgJSON.Dir for the root workspace will be an empty string, and for
+	// other workspaces, it will be a relative path.
+	workspaceAbsolutePath := workspacePackageJSON.Dir.RestoreAnchor(g.RepoRoot)
+	turboConfig, err := fs.LoadTurboConfig(workspaceAbsolutePath, workspacePackageJSON, isSinglePackage)
 
 	// If we failed to load a TurboConfig, return the error
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("[debug] no exist error, woo! %#v\n", err)
+		} else {
+			fmt.Printf("[debug] some other erorr loading turbo.json! %#v\n", err)
+		}
 		return nil, err
 	}
 
@@ -120,13 +129,11 @@ func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSing
 
 // GetPackageJSONFromWorkspace returns an Unmarshaled struct of the package.json in the given workspace
 func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.PackageJSON, error) {
-	pkgJSON, ok := g.WorkspaceInfos.PackageJSONs[workspaceName]
-
-	if !ok {
-		return &fs.PackageJSON{}, nil
+	if pkgJSON, ok := g.WorkspaceInfos.PackageJSONs[workspaceName]; ok {
+		return pkgJSON, nil
 	}
 
-	return pkgJSON, nil
+	return nil, fmt.Errorf("No package.json for %s", workspaceName)
 }
 
 // repoRelativeLogFile returns the path to the log file for this task execution as a
