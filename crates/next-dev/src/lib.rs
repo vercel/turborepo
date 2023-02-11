@@ -379,7 +379,8 @@ async fn source(
     )
     .into();
     let router_source =
-        NextRouterContentSourceVc::new(main_source, execution_context, next_config).into();
+        NextRouterContentSourceVc::new(main_source, execution_context, next_config, server_addr)
+            .into();
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),

@@ -9,10 +9,13 @@ use turbo_tasks::{
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, to_sys_path, File, FileSystemPathVc,
 };
-use turbopack::evaluate_context::node_evaluate_asset_context;
+use turbopack::{evaluate_context::node_evaluate_asset_context, transition::TransitionsByNameVc};
 use turbopack_core::{
     asset::AssetVc,
+    chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
+    environment::{EnvironmentIntention::Middleware, ServerAddrVc},
+    reference_type::{ReferenceType::TypeScript, TypeScriptReferenceSubType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -31,7 +34,12 @@ use turbopack_node::{
 use crate::{
     embed_js::{next_asset, wrap_with_next_js_fs},
     next_config::NextConfigVc,
+    next_edge::{
+        context::{get_edge_compile_time_info, get_edge_resolve_options_context},
+        transition::NextEdgeTransition,
+    },
     next_import_map::get_next_build_import_map,
+    next_server::context::ServerContextType,
 };
 
 #[turbo_tasks::function]
@@ -184,7 +192,13 @@ async fn config_assets(
     let mut inner = HashMap::new();
 
     let middleware_config = get_config(context, project_path, middleware_files(page_extensions));
-    inner.insert("MIDDLEWARE_CONFIG".to_string(), middleware_config.into());
+    inner.insert(
+        "MIDDLEWARE_CHUNK_GROUP".to_string(),
+        context.with_transition("next-edge").process(
+            middleware_config.into(),
+            Value::new(TypeScript(TypeScriptReferenceSubType::Undefined)),
+        ),
+    );
 
     Ok(InnerAssetsVc::cell(inner))
 }
@@ -207,20 +221,74 @@ fn route_executor(
 }
 
 #[turbo_tasks::function]
+fn edge_transition_map(
+    server_addr: ServerAddrVc,
+    project_path: FileSystemPathVc,
+    output_path: FileSystemPathVc,
+    next_config: NextConfigVc,
+) -> TransitionsByNameVc {
+    let edge_compile_time_info = get_edge_compile_time_info(server_addr, Value::new(Middleware));
+
+    let edge_chunking_context = DevChunkingContextVc::builder(
+        project_path,
+        output_path.join("edge"),
+        output_path.join("edge/chunks"),
+        output_path.join("edge/assets"),
+        edge_compile_time_info.environment(),
+    )
+    .build();
+
+    let edge_resolve_options_context = get_edge_resolve_options_context(
+        project_path,
+        Value::new(ServerContextType::Middleware),
+        next_config,
+    );
+
+    let next_edge_transition = NextEdgeTransition {
+        edge_compile_time_info,
+        edge_chunking_context,
+        edge_resolve_options_context,
+        output_path,
+        base_path: project_path,
+    }
+    .cell()
+    .into();
+
+    TransitionsByNameVc::cell(
+        [("next-edge".to_string(), next_edge_transition)]
+            .into_iter()
+            .collect(),
+    )
+}
+
+#[turbo_tasks::function]
 pub async fn route(
     execution_context: ExecutionContextVc,
     request: RouterRequestVc,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<RouterResultVc> {
     let ExecutionContext {
         project_root,
         intermediate_output_path,
     } = *execution_context.await?;
     let project_path = wrap_with_next_js_fs(project_root);
-    let context = node_evaluate_asset_context(Some(get_next_build_import_map(project_path)));
+    let intermediate_output_path = intermediate_output_path.join("router");
+
+    let context = node_evaluate_asset_context(
+        Some(get_next_build_import_map(project_path)),
+        Some(edge_transition_map(
+            server_addr,
+            project_path,
+            intermediate_output_path,
+            next_config,
+        )),
+    );
 
     let configs = config_assets(context, project_path, next_config.page_extensions());
     let router_asset = route_executor(context, project_path, configs);
+
+    // dbg!(router_asset.dbg().await?);
 
     // TODO this is a hack to get these files watched.
     let next_config = watch_files_hack(context, project_path);
@@ -235,7 +303,7 @@ pub async fn route(
         project_root,
         project_root,
         context,
-        intermediate_output_path.join("router"),
+        intermediate_output_path,
         Some(next_config),
         vec![
             JsonValueVc::cell(request),
