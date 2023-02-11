@@ -406,7 +406,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
 // These definitions should be merged by the consumer.
-// TODO(mehulkar): Can we use getPipelineFromWorkspace() here instead of reading configs again and passing around rootPipeline as an arg?
 func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
 	// Start a list of TaskDefinitions we've found for this TaskID
 	taskDefinitions := []fs.BookkeepingTaskDefinition{}
