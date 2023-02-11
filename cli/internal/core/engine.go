@@ -446,7 +446,6 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 				validateExtends,
 			})
 
-			// TODO: can we print all the error messages instead of just the first one?
 			if len(validationErrors) > 0 {
 				fullError := errors.New("Invalid turbo.json")
 				for _, validationErr := range validationErrors {
