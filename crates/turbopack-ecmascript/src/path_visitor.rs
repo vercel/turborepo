@@ -29,9 +29,7 @@ fn find_range<'a, 'b>(
     index: usize,
 ) -> Option<&'b [(&'a AstPath, &'a dyn VisitorFactory)]> {
     // Precondition: visitors is never empty
-    let first_visitor = visitors.first().unwrap();
-
-    if first_visitor.0[index] > *kind {
+    if visitors.first().unwrap().0[index] > *kind {
         // Fast path: If ast path of the first visitor is already out of range, then we
         // can skip the whole visit.
         return None;
