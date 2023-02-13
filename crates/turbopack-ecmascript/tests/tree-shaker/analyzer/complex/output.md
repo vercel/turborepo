@@ -362,6 +362,16 @@ graph TD
     Item14 --> Item3;
     Item14 --> Item6;
     Item14 --> Item9;
+    Item14 -.-> Item1;
+    Item14 -.-> Item2;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item10;
+    Item14 -.-> Item7;
+    Item14 -.-> Item11;
+    Item14 -.-> Item12;
+    Item14 -.-> Item4;
+    Item14 -.-> Item13;
     Item15 --> Item10;
     Item16 --> Item11;
     Item17 --> Item12;
@@ -386,6 +396,13 @@ graph TD
     N11["Items: [ItemId(10, VarDeclarator(0))]"];
     N0 --> N7;
     N0 --> N9;
+    N0 --> N5;
+    N0 --> N6;
+    N0 --> N8;
+    N0 --> N10;
+    N0 --> N11;
+    N0 --> N3;
+    N0 --> N4;
     N2 --> N11;
     N3 --> N11;
     N4 --> N11;
@@ -415,7 +432,7 @@ graph TD
 ## Module 1
 
 ```js
-
+"module evaluation";
 ```
 
 ## Module 2

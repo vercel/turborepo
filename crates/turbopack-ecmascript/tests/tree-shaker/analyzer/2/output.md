@@ -346,6 +346,17 @@ graph TD
     Item15 --> Item2;
     Item15 --> Item1;
     Item15 --> Item11;
+    Item15 -.-> Item3;
+    Item15 -.-> Item4;
+    Item15 -.-> Item5;
+    Item15 -.-> Item8;
+    Item15 -.-> Item10;
+    Item15 -.-> Item6;
+    Item15 -.-> Item9;
+    Item15 -.-> Item7;
+    Item15 -.-> Item12;
+    Item15 -.-> Item13;
+    Item15 -.-> Item14;
     Item16 --> Item3;
     Item17 --> Item5;
     Item17 --> Item8;
@@ -358,22 +369,32 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(0, Normal)]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(9, Normal), ItemId(8, Normal), ItemId(12, ImportOfModule), ItemId(1, ImportOfModule)]"];
+    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(0, Normal), ItemId(10, Normal), ItemId(1, ImportBinding(0))]"];
     N2["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N3["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal)]"];
+    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal), ItemId(7, Normal), ItemId(6, VarDeclarator(0)), ItemId(5, Normal), ItemId(4, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(2, VarDeclarator(0))]"];
     N5["Items: [ItemId(1, ImportBinding(0))]"];
     N6["Items: [ItemId(2, VarDeclarator(0))]"];
     N7["Items: [ItemId(3, VarDeclarator(0))]"];
-    N8["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
+    N8["Items: [ItemId(5, Normal)]"];
     N9["Items: [ItemId(6, VarDeclarator(0))]"];
     N10["Items: [ItemId(7, Normal)]"];
     N11["Items: [ItemId(10, Normal)]"];
+    N0 --> N1;
+    N0 --> N5;
+    N0 --> N6;
+    N0 --> N8;
+    N0 --> N10;
+    N0 --> N7;
+    N0 --> N9;
+    N0 --> N4;
+    N0 --> N11;
     N1 --> N11;
     N1 --> N6;
     N1 --> N8;
     N1 --> N10;
+    N1 --> N5;
     N2 --> N6;
     N2 --> N8;
     N2 --> N10;
@@ -381,7 +402,10 @@ graph TD
     N4 --> N7;
     N4 --> N9;
     N4 --> N10;
+    N4 --> N6;
+    N4 --> N8;
     N7 --> N6;
+    N8 --> N4;
     N8 --> N6;
     N8 --> N7;
     N9 --> N6;
@@ -401,7 +425,11 @@ graph TD
 ## Module 1
 
 ```js
-
+"module evaluation";
+foobarCopy += "Unused";
+console.log(foobarCopy);
+import "other";
+import "module";
 ```
 
 ## Module 2
@@ -411,6 +439,10 @@ export { external1 };
 export function external1() {
   return internal() + foobar;
 }
+function internal() {
+  return upper(foobar);
+}
+import { upper } from "module";
 ```
 
 ## Module 3
@@ -432,6 +464,12 @@ export { external2 };
 export function external2() {
   foobar += ".";
 }
+foobar += "foo";
+let foobarCopy = foobar;
+foobar += bar;
+const bar = "bar";
+export const foo = foobar;
+export let foobar = "foo";
 ```
 
 ## Module 6
@@ -456,7 +494,6 @@ export const foo = foobar;
 
 ```js
 foobar += bar;
-const bar = "bar";
 ```
 
 ## Module 10
