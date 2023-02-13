@@ -1,0 +1,40 @@
+{
+  "name": "@next/rs",
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {
+    "clean": "rm -rf ./native/*",
+    "build-native": "napi build --cargo-cwd ../.. --platform -p next-rs-napi --cargo-name next_rs_napi --features plugin,rustls-tls --js false native",
+    "build-native-woa": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --features plugin,native-tls --js false native",
+    "build-native-no-plugin": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --js false native",
+    "build-native-no-plugin-woa": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --cargo-flags=--no-default-features --features native-tls --js false native",
+    "build-wasm": "wasm-pack build crates/wasm --scope=next",
+    "cache-build-native": "echo $(ls native)",
+    "test-pack": "cd ../../ && pnpm test-pack next-rs"
+  },
+  "napi": {
+    "name": "next-rs",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "i686-pc-windows-msvc",
+        "aarch64-unknown-linux-gnu",
+        "armv7-unknown-linux-gnueabihf",
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        "arm-linux-androideabi",
+        "x86_64-unknown-freebsd",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "aarch64-pc-windows-msvc"
+      ]
+    }
+  },
+  "dependencies": {
+    "@napi-rs/triples": "1.1.0",
+    "@next/rs-darwin-arm64": "file:../../crates/next-rs-napi/npm/darwin-arm64"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "2.14.7"
+  }
+}
