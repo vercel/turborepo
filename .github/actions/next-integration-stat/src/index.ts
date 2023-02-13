@@ -788,6 +788,8 @@ async function run() {
 
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
+  const failedTestLists = [];
+
   // Consturct a comment body to post test report with summary & full details.
   const comments = failedJobResults.result.reduce((acc, value, idx) => {
     const { name: failedTest, data: testData } = value;
@@ -812,6 +814,7 @@ async function run() {
     }
 
     commentValues.push(`\`${failedTest}\``);
+    failedTestLists.push(failedTest);
 
     for (const group of Object.keys(groupedFails).sort()) {
       const fails = groupedFails[group];
@@ -882,6 +885,12 @@ async function run() {
     if (!prNumber) {
       return;
     }
+
+    // Store the list of failed test paths to a file
+    fs.writeFileSync(
+      "./failed-test-path-list.json",
+      JSON.stringify(failedTestLists, null, 2)
+    );
 
     if (failedJobResults.result.length === 0) {
       console.log("No failed test results found :tada:");
