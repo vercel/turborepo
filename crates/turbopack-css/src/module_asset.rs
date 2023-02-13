@@ -126,7 +126,7 @@ impl ModuleCssModuleAssetVc {
                         CssClassName::Import { from, name } => ModuleCssClass::Import {
                             original: name.to_string(),
                             from: CssModuleComposeReferenceVc::new(
-                                inner.as_resolve_origin(),
+                                self.as_resolve_origin(),
                                 RequestVc::parse(Value::new(from.to_string().into())),
                             ),
                         },
@@ -219,14 +219,7 @@ impl ValueToString for ModuleChunkItem {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "{} (css module)",
-            self.module
-                .await?
-                .inner
-                .await?
-                .source
-                .path()
-                .to_string()
-                .await?
+            self.module.path().to_string().await?
         )))
     }
 }
@@ -241,10 +234,7 @@ impl ChunkItem for ModuleChunkItem {
         // later references are processed first in the post-order traversal of the
         // reference tree, and as such they will be loaded first in the resulting HTML.
         let mut references = vec![CssProxyToCssAssetReference {
-            module: CssProxyModuleAsset {
-                module: self.module,
-            }
-            .cell(),
+            module: self.module,
         }
         .cell()
         .into()];
@@ -358,7 +348,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
 #[turbo_tasks::value]
 struct CssProxyToCssAssetReference {
-    module: CssProxyModuleAssetVc,
+    module: ModuleCssModuleAssetVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -376,7 +366,14 @@ impl ValueToString for CssProxyToCssAssetReference {
 impl AssetReference for CssProxyToCssAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(self.module.into()).cell()
+        ResolveResult::asset(
+            CssProxyModuleAsset {
+                module: self.module,
+            }
+            .cell()
+            .into(),
+        )
+        .cell()
     }
 }
 
