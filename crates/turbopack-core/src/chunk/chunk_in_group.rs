@@ -14,9 +14,12 @@ use crate::{
     version::VersionedContentVc,
 };
 
+/// A chunk that is part of a [ChunkGroup]. In contrast to the inner chunk it
+/// will not have references of parallel chunk since these are already handled
+/// on [ChunkGroup] level.
 #[turbo_tasks::value]
 pub struct ChunkInGroup {
-    pub inner: ChunkVc,
+    inner: ChunkVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -24,6 +27,12 @@ impl ChunkInGroupVc {
     #[turbo_tasks::function]
     pub fn new(inner: ChunkVc) -> Self {
         ChunkInGroup { inner }.cell()
+    }
+
+    /// Returns the inner chunk of this chunk in group.
+    #[turbo_tasks::function]
+    pub async fn inner(self) -> Result<ChunkVc> {
+        Ok(self.await?.inner)
     }
 }
 

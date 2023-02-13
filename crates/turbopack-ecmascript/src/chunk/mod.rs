@@ -216,7 +216,7 @@ impl EcmascriptChunkEvaluateVc {
         for chunk in evaluate_chunks.iter() {
             if let Some(chunk_in_group) = ChunkInGroupVc::resolve_from(chunk).await? {
                 if let Some(ecma_chunk) =
-                    EcmascriptChunkVc::resolve_from(chunk_in_group.await?.inner).await?
+                    EcmascriptChunkVc::resolve_from(chunk_in_group.inner()).await?
                 {
                     if ecma_chunk != origin_chunk {
                         let chunk_path = &*chunk.path().await?;
