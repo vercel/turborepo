@@ -211,6 +211,7 @@ impl DepGraph {
             for dep_ix in graph
                 .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
+                .filter(|&dep_ix| *graph.idx_graph.edge_weight(start_ix, dep_ix).unwrap())
             {
                 // Check if the the only dependant of dep is start
 
@@ -271,6 +272,7 @@ impl DepGraph {
                 .g
                 .idx_graph
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
+                .filter(|&start_ix| *self.g.idx_graph.edge_weight(start_ix, ix).unwrap())
                 .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
                 >= 2
