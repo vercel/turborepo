@@ -1,0 +1,50 @@
+PlainIssue {
+    severity: Warning,
+    context: "[project-with-next]/node_modules/.pnpm/postcss@8.4.20/node_modules/postcss/lib/input.js",
+    category: "parse",
+    title: "lint TP1006 path.resolve(???*0*) is very dynamic",
+    description: "- *0* ???*1*[\"from\"]\n  ⚠\u{fe0f}  unknown object\n- *1* opts\n  ⚠\u{fe0f}  pattern without value",
+    detail: "",
+    documentation_link: "",
+    source: Some(
+        PlainIssueSource {
+            asset: PlainAsset {
+                path: FileSystemPath {
+                    fs: FileSystemVc {
+                        node: TaskCell(
+                            TaskId {
+                                id: 1673,
+                            },
+                            CellId {
+                                type_id: ValueTypeId {
+                                    id: 31,
+                                    name: "turbo-tasks-fs@TODO::::attach::AttachedFileSystem",
+                                },
+                                index: 0,
+                            },
+                        ),
+                    },
+                    path: "node_modules/.pnpm/postcss@8.4.20/node_modules/postcss/lib/input.js",
+                },
+                content: Content(
+                    File {
+                        meta: FileMeta {
+                            permissions: Writable,
+                            content_type: None,
+                        },
+                        content (hash): 6045537986029936691,
+                    },
+                ),
+            },
+            start: SourcePos {
+                line: 43,
+                column: 20,
+            },
+            end: SourcePos {
+                line: 43,
+                column: 20,
+            },
+        },
+    ),
+    sub_issues: [],
+}

@@ -1,0 +1,50 @@
+PlainIssue {
+    severity: Warning,
+    context: "[project-with-next]/crates/next-dev-tests/tests/integration/webpack/chunks/__skipped__/weak-dependencies-context/input/index.js",
+    category: "parse",
+    title: "lint TP1002 require([\"./b\"]) is very dynamic",
+    description: "",
+    detail: "",
+    documentation_link: "",
+    source: Some(
+        PlainIssueSource {
+            asset: PlainAsset {
+                path: FileSystemPath {
+                    fs: FileSystemVc {
+                        node: TaskCell(
+                            TaskId {
+                                id: 1886,
+                            },
+                            CellId {
+                                type_id: ValueTypeId {
+                                    id: 31,
+                                    name: "turbo-tasks-fs@TODO::::attach::AttachedFileSystem",
+                                },
+                                index: 0,
+                            },
+                        ),
+                    },
+                    path: "crates/next-dev-tests/tests/integration/webpack/chunks/__skipped__/weak-dependencies-context/input/index.js",
+                },
+                content: Content(
+                    File {
+                        meta: FileMeta {
+                            permissions: Writable,
+                            content_type: None,
+                        },
+                        content (hash): 4688765805492042123,
+                    },
+                ),
+            },
+            start: SourcePos {
+                line: 13,
+                column: 2,
+            },
+            end: SourcePos {
+                line: 13,
+                column: 2,
+            },
+        },
+    ),
+    sub_issues: [],
+}
