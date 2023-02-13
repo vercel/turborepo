@@ -8,7 +8,7 @@ mod shim;
 mod ui;
 
 use anyhow::Result;
-use log::error;
+use log::{debug, error, log_enabled, Level};
 
 pub use crate::cli::Args;
 use crate::package_manager::PackageManager;
@@ -32,7 +32,17 @@ pub fn get_version() -> &'static str {
 
 pub fn main() -> Payload {
     match shim::run() {
-        Ok(payload) => payload,
+        Ok(payload) => {
+            match &payload {
+                Payload::Go(args) if log_enabled!(Level::Debug) => {
+                    if let Ok(serialized_args) = serde_json::to_string_pretty(&args) {
+                        debug!("Args passed to Go binary:\n{}", serialized_args);
+                    }
+                }
+                _ => (),
+            }
+            payload
+        }
         Err(err) => {
             error!("{}", err.to_string());
             Payload::Rust(Err(err))

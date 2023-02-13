@@ -21,6 +21,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         chunk_content, chunk_content_split,
+        chunk_in_group::ChunkInGroupVc,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
@@ -49,7 +50,7 @@ use self::{
 use crate::{
     parse::ParseResultSourceMapVc,
     references::esm::EsmExportsVc,
-    utils::{stringify_module_id, stringify_str, FormatIter},
+    utils::{stringify_js, FormatIter},
 };
 
 #[turbo_tasks::value]
@@ -213,11 +214,15 @@ impl EcmascriptChunkEvaluateVc {
         let mut chunks_server_paths = Vec::new();
         let output_root = context.output_root().await?;
         for chunk in evaluate_chunks.iter() {
-            if let Some(ecma_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
-                if ecma_chunk != origin_chunk {
-                    let chunk_path = &*chunk.path().await?;
-                    if let Some(chunk_server_path) = output_root.get_path_to(chunk_path) {
-                        chunks_server_paths.push(chunk_server_path.to_string());
+            if let Some(chunk_in_group) = ChunkInGroupVc::resolve_from(chunk).await? {
+                if let Some(ecma_chunk) =
+                    EcmascriptChunkVc::resolve_from(chunk_in_group.inner()).await?
+                {
+                    if ecma_chunk != origin_chunk {
+                        let chunk_path = &*chunk.path().await?;
+                        if let Some(chunk_server_path) = output_root.get_path_to(chunk_path) {
+                            chunks_server_paths.push(chunk_server_path.to_string());
+                        }
                     }
                 }
             }
@@ -613,9 +618,9 @@ impl EcmascriptChunkContentVc {
         let mut code = CodeBuilder::default();
         code += "(self.TURBOPACK = self.TURBOPACK || []).push([";
 
-        writeln!(code, "{}, {{", stringify_str(chunk_server_path))?;
+        writeln!(code, "{}, {{", stringify_js(chunk_server_path))?;
         for entry in &this.module_factories {
-            write!(code, "\n{}: ", &stringify_module_id(entry.id()))?;
+            write!(code, "\n{}: ", &stringify_js(entry.id()))?;
             code.push_code(entry.code());
             code += ",";
         }
@@ -627,7 +632,7 @@ impl EcmascriptChunkContentVc {
                 .chunks_server_paths
                 .await?
                 .iter()
-                .map(|path| format!(" && loadedChunks.has({})", stringify_str(path)))
+                .map(|path| format!(" && loadedChunks.has({})", stringify_js(path)))
                 .collect::<Vec<_>>()
                 .join("");
             let entries_ids = &*evaluate.entry_modules_ids.await?;
@@ -635,7 +640,7 @@ impl EcmascriptChunkContentVc {
                 .iter()
                 .map(|id| async move {
                     let id = id.await?;
-                    let id = stringify_module_id(&id);
+                    let id = stringify_js(&id);
                     Ok(format!(r#"instantiateRuntimeModule({id});"#)) as Result<_>
                 })
                 .try_join()
