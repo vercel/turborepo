@@ -33,7 +33,7 @@ use test_generator::test_resources;
 use tokio::{
     net::TcpSocket,
     sync::mpsc::{channel, Sender},
-    task::{JoinHandle, JoinSet},
+    task::JoinSet,
 };
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::{
@@ -42,9 +42,7 @@ use turbo_tasks::{
 use turbo_tasks_fs::{util::sys_to_unix, DiskFileSystemVc, FileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbo_tasks_testing::retry::retry_async;
-use turbopack_core::issue::{
-    CapturedIssues, Issue, IssueReporter, IssueReporterVc, PlainIssueReadRef,
-};
+use turbopack_core::issue::{CapturedIssues, IssueReporter, IssueReporterVc, PlainIssueReadRef};
 use turbopack_test_utils::snapshot::snapshot_issues;
 
 fn register() {
