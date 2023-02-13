@@ -512,7 +512,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         } => {
             let command = command.clone();
             let base = CommandBase::new(clap_args, repo_root)?;
-            daemon::main(&command, &base).await.map(|_| Payload::Rust(Ok(0))).map_err(|e| anyhow!(e))
+            daemon::main(&command, &base).await?;
+            Ok(Payload::Rust(Ok(0)))
         },
         Command::Prune { .. }
         | Command::Run(_)
