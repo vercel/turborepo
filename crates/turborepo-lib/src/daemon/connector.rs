@@ -54,22 +54,13 @@ impl DaemonConnector {
                 connect_settings: (),
             };
 
-            match (client.handshake().await, &self.dont_kill) {
-                (Ok(_), _) => return Ok(client.with_connect_settings(self)),
-                // should be able to opt out of kill
-                (Err(DaemonError::VersionMismatch), true) => {
-                    return Err(DaemonError::VersionMismatch)
+            match client.handshake().await {
+                Ok(_) => return Ok(client.with_connect_settings(self)),
+                Err(DaemonError::VersionMismatch) if !self.dont_kill => {
+                    self.kill_live_server(client, pid).await?
                 }
-                (Err(DaemonError::VersionMismatch), false) => {
-                    self.kill_live_server(client, pid).await?;
-                    continue;
-                }
-                (Err(DaemonError::Connection), _) => {
-                    self.kill_dead_server(pid).await?;
-                    continue;
-                }
-                // unhandled error
-                (Err(e), _) => return Err(e),
+                Err(DaemonError::Connection) => self.kill_dead_server(pid).await?,
+                Err(e) => return Err(e),
             };
         }
 
