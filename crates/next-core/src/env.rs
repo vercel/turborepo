@@ -63,7 +63,11 @@ pub async fn env_for_js(
     let test_mode = test_mode.as_deref().unwrap_or("");
 
     let env = if client {
-        FilterProcessEnvVc::new(env, "NEXT_PUBLIC_".to_string()).into()
+        FilterProcessEnvVc::new(
+            env,
+            vec!["NEXT_PUBLIC_".to_string(), "NODE_ENV".to_string()],
+        )
+        .into()
     } else {
         env
     };
@@ -92,8 +96,6 @@ pub async fn env_for_js(
     if !test_mode.is_empty() {
         map.insert("__NEXT_TEST_MODE".to_string(), "true".to_string());
     }
-
-    map.insert("NODE_ENV".to_string(), "development".to_string());
 
     Ok(CustomProcessEnvVc::new(env, EnvMapVc::cell(map)).into())
 }
