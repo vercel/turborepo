@@ -33,14 +33,14 @@ We can scope the run to specific packages
   
 Can't depend on unknown tasks
   $ ${TURBO} run build2
-   ERROR  run failed: error preparing engine: Could not find task "workspace-a#custom" in pipeline
-  Turbo error: error preparing engine: Could not find task "workspace-a#custom" in pipeline
+   ERROR  run failed: error preparing engine: Could not find "app-a#custom" in root turbo.json or "app-a" workspace
+  Turbo error: error preparing engine: Could not find "app-a#custom" in root turbo.json or "app-a" workspace
   [1]
 
 Can't depend on tasks from unknown packages
   $ ${TURBO} run build3
-   ERROR  run failed: error preparing engine: Could not find task "unknown#custom" in pipeline
-  Turbo error: error preparing engine: Could not find task "unknown#custom" in pipeline
+   ERROR  run failed: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
+  Turbo error: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
   [1]
 
 

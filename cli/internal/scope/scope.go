@@ -160,7 +160,7 @@ func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDi
 	}
 	logger.Debug(fmt.Sprintf("Using %v as a basis for selecting packages", pkgInferencePath))
 	fullInferencePath := repoRoot.Join(pkgInferencePath)
-	for _, pkgInfo := range packageInfos {
+	for _, pkgInfo := range packageInfos.PackageJSONs {
 		pkgPath := pkgInfo.Dir.RestoreAnchor(repoRoot)
 		inferredPathIsBelow, err := pkgPath.ContainsPath(fullInferencePath)
 		if err != nil {
@@ -208,7 +208,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 		}
 		makeAllPkgs := func() util.Set {
 			allPkgs := make(util.Set)
-			for pkg := range ctx.WorkspaceInfos {
+			for pkg := range ctx.WorkspaceInfos.PackageJSONs {
 				allPkgs.Add(pkg)
 			}
 			return allPkgs
@@ -350,7 +350,7 @@ func getChangedPackages(changedFiles []string, packageInfos graph.WorkspaceInfos
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false
-		for pkgName, pkgInfo := range packageInfos {
+		for pkgName, pkgInfo := range packageInfos.PackageJSONs {
 			if pkgName != util.RootPkgName && fileInPackage(changedFile, pkgInfo.Dir.ToStringDuringMigration()) {
 				changedPackages.Add(pkgName)
 				found = true
