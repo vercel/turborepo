@@ -507,6 +507,7 @@ impl DepGraph {
                         eventual_read_vars: captured_ids.0,
                         write_vars: used_ids.1,
                         eventual_write_vars: captured_ids.1,
+                        content: item.clone(),
                         ..Default::default()
                     };
 
@@ -531,6 +532,7 @@ impl DepGraph {
                 write_vars: used_ids.1,
                 eventual_write_vars: captured_ids.1,
                 side_effects: true,
+                content: item.clone(),
                 ..Default::default()
             };
 
