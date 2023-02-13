@@ -3,7 +3,7 @@ pub mod dev;
 pub mod optimize;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     fmt::{Debug, Display},
 };
 
@@ -12,9 +12,10 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat,
+    graph_traversal::{GraphTraversal, ReverseTopological, SkipDuplicates},
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
-    TryFlatMapRecursiveJoinIterExt, TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::DeterministicHash;
@@ -125,7 +126,13 @@ impl ChunkGroupVc {
     /// All chunks should be loaded in parallel.
     #[turbo_tasks::function]
     pub async fn chunks(self) -> Result<ChunksVc> {
-        let chunks = all_parallel_chunks_in_reverse_topological_order(self.await?.entry).await?;
+        let chunks: Vec<_> = GraphTraversal::<ReverseTopological<_>>::visit(
+            [self.await?.entry],
+            SkipDuplicates::new(get_chunk_children),
+        )
+        .await?
+        .into_iter()
+        .collect();
 
         let chunks = ChunksVc::cell(chunks);
         let chunks = optimize(chunks, self);
@@ -141,21 +148,18 @@ impl ChunkGroupVc {
     }
 }
 
-/// Returns the list of all parallel chunks referred to from the `root` chunk in
-/// reverse topological order.
-///
-/// This order is important for CSS chunks as it defines rules precedence.
-async fn all_parallel_chunks_in_reverse_topological_order(root: ChunkVc) -> Result<Vec<ChunkVc>> {
-    let (edges, chunks_count) = get_chunks_edges_unsorted(root).await?;
-    let adjacency_map = build_adjacency_map(edges, chunks_count);
-    Ok(reverse_topological_order(root, adjacency_map, chunks_count))
-}
-
-#[derive(Debug)]
-struct ChunkEdge {
-    parent: ChunkVc,
-    child: ChunkVc,
-    child_idx: usize,
+/// Computes the list of all chunk children of a given chunk.
+async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+    Ok(parent
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .map(reference_to_chunks)
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten())
 }
 
 /// Get all parallel chunks from a parallel chunk reference.
@@ -180,119 +184,6 @@ async fn reference_to_chunks(r: AssetReferenceVc) -> Result<impl Iterator<Item =
         }
     }
     Ok(result.into_iter().flatten())
-}
-
-/// Computes the list of all chunk children of a given chunk.
-async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkEdge> + Send> {
-    Ok(parent
-        .references()
-        .await?
-        .iter()
-        .copied()
-        .map(reference_to_chunks)
-        .try_join()
-        .await?
-        .into_iter()
-        .flatten()
-        .enumerate()
-        .map(move |(child_idx, child)| ChunkEdge {
-            parent,
-            child,
-            child_idx,
-        }))
-}
-
-/// Compute the list of all chunk edges. This is done by traversing the graph
-/// recursively. The order of the result is non-deterministic, we also keep
-/// track of children indices, so we may re-build the original graph with the
-/// right order in [`build_adjacency_map`].
-///
-/// Also returns the total number of chunks in the graph.
-async fn get_chunks_edges_unsorted(root: ChunkVc) -> Result<(Vec<ChunkEdge>, usize)> {
-    let mut visited = HashSet::new();
-    let edges = [
-        // Start with an edge from the root chunk to itself. This edge will be skipped later,
-        // its only purpose is to start the traversal.
-        ChunkEdge {
-            parent: root,
-            child: root,
-            child_idx: 0,
-        },
-    ]
-    .into_iter()
-    .try_flat_map_recursive_join({
-        |edge| {
-            if visited.insert(edge.child) {
-                Some(get_chunk_children(edge.child))
-            } else {
-                None
-            }
-        }
-    })
-    .await?;
-    let chunks_count = visited.len();
-
-    Ok((edges, chunks_count))
-}
-
-/// Builds the adjacency map of the chunk graph.
-fn build_adjacency_map(
-    edges: Vec<ChunkEdge>,
-    chunks_count: usize,
-) -> HashMap<ChunkVc, BTreeMap<usize, ChunkVc>> {
-    let mut adjacency_map = HashMap::with_capacity(chunks_count);
-    for edge in edges
-        .iter()
-        // Skip the root chunk.
-        .skip(1)
-    {
-        adjacency_map
-            .entry(edge.parent)
-            .or_insert_with(|| BTreeMap::new())
-            .insert(edge.child_idx, edge.child);
-    }
-    adjacency_map
-}
-
-/// Runs a post-order DFS pass on the chunk DAG to compute a reverse topological
-/// order.
-fn reverse_topological_order(
-    root: ChunkVc,
-    adjacency_map: HashMap<ChunkVc, BTreeMap<usize, ChunkVc>>,
-    chunks_count: usize,
-) -> Vec<ChunkVc> {
-    enum Pass {
-        Pre,
-        Post,
-    }
-    let mut stack = vec![(Pass::Pre, root)];
-    let mut rev_topo_sort = Vec::with_capacity(chunks_count);
-    let mut visited = HashSet::new();
-    while let Some((pass, chunk)) = stack.pop() {
-        match pass {
-            Pass::Pre => {
-                if !visited.insert(chunk) {
-                    continue;
-                }
-
-                if let Some(children) = adjacency_map.get(&chunk) {
-                    stack.push((Pass::Post, chunk));
-                    stack.extend(children.values().copied().map(|child| (Pass::Pre, child)));
-                } else {
-                    // Run the post-order pass directly.
-                    rev_topo_sort.push(chunk);
-                }
-            }
-            Pass::Post => {
-                rev_topo_sort.push(chunk);
-            }
-        }
-    }
-
-    // To get a valid topological order, we would then reverse the vector.
-    // However, in this case, a reverse topological order is what we want.
-
-    rev_topo_sort
 }
 
 #[turbo_tasks::value_impl]

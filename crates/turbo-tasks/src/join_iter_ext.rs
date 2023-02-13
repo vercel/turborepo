@@ -1,14 +1,9 @@
-use std::{
-    future::{Future, IntoFuture},
-    pin::Pin,
-    task::ready,
-};
+use std::future::{Future, IntoFuture};
 
 use anyhow::Result;
 use futures::{
     future::{join_all, JoinAll},
-    stream::FuturesUnordered,
-    FutureExt, Stream,
+    FutureExt,
 };
 
 /// Future for the [JoinIterExt::join] method.
@@ -32,6 +27,16 @@ where
     ) -> std::task::Poll<Self::Output> {
         self.inner.poll_unpin(cx)
     }
+}
+
+pub trait JoinIterExt<T, F>: Iterator
+where
+    T: Unpin,
+    F: Future<Output = T>,
+{
+    /// Returns a future that resolves to a vector of the outputs of the futures
+    /// in the iterator.
+    fn join(self) -> Join<F>;
 }
 
 /// Future for the [TryJoinIterExt::try_join] method.
@@ -62,64 +67,6 @@ where
     }
 }
 
-pub struct TryFlatMapRecursiveJoin<T, C, F, CI>
-where
-    C: FnMut(&T) -> Option<F>,
-    F: Future<Output = Result<CI>>,
-    CI: IntoIterator<Item = T>,
-{
-    output: Vec<T>,
-    futures: FuturesUnordered<F>,
-    filter_flat_map: C,
-}
-
-impl<T, C, F, CI> Future for TryFlatMapRecursiveJoin<T, C, F, CI>
-where
-    C: FnMut(&T) -> Option<F>,
-    F: Future<Output = Result<CI>>,
-    CI: IntoIterator<Item = T>,
-{
-    type Output = Result<Vec<T>>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        loop {
-            let futures = unsafe { Pin::new_unchecked(&mut this.futures) };
-            if let Some(result) = ready!(futures.poll_next(cx)) {
-                match result {
-                    Ok(children) => {
-                        for item in children {
-                            match (this.filter_flat_map)(&item) {
-                                Some(future) => {
-                                    this.futures.push(future);
-                                }
-                                None => {}
-                            }
-                            this.output.push(item);
-                        }
-                    }
-                    Err(err) => return std::task::Poll::Ready(Err(err)),
-                }
-            } else {
-                return std::task::Poll::Ready(Ok(std::mem::take(&mut this.output)));
-            }
-        }
-    }
-}
-
-pub trait JoinIterExt<T, F>: Iterator
-where
-    T: Unpin,
-    F: Future<Output = T>,
-{
-    /// Returns a future that resolves to a vector of the outputs of the futures
-    /// in the iterator.
-    fn join(self) -> Join<F>;
-}
-
 pub trait TryJoinIterExt<T, F>: Iterator
 where
     T: Unpin,
@@ -131,33 +78,6 @@ where
     /// Unlike `Futures::future::try_join_all`, this returns the Error that
     /// occurs first in the list of futures, not the first to fail in time.
     fn try_join(self) -> TryJoin<F>;
-}
-
-pub trait TryFlatMapRecursiveJoinIterExt<T, C, F, CI>: Iterator
-where
-    C: FnMut(&T) -> Option<F>,
-    F: Future<Output = Result<CI>>,
-    CI: IntoIterator<Item = T>,
-{
-    /// Applies the `filter_flat_map` function on each item in the iterator, and
-    /// on each item that is returned by `filter_flat_map`, recursively.
-    ///
-    /// Collects all items from the iterator and all items returns by
-    /// `filter_flat_map` into a vector.
-    ///
-    /// `filter_flat_map` will execute concurrently
-    ///
-    /// **Beware:**
-    /// * The order of the returned items is undefined.
-    /// * Circular references must be handled within `filter_flat_map`: return
-    ///   `None` to stop the recursion.
-    ///
-    /// Returns a future that resolve to a [Result<Vec<T>>]. It will
-    /// resolve to the first error that occurs.
-    fn try_flat_map_recursive_join(
-        self,
-        filter_flat_map: C,
-    ) -> TryFlatMapRecursiveJoin<T, C, F, CI>;
 }
 
 impl<T, F, IF, It> JoinIterExt<T, F> for It
@@ -184,36 +104,6 @@ where
     fn try_join(self) -> TryJoin<F> {
         TryJoin {
             inner: join_all(self.map(|f| f.into_future())),
-        }
-    }
-}
-
-impl<T, C, F, CI, It> TryFlatMapRecursiveJoinIterExt<T, C, F, CI> for It
-where
-    C: FnMut(&T) -> Option<F>,
-    F: Future<Output = Result<CI>>,
-    CI: IntoIterator<Item = T>,
-    It: Iterator<Item = T>,
-{
-    fn try_flat_map_recursive_join(
-        self,
-        mut filter_flat_map: C,
-    ) -> TryFlatMapRecursiveJoin<T, C, F, CI> {
-        let futures = FuturesUnordered::new();
-        let mut output = Vec::new();
-        for item in self {
-            match filter_flat_map(&item) {
-                Some(future) => {
-                    futures.push(future);
-                }
-                None => {}
-            }
-            output.push(item);
-        }
-        TryFlatMapRecursiveJoin {
-            output,
-            futures,
-            filter_flat_map,
         }
     }
 }
