@@ -211,12 +211,6 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
         None => return Ok(()), // you cannot watch `..`
     };
 
-    match (action, path.exists()) {
-        (WaitAction::Exists, false) => {}
-        (WaitAction::Deleted, true) => {}
-        _ => return Ok(()),
-    };
-
     let (tx, mut rx) = mpsc::channel(1);
 
     let mut watcher = RecommendedWatcher::new(
@@ -259,6 +253,13 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
 
     debug!("watching {:?}", parent);
     watcher.watch(parent, notify::RecursiveMode::NonRecursive)?;
+
+    match (action, path.exists()) {
+        (WaitAction::Exists, false) => {}
+        (WaitAction::Deleted, true) => {}
+        _ => return Ok(()),
+    };
+
     rx.recv().await.expect("will receive a message");
 
     Ok(())
