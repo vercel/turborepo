@@ -340,6 +340,12 @@
 <span id="340">340</span>
 <span id="341">341</span>
 <span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -503,6 +509,12 @@
                     <span class="kw">use </span>turbo_tasks::debug::ValueDebugFormat;
                     <span class="self">self</span>.value_debug_format(depth).try_to_value_debug_string().<span class="kw">await
                 </span>}
+            }
+
+            <span class="kw">impl </span>turbo_tasks::FromSubTrait&lt;#ref_ident&gt; <span class="kw">for </span>turbo_tasks::debug::ValueDebugVc {
+                <span class="kw">fn </span>from_sub_trait(node_ref: #ref_ident) -&gt; <span class="self">Self </span>{
+                    node_ref.node.into()
+                }
             }
         }
     } <span class="kw">else </span>{
