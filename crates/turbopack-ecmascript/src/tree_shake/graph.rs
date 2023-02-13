@@ -4,12 +4,12 @@ use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
 use petgraph::{algo::kosaraju_scc, prelude::DiGraphMap};
 use swc_core::{
-    common::{util::take::Take, DUMMY_SP},
+    common::{util::take::Take, Spanned, DUMMY_SP},
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
             FnDecl, Id, ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, Stmt,
+            ModuleItem, NamedExport, Stmt, VarDecl,
         },
         atoms::js_word,
         utils::find_pat_ids,
@@ -474,6 +474,19 @@ impl DepGraph {
                         let decl_ids = find_pat_ids(&decl.name);
                         let (r, w) = ids_used_by_ignoring_nested(&decl.init);
                         let (er, ew) = ids_captured_by(&decl.init);
+
+                        let mut var_decl = Box::new(VarDecl {
+                            decls: vec![decl.clone()],
+                            ..*v.clone()
+                        });
+                        let content = if item.is_module_decl() {
+                            ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                                span: item.span(),
+                                decl: Decl::Var(var_decl),
+                            }))
+                        } else {
+                            ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)))
+                        };
                         items.insert(
                             id,
                             ItemData {
@@ -482,6 +495,7 @@ impl DepGraph {
                                 eventual_read_vars: er,
                                 write_vars: decl_ids.into_iter().chain(w).collect(),
                                 eventual_write_vars: ew,
+                                content,
                                 ..Default::default()
                             },
                         );
