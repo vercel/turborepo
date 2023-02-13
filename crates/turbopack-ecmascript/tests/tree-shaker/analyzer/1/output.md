@@ -389,18 +389,19 @@ graph TD
 ## Module 2
 
 ```js
-
+export { foobar };
 ```
 
 ## Module 3
 
 ```js
-
+export { foo };
 ```
 
 ## Module 4
 
 ```js
+export { external1 };
 export function external1() {
   return internal() + foobar;
 }
@@ -409,6 +410,7 @@ export function external1() {
 ## Module 5
 
 ```js
+export { external2 };
 export function external2() {
   foobar += ".";
 }

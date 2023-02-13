@@ -138,12 +138,14 @@ graph TD
 ## Module 2
 
 ```js
+export { DOG };
 export const DOG = dog;
 ```
 
 ## Module 3
 
 ```js
+export { CHIMERA };
 export const CHIMERA = cat + dog;
 const cat = "cat";
 const dog = "dog";

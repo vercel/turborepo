@@ -421,24 +421,26 @@ graph TD
 ## Module 2
 
 ```js
-
+export { dogRef };
 ```
 
 ## Module 3
 
 ```js
-
+export { cat };
 ```
 
 ## Module 4
 
 ```js
+export { initialCat };
 export const initialCat = cat;
 ```
 
 ## Module 5
 
 ```js
+export { getChimera };
 export function getChimera() {
   return cat + dog;
 }
