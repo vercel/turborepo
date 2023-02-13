@@ -351,11 +351,11 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(8, Normal), ItemId(7, Normal), ItemId(0, ImportOfModule)]"];
+    N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(10, Normal), ItemId(9, Normal), ItemId(0, ImportBinding(0))]"];
-    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal), ItemId(6, Normal), ItemId(5, VarDeclarator(0)), ItemId(4, Normal), ItemId(3, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(1, VarDeclarator(0))]"];
+    N3["Items: [ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
     N5["Items: [ItemId(0, ImportBinding(0))]"];
     N6["Items: [ItemId(1, VarDeclarator(0))]"];
     N7["Items: [ItemId(2, VarDeclarator(0))]"];
@@ -363,31 +363,18 @@ graph TD
     N9["Items: [ItemId(5, VarDeclarator(0))]"];
     N10["Items: [ItemId(6, Normal)]"];
     N11["Items: [ItemId(9, Normal)]"];
-    N0 --> N3;
     N0 --> N5;
     N0 --> N6;
     N0 --> N8;
     N0 --> N10;
     N0 --> N7;
     N0 --> N9;
-    N0 --> N4;
     N0 --> N11;
     N1 --> N6;
     N1 --> N8;
     N1 --> N10;
     N2 --> N7;
-    N3 --> N11;
-    N3 --> N6;
-    N3 --> N8;
-    N3 --> N10;
-    N3 --> N5;
-    N4 --> N7;
-    N4 --> N9;
-    N4 --> N10;
-    N4 --> N6;
-    N4 --> N8;
     N7 --> N6;
-    N8 --> N4;
     N8 --> N6;
     N8 --> N7;
     N9 --> N6;
@@ -408,9 +395,6 @@ graph TD
 
 ```js
 "module evaluation";
-foobarCopy += "Unused";
-console.log(foobarCopy);
-import "module";
 ```
 
 ## Module 2
@@ -429,28 +413,12 @@ export { foo };
 
 ```js
 export { external1 };
-export function external1() {
-  return internal() + foobar;
-}
-function internal() {
-  return upper(foobar);
-}
-import { upper } from "module";
 ```
 
 ## Module 5
 
 ```js
 export { external2 };
-export function external2() {
-  foobar += ".";
-}
-foobar += "foo";
-let foobarCopy = foobar;
-foobar += bar;
-const bar = "bar";
-export const foo = foobar;
-export let foobar = "foo";
 ```
 
 ## Module 6
