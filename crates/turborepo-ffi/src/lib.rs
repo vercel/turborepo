@@ -50,10 +50,10 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
     let req: proto::ChangedFilesReq = buffer.into_proto().expect("buffer is valid protobuf");
 
+    let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match scm::git::changed_files(
         PathBuf::from(req.repo_root),
-        req.from_commit.as_deref(),
-        &req.to_commit,
+        commit_range,
         req.include_untracked,
         req.relative_to.as_deref(),
     ) {

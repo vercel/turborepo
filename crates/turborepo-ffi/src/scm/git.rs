@@ -5,8 +5,7 @@ use git2::{DiffFormat, DiffOptions, Oid, Repository};
 
 pub fn changed_files(
     repo_root: PathBuf,
-    from_commit: Option<&str>,
-    to_commit: &str,
+    commit_range: Option<(&str, &str)>,
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>> {
@@ -18,7 +17,8 @@ pub fn changed_files(
         relative_to.as_deref(),
         include_untracked,
     )?;
-    if let Some(from_commit) = from_commit {
+
+    if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
             &repo,
             &mut files,
@@ -37,14 +37,12 @@ fn add_changed_files_from_unstaged_changes(
     relative_to: Option<&str>,
     include_untracked: bool,
 ) -> Result<()> {
-    let head = repo.head()?;
-    let head_tree = head.peel_to_commit()?.tree()?;
     let mut options = DiffOptions::new();
     options.include_untracked(include_untracked);
     options.recurse_untracked_dirs(include_untracked);
     relative_to.map(|relative_to| options.pathspec(relative_to));
 
-    let diff = repo.diff_tree_to_workdir_with_index(Some(&head_tree), Some(&mut options))?;
+    let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
     for delta in diff.deltas() {
         let file = delta.old_file();
@@ -100,6 +98,7 @@ mod tests {
         let mut index = repo.index()?;
         index.add_path(path)?;
         let tree_oid = index.write_tree()?;
+        index.write()?;
         let tree = repo.find_tree(tree_oid)?;
         let previous_commit = previous_commit
             .map(|oid| repo.find_commit(oid))
@@ -126,44 +125,36 @@ mod tests {
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
 
+        // First commit (we need a base commit to compare against)
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
-        // Test that committed file is marked as changed
-        let files =
-            super::changed_files(repo_root.path().to_path_buf(), None, "HEAD", false, None)?;
-        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
         fs::write(&new_file, "let y = 1;")?;
 
         // Test that uncommitted file is marked as changed with `include_untracked`
-        let files = super::changed_files(repo_root.path().to_path_buf(), None, "HEAD", true, None)?;
-        assert_eq!(
-            files,
-            HashSet::from(["bar.js".to_string(), "foo.js".to_string()])
-        );
+        let files = super::changed_files(repo_root.path().to_path_buf(), None, true, None)?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Test that uncommitted file is *not* marked as changed without
         // `include_untracked`
-        let files =
-            super::changed_files(repo_root.path().to_path_buf(), None, "HEAD", false, None)?;
-        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
+        let files = super::changed_files(repo_root.path().to_path_buf(), None, false, None)?;
+        assert_eq!(files, HashSet::from([]));
 
         // Now commit file
         let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
 
-        // Test that uncommitted file in index is marked as changed
+        // Test that only second file is marked as changed when we check commit range
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            second_commit_oid.to_string().as_str(),
+            Some((
+                first_commit_oid.to_string().as_str(),
+                second_commit_oid.to_string().as_str(),
+            )),
             false,
             None,
         )?;
-        assert_eq!(
-            files,
-            HashSet::from(["bar.js".to_string(), "foo.js".to_string()])
-        );
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Create a file nested in subdir
         fs::create_dir_all(repo_root.path().join("subdir"))?;
@@ -173,8 +164,10 @@ mod tests {
         // Test that `relative_to` filters out files not in the specified directory
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            second_commit_oid.to_string().as_str(),
+            Some((
+                first_commit_oid.to_string().as_str(),
+                second_commit_oid.to_string().as_str(),
+            )),
             true,
             Some("subdir"),
         )?;
