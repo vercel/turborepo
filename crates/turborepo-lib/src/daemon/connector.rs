@@ -16,8 +16,12 @@ use super::{client::proto::turbod_client::TurbodClient, DaemonClient, DaemonErro
 
 #[derive(Debug)]
 pub struct DaemonConnector {
-    pub dont_start: bool,
-    pub dont_kill: bool,
+    /// Whether the connector is allowed to start a daemon if it is not already
+    /// running.
+    pub can_start_server: bool,
+    /// Whether the connector is allowed to kill a running daemon (for example,
+    /// in the event of a version mismatch).
+    pub can_kill_server: bool,
     pub pid_file: PathBuf,
     pub sock_file: PathBuf,
 }
@@ -56,7 +60,7 @@ impl DaemonConnector {
 
             match client.handshake().await {
                 Ok(_) => return Ok(client.with_connect_settings(self)),
-                Err(DaemonError::VersionMismatch) if !self.dont_kill => {
+                Err(DaemonError::VersionMismatch) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
                 Err(DaemonError::Connection) => self.kill_dead_server(pid).await?,
@@ -75,16 +79,16 @@ impl DaemonConnector {
 
         let pidfile = pidlock::Pidlock::new(self.pid_file.to_str().ok_or(DaemonError::PidFile)?);
 
-        match (pidfile.get_owner(), self.dont_start) {
-            (Some(pid), _) => {
+        match pidfile.get_owner() {
+            Some(pid) => {
                 debug!("found pid: {}", pid);
                 Ok(sysinfo::Pid::from(pid as usize))
             }
-            (None, false) => {
+            None if self.can_start_server => {
                 debug!("no pid found, starting daemon");
                 Self::start_daemon().await
             }
-            (None, true) => Err(DaemonError::NotRunning),
+            None => Err(DaemonError::NotRunning),
         }
     }
 

@@ -8,15 +8,15 @@ use crate::{
 
 /// Runs the daemon command.
 pub async fn main(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
-    let (dont_start, dont_kill) = match command {
-        DaemonCommand::Status { .. } => (true, true),
-        DaemonCommand::Restart | DaemonCommand::Stop => (true, false),
-        DaemonCommand::Start => (false, false),
+    let (can_start_server, can_kill_server) = match command {
+        DaemonCommand::Status { .. } => (false, false),
+        DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
+        DaemonCommand::Start => (true, true),
     };
 
     let connector = DaemonConnector {
-        dont_start,
-        dont_kill,
+        can_start_server,
+        can_kill_server,
         pid_file: base.daemon_file_root().join("turbod.pid"),
         sock_file: base.daemon_file_root().join("turbod.sock"),
     };
