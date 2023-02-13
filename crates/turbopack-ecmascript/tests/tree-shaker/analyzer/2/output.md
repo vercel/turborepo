@@ -346,17 +346,6 @@ graph TD
     Item15 --> Item2;
     Item15 --> Item1;
     Item15 --> Item11;
-    Item15 -.-> Item3;
-    Item15 -.-> Item4;
-    Item15 -.-> Item5;
-    Item15 -.-> Item8;
-    Item15 -.-> Item10;
-    Item15 -.-> Item6;
-    Item15 -.-> Item9;
-    Item15 -.-> Item7;
-    Item15 -.-> Item12;
-    Item15 -.-> Item13;
-    Item15 -.-> Item14;
     Item16 --> Item3;
     Item17 --> Item5;
     Item17 --> Item8;
@@ -370,28 +359,26 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
+    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(0, Normal)]"];
     N2["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N3["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal)]"];
     N5["Items: [ItemId(1, ImportBinding(0))]"];
     N6["Items: [ItemId(2, VarDeclarator(0))]"];
     N7["Items: [ItemId(3, VarDeclarator(0))]"];
-    N8["Items: [ItemId(5, Normal)]"];
+    N8["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
     N9["Items: [ItemId(6, VarDeclarator(0))]"];
     N10["Items: [ItemId(7, Normal)]"];
-    N11["Items: [ItemId(10, Normal)]"];
-    N0 --> N5;
-    N0 --> N6;
-    N0 --> N8;
-    N0 --> N10;
-    N0 --> N7;
-    N0 --> N9;
-    N0 --> N11;
+    N1 --> N6;
+    N1 --> N8;
+    N1 --> N10;
     N2 --> N6;
     N2 --> N8;
     N2 --> N10;
     N3 --> N7;
+    N4 --> N7;
+    N4 --> N9;
+    N4 --> N10;
     N7 --> N6;
     N8 --> N6;
     N8 --> N7;
@@ -401,10 +388,6 @@ graph TD
     N10 --> N8;
     N10 --> N7;
     N10 --> N9;
-    N11 --> N5;
-    N11 --> N6;
-    N11 --> N8;
-    N11 --> N10;
 ```
 
 # Modules
@@ -419,6 +402,9 @@ graph TD
 
 ```js
 export { external1 };
+export function external1() {
+  return internal() + foobar;
+}
 ```
 
 ## Module 3
@@ -437,6 +423,9 @@ export { foo };
 
 ```js
 export { external2 };
+export function external2() {
+  foobar += ".";
+}
 ```
 
 ## Module 6
@@ -461,6 +450,7 @@ export const foo = foobar;
 
 ```js
 foobar += bar;
+const bar = "bar";
 ```
 
 ## Module 10
@@ -473,12 +463,4 @@ let foobarCopy = foobar;
 
 ```js
 foobar += "foo";
-```
-
-## Module 12
-
-```js
-function internal() {
-  return upper(foobar);
-}
 ```

@@ -111,10 +111,6 @@ graph TD
     Item3 --> Item1;
     Item4 --> Item2;
     Item4 --> Item1;
-    Item5 -.-> Item1;
-    Item5 -.-> Item3;
-    Item5 -.-> Item4;
-    Item5 -.-> Item2;
     Item6 --> Item3;
     Item7 --> Item4;
 ```
@@ -124,10 +120,9 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0)))]"];
-    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
-    N3["Items: [ItemId(0, VarDeclarator(0))]"];
-    N0 --> N3;
+    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(3, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(0, VarDeclarator(0))]"];
+    N1 --> N2;
 ```
 
 # Modules
@@ -142,16 +137,14 @@ graph TD
 
 ```js
 export { DOG };
+export const DOG = dog;
 ```
 
 ## Module 3
 
 ```js
 export { CHIMERA };
-```
-
-## Module 4
-
-```js
+export const CHIMERA = cat + dog;
+const cat = "cat";
 const dog = "dog";
 ```

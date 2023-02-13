@@ -362,16 +362,6 @@ graph TD
     Item14 --> Item3;
     Item14 --> Item6;
     Item14 --> Item9;
-    Item14 -.-> Item1;
-    Item14 -.-> Item2;
-    Item14 -.-> Item5;
-    Item14 -.-> Item8;
-    Item14 -.-> Item10;
-    Item14 -.-> Item7;
-    Item14 -.-> Item11;
-    Item14 -.-> Item12;
-    Item14 -.-> Item4;
-    Item14 -.-> Item13;
     Item15 --> Item10;
     Item16 --> Item11;
     Item17 --> Item12;
@@ -385,23 +375,22 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
-    N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
+    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(11, VarDeclarator(0))]"];
+    N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal), ItemId(10, VarDeclarator(0))]"];
     N5["Items: [ItemId(0, VarDeclarator(0))]"];
     N6["Items: [ItemId(1, Normal)]"];
     N7["Items: [ItemId(2, Normal)]"];
     N8["Items: [ItemId(4, Normal)]"];
     N9["Items: [ItemId(5, Normal)]"];
     N10["Items: [ItemId(7, Normal)]"];
-    N11["Items: [ItemId(10, VarDeclarator(0))]"];
     N0 --> N7;
     N0 --> N9;
-    N0 --> N5;
-    N0 --> N6;
-    N0 --> N8;
-    N0 --> N10;
-    N0 --> N11;
-    N2 --> N11;
+    N2 --> N4;
+    N3 --> N4;
+    N4 --> N5;
+    N4 --> N6;
+    N4 --> N8;
+    N4 --> N10;
     N6 --> N5;
     N7 --> N5;
     N7 --> N6;
@@ -443,12 +432,17 @@ export { cat };
 
 ```js
 export { initialCat };
+export const initialCat = cat;
 ```
 
 ## Module 5
 
 ```js
 export { getChimera };
+export function getChimera() {
+  return cat + dog;
+}
+export let cat = "cat";
 ```
 
 ## Module 6
@@ -485,10 +479,4 @@ console.log(dog);
 
 ```js
 dog += "!";
-```
-
-## Module 12
-
-```js
-export let cat = "cat";
 ```
