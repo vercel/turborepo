@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -163,7 +164,7 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	}
 
 	var turboJSON *TurboJSON
-	turboFromFiles, err := ReadTurboConfig(dir.UntypedJoin(configFile))
+	turboFromFiles, err := readTurboConfig(dir.UntypedJoin(configFile))
 
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// If the file didn't exist, throw a custom error here instead of propagating
@@ -250,8 +251,8 @@ func (to TaskOutputs) Sort() TaskOutputs {
 	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
 }
 
-// ReadTurboConfig reads turbo.json from a provided path
-func ReadTurboConfig(turboJSONPath turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
+// readTurboConfig reads turbo.json from a provided path
+func readTurboConfig(turboJSONPath turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 	// If the configFile exists, use that
 	if turboJSONPath.FileExists() {
 		turboJSON, err := readTurboJSON(turboJSONPath)
@@ -398,8 +399,14 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 
 		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
+				if filepath.IsAbs(glob[1:]) {
+					log.Printf("[WARNING] Using an absolute path in \"outputs\" (%v) will not work and will be an error in a future version", glob)
+				}
 				exclusions = append(exclusions, glob[1:])
 			} else {
+				if filepath.IsAbs(glob) {
+					log.Printf("[WARNING] Using an absolute path in \"outputs\" (%v) will not work and will be an error in a future version", glob)
+				}
 				inclusions = append(inclusions, glob)
 			}
 		}
@@ -465,6 +472,12 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
 		btd.definedFields.Add("Inputs")
+		// TODO: during rust port, this should be moved to a post-parse validation step
+		for _, input := range task.Inputs {
+			if filepath.IsAbs(input) {
+				log.Printf("[WARNING] Using an absolute path in \"inputs\" (%v) will not work and will be an error in a future version", input)
+			}
+		}
 		btd.TaskDefinition.Inputs = task.Inputs
 	}
 
@@ -551,11 +564,15 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 		envVarDependencies.Add(value)
 	}
 
+	// TODO: In the rust port, warnings should be refactored to a post-parse validation step
 	for _, value := range raw.GlobalDependencies {
 		if strings.HasPrefix(value, envPipelineDelimiter) {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", value)
 			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
 		} else {
+			if filepath.IsAbs(value) {
+				log.Printf("[WARNING] Using an absolute path in \"globalDependencies\" (%v) will not work and will be an error in a future version", value)
+			}
 			globalFileDependencies.Add(value)
 		}
 	}
