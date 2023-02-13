@@ -218,6 +218,7 @@ impl DepGraph {
                 if graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
+                    .filter(|&start_ix| *graph.idx_graph.edge_weight(start_ix, dep_ix).unwrap())
                     .filter(|&dependant_ix| {
                         start_ix == dependant_ix || !done.contains(&dependant_ix)
                     })
