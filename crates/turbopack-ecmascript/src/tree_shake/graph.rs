@@ -276,8 +276,6 @@ impl DepGraph {
             }
         }
 
-        done.clear();
-
         for group in &mut groups {
             let start = group[0].clone();
             let start_ix = self.g.get_node(&start);
