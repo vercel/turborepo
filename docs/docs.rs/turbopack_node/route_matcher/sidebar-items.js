@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Params",""],["ParamsVc","Vc for [`Params`]"],["RouteMatcherVc",""]],"trait":[["RouteMatcher","Extracts parameters from a URL path."]],"type":[["ParamsReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":[["Param",""]],"struct":[["ParamVc","Vc for [`Param`]"],["Params",""],["ParamsVc","Vc for [`Params`]"],["RouteMatcherVc",""]],"trait":[["RouteMatcher","Extracts parameters from a URL path."]],"type":[["ParamReadRef","see [turbo_tasks::ReadRef]"],["ParamsReadRef","see [turbo_tasks::ReadRef]"]]};

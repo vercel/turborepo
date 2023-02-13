@@ -59,7 +59,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="kw">use crate</span>::{ResponseHeaders, StructuredError};
+<span class="kw">use crate</span>::{route_matcher::Param, ResponseHeaders, StructuredError};
 
 <span class="kw">pub mod </span>issue;
 <span class="kw">pub mod </span>node_api_source;
@@ -70,7 +70,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>RenderData {
-    params: IndexMap&lt;String, String&gt;,
+    params: IndexMap&lt;String, Param&gt;,
     method: String,
     url: String,
     raw_query: String,

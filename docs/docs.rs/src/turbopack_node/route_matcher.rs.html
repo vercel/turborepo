@@ -13,11 +13,29 @@
 <span id="13">13</span>
 <span id="14">14</span>
 <span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::primitives::BoolVc;
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>Params(<span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, String&gt;&gt;);
+#[derive(Debug, Clone)]
+#[serde(untagged)]
+</span><span class="kw">pub enum </span>Param {
+    Single(String),
+    Multi(Vec&lt;String&gt;),
+}
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>Params(<span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Param&gt;&gt;);
 
 <span class="doccomment">/// Extracts parameters from a URL path.
 </span><span class="attr">#[turbo_tasks::value_trait]

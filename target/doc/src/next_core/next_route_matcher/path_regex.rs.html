@@ -131,17 +131,62 @@
 <span id="131">131</span>
 <span id="132">132</span>
 <span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::primitives::{BoolVc, Regex};
-<span class="kw">use </span>turbopack_node::route_matcher::{ParamsVc, RouteMatcher};
+<span class="kw">use </span>turbopack_node::route_matcher::{Param, ParamsVc, RouteMatcher};
 
 <span class="doccomment">/// A regular expression that matches a path, with named capture groups for the
 /// dynamic parts of the path.
 </span><span class="attr">#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>PathRegex {
     regex: Regex,
-    named_params: Vec&lt;String&gt;,
+    named_params: Vec&lt;NamedParam&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+</span><span class="kw">struct </span>NamedParam {
+    name: String,
+    kind: NamedParamKind,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+</span><span class="kw">enum </span>NamedParamKind {
+    Single,
+    Multi,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>PathRegex {
@@ -160,12 +205,24 @@
             <span class="self">self</span>.named_params
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, name)| {
-                    <span class="kw">if </span>name.is_empty() {
+                .filter_map(|(idx, param)| {
+                    <span class="kw">if </span>param.name.is_empty() {
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     }
                     <span class="kw">let </span>value = capture.get(idx + <span class="number">1</span>)<span class="question-mark">?</span>;
-                    <span class="prelude-val">Some</span>((name.to_string(), value.as_str().to_string()))
+                    <span class="prelude-val">Some</span>((
+                        param.name.to_string(),
+                        <span class="kw">match </span>param.kind {
+                            NamedParamKind::Single =&gt; Param::Single(value.as_str().to_string()),
+                            NamedParamKind::Multi =&gt; Param::Multi(
+                                value
+                                    .as_str()
+                                    .split(<span class="string">&quot;/&quot;</span>)
+                                    .map(|segment| segment.to_string())
+                                    .collect(),
+                            ),
+                        },
+                    ))
                 })
                 .collect()
         }))
@@ -175,7 +232,7 @@
 <span class="doccomment">/// Builder for [PathRegex].
 </span><span class="kw">pub struct </span>PathRegexBuilder {
     regex_str: String,
-    named_params: Vec&lt;String&gt;,
+    named_params: Vec&lt;NamedParam&gt;,
 }
 
 <span class="kw">impl </span>PathRegexBuilder {
@@ -207,7 +264,10 @@
             <span class="string">&quot;([^?]+)?&quot;
         </span>});
         <span class="self">self</span>.push_str(<span class="kw-2">&amp;</span>regex::escape(rem.as_ref()));
-        <span class="self">self</span>.named_params.push(name.into());
+        <span class="self">self</span>.named_params.push(NamedParam {
+            name: name.into(),
+            kind: NamedParamKind::Multi,
+        });
     }
 
     <span class="doccomment">/// Pushes a catch all segment to the regex.
@@ -221,7 +281,10 @@
         }
         <span class="self">self</span>.push_str(<span class="string">&quot;([^?]+)&quot;</span>);
         <span class="self">self</span>.push_str(<span class="kw-2">&amp;</span>regex::escape(rem.as_ref()));
-        <span class="self">self</span>.named_params.push(name.into());
+        <span class="self">self</span>.named_params.push(NamedParam {
+            name: name.into(),
+            kind: NamedParamKind::Multi,
+        });
     }
 
     <span class="doccomment">/// Pushes a dynamic segment to the regex.
@@ -235,7 +298,10 @@
         }
         <span class="self">self</span>.push_str(<span class="string">&quot;([^?/]+)&quot;</span>);
         <span class="self">self</span>.push_str(<span class="kw-2">&amp;</span>regex::escape(rem.as_ref()));
-        <span class="self">self</span>.named_params.push(name.into());
+        <span class="self">self</span>.named_params.push(NamedParam {
+            name: name.into(),
+            kind: NamedParamKind::Single,
+        });
     }
 
     <span class="doccomment">/// Pushes a static segment to the regex.
