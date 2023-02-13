@@ -569,6 +569,10 @@ impl DepGraph {
             items.insert(
                 id,
                 ItemData {
+                    content: ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                        span: DUMMY_SP,
+                        expr: "module evaluation".into(),
+                    })),
                     ..Default::default()
                 },
             );
