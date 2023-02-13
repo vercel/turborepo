@@ -195,14 +195,17 @@ impl DepGraph {
     }
 
     pub(super) fn finalize(&self) -> InternedGraph<Vec<ItemId>> {
+        /// Returns true if it should be called again
         fn add_to_group(
             graph: &InternedGraph<ItemId>,
             group: &mut Vec<ItemId>,
             start_ix: u32,
             done: &mut FxHashSet<u32>,
-        ) {
+        ) -> bool {
             // TODO: Consider cycles
             //
+
+            let mut changed = false;
 
             // Check deps of `start`.
             for dep_ix in graph
@@ -221,12 +224,15 @@ impl DepGraph {
                     == 1
                     && done.insert(dep_ix)
                 {
+                    changed = true;
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
 
-                    add_to_group(graph, group, dep_ix, done)
+                    add_to_group(graph, group, dep_ix, done);
                 }
             }
+
+            changed
         }
 
         let mut cycles = kosaraju_scc(&self.g.idx_graph);
@@ -274,35 +280,17 @@ impl DepGraph {
             }
         }
 
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
-        for group in &mut groups {
-            let start = group.last().unwrap().clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
+        let mut changed = true;
+        while changed {
+            changed = false;
+
+            for group in &mut groups {
+                let start = group.last().unwrap().clone();
+                let start_ix = self.g.get_node(&start);
+                if add_to_group(&self.g, group, start_ix, &mut done) {
+                    changed = true;
+                }
+            }
         }
 
         let mut new_graph = InternedGraph::default();
