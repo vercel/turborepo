@@ -102,8 +102,8 @@ jobs:
             !**.md
             !**.mdx
 
-      - name: Turborepo related changes
-        id: turborepo
+      - name: Turborepo related Rust changes
+        id: turborepo_rust
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
@@ -169,10 +169,10 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
+      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
+      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
