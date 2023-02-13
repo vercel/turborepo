@@ -379,33 +379,20 @@ graph TD
     N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal), ItemId(10, VarDeclarator(0))]"];
     N5["Items: [ItemId(0, VarDeclarator(0))]"];
     N6["Items: [ItemId(1, Normal)]"];
-    N7["Items: [ItemId(2, Normal)]"];
-    N8["Items: [ItemId(4, Normal)]"];
-    N9["Items: [ItemId(5, Normal)]"];
-    N10["Items: [ItemId(7, Normal)]"];
-    N0 --> N7;
-    N0 --> N9;
+    N7["Items: [ItemId(4, Normal)]"];
+    N8["Items: [ItemId(7, Normal)]"];
     N2 --> N4;
     N3 --> N4;
     N4 --> N5;
     N4 --> N6;
+    N4 --> N7;
     N4 --> N8;
-    N4 --> N10;
     N6 --> N5;
     N7 --> N5;
     N7 --> N6;
     N8 --> N5;
     N8 --> N6;
     N8 --> N7;
-    N9 --> N5;
-    N9 --> N6;
-    N9 --> N8;
-    N9 --> N7;
-    N10 --> N5;
-    N10 --> N6;
-    N10 --> N8;
-    N10 --> N7;
-    N10 --> N9;
 ```
 
 # Modules
@@ -460,22 +447,10 @@ dog += "!";
 ## Module 8
 
 ```js
-console.log(dog);
-```
-
-## Module 9
-
-```js
 dog += "!";
 ```
 
-## Module 10
-
-```js
-console.log(dog);
-```
-
-## Module 11
+## Module 9
 
 ```js
 dog += "!";

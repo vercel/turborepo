@@ -363,31 +363,17 @@ graph TD
     N2["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N3["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
     N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal)]"];
-    N5["Items: [ItemId(1, ImportBinding(0))]"];
-    N6["Items: [ItemId(2, VarDeclarator(0))]"];
-    N7["Items: [ItemId(3, VarDeclarator(0))]"];
-    N8["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
-    N9["Items: [ItemId(6, VarDeclarator(0))]"];
-    N10["Items: [ItemId(7, Normal)]"];
+    N5["Items: [ItemId(2, VarDeclarator(0))]"];
+    N6["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
+    N7["Items: [ItemId(6, VarDeclarator(0))]"];
+    N1 --> N5;
     N1 --> N6;
-    N1 --> N8;
-    N1 --> N10;
+    N2 --> N5;
     N2 --> N6;
-    N2 --> N8;
-    N2 --> N10;
-    N3 --> N7;
     N4 --> N7;
-    N4 --> N9;
-    N4 --> N10;
+    N6 --> N5;
+    N7 --> N5;
     N7 --> N6;
-    N8 --> N6;
-    N8 --> N7;
-    N9 --> N6;
-    N9 --> N8;
-    N10 --> N6;
-    N10 --> N8;
-    N10 --> N7;
-    N10 --> N9;
 ```
 
 # Modules
@@ -431,36 +417,18 @@ export function external2() {
 ## Module 6
 
 ```js
-import { upper } from "module";
-```
-
-## Module 7
-
-```js
 export let foobar = "foo";
 ```
 
-## Module 8
-
-```js
-export const foo = foobar;
-```
-
-## Module 9
+## Module 7
 
 ```js
 foobar += bar;
 const bar = "bar";
 ```
 
-## Module 10
+## Module 8
 
 ```js
 let foobarCopy = foobar;
-```
-
-## Module 11
-
-```js
-foobar += "foo";
 ```
