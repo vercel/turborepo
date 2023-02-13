@@ -416,9 +416,66 @@
 <span id="416">416</span>
 <span id="417">417</span>
 <span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
+
+<span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
@@ -435,6 +492,10 @@
         FromChunkableAsset, ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
+    introspect::{
+        asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
+        Introspectable, IntrospectableChildrenVc, IntrospectableVc,
+    },
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
@@ -832,6 +893,55 @@
         _asset: ChunkableAssetVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, ChunkableAssetVc)&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+    }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>introspectable_type() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;css chunk&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>entry_module_key() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;entry module&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Introspectable <span class="kw">for </span>CssChunk {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        introspectable_type()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>title(self_vc: CssChunkVc) -&gt; StringVc {
+        self_vc.path().to_string()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>details(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="kw">let </span>content = content_to_details(self_vc.content());
+        <span class="kw">let </span><span class="kw-2">mut </span>details = String::new();
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_content = css_chunk_content(this.context, this.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
+        details += <span class="string">&quot;Chunk items:\n\n&quot;</span>;
+        <span class="kw">for </span>item <span class="kw">in </span>chunk_content.chunk_items.iter() {
+            <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+        }
+        details += <span class="string">&quot;\nContent:\n\n&quot;</span>;
+        <span class="macro">write!</span>(details, <span class="string">&quot;{}&quot;</span>, content.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(StringVc::cell(details))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>children(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>children = children_from_asset_references(self_vc.references())
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.clone_value();
+        <span class="kw">for </span><span class="kw-2">&amp;</span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>.main_entries.<span class="kw">await</span><span class="question-mark">? </span>{
+            children.insert((entry_module_key(), IntrospectableAssetVc::new(entry.into())));
+        }
+        <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(children))
     }
 }
 </code></pre></div>

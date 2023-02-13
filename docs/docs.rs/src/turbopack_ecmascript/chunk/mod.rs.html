@@ -1309,6 +1309,11 @@
 <span id="1309">1309</span>
 <span id="1310">1310</span>
 <span id="1311">1311</span>
+<span id="1312">1312</span>
+<span id="1313">1313</span>
+<span id="1314">1314</span>
+<span id="1315">1315</span>
+<span id="1316">1316</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1332,6 +1337,7 @@
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         chunk_content, chunk_content_split,
+        chunk_in_group::ChunkInGroupVc,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
@@ -1524,11 +1530,15 @@
         <span class="kw">let </span><span class="kw-2">mut </span>chunks_server_paths = Vec::new();
         <span class="kw">let </span>output_root = context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>chunk <span class="kw">in </span>evaluate_chunks.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(ecma_chunk) = EcmascriptChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">if </span>ecma_chunk != origin_chunk {
-                    <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_server_path) = output_root.get_path_to(chunk_path) {
-                        chunks_server_paths.push(chunk_server_path.to_string());
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_in_group) = ChunkInGroupVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(ecma_chunk) =
+                    EcmascriptChunkVc::resolve_from(chunk_in_group.inner()).<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    <span class="kw">if </span>ecma_chunk != origin_chunk {
+                        <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_server_path) = output_root.get_path_to(chunk_path) {
+                            chunks_server_paths.push(chunk_server_path.to_string());
+                        }
                     }
                 }
             }

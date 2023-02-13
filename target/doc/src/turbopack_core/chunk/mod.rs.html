@@ -562,7 +562,13 @@
 <span id="562">562</span>
 <span id="563">563</span>
 <span id="564">564</span>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+</pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
+<span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
 <span class="kw">use </span>std::{
@@ -582,7 +588,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbo_tasks_hash::DeterministicHash;
 
-<span class="kw">use </span><span class="self">self</span>::optimize::optimize;
+<span class="kw">use </span><span class="self">self</span>::{chunk_in_group::ChunkInGroupVc, optimize::optimize};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
     environment::EnvironmentVc,
@@ -713,10 +719,7 @@
             <span class="prelude-val">Ok</span>(result.into_iter().flatten())
         }
 
-        <span class="comment">// async fn get_chunk_children(
-        //     chunk: ChunkVc,
-        // ) -&gt; Result&lt;Flatten&lt;IntoIter&lt;Flatten&lt;IntoIter&lt;Option&lt;ChunkVc&gt;&gt;&gt;&gt;&gt;&gt; {
-        </span><span class="kw">async fn </span>get_chunk_children(
+        <span class="kw">async fn </span>get_chunk_children(
             chunk: ChunkVc,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
             <span class="prelude-val">Ok</span>(chunk
@@ -738,6 +741,13 @@
 
         <span class="kw">let </span>chunks = ChunksVc::cell(chunks.into_iter().collect());
         <span class="kw">let </span>chunks = optimize(chunks, <span class="self">self</span>);
+        <span class="kw">let </span>chunks = ChunksVc::cell(
+            chunks
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.iter()
+                .map(|<span class="kw-2">&amp;</span>chunk| ChunkInGroupVc::new(chunk).as_chunk())
+                .collect(),
+        );
 
         <span class="prelude-val">Ok</span>(chunks)
     }
