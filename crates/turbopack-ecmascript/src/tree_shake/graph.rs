@@ -475,7 +475,7 @@ impl DepGraph {
                         let (r, w) = ids_used_by_ignoring_nested(&decl.init);
                         let (er, ew) = ids_captured_by(&decl.init);
 
-                        let mut var_decl = Box::new(VarDecl {
+                        let var_decl = Box::new(VarDecl {
                             decls: vec![decl.clone()],
                             ..*v.clone()
                         });
