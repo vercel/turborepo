@@ -27,7 +27,9 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> Result<(), Dae
         DaemonCommand::Restart => {
             client.restart().await?;
         }
-        DaemonCommand::Start => {} // no-op
+        // connector.connect will have already started the daemon if needed,
+        // so this is a no-op
+        DaemonCommand::Start => {}
         DaemonCommand::Stop => {
             client.stop().await?;
         }
