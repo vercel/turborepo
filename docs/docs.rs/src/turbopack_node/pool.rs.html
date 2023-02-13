@@ -412,6 +412,43 @@
 <span id="412">412</span>
 <span id="413">413</span>
 <span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     future::Future,
@@ -431,10 +468,10 @@
         BufReader,
     },
     net::{TcpListener, TcpStream},
-    process::{Child, Command},
+    process::{Child, ChildStderr, ChildStdout, Command},
     select,
     sync::{OwnedSemaphorePermit, Semaphore},
-    time::sleep,
+    time::{sleep, timeout},
 };
 
 <span class="kw">enum </span>NodeJsPoolProcess {
@@ -453,6 +490,14 @@
 <span class="kw">struct </span>RunningNodeJsPoolProcess {
     child: <span class="prelude-ty">Option</span>&lt;Child&gt;,
     connection: TcpStream,
+    stdout_buf: Vec&lt;u8&gt;,
+    stdout: BufReader&lt;ChildStdout&gt;,
+    shared_stdout: SharedOutputSet,
+    stdout_occurences: HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
+    stderr_buf: Vec&lt;u8&gt;,
+    stderr: BufReader&lt;ChildStderr&gt;,
+    shared_stderr: SharedOutputSet,
+    stderr_occurences: HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
 }
 
 <span class="kw">const </span>CONNECT_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
@@ -463,15 +508,14 @@
 /// lines that has beem emitted by other `handle_output_stream` instances with
 /// the same `shared` before.
 </span><span class="kw">async fn </span>handle_output_stream(
-    stream: <span class="kw">impl </span>AsyncRead + Unpin,
-    shared: SharedOutputSet,
+    buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;,
+    stream: <span class="kw-2">&amp;mut </span>BufReader&lt;<span class="kw">impl </span>AsyncRead + Unpin&gt;,
+    shared: <span class="kw-2">&amp;mut </span>SharedOutputSet,
+    own_output: <span class="kw-2">&amp;mut </span>HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
     <span class="kw-2">mut </span>final_stream: <span class="kw">impl </span>AsyncWrite + Unpin,
 ) {
-    <span class="kw">let </span><span class="kw-2">mut </span>buffered = BufReader::new(stream);
-    <span class="kw">let </span><span class="kw-2">mut </span>own_output = HashMap::&lt;Arc&lt;[u8]&gt;, u32&gt;::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
     <span class="kw">loop </span>{
-        <span class="kw">match </span>buffered.read_until(<span class="string">b&#39;\n&#39;</span>, <span class="kw-2">&amp;mut </span>buffer).<span class="kw">await </span>{
+        <span class="kw">match </span>stream.read_until(<span class="string">b&#39;\n&#39;</span>, buffer).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="number">0</span>) =&gt; {
                 <span class="kw">break</span>;
             }
@@ -481,7 +525,7 @@
             }
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
         }
-        <span class="kw">let </span>line = Arc::from(take(<span class="kw-2">&amp;mut </span>buffer).into_boxed_slice());
+        <span class="kw">let </span>line = Arc::from(take(buffer).into_boxed_slice());
         <span class="kw">let </span>occurance_number = <span class="kw-2">*</span>own_output
             .entry(Arc::clone(<span class="kw-2">&amp;</span>line))
             .and_modify(|c| <span class="kw-2">*</span>c += <span class="number">1</span>)
@@ -599,20 +643,20 @@
                     },
                 };
 
-                tokio::spawn(handle_output_stream(
-                    child.stdout.take().unwrap(),
-                    shared_stdout,
-                    stdout(),
-                ));
-                tokio::spawn(handle_output_stream(
-                    child.stderr.take().unwrap(),
-                    shared_stderr,
-                    stderr(),
-                ));
+                <span class="kw">let </span>stdout = BufReader::new(child.stdout.take().unwrap());
+                <span class="kw">let </span>stderr = BufReader::new(child.stderr.take().unwrap());
 
                 RunningNodeJsPoolProcess {
                     child: <span class="prelude-val">Some</span>(child),
                     connection,
+                    stdout,
+                    stdout_buf: Vec::new(),
+                    stdout_occurences: HashMap::new(),
+                    shared_stdout,
+                    stderr,
+                    stderr_buf: Vec::new(),
+                    stderr_occurences: HashMap::new(),
+                    shared_stderr,
                 }
             }
             NodeJsPoolProcess::Running(running) =&gt; running,
@@ -622,19 +666,40 @@
 
 <span class="kw">impl </span>RunningNodeJsPoolProcess {
     <span class="kw">async fn </span>recv(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt; {
-        <span class="kw">let </span>packet_len = <span class="self">self
-            </span>.connection
-            .read_u32()
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;reading packet length&quot;</span>)<span class="question-mark">?
-            </span>.try_into()
-            .context(<span class="string">&quot;storing packet length&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>packet_data = <span class="macro">vec!</span>[<span class="number">0</span>; packet_len];
-        <span class="self">self</span>.connection
-            .read_exact(<span class="kw-2">&amp;mut </span>packet_data)
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;reading packet data&quot;</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(packet_data)
+        <span class="kw">let </span>connection = <span class="kw-2">&amp;mut </span><span class="self">self</span>.connection;
+        <span class="kw">let </span>recv_future = <span class="kw">async move </span>{
+            <span class="kw">let </span>packet_len = connection
+                .read_u32()
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;reading packet length&quot;</span>)<span class="question-mark">?
+                </span>.try_into()
+                .context(<span class="string">&quot;storing packet length&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>packet_data = <span class="macro">vec!</span>[<span class="number">0</span>; packet_len];
+            connection
+                .read_exact(<span class="kw-2">&amp;mut </span>packet_data)
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;reading packet data&quot;</span>)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(packet_data)
+        };
+        <span class="kw">let </span>stdout_future = handle_output_stream(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout_buf,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.shared_stdout,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout_occurences,
+            stdout(),
+        );
+        <span class="kw">let </span>stderr_future = handle_output_stream(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr_buf,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.shared_stderr,
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr_occurences,
+            stderr(),
+        );
+        <span class="macro">select! </span>{
+            result = recv_future =&gt; result,
+            <span class="kw">_ </span>= stdout_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stdout stream ended unexpectedly&quot;</span>),
+            <span class="kw">_ </span>= stderr_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stderr stream ended unexpectedly&quot;</span>),
+        }
     }
 
     <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, packet_data: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -772,20 +837,26 @@
         </span>M: DeserializeOwned,
     {
         <span class="kw">let </span>message = <span class="self">self
-            </span>.with_process(
-                |process| <span class="kw">async move </span>{ process.recv().<span class="kw">await</span>.context(<span class="string">&quot;receiving message&quot;</span>) },
-            )
+            </span>.with_process(|process| <span class="kw">async move </span>{
+                timeout(Duration::from_secs(<span class="number">30</span>), process.recv())
+                    .<span class="kw">await
+                    </span>.context(<span class="string">&quot;timeout while receiving message from process&quot;</span>)<span class="question-mark">?
+                    </span>.context(<span class="string">&quot;failed to receive message&quot;</span>)
+            })
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        serde_json::from_slice(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;deserializing message&quot;</span>)
+        serde_json::from_slice(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;failed to deserialize message&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>send&lt;M&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
     <span class="kw">where
         </span>M: Serialize,
     {
-        <span class="kw">let </span>message = serde_json::to_vec(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;serializing message&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>message = serde_json::to_vec(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;failed to serialize message&quot;</span>)<span class="question-mark">?</span>;
         <span class="self">self</span>.with_process(|process| <span class="kw">async move </span>{
-            process.send(message).<span class="kw">await</span>.context(<span class="string">&quot;sending message&quot;</span>)<span class="question-mark">?</span>;
+            timeout(Duration::from_secs(<span class="number">30</span>), process.send(message))
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;timeout while sending message&quot;</span>)<span class="question-mark">?
+                </span>.context(<span class="string">&quot;failed to send message&quot;</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(())
         })
         .<span class="kw">await
@@ -804,7 +875,10 @@
 
         <span class="comment">// Ignore error since we are not sure if the process is still alive
         </span><span class="kw">let _ </span>= child.start_kill();
-        <span class="kw">let </span>status = child.wait().<span class="kw">await</span>.context(<span class="string">&quot;waiting for process end&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>status = timeout(Duration::from_secs(<span class="number">30</span>), child.wait())
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;timeout while waiting for process end&quot;</span>)<span class="question-mark">?
+            </span>.context(<span class="string">&quot;waiting for process end&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(status)
     }
