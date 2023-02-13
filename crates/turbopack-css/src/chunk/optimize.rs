@@ -66,41 +66,48 @@ async fn merge_chunks(
     ))
 }
 
-/// The maximum number of chunks to merge into a single chunk.
-const CHUNK_MERGE_COUNT: usize = 25;
+/// The maximum number of chunks to exist in a single chunk group. The optimizer
+/// will merge chunks into groups until it has at most this number of chunks.
+const MAX_CHUNK_COUNT: usize = 20;
 
-async fn aggregate_adjacent_chunks(
-    chunks: ChunksVc,
-    include_chunk: impl Fn(ChunkVc, &[ChunkVc]) -> bool,
-) -> Result<Vec<Vec<ChunkVc>>> {
+fn aggregate_adjacent_chunks(chunks: &[ChunkVc]) -> Vec<Vec<ChunkVc>> {
+    // Each of the resulting merged chunks will have `chunks_per_merged_chunk`
+    // chunks in them, except for the first `chunks_mod` chunks, which will have
+    // one more chunk.
+    let chunks_per_merged_chunk = chunks.len() / MAX_CHUNK_COUNT;
+    let mut chunks_mod = chunks.len() % MAX_CHUNK_COUNT;
+
     let mut chunks_vecs = vec![];
-    let chunks = chunks.await?;
-    let mut chunks_iter = chunks.iter();
+    let mut current_chunks = vec![];
 
-    let Some(first) = chunks_iter.next() else {
-        return Ok(vec![]);
-    };
-
-    let mut current_chunks = vec![*first];
-
-    for chunk in chunks_iter {
-        if !include_chunk(*chunk, &current_chunks) {
-            chunks_vecs.push(std::mem::take(&mut current_chunks))
+    for chunk in chunks.into_iter().copied() {
+        if current_chunks.len() < chunks_per_merged_chunk {
+            current_chunks.push(chunk);
+        } else if current_chunks.len() == chunks_per_merged_chunk && chunks_mod > 0 {
+            current_chunks.push(chunk);
+            chunks_mod -= 1;
+            chunks_vecs.push(std::mem::take(&mut current_chunks));
+        } else {
+            chunks_vecs.push(std::mem::take(&mut current_chunks));
+            current_chunks.push(chunk);
         }
-
-        current_chunks.push(*chunk);
     }
 
-    chunks_vecs.push(current_chunks);
+    if current_chunks.len() > 0 {
+        chunks_vecs.push(current_chunks);
+    }
 
-    Ok(chunks_vecs)
+    chunks_vecs
 }
 
-async fn merge_adjacent_chunks(chunks: ChunksVc) -> Result<ChunksVc> {
-    let chunks = aggregate_adjacent_chunks(chunks, |_chunk, current_chunks| {
-        current_chunks.len() < CHUNK_MERGE_COUNT
-    })
-    .await?;
+async fn merge_adjacent_chunks(chunks_vc: ChunksVc) -> Result<ChunksVc> {
+    let chunks = chunks_vc.await?;
+
+    if chunks.len() <= MAX_CHUNK_COUNT {
+        return Ok(chunks_vc);
+    }
+
+    let chunks = aggregate_adjacent_chunks(&*chunks);
 
     let chunks = chunks
         .into_iter()
