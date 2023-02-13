@@ -52,12 +52,15 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
 
     let response = match scm::git::changed_files(
         PathBuf::from(req.repo_root),
-        req.from_commit,
-        req.to_commit,
+        req.from_commit.as_deref(),
+        &req.to_commit,
         req.include_untracked,
-        req.relative_to,
+        req.relative_to.as_deref(),
     ) {
-        Ok(files) => proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files }),
+        Ok(files) => {
+            let files: Vec<_> = files.into_iter().collect();
+            proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files })
+        }
         Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
     };
 
