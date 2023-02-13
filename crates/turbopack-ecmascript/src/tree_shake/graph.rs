@@ -7,8 +7,9 @@ use swc_core::{
     common::{util::take::Take, DUMMY_SP},
     ecma::{
         ast::{
-            op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
-            ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+            op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
+            FnDecl, Id, ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, Stmt,
         },
         atoms::js_word,
         utils::find_pat_ids,
@@ -562,12 +563,25 @@ impl DepGraph {
         for export in exports {
             let id = ItemId {
                 index: usize::MAX,
-                kind: ItemIdKind::Export(export),
+                kind: ItemIdKind::Export(export.clone()),
             };
             ids.push(id.clone());
             items.insert(
                 id,
                 ItemData {
+                    content: ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
+                        span: DUMMY_SP,
+                        specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
+                            span: DUMMY_SP,
+                            orig: ModuleExportName::Ident(export.into()),
+                            // TODO
+                            exported: None,
+                            is_type_only: false,
+                        })],
+                        src: None,
+                        type_only: false,
+                        asserts: None,
+                    })),
                     ..Default::default()
                 },
             );
