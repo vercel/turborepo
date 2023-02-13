@@ -108,10 +108,6 @@ enum ModuleCssClass {
 #[derive(Debug, Clone)]
 struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 
-#[turbo_tasks::value(transparent)]
-#[derive(Debug, Clone)]
-struct ResolvedModuleCssClasses(IndexMap<String, Vec<String>>);
-
 #[turbo_tasks::value_impl]
 impl ModuleCssModuleAssetVc {
     #[turbo_tasks::function]
