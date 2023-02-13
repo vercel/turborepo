@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use super::CommandBase;
 use crate::{
@@ -43,7 +43,10 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> Result<(), Dae
                 println!("{}", serde_json::to_string_pretty(&status).unwrap());
             } else {
                 println!("Daemon log file: {}", status.log_file.to_string_lossy());
-                println!("Daemon uptime: {}s", status.uptime_ms / 1000);
+                println!(
+                    "Daemon uptime: {}s",
+                    humantime::format_duration(Duration::from_millis(status.uptime_ms))
+                );
                 println!("Daemon pid file: {}", status.pid_file.to_string_lossy());
                 println!("Daemon socket file: {}", status.sock_file.to_string_lossy());
             }
