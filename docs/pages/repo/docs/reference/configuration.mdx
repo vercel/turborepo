@@ -1,5 +1,5 @@
 ---
-title: Configuration Options - turbo.json
+title: Configuration
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
@@ -8,13 +8,13 @@ import OutputModeTable from "../../../../components/output-mode-table.mdx";
 
 # Configuration Options (`turbo.json`)
 
-You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and npm users).
+You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root directory.
 
 ## `globalDependencies`
 
 `type: string[]`
 
-A list of file globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
+A list of file globs for global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
 This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
 
 <Callout type="info">
@@ -56,6 +56,12 @@ A list of environment variables for implicit global hash dependencies. The conte
   "globalEnv": ["GITHUB_TOKEN"] // value will impact the hashes of all tasks
 }
 ```
+
+## `extends`
+
+`type: string[]`
+
+The `extends` key is only valid in [Workspace Configuration][1]. It will be ignored in the root `turbo.json`.
 
 ## `pipeline`
 
@@ -330,3 +336,5 @@ option, `turbo` can warn you about an invalid configuration.
   }
 }
 ```
+
+[1]: /repo/docs/core-concepts/monorepos/configuring-workspaces

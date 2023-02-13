@@ -1,0 +1,169 @@
+---
+title: Configuring Workspaces
+description: Turborepo lets you configure each workspace
+---
+
+import Callout from "../../../../../components/Callout";
+
+# Configuring Workspaces
+
+Most monorepos can declare a `turbo.json` in the root directory with a uniform
+set of tasks that apply to all workspaces. But sometimes, a monorepo can contain
+workspaces that need to configure their tasks differently. To accommodate this,
+Turborepo enables you to extend the root configuration with a `turbo.json` in
+any workspace. This flexibility enables a more diverse set of apps and packages
+to co-exist, and allows workspace owners to maintain specialized tasks and
+configuration without affecting other inhabitants of the monorepo.
+
+## How it Works
+
+To override any of the configuration for a task, add a `turbo.json` file in any
+workspace of your monorepo with a top level `extends` key:
+
+```json
+{
+  "extends": ["//"],
+  "pipeline": {
+    // custom configuration for the workspace here
+  }
+}
+```
+
+<Callout>
+  For now, the only valid value for the `extends` key is `["//"]`. The
+`//` syntax, you may recall, signifies "root", similar to how it's used to
+[declare root tasks][1].
+</Callout>
+
+Extended configuration in a workspace can reset or override any of [the
+configuration for a pipeline task][2]. If you don't include a key, it will inherit
+from the value from the extended `turbo.json`.
+
+Workspace Configurations cannot use [the `workspace#task` syntax][3], because the `workspace` is
+inferred based on the location of the config, and it is not possible to extend the configuration
+for another workspace.
+
+## Examples
+
+To illustrate, let's look at a couple of use cases.
+
+### Different Frameworks
+
+Let's say your monorepo has a many Next.js apps, and one Sveltekit app. By
+default, both frameworks create their build with the `build` script in their
+respective `package.json`s. With a single `turbo.json` you can configure this
+with:
+
+```jsonc
+// turbo.json
+{
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**", ".svelte-kit/**"],
+    }
+  }
+}
+```
+
+Notice how both `.next/**` and `.svelte-kit/**` need to be specified as outputs,
+even though though the Next.js apps do not generate this output. With Workspace
+overrides, you can instead add a new configuration at
+`apps/my-svelte-kit-app/turbo.json`, and remove the config from the root
+configuration:
+
+```json
+// apps/my-svelte-kit-app/turbo.json
+{
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "outputs": [".svelte-kit/**"]
+    }
+  }
+}
+```
+
+```diff
+//turbo.json
+{
+  "pipeline": {
+    "build": {
+-      "outputs": [".next/**", ".svelte-kit/**"]
++      "outputs": [".next/**"]
+    }
+  }
+}
+```
+
+### Specialized Tasks
+
+In another example, say that the `build` task in one workspace `dependsOn` a
+`compile` task. You could universally declare it as `dependsOn: ["compile"]`.
+This means that your root `turbo.json` has to have a empty `compile` task entry:
+
+```json
+{
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["compile"]
+    },
+    "compile": {}
+  }
+}
+```
+
+With a Workspace override, you can move that `compile` task into the
+`apps/my-custom-app/turbo.json` and remove it from the root.
+
+## Relationship to `Workspace#Task` syntax
+
+You may be wondering: how does this relate to [`workspace#task` entries][3] in the root turbo.json?
+These features are very similar, with one major difference. When you declare a specific workspace task
+in the root turbo.json, it is _completely_ preferred over the baseline task configuration. With a
+Workspace Override, the task configuration is merged. Consider the example of the monorepo with
+four Next.js apps and a Sveltekit app again. Without a workspace override, you may configure your
+root `turbo.json` like this:
+
+```json
+// turbo.json
+{
+  "pipeline": {
+    "build": {
+      "outputMode": "hash-only",
+      "outputs": [".next/**"],
+    },
+    "my-sveltekit-app#build": {
+      "outputs": [".svelte-kit/**"]
+    }
+  }
+}
+```
+
+This works, but it's important to understand that the `my-sveltekit-app#build`
+completely ovewrites `build` for the Sveltekit app. Any other config (such as
+`outputMode`) in the `build` config would be lost. To retain the `build` config,
+you would have to duplicate all the config including the override. Other than
+duplication, the obvious problem with this setup is that it can be difficult to
+understand over time which duplications are intentional and which ones are added
+just because someone wanted to add a custom `outputs` for their workspace.
+
+With workspace overrides, you don't need duplicate any configuration, just
+override what needs to be changed.
+
+<Callout type="info">
+  Although there are no plans to remove Workspace Specific Task configurations, we expect that
+  many of the use cases that it is used for, can be changed to Workspace Overrides instead.
+</Callout>
+
+## Troubleshooting
+
+In large monorepos, it can sometimes be difficult to understand how Turborepo is
+interpreting your configuration. To help, we've added a `resolvedTaskDefinition`
+to the Dry Run output. If you run `turbo run build --dry-run`, for example, the
+output will include the combination of all `turbo.json` configuration that were
+considered before running the task.
+
+[1]: /repo/docs/core-concepts/monorepos/running-tasks#running-tasks-from-the-root
+[2]: /repo/docs/reference/configuration#pipeline
+[3]: /repo/docs/core-concepts/monorepos/running-tasks#specific-workspace-tasks
