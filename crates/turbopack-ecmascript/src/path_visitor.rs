@@ -35,7 +35,7 @@ fn find_range<'a, 'b>(
         return None;
     }
 
-    let start = if visitors.first().unwrap.0[index] == *kind {
+    let start = if visitors.first().unwrap().0[index] == *kind {
         // Fast path: It looks like the whole range is selected
         0
     } else {
