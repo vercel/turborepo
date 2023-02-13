@@ -64,7 +64,11 @@ impl DevManifestContentSourceVc {
             .page_roots
             .iter()
             .copied()
-            .try_flat_map_recursive_join(get_content_source_children)
+            // This call returns a non-deterministic order of content sources,
+            // but we don't care as we sort the result anyway.
+            .try_flat_map_recursive_join(|content_source| {
+                Some(get_content_source_children(*content_source))
+            })
             .await?
             .into_iter()
             .map(content_source_to_pathname)

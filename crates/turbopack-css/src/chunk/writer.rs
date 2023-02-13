@@ -36,6 +36,18 @@ pub async fn expand_imports(
                     close,
                 ));
             }
+            Some(CssImport::Composes(composed_chunk_item)) => {
+                let id = &*composed_chunk_item.to_string().await?;
+                writeln!(code, "/* composes({}) */", id)?;
+
+                let imported_content_vc = composed_chunk_item.content();
+                let imported_content = &*imported_content_vc.await?;
+                stack.push((
+                    composed_chunk_item,
+                    imported_content.imports.iter().cloned().collect(),
+                    "".to_string(),
+                ));
+            }
             Some(CssImport::External(url_vc)) => {
                 external_imports.push(url_vc);
             }

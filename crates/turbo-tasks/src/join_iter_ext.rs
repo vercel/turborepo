@@ -1,7 +1,5 @@
 use std::{
     future::{Future, IntoFuture},
-    hash::Hash,
-    mem::take,
     pin::Pin,
     task::ready,
 };
@@ -9,10 +7,9 @@ use std::{
 use anyhow::Result;
 use futures::{
     future::{join_all, JoinAll},
-    stream::FuturesOrdered,
+    stream::FuturesUnordered,
     FutureExt, Stream,
 };
-use indexmap::IndexSet;
 
 /// Future for the [JoinIterExt::join] method.
 pub struct Join<F>
@@ -67,24 +64,23 @@ where
 
 pub struct TryFlatMapRecursiveJoin<T, C, F, CI>
 where
-    T: Hash + PartialEq + Eq + Clone,
-    C: Fn(T) -> F,
+    C: FnMut(&T) -> Option<F>,
     F: Future<Output = Result<CI>>,
     CI: IntoIterator<Item = T>,
 {
-    set: IndexSet<T>,
-    futures: FuturesOrdered<F>,
-    get_children: C,
+    output: Vec<T>,
+    futures: FuturesUnordered<F>,
+    filter_flat_map: C,
 }
 
 impl<T, C, F, CI> Future for TryFlatMapRecursiveJoin<T, C, F, CI>
 where
-    T: Hash + PartialEq + Eq + Clone,
-    C: Fn(T) -> F,
+    C: FnMut(&T) -> Option<F>,
     F: Future<Output = Result<CI>>,
     CI: IntoIterator<Item = T>,
 {
-    type Output = Result<IndexSet<T>>;
+    type Output = Result<Vec<T>>;
+
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -96,17 +92,19 @@ where
                 match result {
                     Ok(children) => {
                         for item in children {
-                            let (index, new) = this.set.insert_full(item);
-                            if new {
-                                this.futures
-                                    .push_back((this.get_children)(this.set[index].clone()));
+                            match (this.filter_flat_map)(&item) {
+                                Some(future) => {
+                                    this.futures.push(future);
+                                }
+                                None => {}
                             }
+                            this.output.push(item);
                         }
                     }
                     Err(err) => return std::task::Poll::Ready(Err(err)),
                 }
             } else {
-                return std::task::Poll::Ready(Ok(take(&mut this.set)));
+                return std::task::Poll::Ready(Ok(std::mem::take(&mut this.output)));
             }
         }
     }
@@ -137,20 +135,29 @@ where
 
 pub trait TryFlatMapRecursiveJoinIterExt<T, C, F, CI>: Iterator
 where
-    T: Hash + PartialEq + Eq + Clone,
-    C: Fn(T) -> F,
+    C: FnMut(&T) -> Option<F>,
     F: Future<Output = Result<CI>>,
     CI: IntoIterator<Item = T>,
 {
-    /// Applies the `get_children` function on each item in the iterator, and on
-    /// each item that is returned by `get_children`. Collects all items from
-    /// the iterator and all items returns by `get_children` into an index set.
-    /// The order of items is equal to a breadth-first traversal of the tree,
-    /// but `get_children` will execute concurrently. It will handle circular
-    /// references gracefully. Returns a future that resolve to a
-    /// [Result<IndexSet>]. It will resolve to the first error that occur in
-    /// breadth-first order.
-    fn try_flat_map_recursive_join(self, get_children: C) -> TryFlatMapRecursiveJoin<T, C, F, CI>;
+    /// Applies the `filter_flat_map` function on each item in the iterator, and
+    /// on each item that is returned by `filter_flat_map`, recursively.
+    ///
+    /// Collects all items from the iterator and all items returns by
+    /// `filter_flat_map` into a vector.
+    ///
+    /// `filter_flat_map` will execute concurrently
+    ///
+    /// **Beware:**
+    /// * The order of the returned items is undefined.
+    /// * Circular references must be handled within `filter_flat_map`: return
+    ///   `None` to stop the recursion.
+    ///
+    /// Returns a future that resolve to a [Result<Vec<T>>]. It will
+    /// resolve to the first error that occurs.
+    fn try_flat_map_recursive_join(
+        self,
+        filter_flat_map: C,
+    ) -> TryFlatMapRecursiveJoin<T, C, F, CI>;
 }
 
 impl<T, F, IF, It> JoinIterExt<T, F> for It
@@ -183,25 +190,30 @@ where
 
 impl<T, C, F, CI, It> TryFlatMapRecursiveJoinIterExt<T, C, F, CI> for It
 where
-    T: Hash + PartialEq + Eq + Clone,
-    C: Fn(T) -> F,
+    C: FnMut(&T) -> Option<F>,
     F: Future<Output = Result<CI>>,
     CI: IntoIterator<Item = T>,
     It: Iterator<Item = T>,
 {
-    fn try_flat_map_recursive_join(self, get_children: C) -> TryFlatMapRecursiveJoin<T, C, F, CI> {
-        let mut set = IndexSet::new();
-        let mut futures = FuturesOrdered::new();
+    fn try_flat_map_recursive_join(
+        self,
+        mut filter_flat_map: C,
+    ) -> TryFlatMapRecursiveJoin<T, C, F, CI> {
+        let futures = FuturesUnordered::new();
+        let mut output = Vec::new();
         for item in self {
-            let (index, new) = set.insert_full(item);
-            if new {
-                futures.push_back(get_children(set[index].clone()));
+            match filter_flat_map(&item) {
+                Some(future) => {
+                    futures.push(future);
+                }
+                None => {}
             }
+            output.push(item);
         }
         TryFlatMapRecursiveJoin {
-            set,
+            output,
             futures,
-            get_children,
+            filter_flat_map,
         }
     }
 }
