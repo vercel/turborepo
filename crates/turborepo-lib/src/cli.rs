@@ -147,7 +147,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "command")]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
