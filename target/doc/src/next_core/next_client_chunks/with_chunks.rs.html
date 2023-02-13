@@ -190,7 +190,6 @@
 <span id="190">190</span>
 <span id="191">191</span>
 <span id="192">192</span>
-<span id="193">193</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
@@ -201,7 +200,7 @@
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_module_id,
+    utils::stringify_js,
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -315,8 +314,7 @@
                 client_chunks.push(Value::String(path.to_string()));
             }
         }
-        <span class="kw">let </span>module_id =
-            stringify_module_id(<span class="kw-2">&amp;*</span>inner.asset.as_chunk_item(<span class="self">self</span>.inner_context).id().<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="kw">let </span>module_id = stringify_js(<span class="kw-2">&amp;*</span>inner.asset.as_chunk_item(<span class="self">self</span>.inner_context).id().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: <span class="macro">format!</span>(
                 <span class="string">&quot;__turbopack_esm__({{

@@ -1360,7 +1360,7 @@
 <span class="kw">use crate</span>::{
     parse::ParseResultSourceMapVc,
     references::esm::EsmExportsVc,
-    utils::{stringify_module_id, stringify_str, FormatIter},
+    utils::{stringify_js, FormatIter},
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -1924,9 +1924,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
         code += <span class="string">&quot;(self.TURBOPACK = self.TURBOPACK || []).push([&quot;</span>;
 
-        <span class="macro">writeln!</span>(code, <span class="string">&quot;{}, {{&quot;</span>, stringify_str(chunk_server_path))<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(code, <span class="string">&quot;{}, {{&quot;</span>, stringify_js(chunk_server_path))<span class="question-mark">?</span>;
         <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;</span>this.module_factories {
-            <span class="macro">write!</span>(code, <span class="string">&quot;\n{}: &quot;</span>, <span class="kw-2">&amp;</span>stringify_module_id(entry.id()))<span class="question-mark">?</span>;
+            <span class="macro">write!</span>(code, <span class="string">&quot;\n{}: &quot;</span>, <span class="kw-2">&amp;</span>stringify_js(entry.id()))<span class="question-mark">?</span>;
             code.push_code(entry.code());
             code += <span class="string">&quot;,&quot;</span>;
         }
@@ -1938,7 +1938,7 @@
                 .chunks_server_paths
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
-                .map(|path| <span class="macro">format!</span>(<span class="string">&quot; &amp;&amp; loadedChunks.has({})&quot;</span>, stringify_str(path)))
+                .map(|path| <span class="macro">format!</span>(<span class="string">&quot; &amp;&amp; loadedChunks.has({})&quot;</span>, stringify_js(path)))
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                 .join(<span class="string">&quot;&quot;</span>);
             <span class="kw">let </span>entries_ids = <span class="kw-2">&amp;*</span>evaluate.entry_modules_ids.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1946,7 +1946,7 @@
                 .iter()
                 .map(|id| <span class="kw">async move </span>{
                     <span class="kw">let </span>id = id.<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>id = stringify_module_id(<span class="kw-2">&amp;</span>id);
+                    <span class="kw">let </span>id = stringify_js(<span class="kw-2">&amp;</span>id);
                     <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">r#&quot;instantiateRuntimeModule({id});&quot;#</span>)) <span class="kw">as </span><span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;
                 })
                 .try_join()

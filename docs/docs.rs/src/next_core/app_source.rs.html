@@ -755,7 +755,7 @@
     },
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_str,
+    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_js,
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 <span class="kw">use </span>turbopack_env::ProcessEnvAssetVc;
@@ -1293,7 +1293,7 @@
                                     </span>));
                                 }
                             }
-                            <span class="prelude-val">Ok</span>((stringify_str(segment_path), imports))
+                            <span class="prelude-val">Ok</span>((stringify_js(segment_path), imports))
                         });
                         futures
                     })
@@ -1318,7 +1318,7 @@
                     <span class="string">&quot;import {}, {{ chunks as {} }} from {};\n&quot;</span>,
                     identifier,
                     chunks_identifier,
-                    stringify_str(p)
+                    stringify_js(p)
                 )<span class="question-mark">?
             </span>}
         }
@@ -1328,7 +1328,7 @@
                 <span class="string">r#&quot;(&quot;TURBOPACK {{ transition: next-client }}&quot;);
 import BOOTSTRAP from {};
 &quot;#</span>,
-                stringify_str(<span class="kw-2">&amp;</span>page)
+                stringify_js(<span class="kw-2">&amp;</span>page)
             )<span class="question-mark">?</span>;
         }
 
@@ -1339,7 +1339,7 @@ import BOOTSTRAP from {};
                 <span class="macro">writeln!</span>(
                     result,
                     <span class="string">&quot;    {key}: {{ module: {identifier}, chunks: {chunks_identifier} }},&quot;</span>,
-                    key = stringify_str(key),
+                    key = stringify_js(key),
                 )<span class="question-mark">?</span>;
             }
             result += <span class="string">&quot;  },&quot;</span>;

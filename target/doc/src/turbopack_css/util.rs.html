@@ -51,7 +51,7 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
-</pre><pre class="rust"><code><span class="kw">pub fn </span>stringify_str(str: <span class="kw-2">&amp;</span>str) -&gt; String {
+</pre><pre class="rust"><code><span class="kw">pub fn </span>stringify_js(str: <span class="kw-2">&amp;</span>str) -&gt; String {
     <span class="kw">let </span><span class="kw-2">mut </span>escaped = String::with_capacity(str.len());
     <span class="kw">for </span>char <span class="kw">in </span>str.chars() {
         <span class="kw">match </span>char {
@@ -75,33 +75,33 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::util::stringify_str;
+    <span class="kw">use </span><span class="kw">crate</span>::util::stringify_js;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>surrounds_with_double_quotes() {
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">&quot;foo&quot;</span>), <span class="string">r#&quot;&quot;foo&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">&quot;foo&quot;</span>), <span class="string">r#&quot;&quot;foo&quot;&quot;#</span>);
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>escapes_double_quotes() {
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">r#&quot;&quot;&quot;&quot;#</span>), <span class="string">r#&quot;&quot;\&quot;\&quot;&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">r#&quot;&quot;&quot;&quot;#</span>), <span class="string">r#&quot;&quot;\&quot;\&quot;&quot;&quot;#</span>);
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>escapes_backslash() {
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">r#&quot;\&quot;#</span>), <span class="string">r#&quot;&quot;\\&quot;&quot;#</span>);
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">r#&quot;\\&quot;#</span>), <span class="string">r#&quot;&quot;\\\\&quot;&quot;#</span>);
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">r#&quot;\n&quot;#</span>), <span class="string">r#&quot;&quot;\\n&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">r#&quot;\&quot;#</span>), <span class="string">r#&quot;&quot;\\&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">r#&quot;\\&quot;#</span>), <span class="string">r#&quot;&quot;\\\\&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">r#&quot;\n&quot;#</span>), <span class="string">r#&quot;&quot;\\n&quot;&quot;#</span>);
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>escapes_newlines() {
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">&quot;\n&quot;</span>), <span class="string">r#&quot;&quot;\n&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">&quot;\n&quot;</span>), <span class="string">r#&quot;&quot;\n&quot;&quot;#</span>);
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>escapes_mixed() {
-        <span class="macro">assert_eq!</span>(stringify_str(<span class="string">&quot;\n\r\u{0c}&quot;</span>), <span class="string">r#&quot;&quot;\n\r\f&quot;&quot;#</span>);
+        <span class="macro">assert_eq!</span>(stringify_js(<span class="string">&quot;\n\r\u{0c}&quot;</span>), <span class="string">r#&quot;&quot;\n\r\f&quot;&quot;#</span>);
     }
 }
 </code></pre></div>

@@ -161,7 +161,7 @@
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_str,
+    utils::stringify_js,
 };
 
 <span class="doccomment">/// The `process.env` asset, responsible for initializing the env (shared by all
@@ -280,7 +280,7 @@
             // env can be used to inject live code into the output.
             // TODO this is not completely correct as env vars need to ignore casing
             // So `process.env.path === process.env.PATH === process.env.PaTh`
-            </span><span class="macro">writeln!</span>(code, <span class="string">&quot;env[{}] = {};&quot;</span>, stringify_str(name), val)<span class="question-mark">?</span>;
+            </span><span class="macro">writeln!</span>(code, <span class="string">&quot;env[{}] = {};&quot;</span>, stringify_js(name), val)<span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

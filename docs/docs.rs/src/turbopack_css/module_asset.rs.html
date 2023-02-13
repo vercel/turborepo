@@ -244,11 +244,6 @@
 <span id="244">244</span>
 <span id="245">245</span>
 <span id="246">246</span>
-<span id="247">247</span>
-<span id="248">248</span>
-<span id="249">249</span>
-<span id="250">250</span>
-<span id="251">251</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -278,7 +273,7 @@
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_str,
+    utils::stringify_js,
     ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
@@ -444,12 +439,7 @@
                         })
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                         .join(<span class="string">&quot; &quot;</span>);
-                    <span class="macro">writeln!</span>(
-                        code,
-                        <span class="string">&quot;  {}: {},&quot;</span>,
-                        stringify_str(key),
-                        stringify_str(<span class="kw-2">&amp;</span>content)
-                    )<span class="question-mark">?</span>;
+                    <span class="macro">writeln!</span>(code, <span class="string">&quot;  {}: {},&quot;</span>, stringify_js(key), stringify_js(<span class="kw-2">&amp;</span>content))<span class="question-mark">?</span>;
                 }
                 code += <span class="string">&quot;});\n&quot;</span>;
                 EcmascriptChunkItemContent {

@@ -331,7 +331,7 @@
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::{stringify_module_id, stringify_str},
+    utils::stringify_js,
 };
 
 <span class="doccomment">/// The manifest loader item is shipped in the same chunk that uses the dynamic
@@ -437,9 +437,9 @@ __turbopack_export_value__((__turbopack_import__) =&gt; {{
         return __turbopack_require__({item_id});
     }}).then(() =&gt; __turbopack_import__({dynamic_id}));
 }});&quot;</span>,
-            chunk_server_path = stringify_str(chunk_server_path),
-            item_id = stringify_module_id(item_id),
-            dynamic_id = stringify_module_id(dynamic_id),
+            chunk_server_path = stringify_js(chunk_server_path),
+            item_id = stringify_js(item_id),
+            dynamic_id = stringify_js(dynamic_id),
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
@@ -586,7 +586,7 @@ __turbopack_export_value__((__turbopack_import__) =&gt; {{
 
         <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="string">b&quot;const chunks = [\n&quot;</span>.to_vec();
         <span class="kw">for </span>pathname <span class="kw">in </span>chunk_server_paths {
-            <span class="macro">writeln!</span>(code, <span class="string">&quot;    {},&quot;</span>, stringify_str(<span class="kw-2">&amp;</span>pathname))<span class="question-mark">?</span>;
+            <span class="macro">writeln!</span>(code, <span class="string">&quot;    {},&quot;</span>, stringify_js(<span class="kw-2">&amp;</span>pathname))<span class="question-mark">?</span>;
         }
         <span class="macro">writeln!</span>(code, <span class="string">&quot;];&quot;</span>)<span class="question-mark">?</span>;
 

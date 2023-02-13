@@ -446,7 +446,7 @@
 <span class="kw">use crate</span>::{
     embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
     parse::ParseResultSourceMapVc,
-    util::stringify_str,
+    util::stringify_js,
     ImportAssetReferenceVc,
 };
 
@@ -552,7 +552,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
         <span class="macro">writeln!</span>(code, <span class="string">&quot;/* chunk {} */&quot;</span>, chunk_name.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
         <span class="kw">for </span>external_import <span class="kw">in </span>external_imports {
-            <span class="macro">writeln!</span>(code, <span class="string">&quot;@import {};&quot;</span>, stringify_str(<span class="kw-2">&amp;</span>external_import))<span class="question-mark">?</span>;
+            <span class="macro">writeln!</span>(code, <span class="string">&quot;@import {};&quot;</span>, stringify_js(<span class="kw-2">&amp;</span>external_import))<span class="question-mark">?</span>;
         }
 
         code.push_code(<span class="kw-2">&amp;</span>body.build());

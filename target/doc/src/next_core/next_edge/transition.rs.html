@@ -111,7 +111,7 @@
     environment::EnvironmentVc,
     virtual_asset::VirtualAssetVc,
 };
-<span class="kw">use </span>turbopack_ecmascript::{chunk_group_files_asset::ChunkGroupFilesAsset, utils::stringify_str};
+<span class="kw">use </span>turbopack_ecmascript::{chunk_group_files_asset::ChunkGroupFilesAsset, utils::stringify_js};
 
 <span class="kw">use </span><span class="kw">crate</span>::embed_js::next_js_file;
 
@@ -134,7 +134,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>new_content = RopeBuilder::from(
             <span class="macro">format!</span>(
                 <span class="string">&quot;const PAGE = {};\n&quot;</span>,
-                stringify_str(
+                stringify_js(
                     <span class="self">self</span>.base_path
                         .<span class="kw">await</span><span class="question-mark">?
                         </span>.get_path_to(<span class="kw-2">&amp;*</span>asset.path().<span class="kw">await</span><span class="question-mark">?</span>)

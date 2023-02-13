@@ -42,7 +42,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
 <span class="kw">use </span>turbo_tasks_env::{EnvMapVc, ProcessEnv, ProcessEnvVc};
-<span class="kw">use </span>turbopack_ecmascript::utils::stringify_str;
+<span class="kw">use </span>turbopack_ecmascript::utils::stringify_js;
 
 <span class="doccomment">/// Encodes values as JS strings so that they can be safely injected into a JS
 /// output.
@@ -67,7 +67,7 @@
 
         <span class="kw">let </span>encoded = prior
             .iter()
-            .map(|(k, v)| (k.clone(), stringify_str(v)))
+            .map(|(k, v)| (k.clone(), stringify_js(v)))
             .collect();
 
         <span class="prelude-val">Ok</span>(EnvMapVc::cell(encoded))
@@ -76,7 +76,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;OptionStringVc&gt; {
         <span class="kw">let </span>prior = <span class="self">self</span>.prior.read(name).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>encoded = prior.as_deref().map(stringify_str);
+        <span class="kw">let </span>encoded = prior.as_deref().map(stringify_js);
         <span class="prelude-val">Ok</span>(OptionStringVc::cell(encoded))
     }
 }

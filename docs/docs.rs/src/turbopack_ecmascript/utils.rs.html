@@ -125,12 +125,6 @@
 <span id="125">125</span>
 <span id="126">126</span>
 <span id="127">127</span>
-<span id="128">128</span>
-<span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
-<span id="132">132</span>
-<span id="133">133</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     future::Future,
     pin::Pin,
@@ -138,6 +132,7 @@
 };
 
 <span class="kw">use </span>pin_project_lite::pin_project;
+<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::ast::{Expr, Lit, Str},
@@ -197,19 +192,12 @@
     })
 }
 
-<span class="kw">pub fn </span>stringify_module_id(id: <span class="kw-2">&amp;</span>ModuleId) -&gt; String {
-    <span class="kw">match </span>id {
-        ModuleId::Number(n) =&gt; stringify_number(<span class="kw-2">*</span>n),
-        ModuleId::String(s) =&gt; stringify_str(s),
-    }
-}
-
-<span class="kw">pub fn </span>stringify_str(s: <span class="kw-2">&amp;</span>str) -&gt; String {
+<span class="doccomment">/// Converts a serializable value into a valid JavaScript expression.
+</span><span class="kw">pub fn </span>stringify_js&lt;T&gt;(s: <span class="kw-2">&amp;</span>T) -&gt; String
+<span class="kw">where
+    </span>T: Serialize + <span class="question-mark">?</span>Sized,
+{
     serde_json::to_string(s).unwrap()
-}
-
-<span class="kw">pub fn </span>stringify_number(s: u32) -&gt; String {
-    s.to_string()
 }
 
 <span class="kw">pub struct </span>FormatIter&lt;T: Iterator, F: Fn() -&gt; T&gt;(<span class="kw">pub </span>F);
