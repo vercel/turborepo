@@ -16,14 +16,14 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp.log | grep "override-values:override-values-task-with-deps"
-  override-values:override-values-task-with-deps: cache miss, executing 3d2372c2f2000cd6
+  override-values:override-values-task-with-deps: cache miss, executing cf35abb7b46ffad7
   override-values:override-values-task-with-deps: 
   override-values:override-values-task-with-deps: > override-values-task-with-deps
   override-values:override-values-task-with-deps: > echo "running override-values-task-with-deps" > out/foo.min.txt
   override-values:override-values-task-with-deps: 
 
   $ cat tmp.log | grep "override-values:override-values-underlying-task"
-  override-values:override-values-underlying-task: cache miss, executing 3a0c61b37b07c844
+  override-values:override-values-underlying-task: cache miss, executing 783a94e433071496
   override-values:override-values-underlying-task: 
   override-values:override-values-underlying-task: > override-values-underlying-task
   override-values:override-values-underlying-task: > echo "running override-values-underlying-task"
@@ -31,7 +31,7 @@ Setup
   override-values:override-values-underlying-task: running override-values-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:override-values-underlying-topo-task"
-  blank-pkg:override-values-underlying-topo-task: cache miss, executing a20f51570cf3ca37
+  blank-pkg:override-values-underlying-topo-task: cache miss, executing 0e2630802fda80c3
   blank-pkg:override-values-underlying-topo-task: 
   blank-pkg:override-values-underlying-topo-task: > override-values-underlying-topo-task
   blank-pkg:override-values-underlying-topo-task: > echo "override-values-underlying-topo-task from blank-pkg"
