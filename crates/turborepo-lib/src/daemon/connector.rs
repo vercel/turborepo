@@ -146,7 +146,7 @@ impl DaemonConnector {
 
         match timeout(
             Self::SHUTDOWN_TIMEOUT,
-            wait_for_file(&self.pid_file, WaitAction::Missing),
+            wait_for_file(&self.pid_file, WaitAction::Deleted),
         )
         .await?
         {
@@ -209,7 +209,7 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
 
     match (action, path.exists()) {
         (WaitAction::Exists, false) => {}
-        (WaitAction::Missing, true) => {}
+        (WaitAction::Deleted, true) => {}
         _ => return Ok(()),
     };
 
@@ -233,7 +233,7 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
                     paths,
                     ..
                 }),
-                WaitAction::Missing,
+                WaitAction::Deleted,
             ) => {
                 if paths.iter().any(|p| {
                     p.file_name()
@@ -265,5 +265,5 @@ enum WaitAction {
     /// Wait for the file to exist.
     Exists,
     /// Wait for the file to be deleted.
-    Missing,
+    Deleted,
 }
