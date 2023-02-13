@@ -8,6 +8,7 @@ use turbo_tasks::{
     Value,
 };
 use turbo_tasks_env::EnvMapVc;
+use turbo_tasks_fs::json::parse_json_rope_with_source_context;
 use turbopack::{
     evaluate_context::node_evaluate_asset_context,
     module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
@@ -47,6 +48,7 @@ pub struct NextConfig {
     pub images: ImageConfig,
     pub page_extensions: Vec<String>,
     pub react_strict_mode: Option<bool>,
+    pub rewrites: Rewrites,
     pub transpile_packages: Option<Vec<String>>,
 
     // unsupported
@@ -67,8 +69,7 @@ pub struct NextConfig {
     // this is a function in js land
     generate_build_id: Option<serde_json::Value>,
     generate_etags: bool,
-    // this is a function in js land
-    headers: Option<serde_json::Value>,
+    headers: Vec<Header>,
     http_agent_options: HttpAgentConfig,
     i18n: Option<I18NConfig>,
     on_demand_entries: OnDemandEntriesConfig,
@@ -78,10 +79,7 @@ pub struct NextConfig {
     powered_by_header: bool,
     production_browser_source_maps: bool,
     public_runtime_config: IndexMap<String, serde_json::Value>,
-    // this is a function in js land
-    redirects: Option<serde_json::Value>,
-    // this is a function in js land
-    rewrites: Option<serde_json::Value>,
+    redirects: Vec<Redirect>,
     sass_options: IndexMap<String, serde_json::Value>,
     server_runtime_config: IndexMap<String, serde_json::Value>,
     static_page_generation_timeout: f64,
@@ -158,6 +156,100 @@ struct I18NConfig {
 #[serde(rename_all = "kebab-case")]
 enum OutputType {
     Standalone,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum RouteHas {
+    Header {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Cookie {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Query {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Host {
+        value: String,
+    },
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
+pub struct HeaderValue {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
+pub struct Header {
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_path: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locale: Option<bool>,
+    pub headers: Vec<HeaderValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has: Option<Vec<RouteHas>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<Vec<RouteHas>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
+pub enum RedirectStatus {
+    StatusCode(f64),
+    Permanent(bool),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
+pub struct Redirect {
+    pub source: String,
+    pub destination: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_path: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locale: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has: Option<Vec<RouteHas>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<Vec<RouteHas>>,
+
+    #[serde(flatten)]
+    pub status: RedirectStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
+pub struct Rewrite {
+    pub source: String,
+    pub destination: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_path: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locale: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has: Option<Vec<RouteHas>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<Vec<RouteHas>>,
+}
+
+#[turbo_tasks::value(eq = "manual")]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Rewrites {
+    pub before_files: Vec<Rewrite>,
+    pub after_files: Vec<Rewrite>,
+    pub fallback: Vec<Rewrite>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
@@ -243,11 +335,17 @@ pub enum RemotePatternProtocal {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = "camelCase")]
+pub struct ExperimentalTurboConfig {
+    pub loaders: Option<IndexMap<String, WebpackLoaderConfigs>>,
+    pub resolve_alias: Option<IndexMap<String, JsonValue>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
+#[serde(rename_all = "camelCase")]
 pub struct ExperimentalConfig {
     pub app_dir: Option<bool>,
     pub server_components_external_packages: Option<Vec<String>>,
-    pub turbopack_loaders: Option<IndexMap<String, WebpackLoaderConfigs>>,
-    pub turbopack_resolve_alias: Option<IndexMap<String, JsonValue>>,
+    pub turbo: Option<ExperimentalTurboConfig>,
 
     // unsupported
     adjust_font_fallbacks: Option<bool>,
@@ -390,6 +488,11 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn rewrites(self) -> Result<RewritesVc> {
+        Ok(self.await?.rewrites.clone().cell())
+    }
+
+    #[turbo_tasks::function]
     pub async fn transpile_packages(self) -> Result<StringsVc> {
         Ok(StringsVc::cell(
             self.await?.transpile_packages.clone().unwrap_or_default(),
@@ -398,11 +501,12 @@ impl NextConfigVc {
 
     #[turbo_tasks::function]
     pub async fn webpack_loaders_options(self) -> Result<WebpackLoadersOptionsVc> {
-        let Some(ref turbopack_loaders) = self.await?.experimental.turbopack_loaders else {
+        let this = self.await?;
+        let Some(turbo_loaders) = this.experimental.turbo.as_ref().and_then(|t| t.loaders.as_ref()) else {
             return Ok(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
         };
         let mut extension_to_loaders = IndexMap::new();
-        for (ext, loaders) in turbopack_loaders {
+        for (ext, loaders) in turbo_loaders {
             extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
         }
         Ok(WebpackLoadersOptions {
@@ -415,7 +519,7 @@ impl NextConfigVc {
     #[turbo_tasks::function]
     pub async fn resolve_alias_options(self) -> Result<ResolveAliasMapVc> {
         let this = self.await?;
-        let Some(resolve_alias) = this.experimental.turbopack_resolve_alias.as_ref() else {
+        let Some(resolve_alias) = this.experimental.turbo.as_ref().and_then(|t| t.resolve_alias.as_ref()) else {
             return Ok(ResolveAliasMapVc::cell(ResolveAliasMap::default()));
         };
         let alias_map: ResolveAliasMap = resolve_alias.try_into()?;
@@ -485,7 +589,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     .await?;
     match &*config_value {
         JavaScriptValue::Value(val) => {
-            let next_config: NextConfig = serde_json::from_reader(val.read())?;
+            let next_config: NextConfig = parse_json_rope_with_source_context(val)?;
             let next_config = next_config.cell();
 
             Ok(next_config)

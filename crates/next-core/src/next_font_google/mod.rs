@@ -4,7 +4,7 @@ use indoc::formatdoc;
 use once_cell::sync::Lazy;
 use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
 use turbo_tasks_fetch::fetch;
-use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     issue::IssueSeverity,
@@ -34,8 +34,9 @@ pub(crate) mod request;
 mod util;
 
 pub const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
-static FONT_DATA: Lazy<FontData> =
-    Lazy::new(|| serde_json::from_str(include_str!("__generated__/font-data.json")).unwrap());
+static FONT_DATA: Lazy<FontData> = Lazy::new(|| {
+    parse_json_with_source_context(include_str!("__generated__/font-data.json")).unwrap()
+});
 
 type FontData = IndexMap<String, FontDataEntry>;
 
@@ -81,14 +82,19 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
                     formatdoc!(
                         r#"
                             import cssModule from "@vercel/turbopack-next/internal/font/google/cssmodule.module.css?{}";
-                            export default {{
+                            const fontData = {{
                                 className: cssModule.className,
                                 style: {{
                                     fontFamily: "{}",
                                     {}{}
                                 }},
-                                variable: cssModule.variable
                             }};
+
+                            if (cssModule.variable != null) {{
+                                fontData.variable = cssModule.variable;
+                            }}
+
+                            export default fontData;
                         "#,
                         // Pass along whichever options we received to the css handler
                         qstring::QString::new(query.as_ref().unwrap().iter().collect()),
@@ -110,7 +116,7 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
                 .into(),
             );
 
-        Ok(ImportMapResult::Result(ResolveResult::Single(js_asset.into(), vec![]).into()).into())
+        Ok(ImportMapResult::Result(ResolveResult::asset(js_asset.into()).into()).into())
     }
 }
 
@@ -227,7 +233,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
             .into(),
         );
 
-        Ok(ImportMapResult::Result(ResolveResult::Single(css_asset.into(), vec![]).into()).into())
+        Ok(ImportMapResult::Result(ResolveResult::asset(css_asset.into()).into()).into())
     }
 }
 
@@ -361,16 +367,16 @@ async fn font_options_from_query_map(query: QueryMapVc) -> Result<NextFontGoogle
     // of Issues should be okay.
     let query_map = query_map
         .as_ref()
-        .context("@next/font/google queries must exist")?;
+        .context("next/font/google queries must exist")?;
 
     if query_map.len() != 1 {
-        bail!("@next/font/google queries must only have one entry");
+        bail!("next/font/google queries must only have one entry");
     }
 
     let Some((json, _)) = query_map.iter().next() else {
             bail!("Expected one entry");
         };
 
-    self::options::options_from_request(&serde_json::from_str(json)?, &FONT_DATA)
+    self::options::options_from_request(&parse_json_with_source_context(json)?, &FONT_DATA)
         .map(NextFontGoogleOptionsVc::cell)
 }

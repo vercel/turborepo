@@ -1,19 +1,23 @@
 use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
-use axum::async_trait;
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::{get_version, retry::retry_future};
 
-#[async_trait]
-pub trait UserClient {
-    fn set_token(&mut self, token: String);
-    async fn get_user(&self) -> Result<UserResponse>;
-    async fn get_teams(&self) -> Result<TeamsResponse>;
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse>;
+#[derive(Debug, Clone, Deserialize)]
+pub struct VerifiedSsoUser {
+    pub token: String,
+    pub team_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerificationResponse {
+    pub token: String,
+    pub team_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +87,7 @@ pub struct User {
     pub email: String,
     pub name: Option<String>,
     #[serde(rename = "createdAt")]
-    pub created_at: u64,
+    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,49 +96,37 @@ pub struct UserResponse {
 }
 
 pub struct APIClient {
-    token: String,
     client: reqwest::Client,
     base_url: String,
 }
 
-#[async_trait]
-impl UserClient for APIClient {
-    fn set_token(&mut self, token: String) {
-        self.token = token
-    }
-
-    async fn get_user(&self) -> Result<UserResponse> {
+impl APIClient {
+    pub async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let response = self
             .make_retryable_request(|| {
+                let url = self.make_url("/v2/user");
                 let request_builder = self
                     .client
-                    .get(self.make_url("/v2/user"))
+                    .get(url)
                     .header("User-Agent", USER_AGENT.clone())
-                    .header("Authorization", format!("Bearer {}", self.token))
+                    .header("Authorization", format!("Bearer {}", token))
                     .header("Content-Type", "application/json");
 
                 request_builder.send()
             })
-            .await;
+            .await?;
 
-        match response {
-            Ok(response) => {
-                let user_response = response.json::<UserResponse>().await?;
-                Ok(user_response)
-            }
-            Err(error) => {
-                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
-                    if error.status() == Some(StatusCode::NOT_FOUND) {
-                        return Err(anyhow!("404 - Not found"));
-                    }
-                }
-
-                Err(error)
-            }
-        }
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting user: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
-    async fn get_teams(&self) -> Result<TeamsResponse> {
+    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let response = self
             .make_retryable_request(|| {
                 let request_builder = self
@@ -142,30 +134,51 @@ impl UserClient for APIClient {
                     .get(self.make_url("/v2/teams?limit=100"))
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.token));
+                    .header("Authorization", format!("Bearer {}", token));
 
                 request_builder.send()
             })
-            .await;
+            .await?;
 
-        match response {
-            Ok(response) => {
-                let teams_response = response.json().await?;
-                Ok(teams_response)
-            }
-            Err(error) => {
-                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
-                    if error.status() == Some(StatusCode::NOT_FOUND) {
-                        return Err(anyhow!("404 - Not found"));
-                    }
-                }
-
-                Err(error)
-            }
-        }
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting teams: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse> {
+    pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+        let response = {
+            let request_builder = self
+                .client
+                .get(self.make_url("/v2/team"))
+                .query(&[("teamId", team_id)])
+                .header("User-Agent", USER_AGENT.clone())
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", token));
+            request_builder.send()
+        }
+        .await?;
+
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting team: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
+    }
+
+    pub async fn get_caching_status(
+        &self,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<CachingStatusResponse> {
         let response = self
             .make_retryable_request(|| {
                 let mut request_builder = self
@@ -173,8 +186,11 @@ impl UserClient for APIClient {
                     .get(self.make_url("/v8/artifacts/status"))
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.token));
+                    .header("Authorization", format!("Bearer {}", token));
 
+                if let Some(slug) = team_slug {
+                    request_builder = request_builder.query(&[("teamSlug", slug)]);
+                }
                 if team_id.starts_with("team_") {
                     request_builder = request_builder.query(&[("teamId", team_id)]);
                 }
@@ -182,20 +198,53 @@ impl UserClient for APIClient {
                 request_builder.send()
             })
             .await?;
-        Ok(response.json().await?)
+
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting caching status: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
-}
 
-const RETRY_MAX: u32 = 2;
+    pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/registration/verify"))
+                    .query(&[("token", token), ("tokenName", token_name)])
+                    .header("User-Agent", USER_AGENT.clone());
 
-impl APIClient {
+                request_builder.send()
+            })
+            .await?;
+
+        let verification_response: VerificationResponse = response.json().await.map_err(|err| {
+            anyhow!(
+                "Error verifying token: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })?;
+        Ok(VerifiedSsoUser {
+            token: verification_response.token,
+            team_id: verification_response.team_id,
+        })
+    }
+
+    const RETRY_MAX: u32 = 2;
+
     async fn make_retryable_request<
         F: Future<Output = Result<reqwest::Response, reqwest::Error>>,
     >(
         &self,
         request_builder: impl Fn() -> F,
     ) -> Result<reqwest::Response> {
-        retry_future(RETRY_MAX, request_builder, Self::should_retry_request).await
+        retry_future(Self::RETRY_MAX, request_builder, Self::should_retry_request).await
     }
 
     fn should_retry_request(error: &reqwest::Error) -> bool {
@@ -212,13 +261,12 @@ impl APIClient {
         false
     }
 
-    pub fn new(token: impl AsRef<str>, base_url: impl AsRef<str>) -> Result<Self> {
+    pub fn new(base_url: impl AsRef<str>) -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(20))
             .build()?;
 
         Ok(APIClient {
-            token: token.as_ref().to_string(),
             client,
             base_url: base_url.as_ref().to_string(),
         })

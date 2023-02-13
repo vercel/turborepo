@@ -6,11 +6,6 @@ on:
   repository_dispatch:
     # This is the event type defined by next.js upstream's `repository_dispatch` workflow dispatches.
     types: [nextjs-release-published]
-    inputs:
-      force_post_to_slack:
-        description: Override post test results to Slack
-        type: boolean
-        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -36,8 +31,9 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
-      force_post_to_slack: ${{ inputs.force_post_to_slack }}
+      force_post_to_slack: ${{ inputs.force_post_to_slack || false }}
       version: ${{ inputs.version || github.event.client_payload.version }}
+      diff_base: "release"
 
   # Upload test results to branch.
   upload_test_results:

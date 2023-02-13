@@ -27,7 +27,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_str,
+    utils::stringify_js,
     ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
@@ -154,7 +154,7 @@ impl ValueToString for CssProxyToCssAssetReference {
 impl AssetReference for CssProxyToCssAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(self.module.into(), Vec::new()).cell()
+        ResolveResult::asset(self.module.into()).cell()
     }
 }
 
@@ -193,12 +193,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         })
                         .collect::<Vec<_>>()
                         .join(" ");
-                    writeln!(
-                        code,
-                        "  {}: {},",
-                        stringify_str(key),
-                        stringify_str(&content)
-                    )?;
+                    writeln!(code, "  {}: {},", stringify_js(key), stringify_js(&content))?;
                 }
                 code += "});\n";
                 EcmascriptChunkItemContent {

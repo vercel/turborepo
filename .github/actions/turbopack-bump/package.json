@@ -1,0 +1,17 @@
+{
+  "name": "turbopack-bump-action",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build:index": "ncc build src/index.ts -o dist --source-map --minify",
+    "prepare": "npm run build:index"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/github": "5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "18.13.0",
+    "@vercel/ncc": "^0.36.0"
+  }
+}
