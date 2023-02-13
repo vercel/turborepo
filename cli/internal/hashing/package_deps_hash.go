@@ -43,12 +43,16 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 		}
 		result = gitLsTreeOutput
 	} else {
-
-		// Add in package.json to input patterns because if the `scripts` in
-		// the package.json change (i.e. the tasks that turbo executes), we want
-		// a cache miss, since any existing cache could be invalid.
-		// Note this package.json will be resolved relative to the pkgPath.
+		// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
+		//
+		// - package.json is an input because if the `scripts` in
+		// 		the package.json change (i.e. the tasks that turbo executes), we want
+		// 		a cache miss, since any existing cache could be invalid.
+		// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
+		// 		is similarly included in the global hash. This file may not exist in the workspace, but
+		// 		that is ok, because it will get ignored downstream.
 		calculatedInputs = append(calculatedInputs, "package.json")
+		calculatedInputs = append(calculatedInputs, "turbo.json")
 
 		// The input patterns are relative to the package.
 		// However, we need to change the globbing to be relative to the repo root.
