@@ -422,17 +422,32 @@ async function getTestResultDiffBase(
 
   // If base is main, get the tree under `test-results/main`
   // Otherwise iterate over all the trees under `test-results` then find latest next.js release
-  let baseTree:
+  let testResultJsonTree:
     | Awaited<
         ReturnType<Awaited<Octokit["rest"]["git"]["getTree"]>>
-      >["data"]["tree"][number]
+      >["data"]["tree"]
     | undefined;
+
   if (shouldDiffWithMain) {
     console.log("Trying to find latest test results from main branch");
-    baseTree = testResultsTree.find((tree) => tree.path === "main");
+    const baseTree = testResultsTree.find((tree) => tree.path === "main");
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // Now tree should point the list of .json for the actual test results
+    testResultJsonTree = (
+      await octokit.rest.git.getTree({
+        ...context.repo,
+        tree_sha: baseTree.sha,
+      })
+    ).data.tree;
   } else {
     console.log("Trying to find latest test results from next.js release");
-    baseTree = testResultsTree
+    const baseTree = testResultsTree
       .filter((tree) => tree.path !== "main")
       .reduce((acc, value) => {
         if (!acc) {
@@ -440,23 +455,17 @@ async function getTestResultDiffBase(
         }
 
         return semver.gt(value.path, acc.path) ? value : acc;
-      }, null as any as typeof baseTree);
+      }, null);
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // If the results is for the release, no need to traverse down the tree
+    testResultJsonTree = [baseTree];
   }
-
-  if (!baseTree || !baseTree.sha) {
-    console.log("There is no base to compare test results against");
-    return null;
-  }
-
-  console.log("Found base tree", baseTree);
-
-  // Now tree should point the list of .json for the actual test results
-  const testResultJsonTree = (
-    await octokit.rest.git.getTree({
-      ...context.repo,
-      tree_sha: baseTree.sha,
-    })
-  ).data.tree;
 
   if (!testResultJsonTree) {
     console.log("There is no test results stored in the base yet");
