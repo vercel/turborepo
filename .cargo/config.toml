@@ -11,4 +11,4 @@ linker = "rust-lld"
 xtask = "run --package xtask --"
 
 [target.'cfg(all())']
-rustflags = ["-Aclippy::too_many_arguments"]
+rustflags = ["--cfg", "tokio_unstable", "-Aclippy::too_many_arguments"]
