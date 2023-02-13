@@ -244,18 +244,18 @@ impl Analyzer<'_> {
                             self.g.add_strong_dep(item_id, last);
                         }
 
-                        // Create weak dependencies to all LAST_WRITES and
-                        // LAST_READS.
+                        // // Create weak dependencies to all LAST_WRITES and
+                        // // LAST_READS.
 
-                        for (.., state) in self.vars.iter() {
-                            for last_write in state.last_writes.iter() {
-                                self.g.add_weak_dep(item_id, last_write);
-                            }
+                        // for (.., state) in self.vars.iter() {
+                        //     for last_write in state.last_writes.iter() {
+                        //         self.g.add_weak_dep(item_id, last_write);
+                        //     }
 
-                            for last_read in state.last_reads.iter() {
-                                self.g.add_weak_dep(item_id, last_read);
-                            }
-                        }
+                        //     for last_read in state.last_reads.iter() {
+                        //         self.g.add_weak_dep(item_id, last_read);
+                        //     }
+                        // }
                     }
                     ItemIdKind::Export(id) => {
                         // Create a strong dependency to LAST_WRITES for this var
