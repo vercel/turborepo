@@ -6,7 +6,7 @@ use std::{
 use anyhow::{bail, Result};
 use hyper::Uri;
 use turbo_tasks::{TransientInstance, Value};
-use turbopack_cli_utils::issue::ConsoleUiVc;
+use turbopack_core::issue::IssueReporterVc;
 
 use super::{
     headers::{HeaderValue, Headers},
@@ -15,7 +15,10 @@ use super::{
     ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
     ProxyResultVc, StaticContentVc,
 };
-use crate::{handle_issues, source::ContentSourceData};
+use crate::{
+    handle_issues,
+    source::{ContentSource, ContentSourceData, GetContentSourceContent},
+};
 
 /// The result of [`resolve_source_request`]. Similar to a
 /// `ContentSourceContent`, but without the `Rewrite` variant as this is taken
@@ -33,7 +36,7 @@ pub enum ResolveSourceRequestResult {
 pub async fn resolve_source_request(
     source: ContentSourceVc,
     request: TransientInstance<SourceRequest>,
-    console_ui: ConsoleUiVc,
+    issue_reporter: IssueReporterVc,
 ) -> Result<ResolveSourceRequestResultVc> {
     let mut data = ContentSourceData::default();
     let mut current_source = source;
@@ -47,7 +50,7 @@ pub async fn resolve_source_request(
             result,
             &original_path,
             "get content from source",
-            console_ui,
+            issue_reporter,
         )
         .await?;
 
@@ -109,6 +112,18 @@ async fn request_to_data(
     }
     if vary.body {
         data.body = Some(request.body.clone().into());
+    }
+    if vary.raw_query {
+        data.raw_query = Some(request.uri.query().unwrap_or("").to_string());
+    }
+    if vary.raw_headers {
+        data.raw_headers = Some(
+            request
+                .headers
+                .iter()
+                .map(|(name, value)| Ok((name.to_string(), value.to_str()?.to_string())))
+                .collect::<Result<Vec<_>>>()?,
+        );
     }
     if let Some(filter) = vary.query.as_ref() {
         if let Some(query) = request.uri.query() {

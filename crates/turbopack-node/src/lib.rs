@@ -1,5 +1,6 @@
 #![feature(async_closure)]
 #![feature(min_specialization)]
+#![feature(lint_reasons)]
 
 use std::{
     collections::{HashMap, HashSet},
@@ -18,9 +19,10 @@ use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
-    asset::{AssetVc, AssetsSetVc},
+    asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
-    source_map::{GenerateSourceMapVc, SourceMapVc},
+    reference::AssetReference,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};

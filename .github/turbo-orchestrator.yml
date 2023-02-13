@@ -1,0 +1,72 @@
+# Docs
+
+# Label Config
+
+# labeler:
+#   - settings:
+#     - codeOwnersPath: {PATH TO CODEOWNERS FILE (defaults to .github/CODEOWNERS)}
+#   - labels:
+#     - label: {YOUR LABEL NAME}
+#       condition: {AND (default) | OR}
+#       when:
+#         {TEST_FUNCTION}: {REGEX}
+#         ...
+#     ...
+
+#| Function Name               | Description                                                                |
+#| --------------------------- | -------------------------------------------------------------------------- |
+#| `isAnyFilePathMatch`        | Returns true if any filename in the PR diff matches the given regex        |
+#| `isPRBodyMatch`             | Returns true if the PR description matches the given regex                 |
+#| `isPRTitleMatch`            | Returns true if the PR title matches the given regex                       |
+#| `isPRAuthorMatch`           | Returns true if the PR author matches the given regex                      |
+#| `isPRAuthorCompanyMatch`    | Returns true if the PR author's company matches the given regex            |
+#| `isAnyFileOwnedByMatch`     | Returns true if any owner of a file in the PR diff matches the given regex |
+#| `isNotAnyFilePathMatch`     | The negation of `isAnyFilePathMatch`                                       |
+#| `isNotPRBodyMatch`          | The negation of `isPRBodyMatch`                                            |
+#| `isNotPRTitleMatch`         | The negation of `isPRTitleMatch`                                           |
+#| `isNotPRAuthorMatch`        | The negation of `isPRAuthorMatch`                                          |
+#| `isNotPRAuthorCompanyMatch` | The negation of `isPRAuthorCompanyMatch`                                   |
+#| `isNotAnyFileOwnerByMatch`  | The negation of `isAnyFileOwnedByMatch`                                    |
+
+labeler:
+  labels:
+    # teams
+    - label: "team: turborepo"
+      when:
+        isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
+    - label: "team: turbopack"
+      when:
+        isAnyFileOwnedByMatch: '@vercel\/web-tooling'
+
+    # areas
+    - label: "area: ci"
+      when:
+        isAnyFilePathMatch: '^\.github\/(workflows|actions).*$'
+    - label: "area: examples"
+      when:
+        isAnyFilePathMatch: '^examples\/.*$'
+    - label: "area: docs"
+      when:
+        isAnyFilePathMatch: '^docs\/.*\.mdx$'
+    - label: "area: site"
+      when:
+        isAnyFilePathMatch: '^docs\/.*\.(?!mdx).*$'
+
+    # packages
+    - label: "pkg: turbo-eslint"
+      when:
+        isAnyFilePathMatch: '^packages\/eslint-(plugin|config)-turbo\/.*$'
+    - label: "pkg: turbo-ignore"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-ignore\/.*$'
+    - label: "pkg: turbo-codemod"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-codemod\/.*$'
+    - label: "pkg: create-turbo"
+      when:
+        isAnyFilePathMatch: '^packages\/create-turbo\/.*$'
+events:
+  onPublish:
+    turbo:
+      - runWorkflow: turborepo-smoke-published.yml
+        when: any

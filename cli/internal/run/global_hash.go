@@ -29,7 +29,7 @@ type GlobalTracker struct {
 	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
 	HashedSortedEnvPairs []string                              `json:"hashedSortedEnvPairs"`
 	GlobalCacheKey       string                                `json:"globalCacheKey"`
-	Pipeline             fs.Pipeline                           `json:"pipeline"`
+	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
 }
 
 type GlobalHashInputs struct {
@@ -37,7 +37,7 @@ type GlobalHashInputs struct {
 	rootExternalDepsHash string
 	hashedSortedEnvPairs []string
 	globalCacheKey       string
-	pipeline             fs.Pipeline
+	pipeline             fs.PristinePipeline
 }
 
 func (th *GlobalTracker) CalculateGlobalHash() (string, error) {
@@ -119,7 +119,7 @@ func NewGlobalTracker(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs
 		RootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		HashedSortedEnvPairs: globalHashableEnvPairs,
 		GlobalCacheKey:       _globalCacheKey,
-		Pipeline:             pipeline,
+		Pipeline:             pipeline.Pristine(),
 	}, nil
 }
 

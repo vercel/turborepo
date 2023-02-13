@@ -129,57 +129,59 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	workspaceInfos := internalGraph.WorkspaceInfos{
-		"//": {
-			Dir:                    turbopath.AnchoredSystemPath("").ToSystemPath(),
-			UnresolvedExternalDeps: map[string]string{"global": "2"},
-			TransitiveDeps:         []lockfile.Package{{Key: "global2", Version: "2", Found: true}},
-		},
-		"app0": {
-			Dir:                    turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
-			Name:                   "app0",
-			UnresolvedExternalDeps: map[string]string{"app0-dep": "2"},
-			TransitiveDeps: []lockfile.Package{
-				{Key: "app0-dep2", Version: "2", Found: true},
-				{Key: "app0-util2", Version: "2", Found: true},
+		PackageJSONs: map[string]*fs.PackageJSON{
+			"//": {
+				Dir:                    turbopath.AnchoredSystemPath("").ToSystemPath(),
+				UnresolvedExternalDeps: map[string]string{"global": "2"},
+				TransitiveDeps:         []lockfile.Package{{Key: "global2", Version: "2", Found: true}},
 			},
-		},
-		"app1": {
-			Dir:  turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
-			Name: "app1",
-		},
-		"app2": {
-			Dir:  turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
-			Name: "app2",
-		},
-		"app2-a": {
-			Dir:  turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
-			Name: "app2-a",
-		},
-		"libA": {
-			Dir:  turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
-			Name: "libA",
-		},
-		"libB": {
-			Dir:                    turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
-			Name:                   "libB",
-			UnresolvedExternalDeps: map[string]string{"external": "1"},
-			TransitiveDeps: []lockfile.Package{
-				{Key: "external-dep-a1", Version: "1", Found: true},
-				{Key: "external-dep-b1", Version: "1", Found: true},
-				{Key: "external1", Version: "1", Found: true},
+			"app0": {
+				Dir:                    turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
+				Name:                   "app0",
+				UnresolvedExternalDeps: map[string]string{"app0-dep": "2"},
+				TransitiveDeps: []lockfile.Package{
+					{Key: "app0-dep2", Version: "2", Found: true},
+					{Key: "app0-util2", Version: "2", Found: true},
+				},
 			},
-		},
-		"libC": {
-			Dir:  turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
-			Name: "libC",
-		},
-		"libD": {
-			Dir:  turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
-			Name: "libD",
+			"app1": {
+				Dir:  turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+				Name: "app1",
+			},
+			"app2": {
+				Dir:  turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+				Name: "app2",
+			},
+			"app2-a": {
+				Dir:  turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+				Name: "app2-a",
+			},
+			"libA": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+				Name: "libA",
+			},
+			"libB": {
+				Dir:                    turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
+				Name:                   "libB",
+				UnresolvedExternalDeps: map[string]string{"external": "1"},
+				TransitiveDeps: []lockfile.Package{
+					{Key: "external-dep-a1", Version: "1", Found: true},
+					{Key: "external-dep-b1", Version: "1", Found: true},
+					{Key: "external1", Version: "1", Found: true},
+				},
+			},
+			"libC": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+				Name: "libC",
+			},
+			"libD": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+				Name: "libD",
+			},
 		},
 	}
 	packageNames := []string{}
-	for name := range workspaceInfos {
+	for name := range workspaceInfos.PackageJSONs {
 		packageNames = append(packageNames, name)
 	}
 

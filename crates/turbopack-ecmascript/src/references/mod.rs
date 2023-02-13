@@ -37,13 +37,17 @@ use swc_core::{
 use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     environment::EnvironmentVc,
-    reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
+    reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
-        find_context_file, origin::ResolveOriginVc, package_json, parse::RequestVc,
-        pattern::Pattern, resolve, FindContextFileResult, ResolveResult,
+        find_context_file,
+        origin::{ResolveOrigin, ResolveOriginVc},
+        package_json,
+        parse::RequestVc,
+        pattern::Pattern,
+        resolve, FindContextFileResult, PrimaryResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -270,7 +274,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             // TODO this probably needs to be a field in EcmascriptModuleAsset so it
                             // knows to use that SourceMap when running code generation.
                             // The reference is needed too for turbotrace
-                            analysis.add_reference(SourceMapVc::new(
+                            analysis.add_reference(SourceMapReferenceVc::new(
                                 source.path(),
                                 source.path().parent().join(path),
                             ))
@@ -1595,24 +1599,33 @@ async fn value_visitor_inner(
                     let pat = js_value_to_pattern(&args[0]);
                     let request = RequestVc::parse(Value::new(pat.clone()));
                     let resolved = cjs_resolve(origin, request).await?;
-                    match &*resolved {
-                        ResolveResult::Single(asset, _) => require_resolve(asset.path()).await?,
-                        ResolveResult::Alternatives(assets, _) => JsValue::alternatives(
-                            assets
-                                .iter()
-                                .map(|asset| require_resolve(asset.path()))
-                                .try_join()
-                                .await?,
-                        ),
-                        _ => JsValue::Unknown(
+                    let mut values = resolved
+                        .primary
+                        .iter()
+                        .map(|result| async move {
+                            Ok(if let PrimaryResolveResult::Asset(asset) = result {
+                                Some(require_resolve(asset.path()).await?)
+                            } else {
+                                None
+                            })
+                        })
+                        .try_join()
+                        .await?
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>();
+                    match values.len() {
+                        0 => JsValue::Unknown(
                             Some(Arc::new(JsValue::call(
                                 box JsValue::WellKnownFunction(
                                     WellKnownFunctionKind::RequireResolve,
                                 ),
                                 args,
                             ))),
-                            Box::leak(Box::new(format!("unresolveable request {pat}"))),
+                            "unresolveable request",
                         ),
+                        1 => values.pop().unwrap(),
+                        _ => JsValue::alternatives(values),
                     }
                 } else {
                     JsValue::Unknown(
@@ -2110,8 +2123,8 @@ async fn resolve_as_webpack_runtime(
         options,
     );
 
-    if let ResolveResult::Single(source, _) = &*resolved.await? {
-        Ok(webpack_runtime(*source, transforms))
+    if let Some(source) = *resolved.first_asset().await? {
+        Ok(webpack_runtime(source, transforms))
     } else {
         Ok(WebpackRuntime::None.into())
     }

@@ -11,8 +11,8 @@ use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
 use turbo_tasks::{TransientInstance, TurboTasksApi};
-use turbopack_cli_utils::issue::ConsoleUiVc;
-use turbopack_core::version::Update;
+use turbo_tasks_fs::json::parse_json_with_source_context;
+use turbopack_core::{issue::IssueReporterVc, version::Update};
 
 use super::{
     protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
@@ -27,15 +27,15 @@ use crate::{
 /// A server that listens for updates and sends them to connected clients.
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
-    console_ui: ConsoleUiVc,
+    issue_reporter: IssueReporterVc,
 }
 
 impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
     /// Create a new update server with the given websocket and content source.
-    pub fn new(source_provider: P, console_ui: ConsoleUiVc) -> Self {
+    pub fn new(source_provider: P, issue_reporter: IssueReporterVc) -> Self {
         Self {
             source_provider,
-            console_ui,
+            issue_reporter,
         }
     }
 
@@ -68,7 +68,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                                     resolve_source_request(
                                         source,
                                         TransientInstance::new(request),
-                                        self.console_ui
+                                        self.issue_reporter
                                     )
                                 }
                             };
@@ -185,12 +185,11 @@ impl Stream for UpdateClient {
             }
         };
 
-        match serde_json::from_str(&msg) {
+        match parse_json_with_source_context(&msg).context("deserializing websocket message") {
             Ok(msg) => Poll::Ready(Some(Ok(msg))),
             Err(err) => {
                 *this.ended = true;
 
-                let err = Error::new(err).context("deserializing websocket message");
                 Poll::Ready(Some(Err(err)))
             }
         }

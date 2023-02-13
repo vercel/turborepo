@@ -1,6 +1,7 @@
 #![feature(min_specialization)]
 
 mod nft_json;
+
 use std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
@@ -25,7 +26,7 @@ use turbo_tasks::{
     NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemVc, ReadGlobResultVc,
 };
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -36,12 +37,12 @@ use turbopack::{
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
-use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueSeverity, IssueVc},
+    issue::{IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -343,7 +344,10 @@ fn process_input(dir: &Path, context: &str, input: &[String]) -> Result<Vec<Stri
         .collect()
 }
 
-pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
+pub async fn start(
+    args: Arc<Args>,
+    turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
+) -> Result<Vec<String>> {
     register();
     let &CommonArgs {
         visualize_graph,
@@ -406,7 +410,11 @@ pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX))),
+        || {
+            turbo_tasks.cloned().unwrap_or_else(|| {
+                TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
+            })
+        },
         |tt, root_task, _| async move {
             if visualize_graph {
                 let mut stats = Stats::new();
@@ -479,24 +487,27 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     let (sender, mut receiver) = channel(1);
     let dir = current_dir().unwrap();
     let tt = create_tt();
-    let console_ui = Arc::new(ConsoleUi::new(LogOptions {
-        current_dir: dir.clone(),
-        show_all,
-        log_detail,
-        log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
-    }));
     let task = tt.spawn_root_task(move || {
+        let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
+            current_dir: dir.clone(),
+            show_all,
+            log_detail,
+            log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
+        }));
         let dir = dir.clone();
         let args = args.clone();
-        let console_ui = console_ui.clone();
         let sender = sender.clone();
         Box::pin(async move {
             let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
 
-            let console_ui = (*console_ui).clone().cell();
-            console_ui
-                .group_and_display_issues(TransientValue::new(output.into()))
+            let source = TransientValue::new(output.into());
+            let issues = IssueVc::peek_issues_with_path(output)
+                .await?
+                .strongly_consistent()
                 .await?;
+            console_ui
+                .as_issue_reporter()
+                .report_issues(TransientInstance::new(issues), source);
 
             if has_return_value {
                 let output_read_ref = output.await?;
