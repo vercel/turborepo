@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat,
     primitives::{BoolVc, StringVc},
@@ -27,8 +27,9 @@ use crate::{
 };
 
 /// A module id, which can be a number or string
-#[turbo_tasks::value(shared, serialization = "custom")]
+#[turbo_tasks::value(shared)]
 #[derive(Debug, Clone, Hash, DeterministicHash)]
+#[serde(untagged)]
 pub enum ModuleId {
     Number(u32),
     String(String),
@@ -40,51 +41,6 @@ impl Display for ModuleId {
             ModuleId::Number(i) => write!(f, "{}", i),
             ModuleId::String(s) => write!(f, "{}", s),
         }
-    }
-}
-
-impl Serialize for ModuleId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            ModuleId::Number(i) => serializer.serialize_u32(*i),
-            ModuleId::String(s) => serializer.serialize_str(s),
-        }
-    }
-}
-
-struct ModuleIdVisitor;
-
-impl<'de> Visitor<'de> for ModuleIdVisitor {
-    type Value = ModuleId;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a string or number module id")
-    }
-
-    fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        Ok(ModuleId::Number(u32::from(value)))
-    }
-
-    fn visit_string<E>(self, v: String) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        Ok(ModuleId::String(v))
-    }
-}
-
-impl<'de> Deserialize<'de> for ModuleId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_any(ModuleIdVisitor)
     }
 }
 
