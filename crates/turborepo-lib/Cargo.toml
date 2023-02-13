@@ -41,7 +41,7 @@ indicatif = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 notify = "5.1.0"
-pidlock = { version = "0.1.4", path = "../../../pidlock" }
+pidlock = { git = "https://github.com/arlyon/pidlock", branch = "master" }
 predicates = { workspace = true }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
