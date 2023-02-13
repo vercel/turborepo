@@ -201,10 +201,6 @@ impl DepGraph {
             start_ix: u32,
             done: &mut FxHashSet<u32>,
         ) {
-            if !done.insert(start_ix) {
-                return;
-            }
-
             // TODO: Consider cycles
             //
 
@@ -223,9 +219,11 @@ impl DepGraph {
                     })
                     .count()
                     == 1
+                    && done.insert(dep_ix)
                 {
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
+
                     add_to_group(graph, group, dep_ix, done)
                 }
             }
@@ -277,7 +275,32 @@ impl DepGraph {
         }
 
         for group in &mut groups {
-            let start = group[0].clone();
+            let start = group.last().unwrap().clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+        for group in &mut groups {
+            let start = group.last().unwrap().clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+        for group in &mut groups {
+            let start = group.last().unwrap().clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+        for group in &mut groups {
+            let start = group.last().unwrap().clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+        for group in &mut groups {
+            let start = group.last().unwrap().clone();
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
+        }
+        for group in &mut groups {
+            let start = group.last().unwrap().clone();
             let start_ix = self.g.get_node(&start);
             add_to_group(&self.g, group, start_ix, &mut done);
         }
