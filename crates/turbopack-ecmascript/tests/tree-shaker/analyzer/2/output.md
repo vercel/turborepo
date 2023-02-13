@@ -358,22 +358,22 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(0, Normal)]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(8, Normal), ItemId(12, ImportOfModule), ItemId(1, ImportOfModule)]"];
+    N1["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(0, Normal), ItemId(10, Normal), ItemId(1, ImportBinding(0)), ItemId(7, Normal)]"];
     N2["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
+    N3["Items: [ItemId(Export((Atom('foo' type=inline), #0))), ItemId(3, VarDeclarator(0))]"];
     N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal)]"];
     N5["Items: [ItemId(2, VarDeclarator(0))]"];
-    N6["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
-    N7["Items: [ItemId(6, VarDeclarator(0))]"];
+    N0 --> N1;
+    N0 --> N5;
+    N0 --> N3;
     N1 --> N5;
-    N1 --> N6;
+    N1 --> N3;
     N2 --> N5;
-    N2 --> N6;
-    N4 --> N7;
-    N6 --> N5;
-    N7 --> N5;
-    N7 --> N6;
+    N2 --> N1;
+    N3 --> N5;
+    N4 --> N3;
+    N4 --> N1;
 ```
 
 # Modules
@@ -382,6 +382,9 @@ graph TD
 
 ```js
 "module evaluation";
+console.log(foobarCopy);
+import "other";
+import "module";
 ```
 
 ## Module 2
@@ -391,6 +394,11 @@ export { external1 };
 export function external1() {
   return internal() + foobar;
 }
+function internal() {
+  return upper(foobar);
+}
+import { upper } from "module";
+foobar += "foo";
 ```
 
 ## Module 3
@@ -403,6 +411,7 @@ export { foobar };
 
 ```js
 export { foo };
+export const foo = foobar;
 ```
 
 ## Module 5
@@ -418,17 +427,4 @@ export function external2() {
 
 ```js
 export let foobar = "foo";
-```
-
-## Module 7
-
-```js
-foobar += bar;
-const bar = "bar";
-```
-
-## Module 8
-
-```js
-let foobarCopy = foobar;
 ```
