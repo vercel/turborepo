@@ -2461,6 +2461,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hostname"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c731c3e10504cc8ed35cfe2f1db4c9274c3d35fa486e3b31df46f068ef3e867"
+dependencies = [
+ "libc",
+ "match_cfg",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "http"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3242,6 +3253,12 @@ dependencies = [
  "serde_json",
  "unicode-id",
 ]
+
+[[package]]
+name = "match_cfg"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffbee8634e0d45d258acb448e7eaab3fce7a0a467395d4d9f228e3c1f01fb2e4"
 
 [[package]]
 name = "matchers"
@@ -7638,11 +7655,11 @@ version = "0.1.0"
 dependencies = [
  "atty",
  "console",
+ "reqwest",
  "semver 1.0.16",
  "serde",
  "thiserror",
  "update-informer",
- "ureq",
 ]
 
 [[package]]
@@ -7868,6 +7885,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures",
+ "futures-retry",
  "indexmap",
  "mime",
  "serde",
@@ -7959,6 +7977,7 @@ dependencies = [
  "dirs-next",
  "dunce",
  "env_logger 0.10.0",
+ "hostname",
  "indicatif",
  "itertools",
  "lazy_static",
@@ -8093,32 +8112,12 @@ checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 [[package]]
 name = "update-informer"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "152ff185ca29f7f487c51ca785b0f1d85970c4581f4cdd12ed499227890200f5"
+source = "git+https://github.com/mgrachev/update-informer?rev=b7a415ac2276e857167b9fe8282044f93155878a#b7a415ac2276e857167b9fe8282044f93155878a"
 dependencies = [
  "directories",
  "semver 1.0.16",
  "serde",
  "serde_json",
- "ureq",
-]
-
-[[package]]
-name = "ureq"
-version = "2.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338b31dd1314f68f3aabf3ed57ab922df95ffcd902476ca7ba3c4ce7b908c46d"
-dependencies = [
- "base64 0.13.1",
- "flate2",
- "log",
- "once_cell",
- "rustls",
- "serde",
- "serde_json",
- "url",
- "webpki",
- "webpki-roots",
 ]
 
 [[package]]
