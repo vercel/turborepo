@@ -603,7 +603,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
 
 #[turbo_tasks::function]
 pub async fn has_next_config(context: FileSystemPathVc) -> Result<BoolVc> {
-    Ok(BoolVc::cell(matches!(
+    Ok(BoolVc::cell(!matches!(
         *find_context_file(context, next_configs()).await?,
         FindContextFileResult::NotFound(_)
     )))

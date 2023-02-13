@@ -67,7 +67,7 @@ impl ContentSource for NextRouterContentSource {
         // `index.js`. If this isn't a Next.js project, don't try to use the Next.js
         // router.
         let project_root = this.execution_context.await?.project_root;
-        if *(has_next_config(project_root).await?) {
+        if !(*has_next_config(project_root).await?) {
             return Ok(this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())));
