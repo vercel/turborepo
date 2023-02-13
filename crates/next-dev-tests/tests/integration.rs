@@ -489,7 +489,7 @@ impl IssueReporter for TestIssueReporter {
         captured_issues: TransientInstance<ReadRef<CapturedIssues>>,
         _source: TransientValue<RawVc>,
     ) -> Result<()> {
-        let issue_tx = self.issue_tx.lock().clone();
+        let issue_tx = self.issue_tx.get_untracked().clone();
         for issue in captured_issues.iter() {
             issue_tx.send(issue.into_plain().await?).await?;
         }

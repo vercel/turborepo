@@ -21,10 +21,6 @@ struct StateInner<T> {
 
 pub struct StateRef<'a, T> {
     inner: MutexGuard<'a, StateInner<T>>,
-}
-
-pub struct StateRefMut<'a, T> {
-    inner: MutexGuard<'a, StateInner<T>>,
     mutated: bool,
 }
 
@@ -99,13 +95,19 @@ impl<T> State<T> {
         let invalidator = get_invalidator();
         let mut inner = self.inner.lock();
         inner.invalidators.insert(invalidator);
-        StateRef { inner }
+        StateRef {
+            inner,
+            mutated: false,
+        }
     }
 
     /// Gets the current value of the state. Untracked.
     pub fn get_untracked(&self) -> StateRef<'_, T> {
         let inner = self.inner.lock();
-        StateRef { inner }
+        StateRef {
+            inner,
+            mutated: false,
+        }
     }
 
     /// Sets the current state without comparing it with the old value. This
@@ -129,13 +131,6 @@ impl<T> State<T> {
         }
         for invalidator in take(&mut inner.invalidators) {
             invalidator.invalidate();
-        }
-    }
-
-    pub fn lock(&self) -> StateRefMut<'_, T> {
-        StateRefMut {
-            inner: self.inner.lock(),
-            mutated: false,
         }
     }
 }
@@ -163,22 +158,14 @@ impl<'a, T> Deref for StateRef<'a, T> {
     }
 }
 
-impl<'a, T> Deref for StateRefMut<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner.value
-    }
-}
-
-impl<'a, T> DerefMut for StateRefMut<'a, T> {
+impl<'a, T> DerefMut for StateRef<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.mutated = true;
         &mut self.inner.value
     }
 }
 
-impl<'a, T> Drop for StateRefMut<'a, T> {
+impl<'a, T> Drop for StateRef<'a, T> {
     fn drop(&mut self) {
         if self.mutated {
             for invalidator in take(&mut self.inner.invalidators) {

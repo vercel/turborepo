@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbopack_core::{
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
-    resolve::{find_context_file, FindContextFileResult},
-};
+use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
     ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult, RewriteVc,
@@ -13,7 +10,7 @@ use turbopack_dev_server::source::{
 use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::{
-    next_config::next_configs,
+    next_config::has_next_config,
     router::{route, RouterRequest, RouterResult},
 };
 
@@ -70,8 +67,7 @@ impl ContentSource for NextRouterContentSource {
         // `index.js`. If this isn't a Next.js project, don't try to use the Next.js
         // router.
         let project_root = this.execution_context.await?.project_root;
-        let find_config_result = &*find_context_file(project_root, next_configs()).await?;
-        if matches!(find_config_result, FindContextFileResult::NotFound(_)) {
+        if *(has_next_config(project_root).await?) {
             return Ok(this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())));

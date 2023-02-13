@@ -485,6 +485,9 @@ pub struct PlainIssue {
 }
 
 impl PlainIssue {
+    /// We need deduplicate issues that can come from unique paths, but
+    /// represent the same underlying problem. Eg, a parse error for a file
+    /// that is compiled in both client and server contexts.
     pub fn internal_hash(&self) -> u64 {
         let mut hasher = Xxh3Hash64Hasher::new();
         hasher.write_ref(&self.severity);
@@ -511,9 +514,6 @@ impl PlainIssue {
 
 #[turbo_tasks::value_impl]
 impl PlainIssueVc {
-    /// We need deduplicate issues that can come from unique paths, but
-    /// represent the same underlying problem. Eg, a parse error for a file
-    /// that is compiled in both client and server contexts.
     #[turbo_tasks::function]
     pub async fn internal_hash(self) -> Result<U64Vc> {
         Ok(U64Vc::cell(self.await?.internal_hash()))

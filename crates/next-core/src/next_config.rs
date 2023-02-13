@@ -8,7 +8,7 @@ use turbo_tasks::{
     Value,
 };
 use turbo_tasks_env::EnvMapVc;
-use turbo_tasks_fs::json::parse_json_rope_with_source_context;
+use turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileSystemPathVc};
 use turbopack::{
     evaluate_context::node_evaluate_asset_context,
     module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
@@ -527,7 +527,7 @@ impl NextConfigVc {
     }
 }
 
-pub fn next_configs() -> StringsVc {
+fn next_configs() -> StringsVc {
     StringsVc::cell(
         ["next.config.mjs", "next.config.js"]
             .into_iter()
@@ -599,4 +599,12 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
             unimplemented!("Stream not supported now");
         }
     }
+}
+
+#[turbo_tasks::function]
+pub async fn has_next_config(context: FileSystemPathVc) -> Result<BoolVc> {
+    Ok(BoolVc::cell(matches!(
+        *find_context_file(context, next_configs()).await?,
+        FindContextFileResult::NotFound(_)
+    )))
 }
