@@ -145,3 +145,26 @@ impl CommandBase {
         hex::encode(&hasher.finalize()[..8])
     }
 }
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
+    #[test_case("", "e3b0c44298fc1c14"; "empty string ok")]
+    fn test_repo_hash(path: &str, expected_hash: &str) {
+        use std::path::PathBuf;
+
+        use super::CommandBase;
+        use crate::Args;
+
+        let args = Args::default();
+        let repo_root = PathBuf::from(path);
+        let command_base = CommandBase::new(args, repo_root).unwrap();
+
+        let hash = command_base.repo_hash();
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
+    }
+}
