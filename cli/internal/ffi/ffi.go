@@ -7,6 +7,7 @@ package ffi
 import "C"
 
 import (
+	"errors"
 	"reflect"
 	"unsafe"
 
@@ -74,12 +75,26 @@ func GetTurboDataDir() string {
 	return resp.Dir
 }
 
-func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool) []string {
+func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+	var fromCommitRef *string
+	if fromCommit != "" {
+		fromCommitRef = &fromCommit
+	}
+	var toCommitRef *string
+	if toCommit != "" {
+		toCommitRef = &toCommit
+	}
+	var relativeToRef *string
+	if relativeTo != "" {
+		relativeToRef = &relativeTo
+	}
+
 	req := ffi_proto.ChangedFilesReq{
 		RepoRoot:         repoRoot,
-		FromCommit:       fromCommit,
-		ToCommit:         toCommit,
+		FromCommit:       fromCommitRef,
+		ToCommit:         toCommitRef,
 		IncludeUntracked: includeUntracked,
+		RelativeTo:       relativeToRef,
 	}
 
 	buffer := C.changed_files(Marshal(&req))
@@ -87,5 +102,29 @@ func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUn
 	if err := Unmarshal(buffer, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
-	return resp.GetFiles().GetFiles()
+	if err := resp.GetError(); err != "" {
+		return []string{}, errors.New(err)
+	}
+
+	return resp.GetFiles().GetFiles(), nil
+}
+
+func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
+	req := ffi_proto.PreviousContentReq{
+		RepoRoot:   repoRoot,
+		FromCommit: fromCommit,
+		FilePath:   filePath,
+	}
+
+	buffer := C.previous_content(Marshal(&req))
+	resp := ffi_proto.PreviousContentResp{}
+	if err := Unmarshal(buffer, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	content := resp.GetContent()
+	if err := resp.GetError(); err != "" {
+		return []byte{}, errors.New(err)
+	}
+
+	return []byte(content), nil
 }

@@ -1,15 +1,30 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use dunce::canonicalize as fs_canonicalize;
 use git2::{DiffFormat, DiffOptions, Oid, Repository};
 
+/// Finds the changed files in a repository between index and working directory
+/// (unstaged changes) and between two commits.
+///
+/// # Arguments
+///
+/// * `repo_root`: The root of the repository.
+/// * `commit_range`: If Some, the range of commits that should be searched for
+///   changes
+/// * `include_untracked`: If true, untracked files will be included in the
+///   result, i.e. files not yet in git.
+/// * `relative_to`: If Some, only the results relative to this path will be
+///   returned
+///
+/// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
     repo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>> {
-    let repo = Repository::open(&repo_root)?;
+    let repo = Repository::open(repo_root)?;
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(
         &repo,
@@ -47,6 +62,14 @@ fn add_changed_files_from_unstaged_changes(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(path) = file.path() {
+            // NOTE: In the original Go code, `Rel` works even if the base path is not a
+            // prefix of the original path. In Rust, `strip_prefix` returns an
+            // error if the base path is not a prefix of the original path.
+            // However since we're passing a pathspec to `git2` we know that the
+            // base path is a prefix of the original path.
+            let path = relative_to.map_or(path, |relative_to| {
+                path.strip_prefix(relative_to).unwrap_or(path)
+            });
             files.insert(path.to_string_lossy().to_string());
         }
     }
@@ -87,12 +110,47 @@ fn add_changed_files_from_commits(
     Ok(())
 }
 
+/// Finds the content of a file at a previous commit. Assumes file is in a git
+/// repository
+///
+/// # Arguments
+///
+/// * `repo_root`: The root of the repository
+/// * `from_commit`: The commit hash to checkout
+/// * `file_path`: The path to the file
+///
+/// returns: Result<String, Error>
+pub fn previous_content(
+    repo_root: PathBuf,
+    from_commit: &str,
+    file_path: PathBuf,
+) -> Result<String> {
+    let repo = Repository::open(repo_root)?;
+    let from_commit_oid = Oid::from_str(&from_commit)?;
+    let from_commit = repo.find_commit(from_commit_oid)?;
+    let from_tree = from_commit.tree()?;
+
+    // Canonicalize so strip_prefix works properly
+    let file_path = fs_canonicalize(file_path)?;
+    let repo_dir = fs_canonicalize(repo.workdir().ok_or(anyhow!("repository not found"))?)?;
+
+    let relative_path = file_path.strip_prefix(repo_dir).unwrap_or(&file_path);
+
+    let file = from_tree.get_path(&relative_path)?;
+    let blob = repo.find_blob(file.id())?;
+    let content = blob.content();
+
+    Ok(std::str::from_utf8(content)?.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, fs, path::Path};
 
     use anyhow::Result;
     use git2::{Oid, Repository};
+
+    use crate::scm::git::previous_content;
 
     fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Result<Oid> {
         let mut index = repo.index()?;
@@ -171,7 +229,35 @@ mod tests {
             true,
             Some("subdir"),
         )?;
-        assert_eq!(files, HashSet::from(["subdir/baz.js".to_string()]));
+        assert_eq!(files, HashSet::from(["baz.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_previous_content() -> Result<()> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let file = repo_root.path().join("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        fs::write(&file, "let z = 1;")?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+
+        let content = previous_content(
+            repo_root.path().to_path_buf(),
+            first_commit_oid.to_string().as_str(),
+            file.to_path_buf(),
+        )?;
+        assert_eq!(content, "let z = 0;");
+
+        let content = previous_content(
+            repo_root.path().to_path_buf(),
+            second_commit_oid.to_string().as_str(),
+            file.to_path_buf(),
+        )?;
+        assert_eq!(content, "let z = 1;");
 
         Ok(())
     }

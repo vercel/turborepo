@@ -41,3 +41,16 @@ message ChangedFilesResp {
 message ChangedFilesList {
   repeated string files = 1;
 }
+
+message PreviousContentReq {
+  string repo_root = 1;
+  string from_commit = 2;
+  string file_path = 3;
+}
+
+message PreviousContentResp {
+  oneof response {
+    string content = 1;
+    string error = 2;
+  }
+}
