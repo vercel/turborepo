@@ -162,7 +162,7 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let modules = analyzer.g.split_module(&module);
+        let modules = analyzer.g.split_module(&analyzer.items);
 
         writeln!(s, "# Modules").unwrap();
         for (i, module) in modules.iter().enumerate() {

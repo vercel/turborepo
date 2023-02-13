@@ -4,11 +4,11 @@ use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
 use petgraph::{algo::kosaraju_scc, prelude::DiGraphMap};
 use swc_core::{
-    common::util::take::Take,
+    common::{util::take::Take, DUMMY_SP},
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
-            ImportSpecifier, Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+            ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
         },
         atoms::js_word,
         utils::find_pat_ids,
@@ -171,25 +171,20 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
-    pub(super) fn split_module(&self, module: &Module) -> Vec<Module> {
+    pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> Vec<Module> {
         let groups = self.finalize();
 
         let mut modules = vec![];
 
         for group in groups.graph_ix {
             let mut chunk = Module {
-                span: module.span,
+                span: DUMMY_SP,
                 body: vec![],
                 shebang: None,
             };
 
             for g in group {
-                if g.index == usize::MAX {
-                    // TODO: Special modules
-                } else {
-                    // TODO: Kind
-                    chunk.body.push(module.body[g.index].clone());
-                }
+                chunk.body.push(data[&g].content.clone());
             }
 
             modules.push(chunk);
@@ -401,6 +396,10 @@ impl DepGraph {
                             ItemData {
                                 is_hoisted: true,
                                 side_effects: true,
+                                content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
+                                    specifiers: Default::default(),
+                                    ..item.clone()
+                                })),
                                 ..Default::default()
                             },
                         );
@@ -423,6 +422,10 @@ impl DepGraph {
                             ItemData {
                                 is_hoisted: true,
                                 var_decls: vec![local],
+                                content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
+                                    specifiers: vec![s.clone()],
+                                    ..item.clone()
+                                })),
                                 ..Default::default()
                             },
                         );
@@ -449,6 +452,7 @@ impl DepGraph {
                             eventual_read_vars: read_vars,
                             eventual_write_vars: write_vars,
                             var_decls: vec![f.ident.to_id()],
+                            content: item.clone(),
                             ..Default::default()
                         },
                     );
