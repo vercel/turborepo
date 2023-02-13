@@ -3,13 +3,16 @@ use std::{fmt, hash::Hash};
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
 use petgraph::{algo::kosaraju_scc, prelude::DiGraphMap};
-use swc_core::ecma::{
-    ast::{
-        op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
-        ImportSpecifier, Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+use swc_core::{
+    common::util::take::Take,
+    ecma::{
+        ast::{
+            op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
+            ImportSpecifier, Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+        },
+        atoms::js_word,
+        utils::find_pat_ids,
     },
-    atoms::js_word,
-    utils::find_pat_ids,
 };
 
 use super::util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested};
@@ -55,7 +58,7 @@ pub(super) enum ItemIdKind {
 }
 
 /// Data about a module item
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct ItemData {
     /// If the module item is hoisted?
     pub is_hoisted: bool,
@@ -88,6 +91,23 @@ pub(super) struct ItemData {
 
     /// Are other unknown side effects that are trigger during evaluation?
     pub side_effects: bool,
+
+    pub content: ModuleItem,
+}
+
+impl Default for ItemData {
+    fn default() -> Self {
+        Self {
+            is_hoisted: Default::default(),
+            var_decls: Default::default(),
+            read_vars: Default::default(),
+            eventual_read_vars: Default::default(),
+            write_vars: Default::default(),
+            eventual_write_vars: Default::default(),
+            side_effects: Default::default(),
+            content: ModuleItem::dummy(),
+        }
+    }
 }
 
 #[derive(Debug)]
