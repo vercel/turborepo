@@ -175,8 +175,21 @@ impl DepGraph {
     /// Weak imports are imports only if it's is referenced strongly. But this
     /// is production-only, and week dependencies are treated as strong
     /// dependency in development mode.
+    pub(super) fn handle_weak(&mut self, is_development: bool) {
+        if is_development {
+        } else {
+            for start in self.g.graph_ix.iter() {
+                let start = self.g.get_node(start);
+                for end in self.g.graph_ix.iter() {
+                    let end = self.g.get_node(end);
 
-    pub(super) fn handle_weak(&mut self, is_development: bool) {}
+                    if let Some(false) = self.g.idx_graph.edge_weight(start, end) {
+                        self.g.idx_graph.remove_edge(start, end);
+                    }
+                }
+            }
+        }
+    }
 
     pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> Vec<Module> {
         let groups = self.finalize();
@@ -217,14 +230,12 @@ impl DepGraph {
             for dep_ix in graph
                 .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
-                .filter(|&dep_ix| *graph.idx_graph.edge_weight(start_ix, dep_ix).unwrap())
             {
                 // Check if the the only dependant of dep is start
 
                 if graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
-                    .filter(|&start_ix| *graph.idx_graph.edge_weight(start_ix, dep_ix).unwrap())
                     .filter(|&dependant_ix| {
                         start_ix == dependant_ix || !done.contains(&dependant_ix)
                     })
@@ -279,7 +290,6 @@ impl DepGraph {
                 .g
                 .idx_graph
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
-                .filter(|&start_ix| *self.g.idx_graph.edge_weight(start_ix, ix).unwrap())
                 .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
                 >= 2
