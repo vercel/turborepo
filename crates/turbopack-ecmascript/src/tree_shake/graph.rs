@@ -269,22 +269,19 @@ impl DepGraph {
                 let count = graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
-                    .filter(|&dependant_ix| {
-                        start_ix == dependant_ix || !done.contains(&dependant_ix)
-                    })
+                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
                     .count();
 
                 dbg!(count);
 
                 let is_only_dep = count <= 1;
 
-                if (is_module_eval || is_only_dep) && !done.contains(&dep_ix) {
+                if (is_module_eval || is_only_dep) && done.insert(dep_ix) {
                     changed = true;
 
                     group.push(dep_id);
 
                     add_to_group(graph, group, dep_ix, done);
-                    done.insert(dep_ix);
                 }
             }
 
