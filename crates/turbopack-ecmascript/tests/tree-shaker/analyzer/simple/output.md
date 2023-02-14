@@ -111,6 +111,10 @@ graph TD
     Item3 --> Item1;
     Item4 --> Item2;
     Item4 --> Item1;
+    Item5 -.-> Item1;
+    Item5 -.-> Item3;
+    Item5 -.-> Item4;
+    Item5 -.-> Item2;
     Item6 --> Item3;
     Item7 --> Item4;
 ```
@@ -119,10 +123,11 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
-    N2["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
-    N1 --> N2;
+    N0["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(ModuleEvaluation)]"];
+    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0)))]"];
+    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
+    N1 --> N0;
+    N2 --> N0;
 ```
 
 # Modules (dev)
@@ -131,15 +136,18 @@ graph TD
 
 ```js
 "turbopack://chunk-0";
-"module evaluation";
+const dog = "dog";
+const cat = "cat";
+export const DOG = dog;
+export const CHIMERA = cat + dog;
+("module evaluation");
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
-export const DOG = dog;
+import "turbopack://chunk-0.js";
 export { DOG };
 ```
 
@@ -147,9 +155,7 @@ export { DOG };
 
 ```js
 "turbopack://chunk-2";
-const dog = "dog";
-const cat = "cat";
-export const CHIMERA = cat + dog;
+import "turbopack://chunk-0.js";
 export { CHIMERA };
 ```
 
@@ -159,15 +165,18 @@ export { CHIMERA };
 
 ```js
 "turbopack://chunk-0";
-"module evaluation";
+const dog = "dog";
+const cat = "cat";
+export const DOG = dog;
+export const CHIMERA = cat + dog;
+("module evaluation");
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
-export const DOG = dog;
+import "turbopack://chunk-0.js";
 export { DOG };
 ```
 
@@ -175,8 +184,6 @@ export { DOG };
 
 ```js
 "turbopack://chunk-2";
-const dog = "dog";
-const cat = "cat";
-export const CHIMERA = cat + dog;
+import "turbopack://chunk-0.js";
 export { CHIMERA };
 ```
