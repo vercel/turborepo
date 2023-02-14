@@ -379,10 +379,10 @@ graph TD
 ## Module 1
 
 ```js
-"chunk-0";
-import "./chunk-1.js";
-import "./chunk-5.js";
-import "./chunk-4.js";
+"turbopack://chunk-0";
+import "turbopack://chunk-1.js";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-4.js";
 import "module";
 console.log(foobarCopy);
 import "other";
@@ -392,9 +392,9 @@ import "other";
 ## Module 2
 
 ```js
-"chunk-1";
-import "./chunk-5.js";
-import "./chunk-4.js";
+"turbopack://chunk-1";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-4.js";
 export function external1() {
   return internal() + foobar;
 }
@@ -408,24 +408,24 @@ export { external1 };
 ## Module 3
 
 ```js
-"chunk-2";
-import "./chunk-5.js";
-import "./chunk-4.js";
+"turbopack://chunk-2";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-4.js";
 export { foobar };
 ```
 
 ## Module 4
 
 ```js
-"chunk-3";
+"turbopack://chunk-3";
 export { foo };
 ```
 
 ## Module 5
 
 ```js
-"chunk-4";
-import "./chunk-5.js";
+"turbopack://chunk-4";
+import "turbopack://chunk-5.js";
 foobar += "foo";
 export function external2() {
   foobar += ".";
@@ -436,7 +436,7 @@ export { external2 };
 ## Module 6
 
 ```js
-"chunk-5";
+"turbopack://chunk-5";
 export let foobar = "foo";
 ```
 
@@ -445,7 +445,7 @@ export let foobar = "foo";
 ## Module 1
 
 ```js
-"chunk-0";
+"turbopack://chunk-0";
 import "module";
 console.log(foobarCopy);
 import "other";
@@ -455,8 +455,8 @@ import "other";
 ## Module 2
 
 ```js
-"chunk-1";
-import "./chunk-5.js";
+"turbopack://chunk-1";
+import "turbopack://chunk-5.js";
 export function external1() {
   return internal() + foobar;
 }
@@ -471,17 +471,17 @@ export { external1 };
 ## Module 3
 
 ```js
-"chunk-2";
-import "./chunk-5.js";
-import "./chunk-1.js";
+"turbopack://chunk-2";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-1.js";
 export { foobar };
 ```
 
 ## Module 4
 
 ```js
-"chunk-3";
-import "./chunk-5.js";
+"turbopack://chunk-3";
+import "turbopack://chunk-5.js";
 export const foo = foobar;
 export { foo };
 ```
@@ -489,7 +489,7 @@ export { foo };
 ## Module 5
 
 ```js
-"chunk-4";
+"turbopack://chunk-4";
 export function external2() {
   foobar += ".";
 }
@@ -499,6 +499,6 @@ export { external2 };
 ## Module 6
 
 ```js
-"chunk-5";
+"turbopack://chunk-5";
 export let foobar = "foo";
 ```

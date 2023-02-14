@@ -130,15 +130,15 @@ graph TD
 ## Module 1
 
 ```js
-"chunk-0";
+"turbopack://chunk-0";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"chunk-1";
-import "./chunk-2.js";
+"turbopack://chunk-1";
+import "turbopack://chunk-2.js";
 export const DOG = dog;
 export { DOG };
 ```
@@ -146,7 +146,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"chunk-2";
+"turbopack://chunk-2";
 const dog = "dog";
 const cat = "cat";
 export const CHIMERA = cat + dog;
@@ -158,15 +158,15 @@ export { CHIMERA };
 ## Module 1
 
 ```js
-"chunk-0";
+"turbopack://chunk-0";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"chunk-1";
-import "./chunk-2.js";
+"turbopack://chunk-1";
+import "turbopack://chunk-2.js";
 export const DOG = dog;
 export { DOG };
 ```
@@ -174,7 +174,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"chunk-2";
+"turbopack://chunk-2";
 const dog = "dog";
 const cat = "cat";
 export const CHIMERA = cat + dog;
