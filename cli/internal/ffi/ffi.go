@@ -97,10 +97,13 @@ func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUn
 		IncludeUntracked: includeUntracked,
 		RelativeTo:       relativeToRef,
 	}
+	reqBuf := Marshal(&req)
 
-	buffer := C.changed_files(Marshal(&req))
+	respBuf := C.changed_files(reqBuf)
+	reqBuf.Free()
+
 	resp := ffi_proto.ChangedFilesResp{}
-	if err := Unmarshal(buffer, resp.ProtoReflect().Interface()); err != nil {
+	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
 	if err := resp.GetError(); err != "" {
@@ -118,9 +121,12 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 		FilePath:   filePath,
 	}
 
-	buffer := C.previous_content(Marshal(&req))
+	reqBuf := Marshal(&req)
+	respBuf := C.previous_content(reqBuf)
+	reqBuf.Free()
+
 	resp := ffi_proto.PreviousContentResp{}
-	if err := Unmarshal(buffer, resp.ProtoReflect().Interface()); err != nil {
+	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
 	content := resp.GetContent()
