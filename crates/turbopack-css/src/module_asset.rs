@@ -335,11 +335,9 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
                         let module_id =
                             stringify_js(&*placeable.as_chunk_item(self.context).id().await?);
-
-                        exported_class_names.push(formatdoc! {
-                            r#"
-                                __turbopack_import__({module_id}).{original_name}
-                            "#
+                        let original_name = stringify_js(original_name);
+                        exported_class_names.push(format! {
+                            "__turbopack_import__({module_id})[{original_name}]"
                         });
                     }
                     ModuleCssClass::Local { name: class_name }

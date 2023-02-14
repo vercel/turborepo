@@ -21,17 +21,21 @@ pub async fn expand_imports(
         "".to_string(),
     )];
     let mut external_imports = vec![];
-    let mut imported_chunk_items: HashSet<CssChunkItemVc> = HashSet::default();
+    let mut imported_chunk_items: HashSet<(String, String, CssChunkItemVc)> = HashSet::default();
     let mut composed_chunk_items: HashSet<CssChunkItemVc> = HashSet::default();
 
     while let Some((chunk_item, imports, close)) = stack.last_mut() {
         match imports.pop_front() {
             Some(CssImport::Internal(import, imported_chunk_item)) => {
-                if !imported_chunk_items.insert(imported_chunk_item.resolve().await?) {
+                let (open, close) = import.await?.attributes.await?.print_block()?;
+
+                if !imported_chunk_items.insert((
+                    open.clone(),
+                    close.clone(),
+                    imported_chunk_item.resolve().await?,
+                )) {
                     continue;
                 }
-
-                let (open, close) = import.await?.attributes.await?.print_block()?;
 
                 let id = &*imported_chunk_item.to_string().await?;
                 writeln!(code, "/* import({}) */", id)?;
