@@ -252,9 +252,6 @@ impl DepGraph {
 
             let mut changed = false;
 
-            let is_module_eval = graph.graph_ix.get_index(start_ix as _).unwrap().kind
-                == ItemIdKind::ModuleEvaluation;
-
             // Check deps of `start`.
             for dep_ix in graph
                 .idx_graph
