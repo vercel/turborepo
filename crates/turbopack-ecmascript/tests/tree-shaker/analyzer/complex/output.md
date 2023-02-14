@@ -372,8 +372,8 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(2, Normal), ItemId(5, Normal), ItemId(8, Normal), ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, Normal), ItemId(3, Normal), ItemId(4, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(9, VarDeclarator(0)), ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
+    N0["Items: [ItemId(8, Normal), ItemId(ModuleEvaluation)]"];
+    N1["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, Normal), ItemId(2, Normal), ItemId(3, Normal), ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(9, VarDeclarator(0)), ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
     N3["Items: [ItemId(10, VarDeclarator(0)), ItemId(11, VarDeclarator(0)), ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
     N4["Items: [ItemId(12, Normal), ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
@@ -392,8 +392,6 @@ graph TD
 "turbopack://chunk-0";
 import "turbopack://chunk-1.js";
 console.log(dog);
-console.log(dog);
-console.log(dog);
 ("module evaluation");
 ```
 
@@ -404,10 +402,12 @@ console.log(dog);
 import "turbopack://chunk-0.js";
 let dog = "dog";
 dog += "!";
+console.log(dog);
 function getDog() {
   return dog;
 }
 dog += "!";
+console.log(dog);
 function setDog(newDog) {
   dog = newDog;
 }
