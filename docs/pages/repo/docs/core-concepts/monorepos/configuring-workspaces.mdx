@@ -66,8 +66,8 @@ with a single `turbo.json` at the root like this:
 
 But notice that both `.next/**` and `.svelte-kit/**` need to be specified as
 outputs, even though Next.js apps do not generate a `.svelte-kit` directory, and
-vice versa. With workspace configs, you can instead add custom configuration in
-the SvelteKit workspace in `apps/my-svelte-kit-app/turbo.json`:
+vice versa. With Workspace Configurations, you can instead add custom
+configuration in the SvelteKit workspace in `apps/my-svelte-kit-app/turbo.json`:
 
 ```jsonc filename="apps/my-svelte-kit-app/turbo.json"
 {
@@ -100,7 +100,8 @@ closer to where it is used.
 
 In another example, say that the `build` task in one workspace `dependsOn` a
 `compile` task. You could universally declare it as `dependsOn: ["compile"]`.
-This means that your root `turbo.json` has to have an empty `compile` task entry:
+This means that your root `turbo.json` has to have an empty `compile` task
+entry:
 
 ```json filename="turbo.json"
 {
@@ -113,7 +114,7 @@ This means that your root `turbo.json` has to have an empty `compile` task entry
 }
 ```
 
-With a Workspace Configs, you can move that `compile` task into the
+With a Workspace Configurations, you can move that `compile` task into the
 `apps/my-custom-app/turbo.json`,
 
 ```json filename="apps/my-app/turbo.json"
@@ -147,14 +148,13 @@ but continue to inherit any other tasks defined at the root.
 
 ## Comparison to workspace-tasks defined in root `turbo.json`
 
-At first glance, Workspace Configs may sound a lot like the [`workspace#task``
-syntax][3] in the root `turbo.json`. The features are similar, but have one
-significant difference: when you declare a workspace-task in the root
-` turbo.json``, it _completely_ overwrites the baseline task configuration.
-With a Workspace Config, the task configuration is merged instead. Consider the
-example of the monorepo with multiple Next.js apps and a Sveltekit app again.
-Without a workspace task, you might configure your root  `turbo.json` like
-this:
+At first glance, Workspace Configurations may sound a lot like the
+[`workspace#task`` syntax][3] in the root `turbo.json`. The features are
+similar, but have one significant difference: when you declare a workspace-task
+in the root ` turbo.json``, it _completely_ overwrites the baseline task
+configuration. With a Workspace Config, the task configuration is merged
+instead. Consider the example of the monorepo with multiple Next.js apps and a
+Sveltekit app again. Without a workspace task, you might configure your root `turbo.json` like this:
 
 ```jsonc filename="turbo.json"
 {
@@ -176,8 +176,8 @@ this:
 This works, but it's important to understand that the `my-sveltekit-app#build`
 completely ovewrites `build` for the Sveltekit app. Any other config (such as
 `outputMode`) in the `build` config would need to be duplicated. With Workspace
-Configs, you don't need to duplicate any configuration, just override what needs
-to be changed.
+Configurations, you don't need to duplicate any configuration, just override
+what needs to be changed.
 
 <Callout type="info">
   Although there are no plans to remove Workspace-Specific Task configurations,
@@ -187,7 +187,7 @@ to be changed.
 ## Limitations
 
 Although the general idea is the same as the root `turbo.json`, Workspace
-Configs come with a set of guardrails that can prevent workspaces from creating
+Configurations come with a set of guardrails that can prevent workspaces from creating
 confusing situations. These guardrails are listed here to make it clear that
 they are intentional, rather than accidental:
 
