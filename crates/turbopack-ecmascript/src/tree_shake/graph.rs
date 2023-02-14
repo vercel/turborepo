@@ -179,6 +179,10 @@ impl DepGraph {
         if is_development {
         } else {
             for start in self.g.graph_ix.iter() {
+                if start.kind == ItemIdKind::ModuleEvaluation {
+                    continue;
+                }
+
                 let start = self.g.get_node(start);
                 for end in self.g.graph_ix.iter() {
                     let end = self.g.get_node(end);
@@ -262,7 +266,9 @@ impl DepGraph {
                 let count = graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
-                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
+                    .filter(|&dependant_ix| {
+                        start_ix == dependant_ix || !done.contains(&dependant_ix)
+                    })
                     .count();
 
                 dbg!(count);
