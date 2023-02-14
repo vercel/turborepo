@@ -226,6 +226,9 @@ impl DepGraph {
 
             let mut changed = false;
 
+            let is_module_eval = graph.graph_ix.get_index(start_ix as _).unwrap().kind
+                == ItemIdKind::ModuleEvaluation;
+
             // Check deps of `start`.
             for dep_ix in graph
                 .idx_graph
@@ -233,16 +236,16 @@ impl DepGraph {
             {
                 // Check if the the only dependant of dep is start
 
-                if graph
+                let is_only_dep = graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
                     .filter(|&dependant_ix| {
                         start_ix == dependant_ix || !done.contains(&dependant_ix)
                     })
                     .count()
-                    == 1
-                    && done.insert(dep_ix)
-                {
+                    == 1;
+
+                if (is_module_eval || is_only_dep) && done.insert(dep_ix) {
                     changed = true;
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
