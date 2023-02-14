@@ -51,6 +51,7 @@ jobs:
       #     path: packages/next-rs/crates/wasm
 
       - run: npm i -g pnpm@${PNPM_VERSION}
+      - run: pnpm i
       - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
       - run: ./scripts/publish-next-rs.js
 
