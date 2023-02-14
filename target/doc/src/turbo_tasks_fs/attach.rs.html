@@ -171,6 +171,10 @@
 <span id="171">171</span>
 <span id="172">172</span>
 <span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoMap;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, ValueToString, ValueToStringVc};
@@ -226,9 +230,13 @@
             <span class="comment">// already on this filesystem
             </span>fs <span class="kw">if </span>fs == self_fs =&gt; <span class="prelude-val">Ok</span>(contained_path_vc),
             <span class="comment">// in the root filesystem, just need to rebase on this filesystem
-            </span>fs <span class="kw">if </span>fs == this.root_fs =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.root().join(<span class="kw-2">&amp;</span>contained_path.path)),
+            </span>fs <span class="kw">if </span>fs == this.root_fs =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="kw-2">&amp;</span>contained_path.path)),
             <span class="comment">// in the child filesystem, so we expand to the full path by appending to child_path
-            </span>fs <span class="kw">if </span>fs == this.child_fs =&gt; <span class="prelude-val">Ok</span>(<span class="self">self</span>.child_path().join(<span class="kw-2">&amp;</span>contained_path.path)),
+            </span>fs <span class="kw">if </span>fs == this.child_fs =&gt; <span class="prelude-val">Ok</span>(<span class="self">self
+                </span>.child_path()
+                .resolve()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.join(<span class="kw-2">&amp;</span>contained_path.path)),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(
                 <span class="string">&quot;path {} not part of self, the root fs or the child fs&quot;</span>,
                 contained_path_vc.to_string().<span class="kw">await</span><span class="question-mark">?
@@ -240,7 +248,7 @@
     /// [AttachedFileSystem]
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>child_path(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.root().join(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.child_path))
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.child_path))
     }
 
     <span class="doccomment">/// Resolves the local path of the root or child filesystem from a path
@@ -261,9 +269,9 @@
 
         <span class="kw">let </span>child_path = <span class="self">self</span>.child_path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(inner_path) = child_path.get_path_to(<span class="kw-2">&amp;</span>path) {
-            this.child_fs.root().join(inner_path)
+            this.child_fs.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>.join(inner_path)
         } <span class="kw">else </span>{
-            this.root_fs.root().join(<span class="kw-2">&amp;</span>path.path)
+            this.root_fs.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="kw-2">&amp;</span>path.path)
         })
     }
 }

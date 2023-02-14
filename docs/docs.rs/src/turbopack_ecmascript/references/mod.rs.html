@@ -2175,6 +2175,29 @@
 <span id="2175">2175</span>
 <span id="2176">2176</span>
 <span id="2177">2177</span>
+<span id="2178">2178</span>
+<span id="2179">2179</span>
+<span id="2180">2180</span>
+<span id="2181">2181</span>
+<span id="2182">2182</span>
+<span id="2183">2183</span>
+<span id="2184">2184</span>
+<span id="2185">2185</span>
+<span id="2186">2186</span>
+<span id="2187">2187</span>
+<span id="2188">2188</span>
+<span id="2189">2189</span>
+<span id="2190">2190</span>
+<span id="2191">2191</span>
+<span id="2192">2192</span>
+<span id="2193">2193</span>
+<span id="2194">2194</span>
+<span id="2195">2195</span>
+<span id="2196">2196</span>
+<span id="2197">2197</span>
+<span id="2198">2198</span>
+<span id="2199">2199</span>
+<span id="2200">2200</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -4311,12 +4334,32 @@
 </span><span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;none&quot;</span>)]
 </span><span class="kw">pub struct </span>AstPath(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Vec&lt;AstParentKind&gt;);
 
+<span class="kw">pub static </span>TURBOPACK_HELPER: <span class="kw-2">&amp;</span>str = <span class="string">&quot;__turbopackHelper&quot;</span>;
+
+<span class="kw">pub fn </span>is_turbopack_helper_import(import: <span class="kw-2">&amp;</span>ImportDecl) -&gt; bool {
+    import.asserts.as_ref().map_or(<span class="bool-val">true</span>, |asserts| {
+        asserts.props.iter().any(|assert| {
+            assert
+                .as_prop()
+                .and_then(|prop| prop.as_key_value())
+                .and_then(|kv| kv.key.as_ident())
+                .map_or(<span class="bool-val">true</span>, |ident| <span class="kw-2">&amp;*</span>ident.sym != TURBOPACK_HELPER)
+        })
+    })
+}
+
 <span class="kw">fn </span>has_cjs_export(p: <span class="kw-2">&amp;</span>Program) -&gt; bool {
     <span class="kw">use </span>swc_core::ecma::visit::{visit_obj_and_computed, Visit, VisitWith};
 
     <span class="kw">if let </span>Program::Module(m) = p {
         <span class="comment">// Check for imports/exports
-        </span><span class="kw">if </span>m.body.iter().any(ModuleItem::is_module_decl) {
+        </span><span class="kw">if </span>m.body.iter().any(|item| {
+            item.as_module_decl().map_or(<span class="bool-val">false</span>, |module_decl| {
+                module_decl
+                    .as_import()
+                    .map_or(<span class="bool-val">true</span>, |import| !is_turbopack_helper_import(import))
+            })
+        }) {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
     }
@@ -4329,7 +4372,10 @@
         <span class="macro">visit_obj_and_computed!</span>();
 
         <span class="kw">fn </span>visit_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>Ident) {
-            <span class="kw">if </span><span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;module&quot; </span>|| <span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;exports&quot; </span>{
+            <span class="kw">if </span><span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;module&quot;
+                </span>|| <span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;exports&quot;
+                </span>|| <span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;__turbopack_export_value__&quot;
+            </span>{
                 <span class="self">self</span>.found = <span class="bool-val">true</span>;
             }
         }

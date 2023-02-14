@@ -64,17 +64,29 @@
 <span id="64">64</span>
 <span id="65">65</span>
 <span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
 </pre><pre class="rust"><code><span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::{
         ast::{
-            Expr, ExprStmt, ImportDecl, ImportDefaultSpecifier, ImportSpecifier, Lit, Module,
-            ModuleDecl, ModuleItem, Program, Stmt, Str,
+            Expr, ExprStmt, Ident, ImportDecl, ImportDefaultSpecifier, ImportSpecifier,
+            KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop, PropName,
+            PropOrSpread, Stmt, Str,
         },
         utils::private_ident,
     },
     quote,
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::references::TURBOPACK_HELPER;
 
 <span class="macro">macro_rules! </span>has_client_directive {
     (<span class="macro-nonterminal">$stmts</span>:expr) =&gt; {
@@ -118,7 +130,13 @@
                 })],
                 src: <span class="kw">box </span>target_import.into(),
                 type_only: <span class="bool-val">false</span>,
-                asserts: <span class="prelude-val">None</span>,
+                asserts: <span class="prelude-val">Some</span>(<span class="kw">box </span>ObjectLit {
+                    span: DUMMY_SP,
+                    props: <span class="macro">vec!</span>[PropOrSpread::Prop(<span class="kw">box </span>Prop::KeyValue(KeyValueProp {
+                        key: PropName::Ident(Ident::new(TURBOPACK_HELPER.into(), DUMMY_SP)),
+                        value: <span class="kw">box </span>Expr::Lit(<span class="bool-val">true</span>.into()),
+                    }))],
+                }),
                 span: DUMMY_SP,
             })),
             ModuleItem::Stmt(<span class="macro">quote!</span>(

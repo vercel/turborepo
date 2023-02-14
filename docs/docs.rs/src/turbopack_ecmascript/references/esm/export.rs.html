@@ -425,7 +425,7 @@
                     <span class="kw">let </span>ident = ReferencedAsset::get_ident_from_placeable(asset).<span class="kw">await</span><span class="question-mark">?</span>;
 
                     cjs_exports.push(<span class="macro">quote_expr!</span>(
-                        <span class="string">&quot;__turbopack__cjs__($arg)&quot;</span>,
+                        <span class="string">&quot;__turbopack_cjs__($arg)&quot;</span>,
                         arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
                     ));
                 }
