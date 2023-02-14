@@ -265,7 +265,7 @@ impl DepGraph {
                     .filter(|&dependant_ix| !done.contains(&dependant_ix))
                     .count();
 
-                let is_only_dep = count <= 1;
+                let is_only_dep = count == 1;
 
                 if is_only_dep && done.insert(dep_ix) {
                     changed = true;
@@ -332,7 +332,7 @@ impl DepGraph {
                     .filter(|&dependant_ix| !done.contains(&dependant_ix))
                     .count();
 
-                if count >= 2 {
+                if count >= 2 || count == 0 {
                     groups.push(vec![id.clone()]);
                     done.insert(ix);
                     changed = true;
