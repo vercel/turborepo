@@ -2,7 +2,10 @@ use std::{fmt, hash::Hash};
 
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
-use petgraph::{algo::kosaraju_scc, prelude::DiGraphMap};
+use petgraph::{
+    algo::{has_path_connecting, kosaraju_scc},
+    prelude::DiGraphMap,
+};
 use swc_core::{
     common::{util::take::Take, Spanned, DUMMY_SP},
     ecma::{
@@ -259,15 +262,7 @@ impl DepGraph {
             {
                 // Check if the the only dependant of dep is start
 
-                let count = graph
-                    .idx_graph
-                    .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
-                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
-                    .count();
-
-                let is_only_dep = count == 1;
-
-                if is_only_dep && done.insert(dep_ix) {
+                if done.insert(dep_ix) {
                     changed = true;
 
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
@@ -289,6 +284,7 @@ impl DepGraph {
         let mut groups = vec![];
         let mut done = FxHashSet::default();
 
+        // Module evaluation node and export nodes starts a group
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
 
@@ -298,6 +294,30 @@ impl DepGraph {
                 continue;
             }
         }
+
+        // Expand **starting** nodes
+        for (ix, id) in self.g.graph_ix.iter().enumerate() {
+            // If a node is reachable from two or more nodes, it should be in a
+            // separate group.
+
+            if done.contains(&(ix as u32)) {
+                continue;
+            }
+
+            let count = done
+                .iter()
+                .filter(|&&staring_point| {
+                    has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
+                })
+                .count();
+
+            if count >= 2 {
+                groups.push(vec![id.clone()]);
+                done.insert(ix as u32);
+            }
+        }
+
+        //
 
         loop {
             let mut changed = false;
@@ -312,48 +332,6 @@ impl DepGraph {
 
             if !changed {
                 break;
-            }
-        }
-
-        loop {
-            let mut changed = false;
-
-            for id in self.g.graph_ix.iter() {
-                let ix = self.g.get_node(id);
-
-                if done.contains(&ix) {
-                    continue;
-                }
-
-                let count = self
-                    .g
-                    .idx_graph
-                    .neighbors_directed(ix, petgraph::Direction::Incoming)
-                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
-                    .count();
-
-                if count >= 2 || count == 0 {
-                    groups.push(vec![id.clone()]);
-                    done.insert(ix);
-                    changed = true;
-                }
-            }
-
-            if !changed {
-                break;
-            }
-        }
-
-        let mut changed = true;
-        while changed {
-            changed = false;
-
-            for group in &mut groups {
-                let start = group.last().unwrap().clone();
-                let start_ix = self.g.get_node(&start);
-                if add_to_group(&self.g, group, start_ix, &mut done) {
-                    changed = true;
-                }
             }
         }
 
