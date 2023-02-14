@@ -492,12 +492,6 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         let args = args.clone();
         let sender = sender.clone();
         Box::pin(async move {
-            let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
-                current_dir: dir.clone(),
-                show_all,
-                log_detail,
-                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
-            }));
             let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
 
             let source = TransientValue::new(output.into());
@@ -505,6 +499,13 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
                 .await?
                 .strongly_consistent()
                 .await?;
+
+            let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
+                current_dir: dir.clone(),
+                show_all,
+                log_detail,
+                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
+            }));
             console_ui
                 .as_issue_reporter()
                 .report_issues(TransientInstance::new(issues), source);
