@@ -1,13 +1,7 @@
+.ONESHELL:
+
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
-
-EXT :=
-ifeq ($(OS),Windows_NT)
-	UNAME := Windows
-	EXT = .exe
-else
-	UNAME := $(shell uname -s)
-endif
 
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
@@ -15,42 +9,56 @@ GO_FLAGS += "-ldflags=-s -w"
 # Avoid embedding the build path in the executable for more reproducible builds
 GO_FLAGS += -trimpath
 
-CLI_DIR = $(shell pwd)
-
 # allow opting in to the rust codepaths
 GO_TAG ?= go
 
-GO_FILES = $(shell find . -name "*.go")
-SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
-GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
+# TODO: Fix Windows SRC_FILES
+ifeq ($(OS),Windows_NT)
+	EXT = .exe
+	GO_FILES := $(shell dir /b /s | findstr /i ".*\.go$")
+	SRC_FILES := $(shell dir /b /s | findstr /i ".*\.go$")
+	CLI_DIR := $(shell cd)
+	INTEGRATION_TEST_FILES = $(shell dir /b /s | findstr /i "integration_tests.*\.t$")
+	CC := "C:\\msys64\\clangarm64\\bin\\aarch64-w64-mingw32-cc.exe"
+	CXX := "C:\\msys64\\clangarm64\\bin\\aarch64-w64-mingw32-++.exe"
+	LIBRARY_NAME := turborepo_ffi.lib
+else
+	EXT :=
+	GO_FILES := $(shell find . -name "*.go")
+	SRC_FILES := $(shell find . -name "*.go" | grep -v "_test.go")
+	CLI_DIR := $(shell pwd)
+	INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
+	CC := $(CC)
+	CXX := $(CXX)
+	LIBRARY_NAME := libturborepo_ffi.a
+endif
 
 turbo: go-turbo$(EXT)
-	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+	cargo build --manifest-path $(CLI_DIR)/../crates/turborepo/Cargo.toml
 
-go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+go-turbo$(EXT): $(SRC_FILES) go.mod protoc turborepo-ffi-install
+	go env -w CGO_ENABLED=1
+	go env -w CC=$(CC)
+	go env -w CXX=$(CXX)
+	go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi
-	cp -r ../crates/turborepo-ffi/bindings.h \
-	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
-	      ./internal/ffi
+	node -e "const { cpSync } = require('fs'); const { join, normalize } = require('path'); cpSync(join('..', 'crates', 'turborepo-ffi', 'bindings.h'), join('internal', 'ffi', 'bindings.h'), { force: true }); cpSync(join('..', 'crates', 'turborepo-ffi', 'target', 'release', normalize('$(LIBRARY_NAME)')), join('internal', 'ffi', normalize('$(LIBRARY_NAME)')), { force: true });"
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && CARGO_TARGET_DIR=./target cargo build --release
+	cd $(CLI_DIR)/../crates/turborepo-ffi && cargo build --release --target-dir=./target
 
 .PHONY: turborepo-ffi-proto
 turborepo-ffi-proto:
-	protoc -I../crates/ ../crates/turborepo-ffi/messages.proto --go_out=./internal/
+	protoc -I$(CLI_DIR)/../crates/ $(CLI_DIR)/../crates/turborepo-ffi/messages.proto --go_out=$(CLI_DIR)/internal/
 
+.PHONY: protoc
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		internal/turbodprotocol/turbod.proto
-
-$(GENERATED_FILES): internal/turbodprotocol/turbod.proto
-	make protoc
 
 compile-protos: $(GENERATED_FILES)
 
@@ -253,8 +261,6 @@ $(CRAM_ENV)/bin/pip:
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 	$(CRAM_ENV)/bin/pip install prysk
-
-INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
 integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
