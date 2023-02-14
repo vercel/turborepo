@@ -340,25 +340,114 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(7, Normal), ItemId(0, ImportOfModule)]"];
+    N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
-    N2["Items: [ItemId(Export((Atom('foo' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
-    N3["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(10, Normal), ItemId(9, Normal), ItemId(0, ImportBinding(0)), ItemId(6, Normal)]"];
+    N2["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
+    N3["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(10, Normal)]"];
     N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal)]"];
-    N5["Items: [ItemId(1, VarDeclarator(0))]"];
-    N0 --> N3;
-    N0 --> N5;
-    N0 --> N2;
-    N1 --> N5;
-    N1 --> N3;
-    N2 --> N5;
-    N3 --> N5;
-    N3 --> N2;
-    N4 --> N2;
-    N4 --> N3;
+    N5["Items: [ItemId(0, ImportBinding(0))]"];
+    N6["Items: [ItemId(1, VarDeclarator(0))]"];
+    N7["Items: [ItemId(2, VarDeclarator(0))]"];
+    N8["Items: [ItemId(4, Normal), ItemId(3, VarDeclarator(0))]"];
+    N9["Items: [ItemId(5, VarDeclarator(0))]"];
+    N10["Items: [ItemId(6, Normal)]"];
+    N1 --> N6;
+    N1 --> N8;
+    N1 --> N10;
+    N2 --> N7;
+    N3 --> N6;
+    N3 --> N8;
+    N3 --> N10;
+    N4 --> N7;
+    N4 --> N9;
+    N4 --> N10;
+    N7 --> N6;
+    N8 --> N6;
+    N8 --> N7;
+    N9 --> N6;
+    N9 --> N8;
+    N10 --> N6;
+    N10 --> N8;
+    N10 --> N7;
+    N10 --> N9;
 ```
 
-# Modules
+# Modules (dev)
+
+## Module 1
+
+```js
+"module evaluation";
+```
+
+## Module 2
+
+```js
+export { foobar };
+```
+
+## Module 3
+
+```js
+export { foo };
+```
+
+## Module 4
+
+```js
+export { external1 };
+export function external1() {
+  return internal() + foobar;
+}
+```
+
+## Module 5
+
+```js
+export { external2 };
+export function external2() {
+  foobar += ".";
+}
+```
+
+## Module 6
+
+```js
+import { upper } from "module";
+```
+
+## Module 7
+
+```js
+export let foobar = "foo";
+```
+
+## Module 8
+
+```js
+export const foo = foobar;
+```
+
+## Module 9
+
+```js
+foobar += bar;
+const bar = "bar";
+```
+
+## Module 10
+
+```js
+let foobarCopy = foobar;
+```
+
+## Module 11
+
+```js
+foobar += "foo";
+```
+
+# Modules (prod)
 
 ## Module 1
 
