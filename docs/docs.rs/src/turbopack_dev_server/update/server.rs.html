@@ -253,7 +253,6 @@
 <span id="253">253</span>
 <span id="254">254</span>
 <span id="255">255</span>
-<span id="256">256</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -268,8 +267,7 @@
 <span class="kw">use </span>tokio_stream::StreamMap;
 <span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi};
 <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
-<span class="kw">use </span>turbopack_cli_utils::issue::ConsoleUiVc;
-<span class="kw">use </span>turbopack_core::version::Update;
+<span class="kw">use </span>turbopack_core::{issue::IssueReporterVc, version::Update};
 
 <span class="kw">use super</span>::{
     protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
@@ -284,15 +282,15 @@
 <span class="doccomment">/// A server that listens for updates and sends them to connected clients.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>UpdateServer&lt;P: SourceProvider&gt; {
     source_provider: P,
-    console_ui: ConsoleUiVc,
+    issue_reporter: IssueReporterVc,
 }
 
 <span class="kw">impl</span>&lt;P: SourceProvider + Clone + Send + Sync&gt; UpdateServer&lt;P&gt; {
     <span class="doccomment">/// Create a new update server with the given websocket and content source.
-    </span><span class="kw">pub fn </span>new(source_provider: P, console_ui: ConsoleUiVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(source_provider: P, issue_reporter: IssueReporterVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             source_provider,
-            console_ui,
+            issue_reporter,
         }
     }
 
@@ -325,7 +323,7 @@
                                     resolve_source_request(
                                         source,
                                         TransientInstance::new(request),
-                                        <span class="self">self</span>.console_ui
+                                        <span class="self">self</span>.issue_reporter
                                     )
                                 }
                             };

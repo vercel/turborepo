@@ -173,7 +173,7 @@
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>hyper::Uri;
 <span class="kw">use </span>turbo_tasks::{TransientInstance, Value};
-<span class="kw">use </span>turbopack_cli_utils::issue::ConsoleUiVc;
+<span class="kw">use </span>turbopack_core::issue::IssueReporterVc;
 
 <span class="kw">use super</span>::{
     headers::{HeaderValue, Headers},
@@ -203,7 +203,7 @@
 </span><span class="kw">pub async fn </span>resolve_source_request(
     source: ContentSourceVc,
     request: TransientInstance&lt;SourceRequest&gt;,
-    console_ui: ConsoleUiVc,
+    issue_reporter: IssueReporterVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveSourceRequestResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>data = ContentSourceData::default();
     <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
@@ -217,7 +217,7 @@
             result,
             <span class="kw-2">&amp;</span>original_path,
             <span class="string">&quot;get content from source&quot;</span>,
-            console_ui,
+            issue_reporter,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 

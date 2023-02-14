@@ -150,15 +150,13 @@
 <span id="150">150</span>
 <span id="151">151</span>
 <span id="152">152</span>
-<span id="153">153</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{StreamExt, TryStreamExt};
 <span class="kw">use </span>hyper::{header::HeaderName, Request, Response};
 <span class="kw">use </span>mime_guess::mime;
 <span class="kw">use </span>turbo_tasks::TransientInstance;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef};
-<span class="kw">use </span>turbopack_cli_utils::issue::ConsoleUiVc;
-<span class="kw">use </span>turbopack_core::{asset::AssetContent, version::VersionedContent};
+<span class="kw">use </span>turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 
 <span class="kw">use </span><span class="kw">crate</span>::source::{
     request::SourceRequest,
@@ -183,10 +181,10 @@
 </span><span class="kw">async fn </span>get_from_source(
     source: ContentSourceVc,
     request: TransientInstance&lt;SourceRequest&gt;,
-    console_ui: ConsoleUiVc,
+    issue_repoter: IssueReporterVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;GetFromSourceResultVc&gt; {
     <span class="prelude-val">Ok</span>(
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_source_request(source, request, console_ui).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_source_request(source, request, issue_repoter).<span class="kw">await</span><span class="question-mark">? </span>{
             ResolveSourceRequestResult::Static(static_content_vc) =&gt; {
                 <span class="kw">let </span>static_content = static_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>static_content.content.content().<span class="kw">await</span><span class="question-mark">? </span>{
@@ -213,11 +211,11 @@
 </span><span class="kw">pub async fn </span>process_request_with_content_source(
     source: ContentSourceVc,
     request: Request&lt;hyper::Body&gt;,
-    console_ui: ConsoleUiVc,
+    issue_reporter: IssueReporterVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;hyper::Body&gt;&gt; {
     <span class="kw">let </span>original_path = request.uri().path().to_string();
     <span class="kw">let </span>request = http_request_to_source_request(request).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>result = get_from_source(source, TransientInstance::new(request), console_ui);
+    <span class="kw">let </span>result = get_from_source(source, TransientInstance::new(request), issue_reporter);
     <span class="kw">match </span><span class="kw-2">&amp;*</span>result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
         GetFromSourceResult::Static {
             content,
