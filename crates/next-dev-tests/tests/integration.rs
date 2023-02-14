@@ -490,8 +490,8 @@ impl IssueReporter for TestIssueReporter {
         _source: TransientValue<RawVc>,
     ) -> Result<()> {
         let issue_tx = self.issue_tx.get_untracked().clone();
-        for issue in captured_issues.iter() {
-            issue_tx.send(issue.into_plain().await?).await?;
+        for issue in captured_issues.iter().cloned() {
+            issue_tx.send(issue).await?;
         }
 
         Ok(())

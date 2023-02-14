@@ -447,10 +447,8 @@ impl IssueReporter for ConsoleUi {
         let issues = issues
             .iter_with_shortest_path()
             .map(|(issue, path)| async move {
-                // (issue.)
-                let plain_issue = issue.into_plain();
-                let id = plain_issue.internal_hash().await?;
-                Ok((plain_issue.await?, path, issue.context(), *id))
+                let id = issue.internal_hash();
+                Ok((issue, path, issue.context.clone(), id))
             })
             .try_join()
             .await?;
@@ -471,7 +469,7 @@ impl IssueReporter for ConsoleUi {
             }
 
             let severity = plain_issue.severity;
-            let context_path = make_relative_to_cwd(context, current_dir).await?;
+            let context_path = make_relative_to_cwd(&context, current_dir).await?;
             let category = &plain_issue.category;
             let title = &plain_issue.title;
             let severity_map = grouped_issues
@@ -610,22 +608,12 @@ impl IssueReporter for ConsoleUi {
     }
 }
 
-async fn make_relative_to_cwd(path: FileSystemPathVc, cwd: &PathBuf) -> Result<String> {
-    let path = if let Some(fs) = AttachedFileSystemVc::resolve_from(path.fs()).await? {
-        fs.get_inner_fs_path(path)
-    } else {
-        path
-    };
-    if let Some(sys_path) = to_sys_path(path).await? {
-        let relative = sys_path
-            .strip_prefix(cwd)
-            .unwrap_or(&sys_path)
-            .to_string_lossy()
-            .to_string();
-        Ok(relative)
-    } else {
-        Ok(path.to_string().await?.clone_value())
-    }
+async fn make_relative_to_cwd(path: &str, cwd: &PathBuf) -> Result<String> {
+    let relative = path
+        .strip_prefix(&cwd.to_string_lossy().to_string())
+        .unwrap_or(&path)
+        .to_string();
+    Ok(relative)
 }
 
 fn show_all_message(label: &str, size: usize) -> StyledContent<String> {
