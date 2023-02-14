@@ -1671,6 +1671,7 @@ pub async fn to_sys_path(mut path: FileSystemPathVc) -> Result<Option<PathBuf>> 
     loop {
         if let Some(fs) = AttachedFileSystemVc::resolve_from(path.fs()).await? {
             path = fs.get_inner_fs_path(path);
+            continue;
         }
 
         if let Some(fs) = DiskFileSystemVc::resolve_from(path.fs()).await? {
