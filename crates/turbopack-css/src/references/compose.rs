@@ -9,6 +9,7 @@ use turbopack_core::{
 
 use crate::references::css_resolve;
 
+/// A `composes: ... from ...` CSS module reference.
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct CssModuleComposeReference {
@@ -18,6 +19,7 @@ pub struct CssModuleComposeReference {
 
 #[turbo_tasks::value_impl]
 impl CssModuleComposeReferenceVc {
+    /// Creates a new [`CssModuleComposeReference`].
     #[turbo_tasks::function]
     pub fn new(origin: ResolveOriginVc, request: RequestVc) -> Self {
         Self::cell(CssModuleComposeReference { origin, request })

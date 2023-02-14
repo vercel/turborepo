@@ -89,6 +89,9 @@ impl Asset for ModuleCssModuleAsset {
     }
 }
 
+/// A CSS class that is exported from a CSS module.
+///
+/// See [`ModuleCssClasses`] for more information.
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
 enum ModuleCssClass {
@@ -104,6 +107,28 @@ enum ModuleCssClass {
     },
 }
 
+/// A map of CSS classes exported from a CSS module.
+///
+/// ## Example
+///
+/// ```css
+/// :global(.class1) {
+///    color: red;
+/// }
+///
+/// .class2 {
+///   color: blue;
+/// }
+///
+/// .class3 {
+///   composes: class4 from "./other.module.css";
+/// }
+/// ```
+///
+/// The above CSS module would have the following exports:
+/// 1. class1: [Global("exported_class1")]
+/// 2. class2: [Local("exported_class2")]
+/// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
 struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);

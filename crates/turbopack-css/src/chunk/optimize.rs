@@ -70,6 +70,7 @@ async fn merge_chunks(
 /// will merge chunks into groups until it has at most this number of chunks.
 const MAX_CHUNK_COUNT: usize = 20;
 
+/// Groups adjacent chunks into at most `MAX_CHUNK_COUNT` groups.
 fn aggregate_adjacent_chunks(chunks: &[ChunkVc]) -> Vec<Vec<ChunkVc>> {
     // Each of the resulting merged chunks will have `chunks_per_merged_chunk`
     // chunks in them, except for the first `chunks_mod` chunks, which will have
@@ -100,6 +101,7 @@ fn aggregate_adjacent_chunks(chunks: &[ChunkVc]) -> Vec<Vec<ChunkVc>> {
     chunks_vecs
 }
 
+/// Merges adjacent chunks into at most `MAX_CHUNK_COUNT` chunks.
 async fn merge_adjacent_chunks(chunks_vc: ChunksVc) -> Result<ChunksVc> {
     let chunks = chunks_vc.await?;
 
