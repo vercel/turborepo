@@ -372,11 +372,11 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(2, Normal), ItemId(5, Normal), ItemId(8, Normal)]"];
+    N0["Items: [ItemId(2, Normal), ItemId(5, Normal), ItemId(8, Normal), ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(11, VarDeclarator(0))]"];
-    N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal), ItemId(10, VarDeclarator(0))]"];
+    N3["Items: [ItemId(11, VarDeclarator(0)), ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(10, VarDeclarator(0)), ItemId(12, Normal), ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
     N5["Items: [ItemId(0, VarDeclarator(0))]"];
     N6["Items: [ItemId(1, Normal)]"];
     N7["Items: [ItemId(4, Normal)]"];
@@ -411,10 +411,10 @@ import "./chunk-5.js";
 import "./chunk-6.js";
 import "./chunk-7.js";
 import "./chunk-8.js";
+console.log(dog);
+console.log(dog);
+console.log(dog);
 ("module evaluation");
-console.log(dog);
-console.log(dog);
-console.log(dog);
 ```
 
 ## Module 2
@@ -437,8 +437,8 @@ export { cat };
 ```js
 "chunk-3";
 import "./chunk-4.js";
-export { initialCat };
 export const initialCat = cat;
+export { initialCat };
 ```
 
 ## Module 5
@@ -449,11 +449,11 @@ import "./chunk-5.js";
 import "./chunk-6.js";
 import "./chunk-7.js";
 import "./chunk-8.js";
-export { getChimera };
+export let cat = "cat";
 export function getChimera() {
   return cat + dog;
 }
-export let cat = "cat";
+export { getChimera };
 ```
 
 ## Module 6
@@ -499,10 +499,10 @@ dog += "!";
 ```js
 "chunk-0";
 import "./chunk-4.js";
+console.log(dog);
+console.log(dog);
+console.log(dog);
 ("module evaluation");
-console.log(dog);
-console.log(dog);
-console.log(dog);
 ```
 
 ## Module 2
@@ -510,18 +510,18 @@ console.log(dog);
 ```js
 "chunk-1";
 import "./chunk-4.js";
-export { dogRef };
-export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
-};
 function getDog() {
   return dog;
 }
 function setDog(newDog) {
   dog = newDog;
 }
+export const dogRef = {
+  initial: dog,
+  get: getDog,
+  set: setDog,
+};
+export { dogRef };
 ```
 
 ## Module 3
@@ -537,21 +537,21 @@ export { cat };
 ```js
 "chunk-3";
 import "./chunk-4.js";
-export { initialCat };
 export const initialCat = cat;
+export { initialCat };
 ```
 
 ## Module 5
 
 ```js
 "chunk-4";
-export { getChimera };
+let dog = "dog";
+dog += "!";
+dog += "!";
+dog += "!";
+export let cat = "cat";
 export function getChimera() {
   return cat + dog;
 }
-export let cat = "cat";
-dog += "!";
-dog += "!";
-dog += "!";
-let dog = "dog";
+export { getChimera };
 ```

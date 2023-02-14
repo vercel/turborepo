@@ -340,11 +340,11 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation), ItemId(0, ImportOfModule), ItemId(7, Normal)]"];
+    N0["Items: [ItemId(0, ImportOfModule), ItemId(7, Normal), ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('external1' type=dynamic), #0))), ItemId(10, Normal), ItemId(9, Normal), ItemId(0, ImportBinding(0))]"];
-    N4["Items: [ItemId(Export((Atom('external2' type=dynamic), #0))), ItemId(11, Normal), ItemId(6, Normal)]"];
+    N3["Items: [ItemId(0, ImportBinding(0)), ItemId(9, Normal), ItemId(10, Normal), ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(6, Normal), ItemId(11, Normal), ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
     N5["Items: [ItemId(1, VarDeclarator(0))]"];
     N0 --> N3;
     N0 --> N5;
@@ -365,9 +365,9 @@ graph TD
 import "./chunk-3.js";
 import "./chunk-5.js";
 import "./chunk-4.js";
-("module evaluation");
 import "module";
 console.log(foobarCopy);
+("module evaluation");
 ```
 
 ## Module 2
@@ -392,14 +392,14 @@ export { foo };
 "chunk-3";
 import "./chunk-5.js";
 import "./chunk-4.js";
-export { external1 };
-export function external1() {
-  return internal() + foobar;
-}
+import { upper } from "module";
 function internal() {
   return upper(foobar);
 }
-import { upper } from "module";
+export function external1() {
+  return internal() + foobar;
+}
+export { external1 };
 ```
 
 ## Module 5
@@ -407,11 +407,11 @@ import { upper } from "module";
 ```js
 "chunk-4";
 import "./chunk-5.js";
-export { external2 };
+foobar += "foo";
 export function external2() {
   foobar += ".";
 }
-foobar += "foo";
+export { external2 };
 ```
 
 ## Module 6
@@ -427,9 +427,9 @@ export let foobar = "foo";
 
 ```js
 "chunk-0";
-"module evaluation";
 import "module";
 console.log(foobarCopy);
+("module evaluation");
 ```
 
 ## Module 2
@@ -446,8 +446,8 @@ export { foobar };
 ```js
 "chunk-2";
 import "./chunk-5.js";
-export { foo };
 export const foo = foobar;
+export { foo };
 ```
 
 ## Module 4
@@ -455,25 +455,25 @@ export const foo = foobar;
 ```js
 "chunk-3";
 import "./chunk-5.js";
-export { external1 };
-export function external1() {
-  return internal() + foobar;
-}
+import { upper } from "module";
+foobar += "foo";
 function internal() {
   return upper(foobar);
 }
-import { upper } from "module";
-foobar += "foo";
+export function external1() {
+  return internal() + foobar;
+}
+export { external1 };
 ```
 
 ## Module 5
 
 ```js
 "chunk-4";
-export { external2 };
 export function external2() {
   foobar += ".";
 }
+export { external2 };
 ```
 
 ## Module 6

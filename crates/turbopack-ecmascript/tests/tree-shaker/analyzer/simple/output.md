@@ -120,8 +120,8 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(3, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(0, VarDeclarator(0))]"];
+    N1["Items: [ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
+    N2["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
     N1 --> N2;
 ```
 
@@ -139,18 +139,18 @@ graph TD
 ```js
 "chunk-1";
 import "./chunk-2.js";
-export { DOG };
 export const DOG = dog;
+export { DOG };
 ```
 
 ## Module 3
 
 ```js
 "chunk-2";
-export { CHIMERA };
-export const CHIMERA = cat + dog;
-const cat = "cat";
 const dog = "dog";
+const cat = "cat";
+export const CHIMERA = cat + dog;
+export { CHIMERA };
 ```
 
 # Modules (prod)
@@ -167,16 +167,16 @@ const dog = "dog";
 ```js
 "chunk-1";
 import "./chunk-2.js";
-export { DOG };
 export const DOG = dog;
+export { DOG };
 ```
 
 ## Module 3
 
 ```js
 "chunk-2";
-export { CHIMERA };
-export const CHIMERA = cat + dog;
-const cat = "cat";
 const dog = "dog";
+const cat = "cat";
+export const CHIMERA = cat + dog;
+export { CHIMERA };
 ```
