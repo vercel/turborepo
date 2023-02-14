@@ -267,7 +267,7 @@ impl DepGraph {
 
                 let is_only_dep = count <= 1;
 
-                if (is_module_eval || is_only_dep) && done.insert(dep_ix) {
+                if is_only_dep && done.insert(dep_ix) {
                     changed = true;
 
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
