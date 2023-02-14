@@ -191,20 +191,41 @@ impl DepGraph {
         }
     }
 
+    /// Note: ESM imports are immutable, but we does not handle it.
     pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> Vec<Module> {
         let groups = self.finalize();
 
         let mut modules = vec![];
 
-        for group in groups.graph_ix {
+        for (ix, group) in groups.graph_ix.iter().enumerate() {
             let mut chunk = Module {
                 span: DUMMY_SP,
                 body: vec![],
                 shebang: None,
             };
 
+            chunk.body.push(ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                span: DUMMY_SP,
+                expr: format!("chunk-{}", ix).into(),
+            })));
+
+            for dep in groups
+                .idx_graph
+                .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
+            {
+                chunk
+                    .body
+                    .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
+                        span: DUMMY_SP,
+                        specifiers: Default::default(),
+                        src: box format!("./chunk-{}.js", dep).into(),
+                        type_only: false,
+                        asserts: None,
+                    })));
+            }
+
             for g in group {
-                chunk.body.push(data[&g].content.clone());
+                chunk.body.push(data[g].content.clone());
             }
 
             modules.push(chunk);
