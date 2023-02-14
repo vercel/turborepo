@@ -144,7 +144,10 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
-	workspaceInfos := map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON}
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON},
+		TurboConfigs: map[string]*fs.TurboJSON{},
+	}
 	c := &Context{
 		WorkspaceInfos: workspaceInfos,
 		RootNode:       core.ROOT_NODE_NAME,
@@ -162,7 +165,10 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
-	c.WorkspaceInfos = make(graph.WorkspaceInfos)
+	c.WorkspaceInfos = graph.WorkspaceInfos{
+		PackageJSONs: map[string]*fs.PackageJSON{},
+		TurboConfigs: map[string]*fs.TurboJSON{},
+	}
 	c.RootNode = core.ROOT_NODE_NAME
 
 	var warnings Warnings
@@ -207,7 +213,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		return nil, err
 	}
 	populateGraphWaitGroup := &errgroup.Group{}
-	for _, pkg := range c.WorkspaceInfos {
+	for _, pkg := range c.WorkspaceInfos.PackageJSONs {
 		pkg := pkg
 		populateGraphWaitGroup.Go(func() error {
 			return c.populateWorkspaceGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
@@ -224,7 +230,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
-	c.WorkspaceInfos[util.RootPkgName] = rootPackageJSON
+	c.WorkspaceInfos.PackageJSONs[util.RootPkgName] = rootPackageJSON
 
 	return c, warnings.errorOrNil()
 }
@@ -293,7 +299,7 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.WorkspaceInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
+		if item, ok := c.WorkspaceInfos.PackageJSONs[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
 			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
@@ -363,11 +369,11 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		c.WorkspaceGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
-		if c.WorkspaceInfos[pkg.Name] != nil {
-			existing := c.WorkspaceInfos[pkg.Name]
+		if c.WorkspaceInfos.PackageJSONs[pkg.Name] != nil {
+			existing := c.WorkspaceInfos.PackageJSONs[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
-		c.WorkspaceInfos[pkg.Name] = pkg
+		c.WorkspaceInfos.PackageJSONs[pkg.Name] = pkg
 		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}
 	return nil
@@ -481,12 +487,12 @@ func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string,
 		return false
 	}
 
-	changedPkgs := make([]string, 0, len(c.WorkspaceInfos))
+	changedPkgs := make([]string, 0, len(c.WorkspaceInfos.PackageJSONs))
 
 	// check if prev and current have "global" changes e.g. lockfile bump
 	globalChange := c.Lockfile.GlobalChange(previousLockfile)
 
-	for pkgName, pkg := range c.WorkspaceInfos {
+	for pkgName, pkg := range c.WorkspaceInfos.PackageJSONs {
 		if globalChange {
 			break
 		}
@@ -500,8 +506,8 @@ func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string,
 	}
 
 	if globalChange {
-		changedPkgs = make([]string, 0, len(c.WorkspaceInfos))
-		for pkgName := range c.WorkspaceInfos {
+		changedPkgs = make([]string, 0, len(c.WorkspaceInfos.PackageJSONs))
+		for pkgName := range c.WorkspaceInfos.PackageJSONs {
 			changedPkgs = append(changedPkgs, pkgName)
 		}
 		sort.Strings(changedPkgs)

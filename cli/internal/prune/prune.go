@@ -80,7 +80,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 
 	for _, scope := range opts.Scope {
 		p.base.Logger.Trace("scope", "value", scope)
-		target, scopeIsValid := ctx.WorkspaceInfos[scope]
+		target, scopeIsValid := ctx.WorkspaceInfos.PackageJSONs[scope]
 		if !scopeIsValid {
 			return errors.Errorf("invalid scope: package %v not found", scope)
 		}
@@ -139,35 +139,35 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			continue
 		}
 
-		workspaces = append(workspaces, ctx.WorkspaceInfos[internalDep].Dir)
-		originalDir := ctx.WorkspaceInfos[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
+		workspaces = append(workspaces, ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir)
+		originalDir := ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir.RestoreAnchor(p.base.RepoRoot)
 		info, err := originalDir.Lstat()
 		if err != nil {
 			return errors.Wrapf(err, "failed to lstat %s", originalDir)
 		}
-		targetDir := ctx.WorkspaceInfos[internalDep].Dir.RestoreAnchor(fullDir)
+		targetDir := ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir.RestoreAnchor(fullDir)
 		if err := targetDir.MkdirAllMode(info.Mode()); err != nil {
 			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
 		}
 
-		if err := fs.RecursiveCopy(ctx.WorkspaceInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
+		if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.Docker {
-			jsonDir := outDir.UntypedJoin("json", ctx.WorkspaceInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
+			jsonDir := outDir.UntypedJoin("json", ctx.WorkspaceInfos.PackageJSONs[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.WorkspaceInfos[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
+			if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		}
 
-		for _, pkg := range ctx.WorkspaceInfos[internalDep].TransitiveDeps {
+		for _, pkg := range ctx.WorkspaceInfos.PackageJSONs[internalDep].TransitiveDeps {
 			lockfileKeys = append(lockfileKeys, pkg.Key)
 		}
 
-		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.WorkspaceInfos[internalDep].Name))
+		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.WorkspaceInfos.PackageJSONs[internalDep].Name))
 	}
 	p.base.Logger.Trace("new workspaces", "value", workspaces)
 

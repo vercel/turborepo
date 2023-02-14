@@ -15,6 +15,9 @@
     "dev": {
       "cache": false
     },
+    "docs#dev": {
+      "dependsOn": ["schema"]
+    },
     "//#build:ts": {
       "outputs": ["packages/**/dist"],
       "dependsOn": []
