@@ -206,7 +206,7 @@ impl DepGraph {
 
             chunk.body.push(ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
-                expr: format!("chunk-{}", ix).into(),
+                expr: format!("turbopack://chunk-{}", ix).into(),
             })));
 
             for dep in groups
@@ -218,7 +218,7 @@ impl DepGraph {
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
                         specifiers: Default::default(),
-                        src: box format!("./chunk-{}.js", dep).into(),
+                        src: box format!("turbopack://chunk-{}.js", dep).into(),
                         type_only: false,
                         asserts: None,
                     })));
