@@ -65,7 +65,7 @@ jobs:
           - host: macos-latest
             target: "x86_64-apple-darwin"
             build: |
-              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
               pnpm build:nextrs -- --release --target x86_64-apple-darwin
               strip -x packages/next-rs/native/next-rs.*.node
           # - host: windows-latest
