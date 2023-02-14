@@ -75,6 +75,7 @@ func GetTurboDataDir() string {
 	return resp.Dir
 }
 
+// ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
 func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
 	var fromCommitRef *string
 	if fromCommit != "" {
@@ -109,6 +110,7 @@ func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUn
 	return resp.GetFiles().GetFiles(), nil
 }
 
+// PreviousContent returns the content of a file at a previous commit
 func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	req := ffi_proto.PreviousContentReq{
 		RepoRoot:   repoRoot,
