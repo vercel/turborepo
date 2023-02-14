@@ -162,12 +162,28 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let modules = analyzer.g.split_module(&analyzer.items);
+        {
+            let mut g = analyzer.g.clone();
+            g.handle_weak(true);
+            let modules = g.split_module(&analyzer.items);
 
-        writeln!(s, "# Modules").unwrap();
-        for (i, module) in modules.iter().enumerate() {
-            writeln!(s, "## Module {}", i + 1).unwrap();
-            writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
+            writeln!(s, "# Modules (dev)").unwrap();
+            for (i, module) in modules.iter().enumerate() {
+                writeln!(s, "## Module {}", i + 1).unwrap();
+                writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
+            }
+        }
+
+        {
+            let mut g = analyzer.g.clone();
+            g.handle_weak(false);
+            let modules = g.split_module(&analyzer.items);
+
+            writeln!(s, "# Modules (prod)").unwrap();
+            for (i, module) in modules.iter().enumerate() {
+                writeln!(s, "## Module {}", i + 1).unwrap();
+                writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
+            }
         }
 
         NormalizedOutput::from(s)

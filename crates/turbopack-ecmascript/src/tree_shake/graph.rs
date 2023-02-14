@@ -166,12 +166,18 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DepGraph {
     pub(super) g: InternedGraph<ItemId>,
 }
 
 impl DepGraph {
+    /// Weak imports are imports only if it's is referenced strongly. But this
+    /// is production-only, and week dependencies are treated as strong
+    /// dependency in development mode.
+
+    pub(super) fn handle_weak(&mut self, is_development: bool) {}
+
     pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> Vec<Module> {
         let groups = self.finalize();
 
