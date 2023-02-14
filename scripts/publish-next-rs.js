@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const path = require("path");
-const execa = require("execa");
 const { copy } = require("fs-extra");
 const { Sema } = require("async-sema");
 const { readFile, readdir, writeFile } = require("fs/promises");
@@ -9,6 +8,8 @@ const { readFile, readdir, writeFile } = require("fs/promises");
 const cwd = process.cwd();
 
 (async function () {
+  const execa = await import("execa");
+
   try {
     const publishSema = new Sema(2);
 
@@ -40,6 +41,7 @@ const cwd = process.cwd();
             path.join(nativePackagesDir, platform, "package.json"),
             JSON.stringify(pkg, null, 2)
           );
+          console.log("Publishing", platform, "version", version);
           // await execa(
           //   `npm`,
           //   [
