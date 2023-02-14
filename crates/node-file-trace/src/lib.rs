@@ -488,16 +488,16 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     let dir = current_dir().unwrap();
     let tt = create_tt();
     let task = tt.spawn_root_task(move || {
-        let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
-            current_dir: dir.clone(),
-            show_all,
-            log_detail,
-            log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
-        }));
         let dir = dir.clone();
         let args = args.clone();
         let sender = sender.clone();
         Box::pin(async move {
+            let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
+                current_dir: dir.clone(),
+                show_all,
+                log_detail,
+                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
+            }));
             let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
 
             let source = TransientValue::new(output.into());
