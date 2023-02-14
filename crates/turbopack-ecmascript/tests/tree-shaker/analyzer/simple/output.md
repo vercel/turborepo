@@ -120,9 +120,9 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
-    N2["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
-    N1 --> N2;
+    N1["Items: [ItemId(0, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
+    N2["Items: [ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
+    N2 --> N1;
 ```
 
 # Modules (dev)
@@ -138,7 +138,7 @@ graph TD
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
+const dog = "dog";
 export const DOG = dog;
 export { DOG };
 ```
@@ -147,7 +147,7 @@ export { DOG };
 
 ```js
 "turbopack://chunk-2";
-const dog = "dog";
+import "turbopack://chunk-1.js";
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
@@ -166,7 +166,7 @@ export { CHIMERA };
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
+const dog = "dog";
 export const DOG = dog;
 export { DOG };
 ```
@@ -175,7 +175,7 @@ export { DOG };
 
 ```js
 "turbopack://chunk-2";
-const dog = "dog";
+import "turbopack://chunk-1.js";
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };

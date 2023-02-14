@@ -340,20 +340,18 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(0, ImportOfModule), ItemId(7, Normal), ItemId(ModuleEvaluation)]"];
+    N0["Items: [ItemId(0, ImportOfModule), ItemId(0, ImportBinding(0)), ItemId(7, Normal), ItemId(9, Normal), ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N3["Items: [ItemId(0, ImportBinding(0)), ItemId(9, Normal), ItemId(10, Normal), ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
-    N4["Items: [ItemId(6, Normal), ItemId(11, Normal), ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
-    N5["Items: [ItemId(1, VarDeclarator(0))]"];
-    N0 --> N3;
-    N0 --> N5;
+    N3["Items: [ItemId(1, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(4, Normal), ItemId(6, Normal), ItemId(10, Normal), ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(5, VarDeclarator(0)), ItemId(11, Normal), ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
     N0 --> N4;
-    N1 --> N5;
-    N1 --> N4;
-    N3 --> N5;
+    N0 --> N3;
+    N1 --> N3;
+    N2 --> N3;
     N3 --> N4;
-    N4 --> N5;
+    N3 --> N0;
+    N4 --> N3;
 ```
 
 # Modules (dev)
@@ -362,11 +360,14 @@ graph TD
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-3.js";
-import "turbopack://chunk-5.js";
 import "turbopack://chunk-4.js";
+import "turbopack://chunk-3.js";
 import "module";
+import { upper } from "module";
 console.log(foobarCopy);
+function internal() {
+  return upper(foobar);
+}
 ("module evaluation");
 ```
 
@@ -374,8 +375,7 @@ console.log(foobarCopy);
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-4.js";
+import "turbopack://chunk-3.js";
 export { foobar };
 ```
 
@@ -383,6 +383,7 @@ export { foobar };
 
 ```js
 "turbopack://chunk-2";
+import "turbopack://chunk-3.js";
 export { foo };
 ```
 
@@ -390,12 +391,13 @@ export { foo };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-5.js";
 import "turbopack://chunk-4.js";
-import { upper } from "module";
-function internal() {
-  return upper(foobar);
-}
+import "turbopack://chunk-0.js";
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+foobar += "foo";
 export function external1() {
   return internal() + foobar;
 }
@@ -406,19 +408,12 @@ export { external1 };
 
 ```js
 "turbopack://chunk-4";
-import "turbopack://chunk-5.js";
-foobar += "foo";
+import "turbopack://chunk-3.js";
+let foobarCopy = foobar;
 export function external2() {
   foobar += ".";
 }
 export { external2 };
-```
-
-## Module 6
-
-```js
-"turbopack://chunk-5";
-export let foobar = "foo";
 ```
 
 # Modules (prod)
@@ -427,7 +422,9 @@ export let foobar = "foo";
 
 ```js
 "turbopack://chunk-0";
+import "turbopack://chunk-3.js";
 import "module";
+let foobarCopy = foobar;
 console.log(foobarCopy);
 ("module evaluation");
 ```
@@ -436,7 +433,6 @@ console.log(foobarCopy);
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-5.js";
 import "turbopack://chunk-3.js";
 export { foobar };
 ```
@@ -445,7 +441,7 @@ export { foobar };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-3.js";
 export const foo = foobar;
 export { foo };
 ```
@@ -454,8 +450,10 @@ export { foo };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-5.js";
 import { upper } from "module";
+export let foobar = "foo";
+const bar = "bar";
+foobar += bar;
 foobar += "foo";
 function internal() {
   return upper(foobar);
@@ -474,11 +472,4 @@ export function external2() {
   foobar += ".";
 }
 export { external2 };
-```
-
-## Module 6
-
-```js
-"turbopack://chunk-5";
-export let foobar = "foo";
 ```
