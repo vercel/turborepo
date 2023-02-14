@@ -144,7 +144,10 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
-	workspaceInfos := map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON}
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON},
+		TurboConfigs: map[string]*fs.TurboJSON{},
+	}
 	c := &Context{
 		WorkspaceInfos: workspaceInfos,
 		RootNode:       core.ROOT_NODE_NAME,
@@ -162,7 +165,10 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
-	c.WorkspaceInfos = make(graph.WorkspaceInfos)
+	c.WorkspaceInfos = graph.WorkspaceInfos{
+		PackageJSONs: map[string]*fs.PackageJSON{},
+		TurboConfigs: map[string]*fs.TurboJSON{},
+	}
 	c.RootNode = core.ROOT_NODE_NAME
 
 	var warnings Warnings
@@ -207,7 +213,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		return nil, err
 	}
 	populateGraphWaitGroup := &errgroup.Group{}
-	for _, pkg := range c.WorkspaceInfos {
+	for _, pkg := range c.WorkspaceInfos.PackageJSONs {
 		pkg := pkg
 		populateGraphWaitGroup.Go(func() error {
 			return c.populateWorkspaceGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
@@ -224,16 +230,13 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
-	c.WorkspaceInfos[util.RootPkgName] = rootPackageJSON
+	c.WorkspaceInfos.PackageJSONs[util.RootPkgName] = rootPackageJSON
 
 	return c, warnings.errorOrNil()
 }
 
 func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warnings *Warnings) error {
-	seen := mapset.NewSet()
-	var lockfileEg errgroup.Group
 	pkg := rootPackageJSON
-	depSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
 	for dep, version := range pkg.DevDependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
@@ -245,25 +248,25 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if c.Lockfile != nil {
-		pkg.TransitiveDeps = []string{}
-		c.resolveDepGraph(&lockfileEg, pkg, pkg.UnresolvedExternalDeps, depSet, seen, pkg)
-		if err := lockfileEg.Wait(); err != nil {
+		depSet, err := TransitiveClosure(pkg, c.Lockfile)
+		if err != nil {
 			warnings.append(err)
 			// Return early to skip using results of incomplete dep graph resolution
 			return nil
 		}
-		pkg.ExternalDeps = make([]string, 0, depSet.Cardinality())
+		pkg.TransitiveDeps = make([]lockfile.Package, 0, depSet.Cardinality())
 		for _, v := range depSet.ToSlice() {
-			pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
+			dep := v.(lockfile.Package)
+			pkg.TransitiveDeps = append(pkg.TransitiveDeps, dep)
 		}
-		sort.Strings(pkg.ExternalDeps)
-		hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
+		sort.Sort(lockfile.ByKey(pkg.TransitiveDeps))
+		hashOfExternalDeps, err := fs.HashObject(pkg.TransitiveDeps)
 		if err != nil {
 			return err
 		}
 		pkg.ExternalDepsHash = hashOfExternalDeps
 	} else {
-		pkg.ExternalDeps = []string{}
+		pkg.TransitiveDeps = []lockfile.Package{}
 		pkg.ExternalDepsHash = ""
 	}
 
@@ -280,7 +283,6 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 	depMap := make(map[string]string)
 	internalDepsSet := make(dag.Set)
 	externalUnresolvedDepsSet := make(dag.Set)
-	externalDepSet := mapset.NewSet()
 	pkg.UnresolvedExternalDeps = make(map[string]string)
 
 	for dep, version := range pkg.DevDependencies {
@@ -297,7 +299,7 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.WorkspaceInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
+		if item, ok := c.WorkspaceInfos.PackageJSONs[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
 			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
@@ -320,31 +322,29 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	pkg.TransitiveDeps = []string{}
-	seen := mapset.NewSet()
-	lockfileEg := &errgroup.Group{}
-	c.resolveDepGraph(lockfileEg, pkg, pkg.UnresolvedExternalDeps, externalDepSet, seen, pkg)
-	if err := lockfileEg.Wait(); err != nil {
+	externalDeps, err := TransitiveClosure(pkg, c.Lockfile)
+	if err != nil {
 		warnings.append(err)
 		// reset external deps to original state
-		externalDepSet = mapset.NewSet()
+		externalDeps = mapset.NewSet()
 	}
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
 		c.WorkspaceGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
-	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
-	for _, v := range externalDepSet.ToSlice() {
-		pkg.ExternalDeps = append(pkg.ExternalDeps, fmt.Sprintf("%v", v))
+	pkg.TransitiveDeps = make([]lockfile.Package, 0, externalDeps.Cardinality())
+	for _, dependency := range externalDeps.ToSlice() {
+		dependency := dependency.(lockfile.Package)
+		pkg.TransitiveDeps = append(pkg.TransitiveDeps, dependency)
 	}
 	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
 	for _, v := range internalDepsSet.List() {
 		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
 	sort.Strings(pkg.InternalDeps)
-	sort.Strings(pkg.ExternalDeps)
-	hashOfExternalDeps, err := fs.HashObject(pkg.ExternalDeps)
+	sort.Sort(lockfile.ByKey(pkg.TransitiveDeps))
+	hashOfExternalDeps, err := fs.HashObject(pkg.TransitiveDeps)
 	if err != nil {
 		return err
 	}
@@ -369,50 +369,60 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		c.WorkspaceGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
-		if c.WorkspaceInfos[pkg.Name] != nil {
-			existing := c.WorkspaceInfos[pkg.Name]
+		if c.WorkspaceInfos.PackageJSONs[pkg.Name] != nil {
+			existing := c.WorkspaceInfos.PackageJSONs[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
-		c.WorkspaceInfos[pkg.Name] = pkg
+		c.WorkspaceInfos.PackageJSONs[pkg.Name] = pkg
 		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}
 	return nil
 }
 
-func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON, unresolvedDirectDeps map[string]string, resolvedDepsSet mapset.Set, seen mapset.Set, pkg *fs.PackageJSON) {
-	if c.Lockfile == (lockfile.Lockfile)(nil) {
-		return
+// TransitiveClosure the set of all lockfile keys that pkg depends on
+func TransitiveClosure(pkg *fs.PackageJSON, lockFile lockfile.Lockfile) (mapset.Set, error) {
+	if lockfile.IsNil(lockFile) {
+		return nil, fmt.Errorf("No lockfile available to do analysis on")
 	}
+
+	resolvedPkgs := mapset.NewSet()
+	lockfileEg := &errgroup.Group{}
+
+	transitiveClosureHelper(lockfileEg, pkg, lockFile, pkg.UnresolvedExternalDeps, resolvedPkgs)
+
+	if err := lockfileEg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return resolvedPkgs, nil
+}
+
+func transitiveClosureHelper(wg *errgroup.Group, pkg *fs.PackageJSON, lockfile lockfile.Lockfile, unresolvedDirectDeps map[string]string, resolvedDeps mapset.Set) {
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
 		directDepName := directDepName
 		unresolvedVersion := unresolvedVersion
 		wg.Go(func() error {
 
-			lockfilePkg, err := c.Lockfile.ResolvePackage(workspace.Dir.ToUnixPath(), directDepName, unresolvedVersion)
+			lockfilePkg, err := lockfile.ResolvePackage(pkg.Dir.ToUnixPath(), directDepName, unresolvedVersion)
 
 			if err != nil {
 				return err
 			}
 
-			if !lockfilePkg.Found || seen.Contains(lockfilePkg.Key) {
+			if !lockfilePkg.Found || resolvedDeps.Contains(lockfilePkg) {
 				return nil
 			}
 
-			seen.Add(lockfilePkg.Key)
+			resolvedDeps.Add(lockfilePkg)
 
-			pkg.Mu.Lock()
-			pkg.TransitiveDeps = append(pkg.TransitiveDeps, lockfilePkg.Key)
-			pkg.Mu.Unlock()
-			resolvedDepsSet.Add(fmt.Sprintf("%s@%s", lockfilePkg.Key, lockfilePkg.Version))
-
-			allDeps, ok := c.Lockfile.AllDependencies(lockfilePkg.Key)
+			allDeps, ok := lockfile.AllDependencies(lockfilePkg.Key)
 
 			if !ok {
 				panic(fmt.Sprintf("Unable to find entry for %s", lockfilePkg.Key))
 			}
 
 			if len(allDeps) > 0 {
-				c.resolveDepGraph(wg, workspace, allDeps, resolvedDepsSet, seen, pkg)
+				transitiveClosureHelper(wg, pkg, lockfile, allDeps, resolvedDeps)
 			}
 
 			return nil
@@ -447,4 +457,63 @@ func (c *Context) InternalDependencies(start []string) ([]string, error) {
 	sort.Strings(targets)
 
 	return targets, nil
+}
+
+// ChangedPackages returns a list of changed packages based on the contents of a previous lockfile
+// This assumes that none of the package.json in the workspace change, it is
+// the responsibility of the caller to verify this.
+func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string, error) {
+	if lockfile.IsNil(previousLockfile) || lockfile.IsNil(c.Lockfile) {
+		return nil, fmt.Errorf("Cannot detect changed packages without previous and current lockfile")
+	}
+
+	didPackageChange := func(pkgName string, pkg *fs.PackageJSON) bool {
+		previousDeps, err := TransitiveClosure(pkg, previousLockfile)
+		if err != nil || previousDeps.Cardinality() != len(pkg.TransitiveDeps) {
+			return true
+		}
+
+		prevExternalDeps := make([]lockfile.Package, 0, previousDeps.Cardinality())
+		for _, d := range previousDeps.ToSlice() {
+			prevExternalDeps = append(prevExternalDeps, d.(lockfile.Package))
+		}
+		sort.Sort(lockfile.ByKey(prevExternalDeps))
+
+		for i := range prevExternalDeps {
+			if prevExternalDeps[i] != pkg.TransitiveDeps[i] {
+				return true
+			}
+		}
+		return false
+	}
+
+	changedPkgs := make([]string, 0, len(c.WorkspaceInfos.PackageJSONs))
+
+	// check if prev and current have "global" changes e.g. lockfile bump
+	globalChange := c.Lockfile.GlobalChange(previousLockfile)
+
+	for pkgName, pkg := range c.WorkspaceInfos.PackageJSONs {
+		if globalChange {
+			break
+		}
+		if didPackageChange(pkgName, pkg) {
+			if pkgName == util.RootPkgName {
+				globalChange = true
+			} else {
+				changedPkgs = append(changedPkgs, pkgName)
+			}
+		}
+	}
+
+	if globalChange {
+		changedPkgs = make([]string, 0, len(c.WorkspaceInfos.PackageJSONs))
+		for pkgName := range c.WorkspaceInfos.PackageJSONs {
+			changedPkgs = append(changedPkgs, pkgName)
+		}
+		sort.Strings(changedPkgs)
+		return changedPkgs, nil
+	}
+
+	sort.Strings(changedPkgs)
+	return changedPkgs, nil
 }

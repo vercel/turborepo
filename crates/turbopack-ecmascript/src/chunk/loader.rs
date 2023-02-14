@@ -8,7 +8,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc, ChunksVc,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc,
     },
     reference::AssetReferencesVc,
 };
@@ -19,7 +19,7 @@ use crate::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::{stringify_module_id, stringify_str},
+    utils::stringify_js,
 };
 
 /// The manifest loader item is shipped in the same chunk that uses the dynamic
@@ -76,6 +76,11 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.manifest.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let mut code = Vec::new();
 
@@ -120,9 +125,9 @@ __turbopack_export_value__((__turbopack_import__) => {{
         return __turbopack_require__({item_id});
     }}).then(() => __turbopack_import__({dynamic_id}));
 }});",
-            chunk_server_path = stringify_str(chunk_server_path),
-            item_id = stringify_module_id(item_id),
-            dynamic_id = stringify_module_id(dynamic_id),
+            chunk_server_path = stringify_js(chunk_server_path),
+            item_id = stringify_js(item_id),
+            dynamic_id = stringify_js(dynamic_id),
         )?;
 
         Ok(EcmascriptChunkItemContent {
@@ -239,6 +244,11 @@ impl EcmascriptChunkItem for ManifestChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.manifest.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let chunks = self.manifest.chunks().await?;
 
@@ -264,7 +274,7 @@ impl EcmascriptChunkItem for ManifestChunkItem {
 
         let mut code = b"const chunks = [\n".to_vec();
         for pathname in chunk_server_paths {
-            writeln!(code, "    {},", stringify_str(&pathname))?;
+            writeln!(code, "    {},", stringify_js(&pathname))?;
         }
         writeln!(code, "];")?;
 

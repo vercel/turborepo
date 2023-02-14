@@ -22,7 +22,7 @@ use turbopack_core::{
 
 use super::{base::ReferencedAsset, EsmAssetReferenceVc};
 use crate::{
-    chunk::{EcmascriptChunkPlaceableVc, EcmascriptExports},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::esm::base::insert_hoisted_stmt,
@@ -167,7 +167,7 @@ impl CodeGenerateable for EsmExports {
                     let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
 
                     cjs_exports.push(quote_expr!(
-                        "__turbopack__cjs__($arg)",
+                        "__turbopack_cjs__($arg)",
                         arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
                     ));
                 }

@@ -15,7 +15,10 @@ use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc,
+    },
     context::AssetContextVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
@@ -26,7 +29,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_str,
+    utils::stringify_js,
 };
 
 #[turbo_tasks::value]
@@ -181,11 +184,16 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.module.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_str(&format!("/{}", &*self.static_asset.path().await?))
+                path = stringify_js(&format!("/{}", &*self.static_asset.path().await?))
             )
             .into(),
             ..Default::default()

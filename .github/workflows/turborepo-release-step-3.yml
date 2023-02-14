@@ -5,6 +5,9 @@ on:
     inputs:
       release_branch:
         description: "Staging branch to run release from"
+      dry_run:
+        description: "Do a dry run, skipping the final publish step."
+        type: boolean
 
 env:
   RELEASE_TURBO_CLI: true
@@ -51,6 +54,11 @@ jobs:
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Rust Setup
         uses: actions-rs/toolchain@v1
         with:
@@ -64,7 +72,7 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --no-default-features --features rustls-tls --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -117,7 +125,6 @@ jobs:
           mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
 
       - name: Download Go artifacts
-        id: download-artifact
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.TURBOBOT}}
@@ -125,8 +132,6 @@ jobs:
           workflow_conclusion: success
           branch: ${{ inputs.release_branch }}
           path: go-artifacts
-          skip_unpack: false
-          if_no_artifact_found: fail
 
       - name: Move Go artifacts into place
         run: |
@@ -150,7 +155,7 @@ jobs:
           chmod a+x cli/dist-darwin-arm64/go-turbo
 
       - name: Perform Release
-        run: cd cli && make publish-turbo
+        run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -174,6 +179,7 @@ jobs:
         run: echo ::set-output name=version::$(head -n 1 version.txt)
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
+        if: ${{ !inputs.dry_run }}
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ inputs.release_branch }}

@@ -12,7 +12,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmd/auth"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
-	"github.com/vercel/turbo/cli/internal/login"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
@@ -66,11 +65,7 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 	var execErr error
 	go func() {
 		command := args.Command
-		if command.Link != nil {
-			execErr = login.ExecuteLink(helper, &args)
-		} else if command.Login != nil {
-			execErr = login.ExecuteLogin(ctx, helper, &args)
-		} else if command.Unlink != nil {
+		if command.Unlink != nil {
 			execErr = auth.ExecuteUnlink(helper, &args)
 		} else if command.Daemon != nil {
 			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &args)

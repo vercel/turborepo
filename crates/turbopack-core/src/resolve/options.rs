@@ -10,9 +10,9 @@ use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 
 use super::{
     alias_map::{AliasMap, AliasTemplate},
-    AliasPattern, ResolveResult, ResolveResultVc, SpecialType,
+    AliasPattern, PrimaryResolveResult, ResolveResult, ResolveResultVc,
 };
-use crate::resolve::parse::RequestVc;
+use crate::resolve::{parse::RequestVc, plugin::ResolvePluginVc};
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
@@ -241,20 +241,20 @@ async fn import_mapping_to_result(
     Ok(match &*mapping.await? {
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name) => ImportMapResult::Result(
-            ResolveResult::Special(
+            ResolveResult::primary_with_references(
                 name.as_ref().map_or_else(
-                    || SpecialType::OriginalReferenceExternal,
-                    |req| SpecialType::OriginalReferenceTypeExternal(req.to_string()),
+                    || PrimaryResolveResult::OriginalReferenceExternal,
+                    |req| PrimaryResolveResult::OriginalReferenceTypeExternal(req.to_string()),
                 ),
                 Vec::new(),
             )
             .into(),
         ),
         ImportMapping::Ignore => {
-            ImportMapResult::Result(ResolveResult::Special(SpecialType::Ignore, Vec::new()).into())
+            ImportMapResult::Result(ResolveResult::primary(PrimaryResolveResult::Ignore).into())
         }
         ImportMapping::Empty => {
-            ImportMapResult::Result(ResolveResult::Special(SpecialType::Empty, Vec::new()).into())
+            ImportMapResult::Result(ResolveResult::primary(PrimaryResolveResult::Empty).into())
         }
         ImportMapping::PrimaryAlternative(name, context) => {
             let request = RequestVc::parse(Value::new(name.to_string().into()));
@@ -374,6 +374,7 @@ pub struct ResolveOptions {
     /// An import map to use when a request is otherwise unresolveable.
     pub fallback_import_map: Option<ImportMapVc>,
     pub resolved_map: Option<ResolvedMapVc>,
+    pub plugins: Vec<ResolvePluginVc>,
     pub placeholder_for_future_extensions: (),
 }
 

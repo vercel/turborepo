@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack_core::resolve::{
     find_context_file,
     options::{
@@ -10,9 +10,8 @@ use turbopack_core::resolve::{
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
-use turbopack_ecmascript::{
-    resolve::apply_cjs_specific_options,
-    typescript::resolve::{apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options},
+use turbopack_ecmascript::typescript::resolve::{
+    apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options,
 };
 
 use crate::resolve_options_context::ResolveOptionsContextVc;
@@ -175,7 +174,7 @@ async fn base_resolve_options(
                     for condition in opt.custom_conditions.iter() {
                         conditions.insert(condition.to_string(), ConditionValue::Set);
                     }
-                    // Infer some well known conditions
+                    // Infer some well-known conditions
                     let dev = conditions.get("development").cloned();
                     let prod = conditions.get("production").cloned();
                     if prod.is_none() {
@@ -221,6 +220,7 @@ async fn base_resolve_options(
         },
         import_map: Some(import_map),
         resolved_map: opt.resolved_map,
+        plugins: opt.plugins.clone(),
         ..Default::default()
     }
     .into())
@@ -245,12 +245,10 @@ pub async fn resolve_options(
 
     let resolve_options = if options_context_value.enable_typescript {
         let tsconfig = find_context_file(context, tsconfig()).await?;
-        let cjs_resolve_options = apply_cjs_specific_options(resolve_options);
         match *tsconfig {
-            FindContextFileResult::Found(path, _) => apply_tsconfig_resolve_options(
-                resolve_options,
-                tsconfig_resolve_options(path, cjs_resolve_options),
-            ),
+            FindContextFileResult::Found(path, _) => {
+                apply_tsconfig_resolve_options(resolve_options, tsconfig_resolve_options(path))
+            }
             FindContextFileResult::NotFound(_) => resolve_options,
         }
     } else {

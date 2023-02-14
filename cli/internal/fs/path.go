@@ -105,13 +105,6 @@ func TempDir(subDir string) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(os.TempDir()).UntypedJoin(subDir)
 }
 
-// GetTurboDataDir returns a directory outside of the repo
-// where turbo can store data files related to turbo.
-func GetTurboDataDir() turbopath.AbsoluteSystemPath {
-	dataHome := AbsoluteSystemPathFromUpstream(xdg.DataHome)
-	return dataHome.UntypedJoin("turborepo")
-}
-
 // GetUserConfigDir returns the platform-specific common location
 // for configuration files that belong to a user.
 func GetUserConfigDir() turbopath.AbsoluteSystemPath {

@@ -2,7 +2,9 @@ import type { Ipc } from "@vercel/turbopack-next/ipc/index";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
-import loadNextConfig from "@vercel/turbopack-next/entry/config/next";
+import { makeResolver } from "next/dist/server/router.js";
+import loadConfig from "next/dist/server/config";
+import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
 
 import "next/dist/server/node-polyfill-fetch.js";
 
@@ -10,14 +12,19 @@ type RouterRequest = {
   method: string;
   pathname: string;
   // TODO: not passed to request
-  headers: Record<string, string>;
-  query: Record<string, string>;
+  rawHeaders: Array<[string, string]>;
+  rawQuery: string;
 };
 
-type RouteResult = {
-  url: string;
-  headers: Record<string, string>;
-};
+type RouteResult =
+  | {
+      type: "rewrite";
+      url: string;
+      headers: Record<string, string>;
+    }
+  | {
+      type: "none";
+    };
 
 type IpcOutgoingMessage = {
   type: "jsonValue";
@@ -34,7 +41,8 @@ type MessageData =
   | {
       type: "rewrite";
       data: RewriteResponse;
-    };
+    }
+  | { type: "none" };
 
 type RewriteResponse = {
   url: string;
@@ -47,12 +55,22 @@ type MiddlewareHeadersResponse = {
 };
 
 let resolveRouteMemo: Promise<
-  (req: IncomingMessage, res: ServerResponse) => Promise<unknown>
+  (req: IncomingMessage, res: ServerResponse) => Promise<void>
 >;
-async function getResolveRoute(dir: string) {
-  // Deferring the import allows us to not error while we wait for Next.js to implement.
-  const { makeResolver } = (await import("next/dist/server/router.js")) as any;
-  const nextConfig = await loadNextConfig();
+
+async function getResolveRoute(
+  dir: string
+): ReturnType<
+  typeof import("next/dist/server/lib/route-resolver").makeResolver
+> {
+  const nextConfig = await loadConfig(
+    PHASE_DEVELOPMENT_SERVER,
+    process.cwd(),
+    undefined,
+    undefined,
+    true
+  );
+
   return await makeResolver(dir, nextConfig);
 }
 
@@ -76,8 +94,8 @@ export default async function route(
       server,
       routerRequest.method,
       routerRequest.pathname,
-      routerRequest.query,
-      routerRequest.headers
+      routerRequest.rawQuery,
+      routerRequest.rawHeaders
     );
 
     // Send the clientRequest, so the server parses everything. We can then pass
@@ -114,7 +132,7 @@ export default async function route(
 async function handleClientResponse(
   _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponse: IncomingMessage
-): Promise<MessageData | void> {
+): Promise<MessageData> {
   if (clientResponse.headers["x-nextjs-route-result"] === "1") {
     clientResponse.setEncoding("utf8");
     // We're either a redirect or a rewrite
@@ -124,13 +142,21 @@ async function handleClientResponse(
     }
 
     const data = JSON.parse(buffer) as RouteResult;
-    return {
-      type: "rewrite",
-      data: {
-        url: data.url,
-        headers: Object.entries(data.headers).flat(),
-      },
-    };
+
+    switch (data.type) {
+      case "rewrite":
+        return {
+          type: "rewrite",
+          data: {
+            url: data.url,
+            headers: Object.entries(data.headers).flat(),
+          },
+        };
+      case "none":
+        return {
+          type: "none",
+        };
+    }
   }
 
   const responseHeaders: MiddlewareHeadersResponse = {

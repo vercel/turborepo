@@ -160,13 +160,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	turboJSON, err := fs.LoadTurboConfig(r.base.RepoRoot, rootPackageJSON, r.opts.runOpts.singlePackage)
-	if err != nil {
-		return err
-	}
-
-	// TODO: these values come from a config file, hopefully viper can help us merge these
-	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
 
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.singlePackage {
@@ -201,17 +194,26 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
-	pipeline := turboJSON.Pipeline
-	if err := validateTasks(pipeline, targets); err != nil {
-		location := ""
-		if r.opts.runOpts.singlePackage {
-			location = "in `scripts` in \"package.json\""
-		} else {
-			location = "in `pipeline` in \"turbo.json\""
-		}
-		return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
+	// TODO: consolidate some of these arguments
+	// Note: not all properties are set here. GlobalHash and Pipeline keys are set later
+	g := &graph.CompleteGraph{
+		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
+		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
+		RootNode:        pkgDepGraph.RootNode,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		RepoRoot:        r.base.RepoRoot,
 	}
 
+	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.singlePackage)
+	if err != nil {
+		return err
+	}
+
+	// TODO: these values come from a config file, hopefully viper can help us merge these
+	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+
+	pipeline := turboJSON.Pipeline
+	g.Pipeline = pipeline
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
@@ -235,6 +237,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
+
 	globalHash, err := calculateGlobalHash(
 		r.base.RepoRoot,
 		rootPackageJSON,
@@ -246,21 +249,15 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		r.base.Logger,
 		os.Environ(),
 	)
+
+	g.GlobalHash = globalHash
+
 	if err != nil {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
 	r.base.Logger.Debug("global hash", "value", globalHash)
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
-	// TODO: consolidate some of these arguments
-	g := &graph.CompleteGraph{
-		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
-		Pipeline:        pipeline,
-		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
-		GlobalHash:      globalHash,
-		RootNode:        pkgDepGraph.RootNode,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
-	}
 	rs := &runSpec{
 		Targets:      targets,
 		FilteredPkgs: filteredPkgs,
@@ -268,24 +265,31 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 	packageManager := pkgDepGraph.PackageManager
 
-	vertexSet := make(util.Set)
-	for _, v := range g.WorkspaceGraph.Vertices() {
-		vertexSet.Add(v)
-	}
-
-	engine, err := buildTaskGraphEngine(g, rs)
+	engine, err := buildTaskGraphEngine(
+		g,
+		rs,
+		r.opts.runOpts.singlePackage,
+	)
 
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
+
 	tracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
+		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
 		g.WorkspaceInfos,
 	)
 
-	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
+	err = tracker.CalculateFileHashes(
+		engine.TaskGraph.Vertices(),
+		rs.Opts.runOpts.concurrency,
+		r.base.RepoRoot,
+		g,
+	)
+
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
 	}
@@ -299,7 +303,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 				g.WorkspaceGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(g, rs)
+		engine, err = buildTaskGraphEngine(
+			g,
+			rs,
+			r.opts.runOpts.singlePackage,
+		)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -394,14 +402,16 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(g)
+func buildTaskGraphEngine(
+	g *graph.CompleteGraph,
+	rs *runSpec,
+	isSinglePackage bool,
+) (*core.Engine, error) {
+	engine := core.NewEngine(g, isSinglePackage)
 
-	for taskName, taskDefinition := range g.Pipeline {
-		engine.AddTask(&core.Task{
-			Name:           taskName,
-			TaskDefinition: taskDefinition,
-		})
+	// Note: g.Pipeline is a map, but this for loop only cares about the keys
+	for taskName := range g.Pipeline {
+		engine.AddTask(taskName)
 	}
 
 	if err := engine.Prepare(&core.EngineBuildingOptions{
@@ -432,12 +442,3 @@ const (
 	_dryRunJSONValue = "Json"
 	_dryRunTextValue = "Text"
 )
-
-func validateTasks(pipeline fs.Pipeline, tasks []string) error {
-	for _, task := range tasks {
-		if !pipeline.HasTask(task) {
-			return fmt.Errorf("task `%v` not found", task)
-		}
-	}
-	return nil
-}

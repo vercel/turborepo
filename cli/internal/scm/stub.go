@@ -8,3 +8,7 @@ type stub struct{}
 func (s *stub) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
 	return nil, nil
 }
+
+func (s *stub) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	return nil, nil
+}

@@ -1,6 +1,7 @@
 #![feature(min_specialization)]
 
 mod nft_json;
+
 use std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
@@ -25,7 +26,7 @@ use turbo_tasks::{
     NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemVc, ReadGlobResultVc,
 };
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -39,7 +40,7 @@ use turbopack::{
 use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueSeverity, IssueVc},
     reference::all_assets,
@@ -127,9 +128,15 @@ pub struct CommonArgs {
     exact: bool,
 
     /// Whether to enable mdx parsing while tracing dependencies
-    #[cfg_attr(feature = "cli", clap(short, long))]
+    #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "node-api", serde(default))]
     enable_mdx: bool,
+
+    /// Enable experimental garbage collection with the provided memory limit in
+    /// MB.
+    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "serializable", serde(default))]
+    pub memory_limit: Option<usize>,
 }
 
 #[cfg_attr(feature = "cli", derive(Parser))]
@@ -337,10 +344,14 @@ fn process_input(dir: &Path, context: &str, input: &[String]) -> Result<Vec<Stri
         .collect()
 }
 
-pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
+pub async fn start(
+    args: Arc<Args>,
+    turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
+) -> Result<Vec<String>> {
     register();
     let &CommonArgs {
         visualize_graph,
+        memory_limit,
         #[cfg(feature = "persistent_cache")]
             cache: CacheArgs {
             ref cache,
@@ -399,7 +410,11 @@ pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::default()),
+        || {
+            turbo_tasks.cloned().unwrap_or_else(|| {
+                TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
+            })
+        },
         |tt, root_task, _| async move {
             if visualize_graph {
                 let mut stats = Stats::new();

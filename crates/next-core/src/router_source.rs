@@ -4,8 +4,8 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
+    ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult, RewriteVc,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
@@ -41,8 +41,8 @@ fn need_data(source: ContentSourceVc, path: &str) -> ContentSourceResultVc {
             path: path.to_string(),
             vary: ContentSourceDataVary {
                 method: true,
-                headers: Some(ContentSourceDataFilter::All),
-                query: Some(ContentSourceDataFilter::All),
+                raw_headers: true,
+                raw_query: true,
                 ..Default::default()
             },
         }
@@ -62,8 +62,8 @@ impl ContentSource for NextRouterContentSource {
 
         let ContentSourceData {
             method: Some(method),
-            headers: Some(headers),
-            query: Some(query),
+            raw_headers: Some(raw_headers),
+            raw_query: Some(raw_query),
             ..
         } = &*data else {
             return Ok(need_data(self_vc.into(), path))
@@ -72,8 +72,8 @@ impl ContentSource for NextRouterContentSource {
         let request = RouterRequest {
             pathname: format!("/{path}"),
             method: method.clone(),
-            headers: headers.clone(),
-            query: query.clone(),
+            raw_headers: raw_headers.clone(),
+            raw_query: raw_query.clone(),
         }
         .cell();
 
@@ -90,11 +90,16 @@ impl ContentSource for NextRouterContentSource {
                 this.inner
                     .get(path, Value::new(ContentSourceData::default()))
             }
+            RouterResult::None => this
+                .inner
+                .get(path, Value::new(ContentSourceData::default())),
             RouterResult::Rewrite(data) => {
-                let path = data.url.strip_prefix('/').unwrap_or(&data.url);
-                // TODO: We can't set response headers and query for a source.
-                this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
+                // TODO: We can't set response headers on the returned content.
+                ContentSourceResultVc::exact(
+                    ContentSourceContent::Rewrite(RewriteVc::new(data.url.clone(), this.inner))
+                        .cell()
+                        .into(),
+                )
             }
             RouterResult::FullMiddleware(data) => ContentSourceResultVc::exact(
                 ContentSourceContent::HttpProxy(

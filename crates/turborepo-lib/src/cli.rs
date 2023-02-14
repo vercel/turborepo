@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, login, logout, CommandBase},
+    commands::{bin, link, login, logout, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -450,19 +450,34 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Rust(Ok(0)));
             }
 
-            // We haven't implemented sso_team yet so we delegate to Go
-            if sso_team.is_some() {
-                return Ok(Payload::Go(Box::new(clap_args)));
+            let sso_team = sso_team.clone();
+
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+
+            if let Some(sso_team) = sso_team {
+                login::sso_login(&mut base, &sso_team).await?;
+            } else {
+                login::login(&mut base).await?;
             }
-
-            let base = CommandBase::new(clap_args, repo_root)?;
-
-            login::login(base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { .. }
-        | Command::Unlink { .. }
+        Command::Link { no_gitignore } => {
+            if clap_args.test_run {
+                println!("Link test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let modify_gitignore = !*no_gitignore;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+
+            if let Err(err) = link::link(&mut base, modify_gitignore).await {
+                error!("error: {}", err.to_string())
+            };
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
         | Command::Run(_) => Ok(Payload::Go(Box::new(clap_args))),

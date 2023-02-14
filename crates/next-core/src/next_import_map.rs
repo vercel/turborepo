@@ -236,9 +236,7 @@ pub fn get_next_client_resolved_map(
         // Temporary hack to replace the hot reloader until this is passable by props in next.js
         (
             context,
-            GlobVc::new(
-                "**/*/next/dist/client/components/react-dev-overlay/hot-reloader-client.js",
-            ),
+            GlobVc::new("**/next/dist/client/components/react-dev-overlay/hot-reloader-client.js"),
             ImportMapping::PrimaryAlternative(
                 "@vercel/turbopack-next/dev/hot-reloader.tsx".to_string(),
                 Some(root),
@@ -352,6 +350,12 @@ pub async fn insert_next_shared_aliases(
         import_map,
         &format!("{VIRTUAL_PACKAGE_NAME}/"),
         package_root,
+    );
+
+    import_map.insert_alias(
+        // Request path from js via next-font swc transform
+        AliasPattern::exact("next/font/google/target.css"),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new(project_path).into()).into(),
     );
 
     import_map.insert_alias(

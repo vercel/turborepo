@@ -70,7 +70,7 @@ pub use id::{
     with_task_id_mapping, without_task_id_mapping, FunctionId, IdMapping, TaskId, TraitTypeId,
     ValueTypeId,
 };
-pub use join_iter_ext::{JoinIterExt, TryJoinIterExt};
+pub use join_iter_ext::{JoinIterExt, TryFlatMapRecursiveJoinIterExt, TryJoinIterExt};
 pub use manager::{
     dynamic_call, emit, get_invalidator, mark_stateful, run_once, spawn_blocking, spawn_thread,
     trait_call, turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
@@ -85,7 +85,8 @@ pub use task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait};
 pub use value::{TransientInstance, TransientValue, Value};
 pub use value_type::{
-    TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc, ValueType, ValueVc,
+    FromSubTrait, IntoSuperTrait, TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc,
+    ValueType, ValueVc,
 };
 
 #[doc(hidden)]

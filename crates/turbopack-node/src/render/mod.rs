@@ -1,8 +1,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbopack_dev_server::source::{headers::Headers, query::Query};
 
-use crate::{ResponseHeaders, StructuredError};
+use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
 
 pub mod issue;
 pub mod node_api_source;
@@ -11,12 +10,13 @@ pub mod render_static;
 pub mod rendered_source;
 
 #[turbo_tasks::value(shared)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderData {
-    params: IndexMap<String, String>,
+    params: IndexMap<String, Param>,
     method: String,
     url: String,
-    query: Query,
-    headers: Headers,
+    raw_query: String,
+    raw_headers: Vec<(String, String)>,
     path: String,
 }
 

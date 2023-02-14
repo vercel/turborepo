@@ -68,6 +68,7 @@ use self::{
 };
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    code_gen::CodeGenerateable,
     references::analyze_ecmascript_module,
 };
 
@@ -270,6 +271,11 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
+    }
+
+    #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.module.path()
     }
 
     #[turbo_tasks::function]

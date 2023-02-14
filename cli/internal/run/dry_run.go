@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -25,6 +24,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/util"
 )
+
+// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the DryRunSummary will print this, instead of the script (e.g. `next build`).
+const missingTaskLabel = "<NONEXISTENT>"
 
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
@@ -103,39 +107,25 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		command, ok := packageTask.Command()
-		if !ok {
-			command = "<NONEXISTENT>"
+		command := missingTaskLabel
+		if packageTask.Command != "" {
+			command = packageTask.Command
 		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
 		}
 
-		ancestors, err := engine.TaskGraph.Ancestors(packageTask.TaskID)
+		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
 
-		stringAncestors := []string{}
-		for _, dep := range ancestors {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringAncestors = append(stringAncestors, dep.(string))
-			}
-		}
-		descendents, err := engine.TaskGraph.Descendents(packageTask.TaskID)
+		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
-		stringDescendents := []string{}
-		for _, dep := range descendents {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringDescendents = append(stringDescendents, dep.(string))
-			}
-		}
-		sort.Strings(stringDescendents)
 
 		itemStatus, err := turboCache.Exists(hash)
 		if err != nil {
@@ -146,17 +136,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
-			Hash:                   hash,
-			CacheState:             itemStatus,
-			Command:                command,
-			Dir:                    packageTask.Pkg.Dir.ToString(),
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:                packageTask.RepoRelativeLogFile(),
-			Dependencies:           stringAncestors,
-			Dependents:             stringDescendents,
+			Dir:                    packageTask.Dir,
+			Outputs:                packageTask.Outputs,
+			ExcludedOutputs:        packageTask.ExcludedOutputs,
+			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			Command:                command,
+
+			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
+			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
+			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
+			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
 		})
+
 		return nil
 	}
 
@@ -216,7 +208,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(p, "Name\tPath\t")
 		for _, pkg := range summary.Packages {
-			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos[pkg].Dir)
+			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos.PackageJSONs[pkg].Dir)
 		}
 		if err := p.Flush(); err != nil {
 			return err

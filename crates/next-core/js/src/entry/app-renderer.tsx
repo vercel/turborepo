@@ -33,7 +33,8 @@ import "@vercel/turbopack-next/polyfill/async-local-storage";
 import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
-import { ParsedUrlQuery } from "node:querystring";
+import { headersFromEntries } from "@vercel/turbopack-next/internal/utils";
+import { parse, ParsedUrlQuery } from "node:querystring";
 
 globalThis.__next_require__ = (data) => {
   const [, , ssr_id] = JSON.parse(data);
@@ -116,28 +117,11 @@ async function runOperation(renderData: RenderData) {
   const layoutInfoChunks: Record<string, string[]> = {};
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
   const pageModule = pageItem.page!.module;
-  const Page = pageModule.default;
-  const metadata = [];
-  for (let i = 0; i < LAYOUT_INFO.length; i++) {
-    const info = LAYOUT_INFO[i];
-    if (info.layout) {
-      metadata.push({
-        type: "layout",
-        layer: i,
-        mod: () => info.layout!.module,
-        path: `layout${i}.js`,
-      });
-    }
-    if (info.page) {
-      metadata.push({
-        type: "page",
-        layer: i - 1,
-        mod: () => info.page!.module,
-        path: "page.js",
-      });
-    }
-  }
-  let tree: LoaderTree = ["", {}, { page: [() => Page, "page.js"] }];
+  let tree: LoaderTree = [
+    "",
+    {},
+    { page: [() => pageModule.module, "page.js"] },
+  ];
   layoutInfoChunks["page"] = pageItem.page!.chunks;
   for (let i = LAYOUT_INFO.length - 2; i >= 0; i--) {
     const info = LAYOUT_INFO[i];
@@ -147,7 +131,7 @@ async function runOperation(renderData: RenderData) {
         continue;
       }
       const k = key as FileType;
-      components[k] = [() => info[k]!.module.default, `${k}${i}.js`];
+      components[k] = [() => info[k]!.module.module, `${k}${i}.js`];
       layoutInfoChunks[`${k}${i}`] = info[k]!.chunks;
     }
     tree = [info.segment, { children: tree }, components];
@@ -194,9 +178,11 @@ async function runOperation(renderData: RenderData) {
   const req: IncomingMessage = {
     url: renderData.url,
     method: renderData.method,
-    headers: renderData.headers,
+    headers: headersFromEntries(renderData.rawHeaders),
   } as any;
   const res: ServerResponse = new ServerResponseShim(req) as any;
+  const parsedQuery = parse(renderData.rawQuery);
+  const query = { ...parsedQuery, ...renderData.params };
   const renderOpt: Omit<
     RenderOpts,
     "App" | "Document" | "Component" | "pathname"
@@ -223,7 +209,6 @@ async function runOperation(renderData: RenderData) {
       default: undefined,
       tree,
       pages: ["page.js"],
-      metadata,
     },
     serverComponentManifest: manifest,
     serverCSSManifest,
@@ -237,10 +222,7 @@ async function runOperation(renderData: RenderData) {
     req,
     res,
     renderData.path,
-    {
-      ...renderData.query,
-      ...renderData.params,
-    },
+    query,
     renderOpt as any as RenderOpts
   );
 
@@ -260,7 +242,9 @@ async function runOperation(renderData: RenderData) {
     body = result.toUnchunkedString();
   }
   return {
-    headers: [["Content-Type", result.contentType() ?? MIME_TEXT_HTML_UTF8]],
+    headers: [
+      ["Content-Type", result.contentType() ?? MIME_TEXT_HTML_UTF8],
+    ] as [string, string][],
     body,
   };
 }
