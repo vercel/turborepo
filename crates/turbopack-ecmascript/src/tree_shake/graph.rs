@@ -8,8 +8,8 @@ use swc_core::{
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, Stmt, VarDecl,
+            FnDecl, Id, ImportDecl, ImportNamedSpecifier, ImportSpecifier, Module, ModuleDecl,
+            ModuleExportName, ModuleItem, NamedExport, Stmt, VarDecl,
         },
         atoms::js_word,
         utils::find_pat_ids,
@@ -213,11 +213,26 @@ impl DepGraph {
                 .idx_graph
                 .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
             {
+                let mut specifiers = vec![];
+
+                let dep_item_ids = groups.graph_ix.get_index(dep as usize).unwrap();
+
+                for dep_item_id in dep_item_ids {
+                    for id in data[dep_item_id].var_decls.iter() {
+                        specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
+                            span: DUMMY_SP,
+                            local: id.clone().into(),
+                            imported: None,
+                            is_type_only: false,
+                        }));
+                    }
+                }
+
                 chunk
                     .body
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
-                        specifiers: Default::default(),
+                        specifiers,
                         src: box format!("turbopack://chunk-{}.js", dep).into(),
                         type_only: false,
                         asserts: None,
