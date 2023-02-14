@@ -130,7 +130,7 @@ export default async function route(
 }
 
 async function handleClientResponse(
-  _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponse: IncomingMessage
 ): Promise<MessageData> {
   if (clientResponse.headers["x-nextjs-route-result"] === "1") {
@@ -156,6 +156,8 @@ async function handleClientResponse(
         return {
           type: "none",
         };
+      default:
+        return ipc.sendError(new Error("Unknown router result type"));
     }
   }
 
