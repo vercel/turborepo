@@ -165,15 +165,18 @@ export { CHIMERA };
 
 ```js
 "turbopack://chunk-0";
-"module evaluation";
+const dog = "dog";
+const cat = "cat";
+export const DOG = dog;
+export const CHIMERA = cat + dog;
+("module evaluation");
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
-export const DOG = dog;
+import "turbopack://chunk-0.js";
 export { DOG };
 ```
 
@@ -181,8 +184,6 @@ export { DOG };
 
 ```js
 "turbopack://chunk-2";
-const dog = "dog";
-const cat = "cat";
-export const CHIMERA = cat + dog;
+import "turbopack://chunk-0.js";
 export { CHIMERA };
 ```

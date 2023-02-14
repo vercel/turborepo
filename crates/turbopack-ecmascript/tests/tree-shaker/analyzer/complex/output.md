@@ -463,10 +463,29 @@ export { getChimera };
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-4.js";
+let dog = "dog";
+dog += "!";
 console.log(dog);
+function getDog() {
+  return dog;
+}
+dog += "!";
 console.log(dog);
+function setDog(newDog) {
+  dog = newDog;
+}
+dog += "!";
 console.log(dog);
+export const dogRef = {
+  initial: dog,
+  get: getDog,
+  set: setDog,
+};
+export let cat = "cat";
+export const initialCat = cat;
+export function getChimera() {
+  return cat + dog;
+}
 ("module evaluation");
 ```
 
@@ -474,18 +493,7 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-4.js";
-function getDog() {
-  return dog;
-}
-function setDog(newDog) {
-  dog = newDog;
-}
-export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
-};
+import "turbopack://chunk-0.js";
 export { dogRef };
 ```
 
@@ -493,7 +501,7 @@ export { dogRef };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-4.js";
+import "turbopack://chunk-0.js";
 export { cat };
 ```
 
@@ -501,8 +509,7 @@ export { cat };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-4.js";
-export const initialCat = cat;
+import "turbopack://chunk-0.js";
 export { initialCat };
 ```
 
@@ -510,13 +517,6 @@ export { initialCat };
 
 ```js
 "turbopack://chunk-4";
-let dog = "dog";
-dog += "!";
-dog += "!";
-dog += "!";
-export let cat = "cat";
-export function getChimera() {
-  return cat + dog;
-}
+import "turbopack://chunk-0.js";
 export { getChimera };
 ```

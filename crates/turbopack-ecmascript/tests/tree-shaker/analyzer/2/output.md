@@ -447,8 +447,25 @@ export { external2 };
 
 ```js
 "turbopack://chunk-0";
+export function external1() {
+  return internal() + foobar;
+}
 import "module";
+import { upper } from "module";
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
 console.log(foobarCopy);
+foobarCopy += "Unused";
+function internal() {
+  return upper(foobar);
+}
+export function external2() {
+  foobar += ".";
+}
 import "other";
 ("module evaluation");
 ```
@@ -457,15 +474,7 @@ import "other";
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-5.js";
-export function external1() {
-  return internal() + foobar;
-}
-import { upper } from "module";
-foobar += "foo";
-function internal() {
-  return upper(foobar);
-}
+import "turbopack://chunk-0.js";
 export { external1 };
 ```
 
@@ -473,8 +482,7 @@ export { external1 };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-1.js";
+import "turbopack://chunk-0.js";
 export { foobar };
 ```
 
@@ -482,8 +490,7 @@ export { foobar };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-5.js";
-export const foo = foobar;
+import "turbopack://chunk-0.js";
 export { foo };
 ```
 
@@ -491,15 +498,6 @@ export { foo };
 
 ```js
 "turbopack://chunk-4";
-export function external2() {
-  foobar += ".";
-}
+import "turbopack://chunk-0.js";
 export { external2 };
-```
-
-## Module 6
-
-```js
-"turbopack://chunk-5";
-export let foobar = "foo";
 ```
