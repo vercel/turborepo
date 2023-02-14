@@ -8,8 +8,8 @@ use swc_core::{
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, ImportDecl, ImportNamedSpecifier, ImportSpecifier, Module, ModuleDecl,
-            ModuleExportName, ModuleItem, NamedExport, Stmt, VarDecl,
+            FnDecl, Id, ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName,
+            ModuleItem, NamedExport, Stmt, VarDecl,
         },
         atoms::js_word,
         utils::find_pat_ids,
