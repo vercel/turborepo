@@ -407,7 +407,7 @@ graph TD
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-5.js";
+import { dog } from "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-8.js";
@@ -428,7 +428,7 @@ export { dogRef };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-4.js";
+import { cat, getChimera } from "turbopack://chunk-4.js";
 export { cat };
 ```
 
@@ -436,7 +436,7 @@ export { cat };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-4.js";
+import { cat, getChimera } from "turbopack://chunk-4.js";
 export const initialCat = cat;
 export { initialCat };
 ```
@@ -445,7 +445,7 @@ export { initialCat };
 
 ```js
 "turbopack://chunk-4";
-import "turbopack://chunk-5.js";
+import { dog } from "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-8.js";
@@ -467,7 +467,7 @@ let dog = "dog";
 
 ```js
 "turbopack://chunk-6";
-import "turbopack://chunk-5.js";
+import { dog } from "turbopack://chunk-5.js";
 dog += "!";
 ```
 
@@ -475,7 +475,7 @@ dog += "!";
 
 ```js
 "turbopack://chunk-7";
-import "turbopack://chunk-5.js";
+import { dog } from "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-0.js";
 dog += "!";
@@ -485,7 +485,7 @@ dog += "!";
 
 ```js
 "turbopack://chunk-8";
-import "turbopack://chunk-5.js";
+import { dog } from "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-0.js";
@@ -498,7 +498,7 @@ dog += "!";
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-4.js";
+import { dog, cat, getChimera } from "turbopack://chunk-4.js";
 console.log(dog);
 console.log(dog);
 console.log(dog);
@@ -509,7 +509,7 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-4.js";
+import { dog, cat, getChimera } from "turbopack://chunk-4.js";
 function getDog() {
   return dog;
 }
@@ -528,7 +528,7 @@ export { dogRef };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-4.js";
+import { dog, cat, getChimera } from "turbopack://chunk-4.js";
 export { cat };
 ```
 
@@ -536,7 +536,7 @@ export { cat };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-4.js";
+import { dog, cat, getChimera } from "turbopack://chunk-4.js";
 export const initialCat = cat;
 export { initialCat };
 ```

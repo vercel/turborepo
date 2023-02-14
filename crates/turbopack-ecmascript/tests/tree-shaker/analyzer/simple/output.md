@@ -138,7 +138,7 @@ graph TD
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
+import { dog, cat, CHIMERA } from "turbopack://chunk-2.js";
 export const DOG = dog;
 export { DOG };
 ```
@@ -166,7 +166,7 @@ export { CHIMERA };
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-2.js";
+import { dog, cat, CHIMERA } from "turbopack://chunk-2.js";
 export const DOG = dog;
 export { DOG };
 ```

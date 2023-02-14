@@ -380,9 +380,9 @@ graph TD
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-1.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-4.js";
+import { external1, upper, internal } from "turbopack://chunk-1.js";
+import { foobar } from "turbopack://chunk-5.js";
+import { external2 } from "turbopack://chunk-4.js";
 import "module";
 console.log(foobarCopy);
 import "other";
@@ -393,8 +393,8 @@ import "other";
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-4.js";
+import { foobar } from "turbopack://chunk-5.js";
+import { external2 } from "turbopack://chunk-4.js";
 export function external1() {
   return internal() + foobar;
 }
@@ -409,8 +409,8 @@ export { external1 };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-4.js";
+import { foobar } from "turbopack://chunk-5.js";
+import { external2 } from "turbopack://chunk-4.js";
 export { foobar };
 ```
 
@@ -425,7 +425,7 @@ export { foo };
 
 ```js
 "turbopack://chunk-4";
-import "turbopack://chunk-5.js";
+import { foobar } from "turbopack://chunk-5.js";
 foobar += "foo";
 export function external2() {
   foobar += ".";
@@ -456,7 +456,7 @@ import "other";
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-5.js";
+import { foobar } from "turbopack://chunk-5.js";
 export function external1() {
   return internal() + foobar;
 }
@@ -472,8 +472,8 @@ export { external1 };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-1.js";
+import { foobar } from "turbopack://chunk-5.js";
+import { external1, upper, internal } from "turbopack://chunk-1.js";
 export { foobar };
 ```
 
@@ -481,7 +481,7 @@ export { foobar };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-5.js";
+import { foobar } from "turbopack://chunk-5.js";
 export const foo = foobar;
 export { foo };
 ```
