@@ -362,6 +362,16 @@ graph TD
     Item14 --> Item3;
     Item14 --> Item6;
     Item14 --> Item9;
+    Item14 -.-> Item1;
+    Item14 -.-> Item2;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item10;
+    Item14 -.-> Item7;
+    Item14 -.-> Item11;
+    Item14 -.-> Item12;
+    Item14 -.-> Item4;
+    Item14 -.-> Item13;
     Item15 --> Item10;
     Item16 --> Item11;
     Item17 --> Item12;
@@ -372,33 +382,15 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(2, Normal), ItemId(5, Normal), ItemId(8, Normal), ItemId(ModuleEvaluation)]"];
+    N0["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, Normal), ItemId(2, Normal), ItemId(3, Normal), ItemId(4, Normal), ItemId(5, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal), ItemId(9, VarDeclarator(0)), ItemId(10, VarDeclarator(0)), ItemId(11, VarDeclarator(0)), ItemId(12, Normal), ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
-    N3["Items: [ItemId(11, VarDeclarator(0)), ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
-    N4["Items: [ItemId(10, VarDeclarator(0)), ItemId(12, Normal), ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
-    N5["Items: [ItemId(0, VarDeclarator(0))]"];
-    N6["Items: [ItemId(1, Normal)]"];
-    N7["Items: [ItemId(4, Normal)]"];
-    N8["Items: [ItemId(7, Normal)]"];
-    N0 --> N5;
-    N0 --> N6;
-    N0 --> N7;
-    N0 --> N8;
-    N2 --> N4;
-    N3 --> N4;
-    N4 --> N5;
-    N4 --> N6;
-    N4 --> N7;
-    N4 --> N8;
-    N6 --> N5;
-    N7 --> N5;
-    N7 --> N6;
-    N7 --> N0;
-    N8 --> N5;
-    N8 --> N6;
-    N8 --> N7;
-    N8 --> N0;
+    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
+    N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
+    N1 --> N0;
+    N2 --> N0;
+    N3 --> N0;
+    N4 --> N0;
 ```
 
 # Modules (dev)
@@ -407,13 +399,29 @@ graph TD
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+let dog = "dog";
+dog += "!";
 console.log(dog);
+function getDog() {
+  return dog;
+}
+dog += "!";
 console.log(dog);
+function setDog(newDog) {
+  dog = newDog;
+}
+dog += "!";
 console.log(dog);
+export const dogRef = {
+  initial: dog,
+  get: getDog,
+  set: setDog,
+};
+export let cat = "cat";
+export const initialCat = cat;
+export function getChimera() {
+  return cat + dog;
+}
 ("module evaluation");
 ```
 
@@ -421,6 +429,7 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-1";
+import "turbopack://chunk-0.js";
 export { dogRef };
 ```
 
@@ -428,7 +437,7 @@ export { dogRef };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-4.js";
+import "turbopack://chunk-0.js";
 export { cat };
 ```
 
@@ -436,8 +445,7 @@ export { cat };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-4.js";
-export const initialCat = cat;
+import "turbopack://chunk-0.js";
 export { initialCat };
 ```
 
@@ -445,51 +453,8 @@ export { initialCat };
 
 ```js
 "turbopack://chunk-4";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
-export let cat = "cat";
-export function getChimera() {
-  return cat + dog;
-}
+import "turbopack://chunk-0.js";
 export { getChimera };
-```
-
-## Module 6
-
-```js
-"turbopack://chunk-5";
-let dog = "dog";
-```
-
-## Module 7
-
-```js
-"turbopack://chunk-6";
-import "turbopack://chunk-5.js";
-dog += "!";
-```
-
-## Module 8
-
-```js
-"turbopack://chunk-7";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-0.js";
-dog += "!";
-```
-
-## Module 9
-
-```js
-"turbopack://chunk-8";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-0.js";
-dog += "!";
 ```
 
 # Modules (prod)
@@ -498,10 +463,29 @@ dog += "!";
 
 ```js
 "turbopack://chunk-0";
-import "turbopack://chunk-4.js";
+let dog = "dog";
+dog += "!";
 console.log(dog);
+function getDog() {
+  return dog;
+}
+dog += "!";
 console.log(dog);
+function setDog(newDog) {
+  dog = newDog;
+}
+dog += "!";
 console.log(dog);
+export const dogRef = {
+  initial: dog,
+  get: getDog,
+  set: setDog,
+};
+export let cat = "cat";
+export const initialCat = cat;
+export function getChimera() {
+  return cat + dog;
+}
 ("module evaluation");
 ```
 
@@ -509,18 +493,7 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-1";
-import "turbopack://chunk-4.js";
-function getDog() {
-  return dog;
-}
-function setDog(newDog) {
-  dog = newDog;
-}
-export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
-};
+import "turbopack://chunk-0.js";
 export { dogRef };
 ```
 
@@ -528,7 +501,7 @@ export { dogRef };
 
 ```js
 "turbopack://chunk-2";
-import "turbopack://chunk-4.js";
+import "turbopack://chunk-0.js";
 export { cat };
 ```
 
@@ -536,8 +509,7 @@ export { cat };
 
 ```js
 "turbopack://chunk-3";
-import "turbopack://chunk-4.js";
-export const initialCat = cat;
+import "turbopack://chunk-0.js";
 export { initialCat };
 ```
 
@@ -545,13 +517,6 @@ export { initialCat };
 
 ```js
 "turbopack://chunk-4";
-let dog = "dog";
-dog += "!";
-dog += "!";
-dog += "!";
-export let cat = "cat";
-export function getChimera() {
-  return cat + dog;
-}
+import "turbopack://chunk-0.js";
 export { getChimera };
 ```
