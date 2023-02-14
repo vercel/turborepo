@@ -263,18 +263,20 @@ impl DepGraph {
             {
                 // Check if the the only dependant of dep is start
 
-                let is_only_dep = graph
+                let count = graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
-                    .filter(|&dependant_ix| {
-                        start_ix == dependant_ix || !done.contains(&dependant_ix)
-                    })
-                    .count()
-                    == 1;
+                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
+                    .count();
+
+                dbg!(count);
+
+                let is_only_dep = count == 1;
 
                 if (is_module_eval || is_only_dep) && done.insert(dep_ix) {
                     changed = true;
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
+                    dbg!(&dep_id);
                     group.push(dep_id);
 
                     add_to_group(graph, group, dep_ix, done);
@@ -303,29 +305,52 @@ impl DepGraph {
             }
         }
 
-        for group in &mut groups {
-            let start = group[0].clone();
-            let start_ix = self.g.get_node(&start);
-            add_to_group(&self.g, group, start_ix, &mut done);
-        }
+        loop {
+            let mut changed = false;
 
-        for id in self.g.graph_ix.iter() {
-            let ix = self.g.get_node(id);
-
-            if done.contains(&ix) {
-                continue;
+            for group in &mut groups {
+                let start = group[0].clone();
+                let start_ix = self.g.get_node(&start);
+                if add_to_group(&self.g, group, start_ix, &mut done) {
+                    changed = true;
+                }
             }
 
-            if self
-                .g
-                .idx_graph
-                .neighbors_directed(ix, petgraph::Direction::Incoming)
-                .filter(|&dependant_ix| !done.contains(&dependant_ix))
-                .count()
-                >= 2
-            {
-                groups.push(vec![id.clone()]);
-                done.insert(ix);
+            if !changed {
+                break;
+            }
+        }
+
+        loop {
+            let mut changed = false;
+
+            for id in self.g.graph_ix.iter() {
+                let ix = self.g.get_node(id);
+
+                dbg!("Checking", id);
+
+                if done.contains(&ix) {
+                    continue;
+                }
+
+                let count = self
+                    .g
+                    .idx_graph
+                    .neighbors_directed(ix, petgraph::Direction::Incoming)
+                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
+                    .count();
+
+                dbg!(count);
+
+                if count >= 2 {
+                    groups.push(vec![id.clone()]);
+                    done.insert(ix);
+                    changed = true;
+                }
+            }
+
+            if !changed {
+                break;
             }
         }
 
