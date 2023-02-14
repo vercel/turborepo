@@ -336,6 +336,10 @@ impl DepGraph {
             }
         }
 
+        for group in groups.iter_mut() {
+            group.sort()
+        }
+
         let mut new_graph = InternedGraph::default();
         let mut group_ix_by_item_ix = FxHashMap::default();
 
