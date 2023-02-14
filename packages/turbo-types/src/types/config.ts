@@ -59,20 +59,6 @@ export interface Schema {
    * @default {}
    */
   remoteCache?: RemoteCache;
-
-  /**
-   * This key is only available in Workspace Configs
-   * and cannot be used in your root turbo.json.
-   *
-   * Tells turbo to extend your root `turbo.json`
-   * and overrides with the keys provided
-   * in your Workspace Configs.
-   *
-   * Currently, only the "//" value is allowed.
-   *
-   * @default ["//"]
-   */
-  extends?: string[];
 }
 
 export interface Pipeline {
