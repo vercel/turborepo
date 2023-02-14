@@ -11,6 +11,8 @@ use swc_core::{
     quote,
 };
 
+use crate::references::TURBOPACK_HELPER;
+
 macro_rules! has_client_directive {
     ($stmts:expr) => {
         $stmts
@@ -56,7 +58,7 @@ pub fn create_proxy_module(transition_name: &str, target_import: &str) -> Progra
                 asserts: Some(box ObjectLit {
                     span: DUMMY_SP,
                     props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
-                        key: PropName::Ident(Ident::new("turbopackHelper".into(), DUMMY_SP)),
+                        key: PropName::Ident(Ident::new(TURBOPACK_HELPER.into(), DUMMY_SP)),
                         value: box Expr::Lit(true.into()),
                     }))],
                 }),
