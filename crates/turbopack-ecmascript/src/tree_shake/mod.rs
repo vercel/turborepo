@@ -5,6 +5,7 @@ use swc_core::ecma::ast::{Id, Module};
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 
 mod graph;
+pub mod merge;
 #[cfg(test)]
 mod tests;
 mod util;
