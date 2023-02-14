@@ -37,12 +37,15 @@ use tokio::{
 };
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::{
-    NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue, TurboTasks,
+    primitives::BoolVc, NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue,
+    TurboTasks,
 };
 use turbo_tasks_fs::{util::sys_to_unix, DiskFileSystemVc, FileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbo_tasks_testing::retry::retry_async;
-use turbopack_core::issue::{CapturedIssues, IssueReporter, IssueReporterVc, PlainIssueReadRef};
+use turbopack_core::issue::{
+    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssueReadRef,
+};
 use turbopack_test_utils::snapshot::snapshot_issues;
 
 fn register() {
@@ -488,12 +491,17 @@ impl IssueReporter for TestIssueReporter {
         &self,
         captured_issues: TransientInstance<ReadRef<CapturedIssues>>,
         _source: TransientValue<RawVc>,
-    ) -> Result<()> {
+    ) -> Result<BoolVc> {
         let issue_tx = self.issue_tx.get_untracked().clone();
+        let mut has_fatal = false;
         for issue in captured_issues.iter() {
-            issue_tx.send(issue.into_plain().await?).await?;
+            let plain = issue.into_plain().await?;
+            if plain.severity == IssueSeverity::Fatal {
+                has_fatal = true;
+            }
+            issue_tx.send(plain).await?;
         }
 
-        Ok(())
+        Ok(BoolVc::cell(has_fatal))
     }
 }

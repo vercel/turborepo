@@ -341,39 +341,11 @@ pub struct CapturedIssues {
     processing_path: ItemIssueProcessingPathVc,
 }
 
-impl CapturedIssues {
-    pub async fn has_fatal(&self) -> Result<bool> {
-        let mut has_fatal = false;
-
-        for issue in self.issues.iter() {
-            let severity = *issue.severity().await?;
-            if severity == IssueSeverity::Fatal {
-                has_fatal = true;
-                break;
-            }
-        }
-        Ok(has_fatal)
-    }
-}
-
 #[turbo_tasks::value_impl]
 impl CapturedIssuesVc {
     #[turbo_tasks::function]
     pub async fn is_empty(self) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_empty()))
-    }
-
-    #[turbo_tasks::function]
-    pub async fn has_fatal(self) -> Result<BoolVc> {
-        let mut has_fatal = false;
-        for issue in self.await?.iter() {
-            let severity = *issue.severity().await?;
-            if severity == IssueSeverity::Fatal {
-                has_fatal = true;
-                break;
-            }
-        }
-        Ok(BoolVc::cell(has_fatal))
     }
 }
 
@@ -609,5 +581,5 @@ pub trait IssueReporter {
         &self,
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
-    );
+    ) -> BoolVc;
 }
