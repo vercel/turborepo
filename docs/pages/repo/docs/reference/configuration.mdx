@@ -5,6 +5,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 
 import Callout from "../../../../components/Callout";
 import OutputModeTable from "../../../../components/output-mode-table.mdx";
+import Link from 'next/link'
 
 # Configuration Options (`turbo.json`)
 
@@ -94,11 +95,9 @@ Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline tas
 
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the workspace level (e.g. "a workspace's `test` and `lint` commands depend on `build` being completed first").
 
-Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends on the value of that environment variable.
-
 <Callout type="info">
-  Using `$` to declare environment variables in the `dependsOn` config is
-  deprecated. Use the `env` key instead.
+  As of version 1.5, using `$` to declare environment variables in the `dependsOn` config is
+  deprecated. <Link href="#env">Use the `env` key instead.</Link>
 </Callout>
 
 **Example**
@@ -286,7 +285,7 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
 
 ### `outputMode`
 
-`type: "full" | "hash-only" | "new-only" | "none"`
+`type: "full" | "hash-only" | "new-only" | "errors-only" | "none"`
 
 Set type of output logging.
 

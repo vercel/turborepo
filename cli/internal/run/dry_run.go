@@ -208,7 +208,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(p, "Name\tPath\t")
 		for _, pkg := range summary.Packages {
-			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos[pkg].Dir)
+			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos.PackageJSONs[pkg].Dir)
 		}
 		if err := p.Flush(); err != nil {
 			return err

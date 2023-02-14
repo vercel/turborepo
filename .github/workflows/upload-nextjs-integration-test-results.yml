@@ -35,6 +35,7 @@ jobs:
         run: |
           ls -al ./test-results/main
           cat ./test-results/main/nextjs-test-results.json
+          cat ./test-results/main/failed-test-path-list.json
           echo "NEXTJS_VERSION=$(cat ./test-results/main/nextjs-test-results.json | jq .nextjsVersion | tr -d '"' | cut -d ' ' -f2)" >> $GITHUB_ENV
           echo "SHA_SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "RESULT_SUBPATH=$(if ${{ inputs.is_main_branch }}; then echo 'main'; else echo ${{ env.NEXTJS_VERSION }}; fi)" >> $GITHUB_ENV
@@ -46,6 +47,7 @@ jobs:
           echo "Configured test result subpath for ${{ env.RESULT_SUBPATH }} / ${{ env.NEXTJS_VERSION }} / ${{ env.SHA_SHORT }}"
           mkdir -p test-results/${{ env.RESULT_SUBPATH }}
           mv test-results/main/nextjs-test-results.json test-results/${{ env.RESULT_SUBPATH }}/$(date '+%Y%m%d%H%M')-${{ env.NEXTJS_VERSION }}-${{ env.SHA_SHORT }}.json
+          mv -f test-results/main/failed-test-path-list.json test-results/${{ env.RESULT_SUBPATH }}/failed-test-path-list.json
           ls -al ./test-results
           ls -al ./test-results/${{ env.RESULT_SUBPATH }}
 

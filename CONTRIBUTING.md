@@ -27,11 +27,7 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1. Install `jq` and `sponge`
-
-   On macOS: `brew install sponge jq`
-
-1. Install [turborepo crate](https://github.com/vercel/turbo/blob/main/crates/turborepo/README.md) build requirements
+1. Install [turborepo crate](./crates/turborepo/README.md) build requirements
 
 1. Run `pnpm install` at root
 
@@ -42,10 +38,20 @@ Building
 
 ### TLS Implementation
 
-Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls` is a wrapper around OpenSSL. Turborepo requires users to select
-one of them by building with the `rustls-tls` or `native-tls` feature, respectively. To do so, pass either `--features rustls-tls` or `--features native-tls` to `cargo build` or `cargo test`. The Makefile already passes `rustls-tls` by default.
+Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS
+implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
+is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
+and `rustls-tls` features. By default, the `native-tls` feature is selected---this is done so that `cargo build` works
+out of the box. If you wish to select `rustls-tls`, you may do so by passing `--no-default-features --features rustls-tls`
+to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
 
 ### Running Turborepo Tests
+
+Dependencies
+
+1. Install `jq`, `sponge`, and `zstd`
+
+On macOS: `brew install sponge jq zstd`
 
 #### Go Tests
 
@@ -93,6 +99,34 @@ TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 ```
 
 If you're using a different package manager replace npm accordingly.
+
+## Manually testing `turbo`
+
+Before releasing, it's recommended to test the `turbo` binary manually.
+Here's a checklist of testing strategies to cover:
+
+- Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test `prune` (Note `turbo` here is the unreleased turbo binary)
+  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
+  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer build`
+- Test `--dry-run` and `--graph`.
+- Test with and without daemon.
+
+There are also multiple installation scenarios worth testing:
+
+- Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+
+Here are a few repositories that you can test on:
+
+- [next.js](https://github.com/vercel/next.js)
+- [tldraw](https://github.com/tldraw/tldraw)
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [vercel](https://github.com/vercel/vercel)
+
+These lists are by no means exhaustive. Feel free to add to them with other strategies.
 
 ## Publishing `turbo` to the npm registry
 
