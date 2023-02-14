@@ -498,8 +498,11 @@ dog += "!";
 
 ```js
 "turbopack://chunk-0";
+import "turbopack://chunk-5.js";
 import "turbopack://chunk-4.js";
+dog += "!";
 console.log(dog);
+dog += "!";
 console.log(dog);
 console.log(dog);
 ("module evaluation");
@@ -509,6 +512,8 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-1";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-0.js";
 import "turbopack://chunk-4.js";
 function getDog() {
   return dog;
@@ -545,13 +550,19 @@ export { initialCat };
 
 ```js
 "turbopack://chunk-4";
-let dog = "dog";
-dog += "!";
-dog += "!";
+import "turbopack://chunk-5.js";
+import "turbopack://chunk-0.js";
 dog += "!";
 export let cat = "cat";
 export function getChimera() {
   return cat + dog;
 }
 export { getChimera };
+```
+
+## Module 6
+
+```js
+"turbopack://chunk-5";
+let dog = "dog";
 ```
