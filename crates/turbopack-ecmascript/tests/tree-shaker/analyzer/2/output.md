@@ -379,7 +379,11 @@ graph TD
 ## Module 1
 
 ```js
-"module evaluation";
+"chunk-0";
+import "./chunk-1.js";
+import "./chunk-5.js";
+import "./chunk-4.js";
+("module evaluation");
 import "module";
 import "other";
 console.log(foobarCopy);
@@ -388,6 +392,9 @@ console.log(foobarCopy);
 ## Module 2
 
 ```js
+"chunk-1";
+import "./chunk-5.js";
+import "./chunk-4.js";
 export { external1 };
 export function external1() {
   return internal() + foobar;
@@ -401,18 +408,24 @@ import { upper } from "module";
 ## Module 3
 
 ```js
+"chunk-2";
+import "./chunk-5.js";
+import "./chunk-4.js";
 export { foobar };
 ```
 
 ## Module 4
 
 ```js
+"chunk-3";
 export { foo };
 ```
 
 ## Module 5
 
 ```js
+"chunk-4";
+import "./chunk-5.js";
 export { external2 };
 export function external2() {
   foobar += ".";
@@ -423,6 +436,7 @@ foobar += "foo";
 ## Module 6
 
 ```js
+"chunk-5";
 export let foobar = "foo";
 ```
 
@@ -431,6 +445,7 @@ export let foobar = "foo";
 ## Module 1
 
 ```js
+"chunk-0";
 "module evaluation";
 import "module";
 import "other";
@@ -440,6 +455,8 @@ console.log(foobarCopy);
 ## Module 2
 
 ```js
+"chunk-1";
+import "./chunk-5.js";
 export { external1 };
 export function external1() {
   return internal() + foobar;
@@ -454,12 +471,17 @@ import { upper } from "module";
 ## Module 3
 
 ```js
+"chunk-2";
+import "./chunk-5.js";
+import "./chunk-1.js";
 export { foobar };
 ```
 
 ## Module 4
 
 ```js
+"chunk-3";
+import "./chunk-5.js";
 export { foo };
 export const foo = foobar;
 ```
@@ -467,6 +489,7 @@ export const foo = foobar;
 ## Module 5
 
 ```js
+"chunk-4";
 export { external2 };
 export function external2() {
   foobar += ".";
@@ -476,5 +499,6 @@ export function external2() {
 ## Module 6
 
 ```js
+"chunk-5";
 export let foobar = "foo";
 ```

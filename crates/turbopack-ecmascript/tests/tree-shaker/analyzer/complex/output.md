@@ -406,7 +406,12 @@ graph TD
 ## Module 1
 
 ```js
-"module evaluation";
+"chunk-0";
+import "./chunk-5.js";
+import "./chunk-6.js";
+import "./chunk-7.js";
+import "./chunk-8.js";
+("module evaluation");
 console.log(dog);
 console.log(dog);
 console.log(dog);
@@ -415,18 +420,23 @@ console.log(dog);
 ## Module 2
 
 ```js
+"chunk-1";
 export { dogRef };
 ```
 
 ## Module 3
 
 ```js
+"chunk-2";
+import "./chunk-4.js";
 export { cat };
 ```
 
 ## Module 4
 
 ```js
+"chunk-3";
+import "./chunk-4.js";
 export { initialCat };
 export const initialCat = cat;
 ```
@@ -434,6 +444,11 @@ export const initialCat = cat;
 ## Module 5
 
 ```js
+"chunk-4";
+import "./chunk-5.js";
+import "./chunk-6.js";
+import "./chunk-7.js";
+import "./chunk-8.js";
 export { getChimera };
 export function getChimera() {
   return cat + dog;
@@ -444,24 +459,36 @@ export let cat = "cat";
 ## Module 6
 
 ```js
+"chunk-5";
 let dog = "dog";
 ```
 
 ## Module 7
 
 ```js
+"chunk-6";
+import "./chunk-5.js";
 dog += "!";
 ```
 
 ## Module 8
 
 ```js
+"chunk-7";
+import "./chunk-5.js";
+import "./chunk-6.js";
+import "./chunk-0.js";
 dog += "!";
 ```
 
 ## Module 9
 
 ```js
+"chunk-8";
+import "./chunk-5.js";
+import "./chunk-6.js";
+import "./chunk-7.js";
+import "./chunk-0.js";
 dog += "!";
 ```
 
@@ -470,7 +497,9 @@ dog += "!";
 ## Module 1
 
 ```js
-"module evaluation";
+"chunk-0";
+import "./chunk-4.js";
+("module evaluation");
 console.log(dog);
 console.log(dog);
 console.log(dog);
@@ -479,6 +508,8 @@ console.log(dog);
 ## Module 2
 
 ```js
+"chunk-1";
+import "./chunk-4.js";
 export { dogRef };
 export const dogRef = {
   initial: dog,
@@ -496,12 +527,16 @@ function setDog(newDog) {
 ## Module 3
 
 ```js
+"chunk-2";
+import "./chunk-4.js";
 export { cat };
 ```
 
 ## Module 4
 
 ```js
+"chunk-3";
+import "./chunk-4.js";
 export { initialCat };
 export const initialCat = cat;
 ```
@@ -509,6 +544,7 @@ export const initialCat = cat;
 ## Module 5
 
 ```js
+"chunk-4";
 export { getChimera };
 export function getChimera() {
   return cat + dog;
