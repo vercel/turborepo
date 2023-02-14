@@ -4,24 +4,31 @@ export interface Schema {
   $schema?: string;
 
   /**
-   * A list of globs for implicit global hash dependencies.
+   * A list of globs to include in the set of implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing
    * algorithm and affect the hashes of all tasks.
    *
-   * This is useful for busting the cache based on .env files (not in Git),
-   * or any root level file that impacts package tasks (but are not represented
-   * in the traditional dependency graph
+   * This is useful for busting the cache based on:
    *
-   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)).
+   * - .env files (not in Git)
+   *
+   * - any root level file that impacts package tasks
+   * that are not represented in the traditional dependency graph
+   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *
    * @default []
    */
   globalDependencies?: string[];
 
   /**
-   * A list of environment variables, (e.g. GITHUB_TOKEN),
-   * for implicit global hash dependencies.
+   * A list of environment variables for implicit global hash dependencies.
+   *
+   * The variables included in this list will affect all task hashes.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
    *
    * @default []
    */
@@ -29,22 +36,26 @@ export interface Schema {
 
   /**
    * An object representing the task dependency graph of your project. turbo interprets
-   * these conventions to properly schedule, execute, and cache the outputs of tasks in
+   * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
    *
    * @default {}
    */
   pipeline: {
     /**
-     * The name of a task that can be executed by turbo run. If turbo finds a workspace
+     * The name of a task that can be executed by turbo. If turbo finds a workspace
      * package with a package.json scripts object with a matching key, it will apply the
-     * pipeline task configuration to that npm script during execution. This allows you to
-     * use pipeline to set conventions across your entire Turborepo.
+     * pipeline task configuration to that npm script during execution.
      */
     [script: string]: Pipeline;
   };
   /**
-   * Configuration options that control how turbo interfaces with the remote Cache.
+   * Configuration options that control how turbo interfaces with the remote cache.
+   *
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   *
    * @default {}
    */
   remoteCache?: RemoteCache;
@@ -52,23 +63,32 @@ export interface Schema {
 
 export interface Pipeline {
   /**
-   * The list of tasks and environment variables that this task depends on.
+   * The list of tasks that this task depends on.
    *
-   * Prefixing an item in dependsOn with a ^ tells turbo that this pipeline task depends
-   * on the package's topological dependencies completing the task with the ^ prefix first
-   * (e.g. "a package's build tasks should only run once all of its dependencies and
-   * devDependencies have completed their own build commands").
+   * Prefixing an item in dependsOn with a ^ prefix tells turbo that this task depends
+   * on the package's topological dependencies completing the task first.
+   * (e.g. "A package's build tasks should only run once all of its workspace dependencies
+   * have completed their own build commands.")
    *
-   * Items in dependsOn without ^ prefix, express the relationships between tasks at the
-   * package level (e.g. "a package's test and lint commands depend on build being
-   * completed first").
+   * Items in dependsOn without a ^ prefix express the relationships between tasks within the
+   * same package (e.g. "A package's test and lint commands depend on its own build being
+   * completed first.")
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
    *
    * @default []
    */
   dependsOn?: string[];
 
   /**
-   * A list of environment variables, **not** prefixed with $ (e.g. $GITHUB_TOKEN), that this task depends on.
+   * A list of environment variables that this task depends on.
+   *
+   * Note: If you are migrating from a turbo version 1.5 or below,
+   * you may be used to prefixing your variables with a $.
+   * You no longer need to use the $ prefix.
+   * (e.g. $GITHUB_TOKEN -> GITHUB_TOKEN)
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#env
    *
    * @default []
    */
@@ -79,15 +99,20 @@ export interface Pipeline {
    *
    * Turborepo captures task logs for all tasks. This enables us to cache tasks whose runs
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
-   * cacheable artifact, and never need to be specified.
+   * cacheable artifact and never need to be specified.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
    *
    * @default []
    */
   outputs?: string[];
 
   /**
-   * Whether or not to cache the task outputs. Setting cache to false is useful for daemon
-   * or long-running "watch" or development mode tasks that you don't want to cache.
+   * Whether or not to cache the outputs of the task.
+   *
+   * Setting cache to false is useful for long-running "watch" or development mode tasks.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
    *
    * @default true
    */
@@ -96,29 +121,46 @@ export interface Pipeline {
   /**
    * The set of glob patterns to consider as inputs to this task.
    *
-   * Changes to files covered by these globs will cause a cache miss and force
-   * the task to rerun. Changes to files in the package not covered by these globs
-   * will not cause a cache miss.
+   * Changes to files covered by these globs will cause a cache miss and
+   * the task will be rerun.
+   *
+   * If a file has been changed that is **not** included in the set of globs,
+   * it will not cause a cache miss.
    *
    * If omitted or empty, all files in the package are considered as inputs.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   *
    * @default []
    */
   inputs?: string[];
 
   /**
-   * The style of output for this task. Use "full" to display the entire output of
-   * the task. Use "hash-only" to show only the computed task hashes. Use "new-only" to
-   * show the full output of cache misses and the computed hashes for cache hits. Use
-   * "none" to hide task output.
+   * Output mode for the task.
+   *
+   * "full": Displays all output
+   *
+   * "hash-only": Show only the hashes of the tasks
+   *
+   * "new-only": Only show output from cache misses
+   *
+   * "errors-only": Only show output from task failures
+   *
+   * "none": Hides all task output
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
    *
    * @default full
    */
-  outputMode?: string;
+  outputMode?: OutputMode;
 
   /**
-   * Indicates whether the task exits or not. Setting `persistent` to `true`, tells
-   * Turbo that this is a long-running task. Turbo will ensure that other tasks do not
-   * depend on it.
+   * Indicates whether the task exits or not. Setting `persistent` to `true` tells
+   * turbo that this is a long-running task and will ensure that other tasks
+   * cannot depend on it.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
+   *
    * @default false
    */
   persistent?: boolean;
@@ -135,3 +177,10 @@ export interface RemoteCache {
    */
   signature?: boolean;
 }
+
+export type OutputMode =
+  | "full"
+  | "hash-only"
+  | "new-only"
+  | "errors-only"
+  | "none";
