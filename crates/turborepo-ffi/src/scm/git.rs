@@ -173,14 +173,14 @@ mod tests {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
         let file = repo_root.path().join("foo.js");
-        fs::write(&file, "let z = 0;")?;
+        fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
-        fs::write(&new_file, "let y = 1;")?;
+        fs::write(new_file, "let y = 1;")?;
 
         // Test that uncommitted file is marked as changed with `include_untracked`
         let files = super::changed_files(repo_root.path().to_path_buf(), None, true, None)?;
@@ -240,14 +240,14 @@ mod tests {
         let content = previous_content(
             repo_root.path().to_path_buf(),
             first_commit_oid.to_string().as_str(),
-            file.to_path_buf(),
+            file.clone(),
         )?;
         assert_eq!(content, "let z = 0;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
-            file.to_path_buf(),
+            file,
         )?;
         assert_eq!(content, "let z = 1;");
 
