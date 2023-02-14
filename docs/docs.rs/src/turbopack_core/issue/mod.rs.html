@@ -568,31 +568,6 @@
 <span id="568">568</span>
 <span id="569">569</span>
 <span id="570">570</span>
-<span id="571">571</span>
-<span id="572">572</span>
-<span id="573">573</span>
-<span id="574">574</span>
-<span id="575">575</span>
-<span id="576">576</span>
-<span id="577">577</span>
-<span id="578">578</span>
-<span id="579">579</span>
-<span id="580">580</span>
-<span id="581">581</span>
-<span id="582">582</span>
-<span id="583">583</span>
-<span id="584">584</span>
-<span id="585">585</span>
-<span id="586">586</span>
-<span id="587">587</span>
-<span id="588">588</span>
-<span id="589">589</span>
-<span id="590">590</span>
-<span id="591">591</span>
-<span id="592">592</span>
-<span id="593">593</span>
-<span id="594">594</span>
-<span id="595">595</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>analyze;
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">pub mod </span>package_json;
@@ -612,8 +587,7 @@
 <span class="kw">use </span>turbo_tasks::{
     emit,
     primitives::{BoolVc, StringVc, U64Vc},
-    CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
-    ValueToString, ValueToStringVc,
+    CollectiblesSource, ReadRef, TryJoinIterExt, ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
@@ -936,21 +910,6 @@
     </span>processing_path: ItemIssueProcessingPathVc,
 }
 
-<span class="kw">impl </span>CapturedIssues {
-    <span class="kw">pub async fn </span>has_fatal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>has_fatal = <span class="bool-val">false</span>;
-
-        <span class="kw">for </span>issue <span class="kw">in </span><span class="self">self</span>.issues.iter() {
-            <span class="kw">let </span>severity = <span class="kw-2">*</span>issue.severity().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if </span>severity == IssueSeverity::Fatal {
-                has_fatal = <span class="bool-val">true</span>;
-                <span class="kw">break</span>;
-            }
-        }
-        <span class="prelude-val">Ok</span>(has_fatal)
-    }
-}
-
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CapturedIssuesVc {
     <span class="attr">#[turbo_tasks::function]
@@ -1178,15 +1137,6 @@
         }
         .cell())
     }
-}
-
-<span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>IssueReporter {
-    <span class="kw">fn </span>report_issues(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        issues: TransientInstance&lt;ReadRef&lt;CapturedIssues&gt;&gt;,
-        source: TransientValue&lt;RawVc&gt;,
-    );
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

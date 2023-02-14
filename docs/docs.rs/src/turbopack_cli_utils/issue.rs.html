@@ -653,6 +653,17 @@
 <span id="653">653</span>
 <span id="654">654</span>
 <span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -665,17 +676,15 @@
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>crossterm::style::{StyledContent, Stylize};
 <span class="kw">use </span>owo_colors::{OwoColorize <span class="kw">as _</span>, Style};
-<span class="kw">use </span>turbo_tasks::{
-    RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, ValueToString,
-};
+<span class="kw">use </span>turbo_tasks::{RawVc, TransientValue, TryJoinIterExt, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{
     attach::AttachedFileSystemVc,
     source_context::{get_source_context, SourceContextLine},
     to_sys_path, FileLinesContent, FileSystemPathVc,
 };
 <span class="kw">use </span>turbopack_core::issue::{
-    CapturedIssues, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc, IssueSeverity,
-    OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
+    Issue, IssueProcessingPathItem, IssueSeverity, IssueVc, OptionIssueProcessingPathItemsVc,
+    PlainIssue, PlainIssueSource,
 };
 
 <span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1069,34 +1078,41 @@
     }
 }
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ConsoleUiVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(options: TransientInstance&lt;LogOptions&gt;) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>ConsoleUi {
+    <span class="kw">pub fn </span>new(options: LogOptions) -&gt; <span class="self">Self </span>{
         ConsoleUi {
-            options: (<span class="kw-2">*</span>options).clone(),
+            options,
             seen: Arc::new(Mutex::new(SeenIssues::new())),
         }
-        .cell()
     }
 }
 
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>DisplayIssueState {
+    <span class="kw">pub </span>has_fatal: bool,
+    <span class="kw">pub </span>has_issues: bool,
+    <span class="kw">pub </span>has_new_issues: bool,
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>IssueReporter <span class="kw">for </span>ConsoleUi {
+</span><span class="kw">impl </span>ConsoleUiVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>report_issues(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        issues: TransientInstance&lt;ReadRef&lt;CapturedIssues&gt;&gt;,
+    </span><span class="kw">pub async fn </span>group_and_display_issues(
+        <span class="self">self</span>,
         source: TransientValue&lt;RawVc&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>issues = <span class="kw-2">&amp;*</span>issues;
-        <span class="kw">let </span>LogOptions {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;DisplayIssueStateVc&gt; {
+        <span class="kw">let </span>source = source.into_value();
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>issues = IssueVc::peek_issues_with_path(source).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>issues = issues.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">&amp;</span>LogOptions {
             <span class="kw-2">ref </span>current_dir,
             show_all,
             log_detail,
             log_level,
             ..
-        } = <span class="self">self</span>.options;
+        } = <span class="kw-2">&amp;</span>this.options;
         <span class="kw">let </span><span class="kw-2">mut </span>grouped_issues: GroupedIssues = HashMap::new();
 
         <span class="kw">let </span>issues = issues
@@ -1114,11 +1130,11 @@
             .iter()
             .map(|(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, id)| <span class="kw-2">*</span>id)
             .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span><span class="kw-2">mut </span>new_ids = <span class="self">self
-            </span>.seen
-            .lock()
-            .unwrap()
-            .new_ids(source.into_value(), issue_ids);
+        <span class="kw">let </span><span class="kw-2">mut </span>new_ids = this.seen.lock().unwrap().new_ids(source, issue_ids);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>has_fatal = <span class="bool-val">false</span>;
+        <span class="kw">let </span>has_issues = !issues.is_empty();
+        <span class="kw">let </span>has_new_issues = !new_ids.is_empty();
 
         <span class="kw">for </span>(plain_issue, path, context, id) <span class="kw">in </span>issues {
             <span class="kw">if </span>!new_ids.remove(<span class="kw-2">&amp;</span>id) {
@@ -1129,6 +1145,7 @@
             <span class="kw">let </span>context_path = make_relative_to_cwd(context, current_dir).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>category = <span class="kw-2">&amp;</span>plain_issue.category;
             <span class="kw">let </span>title = <span class="kw-2">&amp;</span>plain_issue.title;
+            has_fatal = severity == IssueSeverity::Fatal;
             <span class="kw">let </span>severity_map = grouped_issues
                 .entry(severity)
                 .or_insert_with(Default::default);
@@ -1261,7 +1278,12 @@
             }
         }
 
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(DisplayIssueState {
+            has_fatal,
+            has_issues,
+            has_new_issues,
+        }
+        .cell())
     }
 }
 

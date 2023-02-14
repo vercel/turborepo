@@ -222,13 +222,6 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
-<span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
-<span id="229">229</span>
-<span id="230">230</span>
-<span id="231">231</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -247,17 +240,16 @@
     time::{Duration, Instant},
 };
 
-<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>hyper::{
     server::{conn::AddrIncoming, Builder},
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
 <span class="kw">use </span>turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
-    TransientInstance, TransientValue, TurboTasksApi,
+    run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi,
 };
-<span class="kw">use </span>turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
+<span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc};
 
 <span class="kw">use </span><span class="self">self</span>::{
     source::{ContentSourceResultVc, ContentSourceVc},
@@ -298,27 +290,21 @@
     </span><span class="kw">pub </span>future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;,
 }
 
-<span class="kw">async fn </span>handle_issues&lt;T: Into&lt;RawVc&gt; + CollectiblesSource + Copy&gt;(
+<span class="comment">// Just print issues to console for now...
+</span><span class="kw">async fn </span>handle_issues&lt;T: Into&lt;RawVc&gt;&gt;(
     source: T,
     path: <span class="kw-2">&amp;</span>str,
     operation: <span class="kw-2">&amp;</span>str,
-    issue_reporter: IssueReporterVc,
+    console_ui: ConsoleUiVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>issues = IssueVc::peek_issues_with_path(source)
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.strongly_consistent()
+    <span class="kw">let </span>state = console_ui
+        .group_and_display_issues(TransientValue::new(source.into()))
         .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    issue_reporter.report_issues(
-        TransientInstance::new(issues.clone()),
-        TransientValue::new(source.into()),
-    );
-
-    <span class="kw">if </span>issues.has_fatal().<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Fatal issue(s) occurred in {path} ({operation})&quot;</span>))
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(())
+    <span class="kw">if </span>state.has_fatal {
+        <span class="macro">bail!</span>(<span class="string">&quot;Fatal issue(s) occurred in {path} ({operation}&quot;</span>)
     }
+
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">impl </span>DevServer {
@@ -344,21 +330,21 @@
         <span class="self">self</span>,
         turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksApi&gt;,
         source_provider: <span class="kw">impl </span>SourceProvider + Clone + Send + Sync,
-        get_issue_reporter: Arc&lt;<span class="kw">dyn </span>Fn() -&gt; IssueReporterVc + Send + Sync&gt;,
+        console_ui: Arc&lt;ConsoleUi&gt;,
     ) -&gt; DevServer {
         <span class="kw">let </span>make_svc = make_service_fn(<span class="kw">move </span>|<span class="kw">_</span>| {
             <span class="kw">let </span>tt = turbo_tasks.clone();
             <span class="kw">let </span>source_provider = source_provider.clone();
-            <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
+            <span class="kw">let </span>console_ui = console_ui.clone();
             <span class="kw">async move </span>{
                 <span class="kw">let </span>handler = <span class="kw">move </span>|request: Request&lt;hyper::Body&gt;| {
+                    <span class="kw">let </span>console_ui = console_ui.clone();
                     <span class="kw">let </span>start = Instant::now();
                     <span class="kw">let </span>tt = tt.clone();
-                    <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
                     <span class="kw">let </span>source_provider = source_provider.clone();
                     <span class="kw">let </span>future = <span class="kw">async move </span>{
                         run_once(tt.clone(), <span class="kw">async move </span>{
-                            <span class="kw">let </span>issue_reporter = get_issue_reporter();
+                            <span class="kw">let </span>console_ui = (<span class="kw-2">*</span>console_ui).clone().cell();
 
                             <span class="kw">if </span>hyper_tungstenite::is_upgrade_request(<span class="kw-2">&amp;</span>request) {
                                 <span class="kw">let </span>uri = request.uri();
@@ -368,7 +354,7 @@
                                     <span class="kw">let </span>(response, websocket) =
                                         hyper_tungstenite::upgrade(request, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
                                     <span class="kw">let </span>update_server =
-                                        UpdateServer::new(source_provider, issue_reporter);
+                                        UpdateServer::new(source_provider, console_ui);
                                     update_server.run(<span class="kw-2">&amp;*</span>tt, websocket);
                                     <span class="kw">return </span><span class="prelude-val">Ok</span>(response);
                                 }
@@ -396,12 +382,12 @@
                             <span class="kw">let </span>uri = request.uri();
                             <span class="kw">let </span>path = uri.path().to_string();
                             <span class="kw">let </span>source = source_provider.get_source();
-                            handle_issues(source, <span class="kw-2">&amp;</span>path, <span class="string">&quot;get source&quot;</span>, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
+                            handle_issues(source, <span class="kw-2">&amp;</span>path, <span class="string">&quot;get source&quot;</span>, console_ui).<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>resolved_source = source.resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>response = http::process_request_with_content_source(
                                 resolved_source,
                                 request,
-                                issue_reporter,
+                                console_ui,
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>status = response.status().as_u16();
