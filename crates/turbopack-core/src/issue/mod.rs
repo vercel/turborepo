@@ -300,16 +300,8 @@ impl IssueVc {
     pub async fn peek_issues_with_path<T: CollectiblesSource + Copy>(
         source: T,
     ) -> Result<CapturedIssuesVc> {
-        let issues: AutoSet<IssueVc> = source.peek_collectibles().await?;
-
         Ok(CapturedIssuesVc::cell(CapturedIssues {
-            issues: issues
-                .iter()
-                .map(|v| async { (*v).into_plain().await })
-                .try_join()
-                .await?
-                .into_iter()
-                .collect::<Vec<PlainIssueReadRef>>(),
+            issues: source.peek_collectibles().await?,
             #[cfg(feature = "issue_path")]
             processing_path: ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
                 None,
@@ -326,15 +318,7 @@ impl IssueVc {
         source: T,
     ) -> Result<CapturedIssuesVc> {
         Ok(CapturedIssuesVc::cell(CapturedIssues {
-            issues: source
-                .take_collectibles()
-                .await?
-                .iter()
-                .map(|v: &IssueVc| async { (*v).into_plain().await })
-                .try_join()
-                .await?
-                .into_iter()
-                .collect::<Vec<PlainIssueReadRef>>(),
+            issues: source.take_collectibles().await?,
             #[cfg(feature = "issue_path")]
             processing_path: ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
                 None,
@@ -352,7 +336,7 @@ pub struct Issues(Vec<IssueVc>);
 #[derive(Debug)]
 #[turbo_tasks::value]
 pub struct CapturedIssues {
-    issues: Vec<PlainIssueReadRef>,
+    issues: AutoSet<IssueVc>,
     #[cfg(feature = "issue_path")]
     processing_path: ItemIssueProcessingPathVc,
 }
@@ -362,7 +346,8 @@ impl CapturedIssues {
         let mut has_fatal = false;
 
         for issue in self.issues.iter() {
-            if issue.severity == IssueSeverity::Fatal {
+            let severity = *issue.severity().await?;
+            if severity == IssueSeverity::Fatal {
                 has_fatal = true;
                 break;
             }
@@ -382,7 +367,8 @@ impl CapturedIssuesVc {
     pub async fn has_fatal(self) -> Result<BoolVc> {
         let mut has_fatal = false;
         for issue in self.await?.iter() {
-            if issue.severity == IssueSeverity::Fatal {
+            let severity = *issue.severity().await?;
+            if severity == IssueSeverity::Fatal {
                 has_fatal = true;
                 break;
             }
@@ -403,28 +389,33 @@ impl CapturedIssues {
     }
 
     /// Returns an iterator over the issues.
-    pub fn iter(&self) -> impl Iterator<Item = &PlainIssueReadRef> + '_ {
-        self.issues.iter()
+    pub fn iter(&self) -> impl Iterator<Item = IssueVc> + '_ {
+        self.issues.iter().copied()
     }
 
     /// Returns an iterator over the issues with the shortest path from the root
     /// issue to each issue.
     pub fn iter_with_shortest_path(
         &self,
-    ) -> impl Iterator<Item = (&PlainIssueReadRef, OptionIssueProcessingPathItemsVc)> + '_ {
+    ) -> impl Iterator<Item = (IssueVc, OptionIssueProcessingPathItemsVc)> + '_ {
         self.issues.iter().map(|issue| {
             #[cfg(feature = "issue_path")]
             let path = self.processing_path.shortest_path(*issue);
             #[cfg(not(feature = "issue_path"))]
             let path = OptionIssueProcessingPathItemsVc::cell(None);
-            (issue, path)
+            (*issue, path)
         })
     }
 
     pub async fn get_plain_issues(&self) -> Result<Vec<PlainIssueReadRef>> {
-        let mut list = self.issues.to_vec();
+        let mut list = self
+            .issues
+            .iter()
+            .map(|issue| issue.into_plain().into_future())
+            .try_join()
+            .await?;
         list.sort_by(|a, b| ReadRef::ptr_cmp(a, b));
-        Ok(list.to_vec())
+        Ok(list)
     }
 }
 
@@ -477,7 +468,7 @@ impl IssueSourceVc {
 #[turbo_tasks::value(transparent)]
 pub struct OptionIssueSource(Option<IssueSourceVc>);
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssue {
     pub severity: IssueSeverity,
@@ -564,7 +555,7 @@ impl IssueVc {
     }
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssueSource {
     pub asset: PlainAssetReadRef,
@@ -586,7 +577,7 @@ impl IssueSourceVc {
     }
 }
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainAsset {
     pub path: FileSystemPathReadRef,
