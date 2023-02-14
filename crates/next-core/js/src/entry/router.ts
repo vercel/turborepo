@@ -83,7 +83,6 @@ async function getResolveRoute(
     env: [],
     assets: [],
   };
-  console.log(edgeInfo);
   return await makeResolver(dir, nextConfig, edgeInfo);
 }
 
