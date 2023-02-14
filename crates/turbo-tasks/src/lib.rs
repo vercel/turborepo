@@ -39,7 +39,7 @@ mod completion;
 pub mod debug;
 mod display;
 pub mod event;
-pub mod graph_traversal;
+pub mod graph;
 mod id;
 mod id_factory;
 mod join_iter_ext;

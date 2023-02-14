@@ -81,7 +81,7 @@ fn aggregate_adjacent_chunks(chunks: &[ChunkVc]) -> Vec<Vec<ChunkVc>> {
     let mut chunks_vecs = vec![];
     let mut current_chunks = vec![];
 
-    for chunk in chunks.into_iter().copied() {
+    for chunk in chunks.iter().copied() {
         if current_chunks.len() < chunks_per_merged_chunk {
             current_chunks.push(chunk);
         } else if current_chunks.len() == chunks_per_merged_chunk && chunks_mod > 0 {
@@ -94,7 +94,7 @@ fn aggregate_adjacent_chunks(chunks: &[ChunkVc]) -> Vec<Vec<ChunkVc>> {
         }
     }
 
-    if current_chunks.len() > 0 {
+    if !current_chunks.is_empty() {
         chunks_vecs.push(current_chunks);
     }
 
@@ -109,7 +109,7 @@ async fn merge_adjacent_chunks(chunks_vc: ChunksVc) -> Result<ChunksVc> {
         return Ok(chunks_vc);
     }
 
-    let chunks = aggregate_adjacent_chunks(&*chunks);
+    let chunks = aggregate_adjacent_chunks(&chunks);
 
     let chunks = chunks
         .into_iter()

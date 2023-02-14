@@ -27,11 +27,8 @@ impl<S> GraphTraversal<S> {
         let futures = FuturesUnordered::new();
         for item in roots {
             let (parent_handle, item) = store.insert(None, item);
-            match get_children.get_children(item) {
-                Some(future) => {
-                    futures.push(WithHandle::new(future, parent_handle));
-                }
-                None => {}
+            if let Some(future) = get_children.get_children(item) {
+                futures.push(WithHandle::new(future, parent_handle));
             }
         }
         GraphTraversalFuture {
@@ -75,11 +72,8 @@ where
                             let (child_handle, item) =
                                 this.store.insert(Some(parent_handle.clone()), item);
 
-                            match this.get_children.get_children(&item) {
-                                Some(future) => {
-                                    this.futures.push(WithHandle::new(future, child_handle));
-                                }
-                                None => {}
+                            if let Some(future) = this.get_children.get_children(item) {
+                                this.futures.push(WithHandle::new(future, child_handle));
                             }
                         }
                     }

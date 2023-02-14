@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use mime::{APPLICATION_JAVASCRIPT_UTF_8, APPLICATION_JSON};
 use serde::Serialize;
 use turbo_tasks::{
-    graph_traversal::{GraphTraversal, NonDeterministic},
+    graph::{GraphTraversal, NonDeterministic},
     primitives::{StringVc, StringsVc},
     TryJoinIterExt,
 };
