@@ -273,7 +273,7 @@ impl DepGraph {
 
                 dbg!(count);
 
-                let is_only_dep = count == 1;
+                let is_only_dep = count <= 1;
 
                 if (is_module_eval || is_only_dep) && done.insert(dep_ix) {
                     changed = true;
