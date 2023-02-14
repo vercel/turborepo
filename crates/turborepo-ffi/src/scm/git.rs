@@ -26,21 +26,10 @@ pub fn changed_files(
 ) -> Result<HashSet<String>> {
     let repo = Repository::open(repo_root)?;
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(
-        &repo,
-        &mut files,
-        relative_to.as_deref(),
-        include_untracked,
-    )?;
+    add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
 
     if let Some((from_commit, to_commit)) = commit_range {
-        add_changed_files_from_commits(
-            &repo,
-            &mut files,
-            relative_to.as_deref(),
-            from_commit,
-            to_commit,
-        )?;
+        add_changed_files_from_commits(&repo, &mut files, relative_to, from_commit, to_commit)?;
     }
 
     Ok(files)
@@ -84,8 +73,8 @@ fn add_changed_files_from_commits(
     from_commit: &str,
     to_commit: &str,
 ) -> Result<()> {
-    let from_commit_oid = Oid::from_str(&from_commit)?;
-    let to_commit_oid = Oid::from_str(&to_commit)?;
+    let from_commit_oid = Oid::from_str(from_commit)?;
+    let to_commit_oid = Oid::from_str(to_commit)?;
     let from_commit = repo.find_commit(from_commit_oid)?;
     let to_commit = repo.find_commit(to_commit_oid)?;
     let from_tree = from_commit.tree()?;
@@ -126,17 +115,20 @@ pub fn previous_content(
     file_path: PathBuf,
 ) -> Result<String> {
     let repo = Repository::open(repo_root)?;
-    let from_commit_oid = Oid::from_str(&from_commit)?;
+    let from_commit_oid = Oid::from_str(from_commit)?;
     let from_commit = repo.find_commit(from_commit_oid)?;
     let from_tree = from_commit.tree()?;
 
     // Canonicalize so strip_prefix works properly
     let file_path = fs_canonicalize(file_path)?;
-    let repo_dir = fs_canonicalize(repo.workdir().ok_or(anyhow!("repository not found"))?)?;
+    let repo_dir = fs_canonicalize(
+        repo.workdir()
+            .ok_or_else(|| anyhow!("repository not found"))?,
+    )?;
 
     let relative_path = file_path.strip_prefix(repo_dir).unwrap_or(&file_path);
 
-    let file = from_tree.get_path(&relative_path)?;
+    let file = from_tree.get_path(relative_path)?;
     let blob = repo.find_blob(file.id())?;
     let content = blob.content();
 
