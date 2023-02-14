@@ -2139,7 +2139,22 @@ fn has_cjs_export(p: &Program) -> bool {
 
     if let Program::Module(m) = p {
         // Check for imports/exports
-        if m.body.iter().any(ModuleItem::is_module_decl) {
+        if m.body.iter().any(|item| {
+            item.as_module_decl().map_or(false, |module_decl| {
+                module_decl
+                    .as_import()
+                    .and_then(|import| import.asserts.as_ref())
+                    .map_or(true, |asserts| {
+                        asserts.props.iter().any(|assert| {
+                            assert
+                                .as_prop()
+                                .and_then(|prop| prop.as_key_value())
+                                .and_then(|kv| kv.key.as_ident())
+                                .map_or(true, |ident| &*ident.sym != "turbopackHelper")
+                        })
+                    })
+            })
+        }) {
             return false;
         }
     }
@@ -2152,7 +2167,10 @@ fn has_cjs_export(p: &Program) -> bool {
         visit_obj_and_computed!();
 
         fn visit_ident(&mut self, i: &Ident) {
-            if &*i.sym == "module" || &*i.sym == "exports" {
+            if &*i.sym == "module"
+                || &*i.sym == "exports"
+                || &*i.sym == "__turbopack_export_value__"
+            {
                 self.found = true;
             }
         }

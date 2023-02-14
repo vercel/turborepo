@@ -2,8 +2,9 @@ use swc_core::{
     common::DUMMY_SP,
     ecma::{
         ast::{
-            Expr, ExprStmt, ImportDecl, ImportDefaultSpecifier, ImportSpecifier, Lit, Module,
-            ModuleDecl, ModuleItem, Program, Stmt, Str,
+            Expr, ExprStmt, Ident, ImportDecl, ImportDefaultSpecifier, ImportSpecifier,
+            KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop, PropName,
+            PropOrSpread, Stmt, Str,
         },
         utils::private_ident,
     },
@@ -52,7 +53,13 @@ pub fn create_proxy_module(transition_name: &str, target_import: &str) -> Progra
                 })],
                 src: box target_import.into(),
                 type_only: false,
-                asserts: None,
+                asserts: Some(box ObjectLit {
+                    span: DUMMY_SP,
+                    props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+                        key: PropName::Ident(Ident::new("turbopackHelper".into(), DUMMY_SP)),
+                        value: box Expr::Lit(true.into()),
+                    }))],
+                }),
                 span: DUMMY_SP,
             })),
             ModuleItem::Stmt(quote!(
