@@ -56,6 +56,9 @@ jobs:
           PATTERNS: |
             .github/actions/**
             .github/workflows/test.yml
+            .github/workflows/setup-nextjs-build.yml
+            .github/workflows/nextjs-integration-test-results.yml
+            .github/workflows/upload-nextjs-integration-test-results.yml
 
       - name: Root cargo related changes
         id: cargo
@@ -411,7 +414,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets --locked
+          args: --workspace --all-targets --locked --features rustls-tls
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
@@ -472,16 +475,16 @@ jobs:
 
       - name: Run cargo check release
         run: |
-          cargo check --workspace --all-targets --release
+          cargo check --workspace --all-targets --release --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --all-targets
+          cargo clippy --workspace --all-targets --features rustls-tls
 
       - name: Count clippy warnings
         run: |
           count="0"
-          clippy_output="$(cargo clippy --workspace --all-targets 2>&1)"
+          clippy_output="$(cargo clippy --workspace --all-targets --features rustls-tls 2>&1)"
 
           # Clippy will be invoked and report on each crate individually. We need to sum manually.
           for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings\?$/\1/p'); do
@@ -567,7 +570,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib
+          cargo test -p turborepo-lib --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -599,15 +602,13 @@ jobs:
 
       - name: Build nextest
         timeout-minutes: 120
-        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
 
       - name: Run nextest
         timeout-minutes: 120
-        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -666,13 +667,13 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
 
       - name: Run nextest
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]

@@ -506,7 +506,6 @@ impl FileSystem for DiskFileSystem {
                             })?;
                     }
                 }
-                // println!("write {} bytes to {}", buffer.len(), full_path.display());
                 let full_path_to_write = full_path.clone();
                 retry_future(move || {
                     let full_path = full_path_to_write.clone();
@@ -522,7 +521,6 @@ impl FileSystem for DiskFileSystem {
                 .with_context(|| format!("failed to write to {}", full_path.display()))?;
             }
             FileContent::NotFound => {
-                // println!("remove {}", full_path.display());
                 retry_future(|| fs::remove_file(full_path.clone()))
                     .await
                     .or_else(|err| {
@@ -1404,6 +1402,13 @@ impl FileContent {
 
     pub fn is_content(&self) -> bool {
         matches!(self, FileContent::Content(_))
+    }
+
+    pub fn as_content(&self) -> Option<&File> {
+        match self {
+            FileContent::Content(file) => Some(file),
+            FileContent::NotFound => None,
+        }
     }
 
     pub fn parse_json(&self) -> FileJsonContent {

@@ -21,7 +21,7 @@ use turbopack::{
 use turbopack_core::{
     chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
-    environment::ServerAddrVc,
+    environment::{EnvironmentVc, ServerAddrVc},
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -34,7 +34,7 @@ use turbopack_dev_server::{
     },
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_str,
+    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_js,
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
@@ -78,11 +78,10 @@ async fn next_client_transition(
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: &str,
+    client_environment: EnvironmentVc,
     next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
     let ty = Value::new(ClientContextType::App { app_dir });
-    let client_environment = get_client_environment(browserslist_query);
     let client_chunking_context =
         get_client_chunking_context(project_path, server_root, client_environment, ty);
     let client_module_options_context = get_client_module_options_context(
@@ -172,7 +171,7 @@ fn app_context(
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: &str,
+    client_environment: EnvironmentVc,
     ssr: bool,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
@@ -204,7 +203,7 @@ fn app_context(
             server_root,
             app_dir,
             env,
-            browserslist_query,
+            client_environment,
             next_config,
         ),
     );
@@ -216,7 +215,7 @@ fn app_context(
             execution_context,
             client_ty,
             server_root,
-            browserslist_query,
+            client_environment,
             next_config,
         )
         .into(),
@@ -270,7 +269,10 @@ pub async fn create_app_source(
         src_app
     } else {
         return Ok(NoContentSourceVc::new().into());
-    };
+    }
+    .resolve()
+    .await?;
+    let client_environment = get_client_environment(browserslist_query);
 
     let context_ssr = app_context(
         project_path,
@@ -278,7 +280,7 @@ pub async fn create_app_source(
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_environment,
         true,
         next_config,
         server_addr,
@@ -289,7 +291,7 @@ pub async fn create_app_source(
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_environment,
         false,
         next_config,
         server_addr,
@@ -306,7 +308,7 @@ pub async fn create_app_source(
         execution_context,
         server_root,
         env,
-        browserslist_query,
+        client_environment,
         next_config,
     );
 
@@ -321,6 +323,7 @@ pub async fn create_app_source(
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
+        server_root,
         server_root,
         LayoutSegmentsVc::cell(Vec::new()),
         output_path,
@@ -342,6 +345,7 @@ async fn create_app_source_for_directory(
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
     target: FileSystemPathVc,
+    url: FileSystemPathVc,
     layouts: LayoutSegmentsVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<CombinedContentSourceVc> {
@@ -424,7 +428,7 @@ async fn create_app_source_for_directory(
     layouts = LayoutSegmentsVc::cell(list);
 
     if let Some(page_path) = page {
-        let pathname = pathname_for_path(server_root, target, false);
+        let pathname = pathname_for_path(server_root, url, false);
         let params_matcher = NextParamsMatcherVc::new(pathname);
 
         sources.push(create_node_rendered_source(
@@ -464,12 +468,13 @@ async fn create_app_source_for_directory(
             specificity
         };
 
-        let (new_target, position) = if name.starts_with('(') && name.ends_with(')') {
+        let new_target = target.join(name);
+        let (new_url, position) = if name.starts_with('(') && name.ends_with(')') {
             // This doesn't affect the url
-            (target, position)
+            (url, position)
         } else {
             // This adds to the url
-            (target.join(name), position + 1)
+            (url.join(name), position + 1)
         };
 
         sources.push(
@@ -485,6 +490,7 @@ async fn create_app_source_for_directory(
                 runtime_entries,
                 fallback_page,
                 new_target,
+                new_url,
                 layouts,
                 intermediate_output_path,
             )
@@ -566,7 +572,7 @@ impl AppRendererVc {
                                     ));
                                 }
                             }
-                            Ok((stringify_str(segment_path), imports))
+                            Ok((stringify_js(segment_path), imports))
                         });
                         futures
                     })
@@ -591,7 +597,7 @@ impl AppRendererVc {
                     "import {}, {{ chunks as {} }} from {};\n",
                     identifier,
                     chunks_identifier,
-                    stringify_str(p)
+                    stringify_js(p)
                 )?
             }
         }
@@ -601,7 +607,7 @@ impl AppRendererVc {
                 r#"("TURBOPACK {{ transition: next-client }}");
 import BOOTSTRAP from {};
 "#,
-                stringify_str(&page)
+                stringify_js(&page)
             )?;
         }
 
@@ -612,7 +618,7 @@ import BOOTSTRAP from {};
                 writeln!(
                     result,
                     "    {key}: {{ module: {identifier}, chunks: {chunks_identifier} }},",
-                    key = stringify_str(key),
+                    key = stringify_js(key),
                 )?;
             }
             result += "  },";

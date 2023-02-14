@@ -101,3 +101,13 @@ Check my-app#build output
       "persistent": false
     }
   }
+
+$ Non-existent tasks don't throw an error
+  $ ${TURBO} run doesnotexist --dry=json
+  {
+    "packages": [
+      "my-app",
+      "util"
+    ],
+    "tasks": []
+  }
