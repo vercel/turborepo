@@ -263,6 +263,9 @@ impl DepGraph {
             {
                 // Check if the the only dependant of dep is start
 
+                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
+                dbg!(&dep_id);
+
                 let count = graph
                     .idx_graph
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
@@ -277,8 +280,7 @@ impl DepGraph {
 
                 if (is_module_eval || is_only_dep) && !done.contains(&dep_ix) {
                     changed = true;
-                    let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
-                    dbg!(&dep_id);
+
                     group.push(dep_id);
 
                     add_to_group(graph, group, dep_ix, done);
