@@ -15,7 +15,7 @@ use turbopack_core::{
     chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention::Middleware, ServerAddrVc},
-    reference_type::{ReferenceType::TypeScript, TypeScriptReferenceSubType},
+    reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -196,7 +196,9 @@ async fn config_assets(
         "MIDDLEWARE_CHUNK_GROUP".to_string(),
         context.with_transition("next-edge").process(
             middleware_config.into(),
-            Value::new(TypeScript(TypeScriptReferenceSubType::Undefined)),
+            Value::new(ReferenceType::EcmaScriptModules(
+                EcmaScriptModulesReferenceSubType::Undefined,
+            )),
         ),
     );
 

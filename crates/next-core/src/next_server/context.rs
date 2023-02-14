@@ -116,10 +116,8 @@ pub async fn get_server_resolve_options_context(
             let resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: true,
                 enable_node_externals: true,
-                enable_node_native_modules: true,
                 module: true,
                 custom_conditions: vec!["development".to_string()],
-                import_map: Some(next_server_import_map),
                 ..Default::default()
             };
             ResolveOptionsContext {
