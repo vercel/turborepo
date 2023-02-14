@@ -135,6 +135,9 @@
 <span id="135">135</span>
 <span id="136">136</span>
 <span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
@@ -227,6 +230,9 @@
                 </span>this.inner
                     .get(path, Value::new(ContentSourceData::default()))
             }
+            RouterResult::None =&gt; this
+                .inner
+                .get(path, Value::new(ContentSourceData::default())),
             RouterResult::Rewrite(data) =&gt; {
                 <span class="comment">// TODO: We can&#39;t set response headers on the returned content.
                 </span>ContentSourceResultVc::exact(

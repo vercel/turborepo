@@ -195,6 +195,9 @@
 <span id="195">195</span>
 <span id="196">196</span>
 <span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>turbo_tasks::{
@@ -289,6 +292,7 @@
     FullMiddleware {
         data: FullMiddlewareResponse,
     },
+    <span class="prelude-val">None</span>,
     Error(StructuredError),
 }
 
@@ -297,6 +301,7 @@
 </span><span class="kw">pub enum </span>RouterResult {
     Rewrite(RewriteResponse),
     FullMiddleware(FullMiddlewareResponse),
+    <span class="prelude-val">None</span>,
     Error,
 }
 
@@ -305,6 +310,7 @@
         <span class="kw">match </span>value {
             RouterIncomingMessage::Rewrite { data } =&gt; <span class="self">Self</span>::Rewrite(data),
             RouterIncomingMessage::FullMiddleware { data } =&gt; <span class="self">Self</span>::FullMiddleware(data),
+            RouterIncomingMessage::None =&gt; <span class="self">Self</span>::None,
             <span class="kw">_ </span>=&gt; <span class="self">Self</span>::Error,
         }
     }
