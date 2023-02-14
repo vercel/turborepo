@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm -- turbo run build --filter=docs",
     "build:turbo": "pnpm run --filter=cli build",
+    "build:nextrs": "pnpm run --filter=@next/rs build-native",
     "build:ts": "tsc -b tsconfig.project.json",
     "check:prettier": "prettier -c .",
     "check:toml": "taplo format --check",
@@ -56,5 +57,10 @@
       "next@latest": "13.0.6"
     }
   },
-  "packageManager": "pnpm@7.18.2"
+  "packageManager": "pnpm@7.18.2",
+  "dependencies": {
+    "async-sema": "^3.1.1",
+    "execa": "^7.0.0",
+    "fs-extra": "^11.1.0"
+  }
 }
