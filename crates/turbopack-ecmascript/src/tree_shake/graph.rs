@@ -179,6 +179,10 @@ impl DepGraph {
         if is_development {
         } else {
             for start in self.g.graph_ix.iter() {
+                if start.kind == ItemIdKind::ModuleEvaluation {
+                    continue;
+                }
+
                 let start = self.g.get_node(start);
                 for end in self.g.graph_ix.iter() {
                     let end = self.g.get_node(end);
