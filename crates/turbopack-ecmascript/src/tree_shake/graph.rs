@@ -329,7 +329,7 @@ impl DepGraph {
             for id in self.g.graph_ix.iter() {
                 let ix = self.g.get_node(id);
 
-                dbg!("Checking", id);
+                dbg!("Checking", ix, id);
 
                 if done.contains(&ix) {
                     continue;
