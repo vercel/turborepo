@@ -66,7 +66,7 @@ jobs:
             target: "x86_64-apple-darwin"
             build: |
               npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
-              turbo run build:nextrs -- --release --target x86_64-apple-darwin
+              pnpm build:nextrs -- --release --target x86_64-apple-darwin
               strip -x packages/next-rs/native/next-rs.*.node
           # - host: windows-latest
           #   build: |
@@ -251,8 +251,8 @@ jobs:
           path: ~/.cargo/git
           key: ${{ matrix.settings.target }}-cargo-index
 
-      - name: normalize versions
-        run: node scripts/normalize-version-bump.js
+      # - name: normalize versions
+      #   run: node scripts/normalize-version-bump.js
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
