@@ -107,7 +107,7 @@ func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUn
 		panic(err)
 	}
 	if err := resp.GetError(); err != "" {
-		return []string{}, errors.New(err)
+		return nil, errors.New(err)
 	}
 
 	return resp.GetFiles().GetFiles(), nil
