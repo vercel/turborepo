@@ -178,7 +178,7 @@ fn run(input: PathBuf) {
             let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
 
-            writeln!(s, "## Merged").unwrap();
+            writeln!(s, "## Merged (module eval)").unwrap();
             writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
         }
 
@@ -196,7 +196,7 @@ fn run(input: PathBuf) {
             let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
 
-            writeln!(s, "## Merged").unwrap();
+            writeln!(s, "## Merged (module eval)").unwrap();
             writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
         }
 
