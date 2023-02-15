@@ -157,7 +157,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	tasksOnly := options.TasksOnly
 
 	traversalQueue := []string{}
-
+	missing := make(util.Set)
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
@@ -172,6 +172,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 					var e *MissingTaskError
 					if errors.As(err, &e) {
+						missing.Add(taskName)
 						// Initially, non-package tasks are not required to exist, as long as some
 						// package in the list packages defines it as a package-task. Dependencies
 						// *are* required to have a definition.
@@ -188,11 +189,15 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 	visited := make(util.Set)
 
-	if len(traversalQueue) == 0 {
-		if len(taskNames) == 1 {
-			return fmt.Errorf("Could not find \"%s\" in project", taskNames[0])
+	// validate that all tasks passed were found
+	missingList := missing.UnsafeListOfStrings()
+	sort.Strings(missingList)
+
+	if len(missingList) > 0 {
+		if len(missingList) == 1 {
+			return fmt.Errorf("Could not find \"%s\" in project", missingList[0])
 		}
-		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(taskNames, ", "))
+		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(missingList, ", "))
 	}
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
