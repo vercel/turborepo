@@ -243,6 +243,9 @@ they are intentional, rather than accidental:
 
 - Root turbo.json cannot use the `extends` key.
 
+  To avoid creating circular dependencies on workspaces, the root `turbo.json`
+  cannot extend from anything.
+
 If you have a use case for any of these, please [file an issue][4]!
 
 ## Troubleshooting
