@@ -22,6 +22,13 @@ impl<L> Merger<L>
 where
     L: Load,
 {
+    pub fn new(loader: L) -> Self {
+        Merger {
+            loader,
+            done: Default::default(),
+        }
+    }
+
     pub fn merge_recursively(&mut self, entry: Module) -> Result<Module, Error> {
         let mut content = vec![];
         let mut extra_body = vec![];
