@@ -31,12 +31,16 @@ where
                 ModuleItem::ModuleDecl(ModuleDecl::Import(import)) => {
                     // Try to prepend the content of module
 
-                    if let Some(dep) = self.loader.load(&import.src.value)? {
-                        let mut dep = self.merge_recursively(dep)?;
+                    if self.done.insert(import.src.value.clone()) {
+                        if let Some(dep) = self.loader.load(&import.src.value)? {
+                            let mut dep = self.merge_recursively(dep)?;
 
-                        content.append(&mut dep.body);
+                            content.append(&mut dep.body);
+                        } else {
+                            content.push(ModuleItem::ModuleDecl(ModuleDecl::Import(import)));
+                        }
                     } else {
-                        content.push(ModuleItem::ModuleDecl(ModuleDecl::Import(import)));
+                        // Remove import
                     }
                 }
                 _ => extra_body.push(stmt),
