@@ -50,7 +50,7 @@ message PreviousContentReq {
 
 message PreviousContentResp {
   oneof response {
-    string content = 1;
+    bytes content = 1;
     string error = 2;
   }
 }
