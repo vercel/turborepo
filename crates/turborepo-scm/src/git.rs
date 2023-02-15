@@ -1,8 +1,9 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use anyhow::{anyhow, Result};
 use dunce::canonicalize as fs_canonicalize;
 use git2::{DiffFormat, DiffOptions, Oid, Repository};
+
+use crate::Error;
 
 /// Finds the changed files in a repository between index and working directory
 /// (unstaged changes) and between two commits.
@@ -23,7 +24,7 @@ pub fn changed_files(
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
     relative_to: Option<&str>,
-) -> Result<HashSet<String>> {
+) -> Result<HashSet<String>, Error> {
     let repo = Repository::open(repo_root)?;
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
@@ -40,7 +41,7 @@ fn add_changed_files_from_unstaged_changes(
     files: &mut HashSet<String>,
     relative_to: Option<&str>,
     include_untracked: bool,
-) -> Result<()> {
+) -> Result<(), Error> {
     let mut options = DiffOptions::new();
     options.include_untracked(include_untracked);
     options.recurse_untracked_dirs(include_untracked);
@@ -59,7 +60,11 @@ fn add_changed_files_from_unstaged_changes(
             let path = relative_to.map_or(path, |relative_to| {
                 path.strip_prefix(relative_to).unwrap_or(path)
             });
-            files.insert(path.to_string_lossy().to_string());
+            files.insert(
+                path.to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
+                    .to_string(),
+            );
         }
     }
 
@@ -72,7 +77,7 @@ fn add_changed_files_from_commits(
     relative_to: Option<&str>,
     from_commit: &str,
     to_commit: &str,
-) -> Result<()> {
+) -> Result<(), Error> {
     let from_commit_oid = Oid::from_str(from_commit)?;
     let to_commit_oid = Oid::from_str(to_commit)?;
     let from_commit = repo.find_commit(from_commit_oid)?;
@@ -112,7 +117,7 @@ pub fn previous_content(
     repo_root: PathBuf,
     from_commit: &str,
     file_path: PathBuf,
-) -> Result<String> {
+) -> Result<Vec<u8>, Error> {
     let repo = Repository::open(repo_root)?;
     let from_commit_oid = Oid::from_str(from_commit)?;
     let from_commit = repo.find_commit(from_commit_oid)?;
@@ -120,10 +125,7 @@ pub fn previous_content(
 
     // Canonicalize so strip_prefix works properly
     let file_path = fs_canonicalize(file_path)?;
-    let repo_dir = fs_canonicalize(
-        repo.workdir()
-            .ok_or_else(|| anyhow!("repository not found"))?,
-    )?;
+    let repo_dir = fs_canonicalize(repo.workdir().ok_or(Error::RepositoryNotFound)?)?;
 
     let relative_path = file_path.strip_prefix(repo_dir).unwrap_or(&file_path);
 
@@ -131,19 +133,23 @@ pub fn previous_content(
     let blob = repo.find_blob(file.id())?;
     let content = blob.content();
 
-    Ok(std::str::from_utf8(content)?.to_string())
+    Ok(content.to_vec())
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, fs, path::Path};
 
-    use anyhow::Result;
     use git2::{Oid, Repository};
 
-    use crate::scm::git::previous_content;
+    use super::previous_content;
+    use crate::Error;
 
-    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Result<Oid> {
+    fn commit_file(
+        repo: &Repository,
+        path: &Path,
+        previous_commit: Option<Oid>,
+    ) -> Result<Oid, Error> {
         let mut index = repo.index()?;
         index.add_path(path)?;
         let tree_oid = index.write_tree()?;
@@ -168,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_changed_files() -> Result<()> {
+    fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
         let file = repo_root.path().join("foo.js");
@@ -226,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn test_previous_content() -> Result<()> {
+    fn test_previous_content() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
         let file = repo_root.path().join("foo.js");
@@ -241,14 +247,14 @@ mod tests {
             first_commit_oid.to_string().as_str(),
             file.clone(),
         )?;
-        assert_eq!(content, "let z = 0;");
+        assert_eq!(content, b"let z = 0;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
             file,
         )?;
-        assert_eq!(content, "let z = 1;");
+        assert_eq!(content, b"let z = 1;");
 
         Ok(())
     }

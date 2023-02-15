@@ -2349,6 +2349,8 @@ dependencies = [
  "libc",
  "libgit2-sys",
  "log",
+ "openssl-probe",
+ "openssl-sys",
  "url",
 ]
 
@@ -3138,7 +3140,9 @@ checksum = "7f3d95f6b51075fe9810a7ae22c7095f12b98005ab364d8544797a825ce946a4"
 dependencies = [
  "cc",
  "libc",
+ "libssh2-sys",
  "libz-sys",
+ "openssl-sys",
  "pkg-config",
 ]
 
@@ -3176,6 +3180,20 @@ checksum = "57ed28aba195b38d5ff02b9170cbff627e336a20925e43b4945390401c5dc93f"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "libssh2-sys"
+version = "0.2.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b094a36eb4b8b8c8a7b4b8ae43b2944502be3e59cd87687595cf6b0a71b3f4ca"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "openssl-sys",
+ "pkg-config",
+ "vcpkg",
 ]
 
 [[package]]
@@ -7999,6 +8017,7 @@ dependencies = [
  "prost",
  "prost-build",
  "tempfile",
+ "turborepo-scm",
 ]
 
 [[package]]
@@ -8038,6 +8057,16 @@ dependencies = [
  "tokio",
  "turbo-updater",
  "webbrowser 0.8.7",
+]
+
+[[package]]
+name = "turborepo-scm"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "git2",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

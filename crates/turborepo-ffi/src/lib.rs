@@ -1,5 +1,3 @@
-mod scm;
-
 use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
@@ -51,7 +49,7 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
     let req: proto::ChangedFilesReq = buffer.into_proto().expect("buffer is valid protobuf");
 
     let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
-    let response = match scm::git::changed_files(
+    let response = match turborepo_scm::git::changed_files(
         req.repo_root.into(),
         commit_range,
         req.include_untracked,
@@ -72,9 +70,19 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
 
 #[no_mangle]
 pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
-    let req: proto::PreviousContentReq = buffer.into_proto().expect("buffer is valid protobuf");
+    let req: proto::PreviousContentReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::PreviousContentResp {
+                response: Some(proto::previous_content_resp::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            return resp.into();
+        }
+    };
 
-    let response = match scm::git::previous_content(
+    let response = match turborepo_scm::git::previous_content(
         req.repo_root.into(),
         &req.from_commit,
         PathBuf::from(req.file_path),
