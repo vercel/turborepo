@@ -87,19 +87,17 @@ impl ContentSource for NodeApiContentSource {
                     vary: vary.clone(),
                 })))
             }
-            MatchResult::MatchParams(params) => {
-                return Ok(ContentSourceResult::Result {
-                    specificity: this.specificity,
-                    params: *params,
-                    get_content: NodeApiGetContentResult {
-                        source: self_vc,
-                        path: path.to_string(),
-                    }
-                    .cell()
-                    .into(),
+            MatchResult::MatchParams(params) => Ok(ContentSourceResult::Result {
+                specificity: this.specificity,
+                params: *params,
+                get_content: NodeApiGetContentResult {
+                    source: self_vc,
+                    path: path.to_string(),
                 }
-                .cell());
+                .cell()
+                .into(),
             }
+            .cell()),
         }
     }
 }
