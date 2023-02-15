@@ -16,7 +16,7 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-task-with-deps"
-  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing 68582686ba468bdb
+  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing 35e5f5b0b58468a8
   missing-workspace-config:missing-workspace-config-task-with-deps: 
   missing-workspace-config:missing-workspace-config-task-with-deps: > missing-workspace-config-task-with-deps
   missing-workspace-config:missing-workspace-config-task-with-deps: > echo "running missing-workspace-config-task-with-deps" > out/foo.min.txt
@@ -31,7 +31,7 @@ Setup
   missing-workspace-config:missing-workspace-config-underlying-task: running missing-workspace-config-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:missing-workspace-config-underlying-topo-task"
-  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 7f25337c32f440a0
+  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 7a03890dc4926724
   blank-pkg:missing-workspace-config-underlying-topo-task: 
   blank-pkg:missing-workspace-config-underlying-topo-task: > missing-workspace-config-underlying-topo-task
   blank-pkg:missing-workspace-config-underlying-topo-task: > echo "missing-workspace-config-underlying-topo-task from blank-pkg"
