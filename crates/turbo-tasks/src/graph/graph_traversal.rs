@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, task::ready};
+use std::{future::Future, pin::Pin};
 
 use anyhow::Result;
 use futures::{stream::FuturesUnordered, Stream};
@@ -17,72 +17,166 @@ pub struct GraphTraversal<S> {
 impl<S> GraphTraversal<S> {
     /// Visits the graph starting from the given `roots`, and returns a future
     /// that will resolve to the traversal result.
-    pub fn visit<T, I, C, A>(roots: I, mut get_children: C) -> GraphTraversalFuture<T, S, C, A>
+    pub fn visit<T, I, C, A, Impl>(
+        roots: I,
+        mut get_children: C,
+    ) -> GraphTraversalFuture<T, S, C, A, Impl>
     where
         S: GraphStore<T>,
         I: IntoIterator<Item = T>,
-        C: GetChildren<T, A>,
+        C: GetChildren<T, A, Impl>,
     {
         let mut store = S::default();
         let futures = FuturesUnordered::new();
         for item in roots {
             let (parent_handle, item) = store.insert(None, item);
-            if let Some(future) = get_children.get_children(item) {
-                futures.push(WithHandle::new(future, parent_handle));
+            match get_children.get_children(item) {
+                GraphTraversalControlFlow::Continue(future) => {
+                    futures.push(WithHandle::new(future, parent_handle));
+                }
+                GraphTraversalControlFlow::Abort(abort) => {
+                    return GraphTraversalFuture {
+                        state: GraphTraversalState::Aborted { abort },
+                    };
+                }
+                GraphTraversalControlFlow::Skip => {}
             }
         }
         GraphTraversalFuture {
-            store,
-            futures,
-            get_children,
+            state: GraphTraversalState::Running(GraphTraversalRunningState {
+                store,
+                futures,
+                get_children,
+            }),
         }
     }
 }
 
 /// A future that resolves to a [`GraphStore`] containing the result of a graph
 /// traversal.
-pub struct GraphTraversalFuture<T, S, C, A>
+pub struct GraphTraversalFuture<T, S, C, A, Impl>
 where
     S: GraphStore<T>,
-    C: GetChildren<T, A>,
+    C: GetChildren<T, A, Impl>,
+{
+    state: GraphTraversalState<T, S, C, A, Impl>,
+}
+
+enum GraphTraversalState<T, S, C, A, Impl>
+where
+    S: GraphStore<T>,
+    C: GetChildren<T, A, Impl>,
+{
+    Completed,
+    Aborted { abort: A },
+    Running(GraphTraversalRunningState<T, S, C, A, Impl>),
+}
+
+struct GraphTraversalRunningState<T, S, C, A, Impl>
+where
+    S: GraphStore<T>,
+    C: GetChildren<T, A, Impl>,
 {
     store: S,
     futures: FuturesUnordered<WithHandle<C::Future, S::Handle>>,
     get_children: C,
 }
 
-impl<T, S, C, A> Future for GraphTraversalFuture<T, S, C, A>
+impl<T, S, C, A, Impl> Default for GraphTraversalState<T, S, C, A, Impl>
 where
     S: GraphStore<T>,
-    C: GetChildren<T, A>,
+    C: GetChildren<T, A, Impl>,
 {
-    type Output = Result<S>;
+    fn default() -> Self {
+        GraphTraversalState::Completed
+    }
+}
+
+pub enum GraphTraversalResult<R, A> {
+    Completed(R),
+    Aborted(A),
+}
+
+impl<R> GraphTraversalResult<R, !> {
+    pub fn completed(self) -> R {
+        match self {
+            GraphTraversalResult::Completed(result) => result,
+            GraphTraversalResult::Aborted(_) => unreachable!("the type parameter `A` is `!`"),
+        }
+    }
+}
+
+impl<T, S, C, A, Impl> Future for GraphTraversalFuture<T, S, C, A, Impl>
+where
+    S: GraphStore<T>,
+    C: GetChildren<T, A, Impl>,
+{
+    type Output = GraphTraversalResult<Result<S>, A>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
-        loop {
-            let futures = unsafe { Pin::new_unchecked(&mut this.futures) };
-            if let Some((parent_handle, result)) = ready!(futures.poll_next(cx)) {
-                match result {
-                    Ok(children) => {
+
+        let result;
+        (this.state, result) = match std::mem::take(&mut this.state) {
+            GraphTraversalState::Completed => {
+                panic!("polled after completion")
+            }
+            GraphTraversalState::Aborted { abort } => (
+                GraphTraversalState::Completed,
+                std::task::Poll::Ready(GraphTraversalResult::Aborted(abort)),
+            ),
+            GraphTraversalState::Running(mut running) => 'outer: loop {
+                let futures_pin = unsafe { Pin::new_unchecked(&mut running.futures) };
+                match futures_pin.poll_next(cx) {
+                    std::task::Poll::Ready(Some((parent_handle, Ok(children)))) => {
                         for item in children {
                             let (child_handle, item) =
-                                this.store.insert(Some(parent_handle.clone()), item);
+                                running.store.insert(Some(parent_handle.clone()), item);
 
-                            if let Some(future) = this.get_children.get_children(item) {
-                                this.futures.push(WithHandle::new(future, child_handle));
+                            match running.get_children.get_children(item) {
+                                GraphTraversalControlFlow::Continue(future) => {
+                                    running.futures.push(WithHandle::new(future, child_handle));
+                                }
+                                GraphTraversalControlFlow::Skip => {}
+                                GraphTraversalControlFlow::Abort(abort) => {
+                                    break 'outer (
+                                        GraphTraversalState::Completed,
+                                        std::task::Poll::Ready(GraphTraversalResult::Aborted(
+                                            abort,
+                                        )),
+                                    );
+                                }
                             }
                         }
                     }
-                    Err(err) => return std::task::Poll::Ready(Err(err)),
+                    std::task::Poll::Ready(Some((_, Err(err)))) => {
+                        break (
+                            GraphTraversalState::Completed,
+                            std::task::Poll::Ready(GraphTraversalResult::Completed(Err(err))),
+                        );
+                    }
+                    std::task::Poll::Ready(None) => {
+                        break (
+                            GraphTraversalState::Completed,
+                            std::task::Poll::Ready(GraphTraversalResult::Completed(Ok(
+                                running.store
+                            ))),
+                        );
+                    }
+                    std::task::Poll::Pending => {
+                        break (
+                            GraphTraversalState::Running(running),
+                            std::task::Poll::Pending,
+                        );
+                    }
                 }
-            } else {
-                return std::task::Poll::Ready(Ok(std::mem::take(&mut this.store)));
-            }
-        }
+            },
+        };
+
+        result
     }
 }
 
@@ -128,4 +222,13 @@ where
             std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
+}
+
+pub enum GraphTraversalControlFlow<F, A = !> {
+    /// The traversal should continue with the given future.
+    Continue(F),
+    /// The traversal should abort and return immediately.
+    Abort(A),
+    /// The traversal should skip the current node.
+    Skip,
 }

@@ -5,6 +5,6 @@ mod non_deterministic;
 mod reverse_topological;
 
 pub use get_children::{GetChildren, SkipDuplicates};
-pub use graph_traversal::GraphTraversal;
+pub use graph_traversal::{GraphTraversal, GraphTraversalControlFlow, GraphTraversalResult};
 pub use non_deterministic::NonDeterministic;
 pub use reverse_topological::ReverseTopological;

@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use mime::{APPLICATION_JAVASCRIPT_UTF_8, APPLICATION_JSON};
 use serde::Serialize;
 use turbo_tasks::{
-    graph::{GraphTraversal, NonDeterministic},
+    graph::{GraphTraversal, GraphTraversalResult, NonDeterministic},
     primitives::{StringVc, StringsVc},
     TryJoinIterExt,
 };
@@ -65,7 +65,8 @@ impl DevManifestContentSourceVc {
             this.page_roots.iter().copied(),
             get_content_source_children,
         )
-        .await?
+        .await
+        .completed()?
         .into_iter()
         .map(content_source_to_pathname)
         .try_join()
