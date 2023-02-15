@@ -18,9 +18,15 @@ type LoaderConfig =
       options: { [k: string]: unknown };
     };
 
-const { runLoaders } = __turbopack_external_require__(
-  "loader-runner"
-) as typeof import("loader-runner");
+let runLoaders: typeof import("loader-runner");
+try {
+  ({ runLoaders } = __turbopack_external_require__(
+    "next/dist/compiled/loader-runner"
+  ));
+} catch {
+  // TODO: Remove when all supported versions of Next.js ship with compiled loader-runner
+  ({ runLoaders } = __turbopack_external_require__("loader-runner"));
+}
 
 const contextDir = process.cwd();
 const toPath = (file: string) => {
