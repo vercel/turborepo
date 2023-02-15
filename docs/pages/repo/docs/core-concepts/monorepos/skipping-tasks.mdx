@@ -13,7 +13,7 @@ import Callout from '../../../../../components/Callout'
 
 To skip unaffected work, ensure that your git history is available and run `npx turbo-ignore`.
 
-By default, `turbo-ignore` will run the **build** task in the current working directory. Under the hood, `turbo-ignore` compares the output of `--dry=json` from your previous commit to your current commit.
+By default, `turbo-ignore` will run the **build** task in the current working directory. Under the hood, `turbo-ignore` uses the output of `--dry=json` from your previous commit to your current commit to identify affected packages.
 
 Here's an example of the command that will be built and ran:
 
@@ -62,7 +62,7 @@ This command will:
 3. Parse the output to determine which packages have changed.
 4. Exit with a `1` code if changes are detected. Otherwise, exits with a `0`.
 
-If the outputs match, your `test` task doesn't need to run at all. You can skip all of the extra work that you would have done only to find out that you're `FULL TURBO` for this task.
+While you may have been able to hit a `>>> FULL TURBO` cache for your build task, we just saved time with all of the other setup tasks required to run your CI to make it to the full cache hit.
 
 ## Using `turbo-ignore` on Vercel
 
