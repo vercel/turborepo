@@ -178,7 +178,10 @@ fn run(input: PathBuf) {
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
 
-            let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
+            let mut merger = Merger::new(SingleModuleLoader {
+                modules: &&modules,
+                entry_module_uri: &uri_of_module,
+            });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
 
             writeln!(s, "## Merged (module eval)").unwrap();
@@ -196,7 +199,10 @@ fn run(input: PathBuf) {
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
 
-            let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
+            let mut merger = Merger::new(SingleModuleLoader {
+                modules: &&modules,
+                entry_module_uri: &uri_of_module,
+            });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
 
             writeln!(s, "## Merged (module eval)").unwrap();
@@ -213,23 +219,14 @@ fn run(input: PathBuf) {
 }
 
 struct SingleModuleLoader<'a> {
+    entry_module_uri: &'a str,
     modules: &'a [Module],
 }
 
 impl super::merge::Load for SingleModuleLoader<'_> {
-    fn load(&mut self, uri: &str) -> Result<Option<Module>, Error> {
-        for module in self.modules {
-            match &module.body[0] {
-                ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                    expr: box Expr::Lit(Lit::Str(s)),
-                    ..
-                })) => {
-                    if uri == &*s.value {
-                        return Ok(Some(module.clone()));
-                    }
-                }
-                _ => {}
-            }
+    fn load(&mut self, uri: &str, chunk_id: u32) -> Result<Option<Module>, Error> {
+        if self.entry_module_uri == uri {
+            return Ok(Some(self.modules[chunk_id as usize].clone()));
         }
 
         Ok(None)
