@@ -5,6 +5,7 @@ use swc_core::{
     common::SourceMap,
     ecma::{
         ast::{EsVersion, Expr, ExprStmt, Id, Lit, Module, ModuleItem, Stmt},
+        atoms::JsWord,
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
     },
@@ -164,10 +165,12 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
+        let uri_of_module: JsWord = "test".into();
+
         {
             let mut g = analyzer.g.clone();
             g.handle_weak(true);
-            let modules = g.split_module(&analyzer.items);
+            let modules = g.split_module(&uri_of_module, &analyzer.items);
 
             writeln!(s, "# Modules (dev)").unwrap();
             for (i, module) in modules.iter().enumerate() {
@@ -185,7 +188,7 @@ fn run(input: PathBuf) {
         {
             let mut g = analyzer.g.clone();
             g.handle_weak(false);
-            let modules = g.split_module(&analyzer.items);
+            let modules = g.split_module(&uri_of_module, &analyzer.items);
 
             writeln!(s, "# Modules (prod)").unwrap();
             for (i, module) in modules.iter().enumerate() {

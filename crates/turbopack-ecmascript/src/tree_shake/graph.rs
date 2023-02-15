@@ -15,7 +15,7 @@ use swc_core::{
             ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
             Stmt, VarDecl,
         },
-        atoms::js_word,
+        atoms::{js_word, JsWord},
         utils::find_pat_ids,
     },
 };
@@ -196,7 +196,11 @@ impl DepGraph {
     }
 
     /// Note: ESM imports are immutable, but we does not handle it.
-    pub(super) fn split_module(&self, data: &FxHashMap<ItemId, ItemData>) -> Vec<Module> {
+    pub(super) fn split_module(
+        &self,
+        uri_of_module: &JsWord,
+        data: &FxHashMap<ItemId, ItemData>,
+    ) -> Vec<Module> {
         let groups = self.finalize();
 
         let mut modules = vec![];
@@ -207,11 +211,6 @@ impl DepGraph {
                 body: vec![],
                 shebang: None,
             };
-
-            chunk.body.push(ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                span: DUMMY_SP,
-                expr: format!("turbopack://chunk-{}.js", ix).into(),
-            })));
 
             for dep in groups
                 .idx_graph
@@ -224,7 +223,7 @@ impl DepGraph {
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
                         specifiers,
-                        src: box format!("turbopack://chunk-{}.js", dep).into(),
+                        src: box uri_of_module.clone().into(),
                         type_only: false,
                         asserts: Some(box ObjectLit {
                             span: DUMMY_SP,
