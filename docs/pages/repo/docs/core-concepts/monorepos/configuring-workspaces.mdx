@@ -194,7 +194,7 @@ Configurations come with a set of guardrails that can prevent workspaces from cr
 confusing situations. These guardrails are listed here to make it clear that
 they are intentional, rather than accidental:
 
-- Workspace Configurations cannot use [the `workspace#task` syntax][3]
+- Workspace Configurations cannot use [the `workspace#task` syntax][3] as pipeline entries
 
   The `workspace` is inferred based on the _location_ of the config, and it is
   not possible to change configuration for another workspace. For example, in a
@@ -216,6 +216,19 @@ they are intentional, rather than accidental:
       },
       "build": {
         // ✅ just use the task name!
+      },
+    }
+  }
+  ```
+
+  Note that the `build` task can still depend on a Workspace-specific task:
+
+  ```jsonc filename="apps/my-nextjs-app/turbo.json"
+  {
+    "pipeline": {
+      "build": {
+        // ✅ It's still ok to have workspace#task in dependsOn!
+        "dependsOn": ["some-pkg#compile"]
       },
     }
   }
