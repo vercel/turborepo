@@ -59,10 +59,11 @@ pub(crate) async fn verify_caching_enabled<'a>(
         SelectedTeam::Team(team) => Some(team.slug.as_str()),
         SelectedTeam::User => None,
     });
-    let response = api_client
+    let caching_status = api_client
         .get_caching_status(token, team_id, team_slug)
         .await?;
-    match response.status {
+
+    match caching_status {
         CachingStatus::Disabled => {
             let should_enable = should_enable_caching()?;
             if should_enable {
@@ -127,26 +128,22 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         )
     })?;
 
-    let teams_response = api_client
+    let teams = api_client
         .get_teams(token)
         .await
         .context("could not get team information")?;
 
-    let user_response = api_client
+    let user = api_client
         .get_user(token)
         .await
         .context("could not get user information")?;
 
-    let user_display_name = user_response
-        .user
-        .name
-        .as_deref()
-        .unwrap_or(user_response.user.username.as_str());
+    let user_display_name = user.name.as_deref().unwrap_or(user.username.as_str());
 
-    let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
+    let selected_team = select_team(base, &teams, user_display_name)?;
 
     let team_id = match selected_team {
-        SelectedTeam::User => user_response.user.id.as_str(),
+        SelectedTeam::User => user.id.as_str(),
         SelectedTeam::Team(team) => team.id.as_str(),
     };
 
@@ -363,39 +360,31 @@ mod test {
             .route(
                 "/v2/teams",
                 get(|| async move {
-                    Json(TeamsResponse {
-                        teams: vec![Team {
-                            id: TEAM_ID.to_string(),
-                            slug: "vercel".to_string(),
-                            name: "vercel".to_string(),
-                            created_at: 0,
-                            created: Default::default(),
-                            membership: Membership::new(Role::Owner),
-                        }],
-                    })
+                    Json(TeamsResponse::Teams(vec![Team {
+                        id: TEAM_ID.to_string(),
+                        slug: "vercel".to_string(),
+                        name: "vercel".to_string(),
+                        created_at: 0,
+                        created: Default::default(),
+                        membership: Membership::new(Role::Owner),
+                    }]))
                 }),
             )
             .route(
                 "/v2/user",
                 get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: USER_ID.to_string(),
-                            username: "my_username".to_string(),
-                            email: "my_email".to_string(),
-                            name: None,
-                            created_at: Some(0),
-                        },
-                    })
+                    Json(UserResponse::User(User {
+                        id: USER_ID.to_string(),
+                        username: "my_username".to_string(),
+                        email: "my_email".to_string(),
+                        name: None,
+                        created_at: Some(0),
+                    }))
                 }),
             )
             .route(
                 "/v8/artifacts/status",
-                get(|| async {
-                    Json(CachingStatusResponse {
-                        status: CachingStatus::Enabled,
-                    })
-                }),
+                get(|| async { Json(CachingStatusResponse::Status(CachingStatus::Enabled)) }),
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 

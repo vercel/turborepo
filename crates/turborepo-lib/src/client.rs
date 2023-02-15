@@ -14,10 +14,16 @@ pub struct VerifiedSsoUser {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct APIError {
+    message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
     pub token: String,
     pub team_id: Option<String>,
+    pub error: Option<APIError>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,8 +36,10 @@ pub enum CachingStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachingStatusResponse {
-    pub status: CachingStatus,
+#[serde(rename_all = "lowercase")]
+pub enum CachingStatusResponse {
+    Status(CachingStatus),
+    Error(APIError),
 }
 
 /// Membership is the relationship between the logged-in user and a particular
@@ -76,8 +84,10 @@ impl Team {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeamsResponse {
-    pub teams: Vec<Team>,
+#[serde(rename_all = "lowercase")]
+pub enum TeamsResponse {
+    Teams(Vec<Team>),
+    Error(APIError),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,8 +101,9 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserResponse {
-    pub user: User,
+pub enum UserResponse {
+    User(User),
+    Error(APIError),
 }
 
 pub struct APIClient {
@@ -101,7 +112,7 @@ pub struct APIClient {
 }
 
 impl APIClient {
-    pub async fn get_user(&self, token: &str) -> Result<UserResponse> {
+    pub async fn get_user(&self, token: &str) -> Result<User> {
         let response = self
             .make_retryable_request(|| {
                 let url = self.make_url("/v2/user");
@@ -116,17 +127,22 @@ impl APIClient {
             })
             .await?;
 
-        response.json().await.map_err(|err| {
+        let user_response: UserResponse = response.json().await.map_err(|err| {
             anyhow!(
                 "Error getting user: {}",
                 err.status()
                     .and_then(|status| status.canonical_reason())
                     .unwrap_or(&err.to_string())
             )
-        })
+        })?;
+
+        match user_response {
+            UserResponse::User(user) => Ok(user),
+            UserResponse::Error(APIError { message }) => Err(anyhow!(message)),
+        }
     }
 
-    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    pub async fn get_teams(&self, token: &str) -> Result<Vec<Team>> {
         let response = self
             .make_retryable_request(|| {
                 let request_builder = self
@@ -140,14 +156,19 @@ impl APIClient {
             })
             .await?;
 
-        response.json().await.map_err(|err| {
+        let teams_response: TeamsResponse = response.json().await.map_err(|err| {
             anyhow!(
                 "Error getting teams: {}",
                 err.status()
                     .and_then(|status| status.canonical_reason())
                     .unwrap_or(&err.to_string())
             )
-        })
+        })?;
+
+        match teams_response {
+            TeamsResponse::Teams(teams) => Ok(teams),
+            TeamsResponse::Error(APIError { message }) => Err(anyhow!(message)),
+        }
     }
 
     pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
@@ -178,7 +199,7 @@ impl APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse> {
+    ) -> Result<CachingStatus> {
         let response = self
             .make_retryable_request(|| {
                 let mut request_builder = self
@@ -199,14 +220,19 @@ impl APIClient {
             })
             .await?;
 
-        response.json().await.map_err(|err| {
+        let response = response.json().await.map_err(|err| {
             anyhow!(
                 "Error getting caching status: {}",
                 err.status()
                     .and_then(|status| status.canonical_reason())
                     .unwrap_or(&err.to_string())
             )
-        })
+        })?;
+
+        match response {
+            CachingStatusResponse::Status(status) => Ok(status),
+            CachingStatusResponse::Error(APIError { message }) => Err(anyhow!(message)),
+        }
     }
 
     pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
@@ -230,10 +256,15 @@ impl APIClient {
                     .unwrap_or(&err.to_string())
             )
         })?;
-        Ok(VerifiedSsoUser {
-            token: verification_response.token,
-            team_id: verification_response.team_id,
-        })
+
+        if let Some(APIError { message }) = verification_response.error {
+            Err(anyhow!(message))
+        } else {
+            Ok(VerifiedSsoUser {
+                token: verification_response.token,
+                team_id: verification_response.team_id,
+            })
+        }
     }
 
     const RETRY_MAX: u32 = 2;

@@ -53,7 +53,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
 
     let api_client = base.api_client()?;
     let verified_user = api_client.verify_sso_token(token, &token_name).await?;
-    let user_response = api_client.get_user(&verified_user.token).await?;
+    let user = api_client.get_user(&verified_user.token).await?;
 
     base.user_config_mut()?
         .set_token(Some(verified_user.token.clone()))?;
@@ -63,10 +63,8 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
 {} {}
 ",
         base.ui.rainbow(">>> Success!"),
-        base.ui.apply(BOLD.apply_to(format!(
-            "Turborepo CLI authorized for {}",
-            user_response.user.email
-        )))
+        base.ui
+            .apply(BOLD.apply_to(format!("Turborepo CLI authorized for {}", user.email)))
     );
 
     if let Some(team_id) = verified_user.team_id {
@@ -140,7 +138,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     base.user_config_mut()?.set_token(Some(token.to_string()))?;
 
     let client = base.api_client()?;
-    let user_response = client.get_user(token.as_str()).await?;
+    let user = client.get_user(token.as_str()).await?;
 
     let ui = &base.ui;
 
@@ -154,7 +152,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
 
 ",
         ui.rainbow(">>> Success!"),
-        user_response.user.email,
+        user.email,
         ui.apply(
             CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
         ),
@@ -370,15 +368,13 @@ mod test {
             .route(
                 "/v2/user",
                 get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: "my_user_id".to_string(),
-                            username: "my_username".to_string(),
-                            email: "my_email".to_string(),
-                            name: None,
-                            created_at: Some(0),
-                        },
-                    })
+                    Json(UserResponse::User(User {
+                        id: "my_user_id".to_string(),
+                        username: "my_username".to_string(),
+                        email: "my_email".to_string(),
+                        name: None,
+                        created_at: Some(0),
+                    }))
                 }),
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
@@ -446,29 +442,24 @@ mod test {
                     Json(VerificationResponse {
                         token: EXPECTED_TOKEN_TEST.to_string(),
                         team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
+                        error: None,
                     })
                 }),
             )
             .route(
                 "/v8/artifacts/status",
-                get(|| async move {
-                    Json(CachingStatusResponse {
-                        status: CachingStatus::Enabled,
-                    })
-                }),
+                get(|| async move { Json(CachingStatusResponse::Status(CachingStatus::Enabled)) }),
             )
             .route(
                 "/v2/user",
                 get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: "0".to_string(),
-                            username: "my_username_3".to_string(),
-                            email: "me@vercel.com".to_string(),
-                            name: None,
-                            created_at: None,
-                        },
-                    })
+                    Json(UserResponse::User(User {
+                        id: "0".to_string(),
+                        username: "my_username_3".to_string(),
+                        email: "me@vercel.com".to_string(),
+                        name: None,
+                        created_at: None,
+                    }))
                 }),
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], 3002));
