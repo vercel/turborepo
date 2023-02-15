@@ -2,7 +2,7 @@ use thiserror::Error;
 use tonic::{Code, Status};
 
 use self::proto::turbod_client::TurbodClient;
-use super::connector::DaemonConnector;
+use super::connector::{DaemonConnector, DaemonConnectorError};
 use crate::get_version;
 
 pub mod proto {
@@ -23,7 +23,7 @@ impl<T> DaemonClient<T> {
             .await?
             .into_inner()
             .daemon_status
-            .ok_or(DaemonError::MissingResponse)
+            .ok_or(DaemonError::MalformedResponse)
     }
 
     /// Stops the daemon and closes the connection, returning
@@ -97,37 +97,37 @@ impl DaemonClient<()> {
 impl DaemonClient<DaemonConnector> {
     /// Stops the daemon, closes the connection, and opens a new connection.
     pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
-        self.stop().await?.connect().await
+        self.stop().await?.connect().await.map_err(Into::into)
     }
 }
 
 #[derive(Error, Debug)]
 pub enum DaemonError {
-    #[error("Failed to connect to daemon")]
-    Connection,
-    #[error("Daemon version mismatch")]
+    /// The server was connected but is now unavailable.
+    #[error("server is unavailable")]
+    Unavailable,
+    /// The server is running a different version of turborepo.
+    #[error("version mismatch")]
     VersionMismatch,
-    #[error("could not connect: {0}")]
+    /// There is an issue with the underlying grpc transport.
+    #[error("bad grpc transport: {0}")]
     GrpcTransport(#[from] tonic::transport::Error),
-    #[error("could not fork")]
-    Fork,
-    #[error("could not connect: {0}")]
+    /// The daemon returned an unexpected status code.
+    #[error("bad grpc status code: {0}")]
     GrpcFailure(tonic::Code),
-    #[error("missing response")]
-    MissingResponse,
-    #[error("could not read pid file")]
-    PidFile,
-    #[error("could not connect: {0}")]
-    Timeout(#[from] tokio::time::error::Elapsed),
-    #[error("daemon is not running and will not be started")]
-    NotRunning,
+    /// The daemon returned a malformed response.
+    #[error("malformed response")]
+    MalformedResponse,
+    /// There was an issue connecting to the daemon.
+    #[error("unable to connect")]
+    DaemonConnect(#[from] DaemonConnectorError),
 }
 
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
             Code::FailedPrecondition => DaemonError::VersionMismatch,
-            Code::Unavailable => DaemonError::Connection,
+            Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }
     }

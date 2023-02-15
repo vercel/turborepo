@@ -7,12 +7,39 @@ use std::{
 
 use command_group::AsyncCommandGroup;
 use log::{debug, error};
-use notify::{Config, Event, EventKind, RecommendedWatcher, Watcher};
+use notify::{Config, Event, EventKind, Watcher};
 use sysinfo::{ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
+use thiserror::Error;
 use tokio::{net::UnixStream, sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
 
-use super::{client::proto::turbod_client::TurbodClient, DaemonClient, DaemonError};
+use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
+use crate::daemon::DaemonError;
+
+#[derive(Error, Debug)]
+pub enum DaemonConnectorError {
+    /// There was a problem when forking to start the daemon.
+    #[error("unable to fork")]
+    Fork,
+    /// There was a problem reading the pid file.
+    #[error("could not read pid file")]
+    PidFile,
+    /// The daemon is not running and will not be started.
+    #[error("daemon is not running")]
+    NotRunning,
+    /// There was an issue connecting to the socket.
+    #[error("unable to connect to socket")]
+    Socket,
+    /// There was an issue performing the handshake.
+    #[error("unable to make handshake")]
+    Handshake,
+    /// Waiting for the socket timed out.
+    #[error("timeout while watchin directory: {0}")]
+    Timeout(#[from] tokio::time::error::Elapsed),
+    /// There was an issue in the file watcher.
+    #[error("unable to watch directory: {0}")]
+    Watcher(#[from] notify::Error),
+}
 
 #[derive(Debug)]
 pub struct DaemonConnector {
@@ -42,7 +69,7 @@ impl DaemonConnector {
     /// 1. the versions do not match
     /// 2. the server is not running
     /// 3. the server is unresponsive
-    pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
+    pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonConnectorError> {
         let time = Instant::now();
         for _ in 0..Self::CONNECT_RETRY_MAX {
             let pid = self.get_or_start_daemon().await?;
@@ -69,21 +96,21 @@ impl DaemonConnector {
                 Err(DaemonError::VersionMismatch) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
-                Err(DaemonError::Connection) => self.kill_dead_server(pid).await?,
-                Err(e) => return Err(e),
+                Err(DaemonError::Unavailable) => self.kill_dead_server(pid).await?,
+                Err(_) => return Err(DaemonConnectorError::Handshake),
             };
         }
 
-        Err(DaemonError::Connection)
+        Err(DaemonConnectorError::Socket)
     }
 
     /// Gets the PID of the daemon process.
     ///
     /// If a daemon is not running, it starts one.
-    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonError> {
+    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         debug!("looking for pid in lockfile: {:?}", self.pid_file);
 
-        let pidfile = pidlock::Pidlock::new(self.pid_file.to_str().ok_or(DaemonError::PidFile)?);
+        let pidfile = self.pid_lock()?;
 
         match pidfile.get_owner() {
             Some(pid) => {
@@ -94,13 +121,13 @@ impl DaemonConnector {
                 debug!("no pid found, starting daemon");
                 Self::start_daemon().await
             }
-            None => Err(DaemonError::NotRunning),
+            None => Err(DaemonConnectorError::NotRunning),
         }
     }
 
     /// Starts the daemon process, returning its PID.
-    async fn start_daemon() -> Result<sysinfo::Pid, DaemonError> {
-        let binary_path = std::env::current_exe().map_err(|_| DaemonError::Fork)?;
+    async fn start_daemon() -> Result<sysinfo::Pid, DaemonConnectorError> {
+        let binary_path = std::env::current_exe().map_err(|_| DaemonConnectorError::Fork)?;
 
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
@@ -109,23 +136,24 @@ impl DaemonConnector {
             .stderr(Stdio::null())
             .stdout(Stdio::null())
             .group_spawn()
-            .map_err(|_| DaemonError::Fork)?;
+            .map_err(|_| DaemonConnectorError::Fork)?;
 
         group
             .inner()
             .id()
             .map(|id| sysinfo::Pid::from(id as usize))
-            .ok_or(DaemonError::Fork)
+            .ok_or(DaemonConnectorError::Fork)
     }
 
     async fn get_connection(
         path: PathBuf,
-    ) -> Result<TurbodClient<tonic::transport::Channel>, DaemonError> {
+    ) -> Result<TurbodClient<tonic::transport::Channel>, DaemonConnectorError> {
         debug!("connecting to socket: {}", path.to_string_lossy());
         let arc = Arc::new(path);
 
-        // note, this path is just a dummy. the actual path is passed in
-        let channel = match Endpoint::try_from("http://[::]:50051")?
+        // note, this endpoint is just a dummy. the actual path is passed in
+        let channel = match Endpoint::try_from("http://[::]:50051")
+            .expect("this is a valid uri")
             .connect_with_connector(tower::service_fn(move |_| {
                 // we clone the reference counter here and move it into the async closure
                 let arc = arc.clone();
@@ -136,7 +164,7 @@ impl DaemonConnector {
             Ok(c) => c,
             Err(e) => {
                 error!("failed to connect to socket: {}", e);
-                return Err(DaemonError::Connection);
+                return Err(DaemonConnectorError::Socket);
             }
         };
 
@@ -149,7 +177,7 @@ impl DaemonConnector {
         &self,
         client: DaemonClient<()>,
         pid: sysinfo::Pid,
-    ) -> Result<(), DaemonError> {
+    ) -> Result<(), DaemonConnectorError> {
         if client.stop().await.is_err() {
             self.kill_dead_server(pid).await?;
         }
@@ -166,8 +194,8 @@ impl DaemonConnector {
     }
 
     /// Kills a server that is not responding.
-    async fn kill_dead_server(&self, pid: sysinfo::Pid) -> Result<(), DaemonError> {
-        let lock = pidlock::Pidlock::new(self.pid_file.to_str().ok_or(DaemonError::PidFile)?);
+    async fn kill_dead_server(&self, pid: sysinfo::Pid) -> Result<(), DaemonConnectorError> {
+        let lock = self.pid_lock()?;
 
         let system = sysinfo::System::new_with_specifics(
             RefreshKind::new().with_processes(ProcessRefreshKind::new()),
@@ -186,19 +214,26 @@ impl DaemonConnector {
             }
             _ => {
                 debug!("pidfile is stale, ignoring");
-                Err(DaemonError::PidFile)
+                Err(DaemonConnectorError::PidFile)
             }
         }
     }
 
-    async fn wait_for_socket(&self) -> Result<&Path, DaemonError> {
+    async fn wait_for_socket(&self) -> Result<&Path, DaemonConnectorError> {
         timeout(
             Self::SOCKET_TIMEOUT,
             wait_for_file(&self.sock_file, WaitAction::Exists),
         )
         .await?
         .map(|_| self.sock_file.as_path())
-        .map_err(|_| DaemonError::Connection)
+        .map_err(Into::into)
+    }
+
+    fn pid_lock(&self) -> Result<pidlock::Pidlock, DaemonConnectorError> {
+        self.pid_file
+            .to_str()
+            .ok_or(DaemonConnectorError::PidFile)
+            .map(pidlock::Pidlock::new)
     }
 }
 
