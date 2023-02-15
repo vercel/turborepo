@@ -42,18 +42,18 @@ const cwd = process.cwd();
             JSON.stringify(pkg, null, 2)
           );
           console.log("Publishing", platform, "version", version);
-          // await execa(
-          //   `npm`,
-          //   [
-          //     `publish`,
-          //     `${path.join(nativePackagesDir, platform)}`,
-          //     `--access`,
-          //     `public`,
-          //     `--tag canary`,
-          //     //...(version.includes("canary") ? ["--tag", "canary"] : []),
-          //   ],
-          //   { stdio: "inherit" }
-          // );
+          await execa(
+            `npm`,
+            [
+              `publish`,
+              `${path.join(nativePackagesDir, platform)}`,
+              `--access`,
+              `public`,
+              `--tag canary`,
+              //...(version.includes("canary") ? ["--tag", "canary"] : []),
+            ],
+            { stdio: "inherit" }
+          );
         } catch (err) {
           // don't block publishing other versions on single platform error
           console.error(`Failed to publish`, platform, err);

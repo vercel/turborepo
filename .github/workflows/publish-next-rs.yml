@@ -52,7 +52,8 @@ jobs:
 
       - run: npm i -g pnpm@${PNPM_VERSION}
       - run: pnpm i
-      - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+      - name: Write NPM_TOKEN
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
       - run: ./scripts/publish-next-rs.js
 
   # Build binaries for publishing
