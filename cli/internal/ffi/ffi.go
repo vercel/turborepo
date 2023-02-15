@@ -131,7 +131,7 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	}
 	content := resp.GetContent()
 	if err := resp.GetError(); err != "" {
-		return []byte{}, errors.New(err)
+		return nil, errors.New(err)
 	}
 
 	return []byte(content), nil
