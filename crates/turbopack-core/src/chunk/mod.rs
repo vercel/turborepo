@@ -1,3 +1,4 @@
+pub mod chunk_in_group;
 pub mod dev;
 pub mod optimize;
 
@@ -11,14 +12,15 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat,
+    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
-    TryFlatMapRecursiveJoinIterExt, TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::DeterministicHash;
 
-use self::optimize::optimize;
+use self::{chunk_in_group::ChunkInGroupVc, optimize::optimize};
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
     environment::EnvironmentVc,
@@ -124,59 +126,64 @@ impl ChunkGroupVc {
     /// All chunks should be loaded in parallel.
     #[turbo_tasks::function]
     pub async fn chunks(self) -> Result<ChunksVc> {
-        async fn reference_to_chunks(
-            r: AssetReferenceVc,
-        ) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-            let mut result = Vec::new();
-            if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
-                if *pc.is_loaded_in_parallel().await? {
-                    result = r
-                        .resolve_reference()
-                        .await?
-                        .primary
-                        .iter()
-                        .map(|r| async move {
-                            Ok(if let PrimaryResolveResult::Asset(a) = r {
-                                ChunkVc::resolve_from(a).await?
-                            } else {
-                                None
-                            })
-                        })
-                        .try_join()
-                        .await?;
-                }
-            }
-            Ok(result.into_iter().flatten())
-        }
+        let chunks: Vec<_> = GraphTraversal::<ReverseTopological<_>>::visit(
+            [self.await?.entry],
+            SkipDuplicates::new(get_chunk_children),
+        )
+        .await?
+        .into_iter()
+        .collect();
 
-        // async fn get_chunk_children(
-        //     chunk: ChunkVc,
-        // ) -> Result<Flatten<IntoIter<Flatten<IntoIter<Option<ChunkVc>>>>>> {
-        async fn get_chunk_children(
-            chunk: ChunkVc,
-        ) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-            Ok(chunk
-                .references()
+        let chunks = ChunksVc::cell(chunks);
+        let chunks = optimize(chunks, self);
+        let chunks = ChunksVc::cell(
+            chunks
                 .await?
                 .iter()
-                .copied()
-                .map(reference_to_chunks)
-                .try_join()
-                .await?
-                .into_iter()
-                .flatten())
-        }
-
-        let chunks = [self.await?.entry]
-            .into_iter()
-            .try_flat_map_recursive_join(get_chunk_children)
-            .await?;
-
-        let chunks = ChunksVc::cell(chunks.into_iter().collect());
-        let chunks = optimize(chunks, self);
+                .map(|&chunk| ChunkInGroupVc::new(chunk).as_chunk())
+                .collect(),
+        );
 
         Ok(chunks)
     }
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+    Ok(parent
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .map(reference_to_chunks)
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten())
+}
+
+/// Get all parallel chunks from a parallel chunk reference.
+async fn reference_to_chunks(r: AssetReferenceVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+    let mut result = Vec::new();
+    if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
+        if *pc.is_loaded_in_parallel().await? {
+            result = r
+                .resolve_reference()
+                .await?
+                .primary
+                .iter()
+                .map(|r| async move {
+                    Ok(if let PrimaryResolveResult::Asset(a) = r {
+                        ChunkVc::resolve_from(a).await?
+                    } else {
+                        None
+                    })
+                })
+                .try_join()
+                .await?;
+        }
+    }
+    Ok(result.into_iter().flatten())
 }
 
 #[turbo_tasks::value_impl]

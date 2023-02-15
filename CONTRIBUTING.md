@@ -14,6 +14,7 @@ Thanks for your interest in contributing to Turbo!
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Adding a new crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
@@ -27,11 +28,7 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1. Install `jq` and `sponge`
-
-   On macOS: `brew install sponge jq`
-
-1. Install [turborepo crate](https://github.com/vercel/turbo/blob/main/crates/turborepo/README.md) build requirements
+1. Install [turborepo crate](./crates/turborepo/README.md) build requirements
 
 1. Run `pnpm install` at root
 
@@ -50,6 +47,12 @@ out of the box. If you wish to select `rustls-tls`, you may do so by passing `--
 to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
 
 ### Running Turborepo Tests
+
+Dependencies
+
+1. Install `jq`, `sponge`, and `zstd`
+
+On macOS: `brew install sponge jq zstd`
 
 #### Go Tests
 
@@ -129,6 +132,63 @@ These lists are by no means exhaustive. Feel free to add to them with other stra
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./release.md#release-turborepo).
+
+## Adding A New Crate
+
+When adding a new crate to the repo, it is essential that it is included/excluded from the
+relevant workflows. This ensures that changes to the crate are tested by the correct workflows,
+but that they do not trigger unnecessary workflows as well.
+
+First, determine whether the crate is for Turbopack or Turborepo. If it is for Turbopack, then the crate
+should be added to the `default-members` key in the root `Cargo.toml`. If the crate is for Turborepo, the
+crate must be added to the `PATTERNS` list in "Turborepo related changes" section of the `test.yml`
+workflow file. It must also be excluded from the "Turbopack related changes" section of the
+`test.yml` workflow file.
+
+For instance, if we were adding a `turborepo-foo` crate, we would add the following patterns:
+
+```diff
+      - name: Turbopack related changes
+        id: turbopack
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            xtask/**
+            .cargo/**
+            rust-toolchain
+            !crates/turborepo/**
+            !crates/turborepo-lib/**
+            !crates/turborepo-ffi/**
+            !crates/turbo-updater/**
++           !crates/turborepo-foo/**
+            !**.md
+            !**.mdx
+
+      - name: Turborepo related changes
+        id: turborepo
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/turborepo/**
+            crates/turborepo-lib/**
+            crates/turborepo-ffi/**
+            crates/turbo-updater/**
++           crates/turborepo-foo/**
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+```
+
+The crate must also be explicitly excluded from build commands
+when building Turbopack. To do so, add a `--exclude turbopack-foo`
+flag to the build command. Search through `test.yml` and add this
+flag to all cargo commands that already exclude `turborepo-lib`.
 
 ## Contributing to Turbopack
 

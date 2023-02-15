@@ -1636,6 +1636,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af3c796f3b0b408d9fd581611b47fa850821fcb84aa640b83a3c1a5be2d691f2"
 dependencies = [
  "console",
+ "fuzzy-matcher",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -2254,6 +2255,15 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
+]
+
+[[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
 ]
 
 [[package]]
@@ -3747,6 +3757,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chromiumoxide",
+ "console-subscriber",
  "futures",
  "httpmock",
  "lazy_static",
@@ -7754,6 +7765,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "indexmap",
+ "indoc",
  "once_cell",
  "regex",
  "serde",
@@ -7778,6 +7790,7 @@ dependencies = [
  "indexmap",
  "mime",
  "mime_guess",
+ "once_cell",
  "parking_lot",
  "pin-project-lite",
  "serde",

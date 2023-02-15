@@ -92,6 +92,7 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.Absolut
 		}
 		hashObject = manualHashObject
 	}
+
 	hashOfFiles, otherErr := fs.HashObject(hashObject)
 	if otherErr != nil {
 		return "", otherErr
@@ -158,7 +159,12 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
+func (th *Tracker) CalculateFileHashes(
+	allTasks []dag.Vertex,
+	workerCount int,
+	repoRoot turbopath.AbsoluteSystemPath,
+	completeGraph *graph.CompleteGraph,
+) error {
 	hashTasks := make(util.Set)
 
 	for _, v := range allTasks {
@@ -174,9 +180,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 			continue
 		}
 
-		// TODO(mehulkar): Once we start composing turbo.json, we need to change this
-		// to look in the graph for TaskDefinitions, rather than the root pipeline.
-		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
+		taskDefinition, ok := completeGraph.TaskDefinitions[taskID]
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
@@ -196,7 +200,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
 			for packageFileSpec := range hashQueue {
-				pkg, ok := th.workspaceInfos[packageFileSpec.pkg]
+				pkg, ok := th.workspaceInfos.PackageJSONs[packageFileSpec.pkg]
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}

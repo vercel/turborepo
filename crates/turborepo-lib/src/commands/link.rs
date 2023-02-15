@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use console::Style;
 #[cfg(not(test))]
-use dialoguer::Select;
+use dialoguer::FuzzySelect;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
@@ -105,8 +105,10 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
     let homedir = homedir_path.to_string_lossy();
     println!(
         ">>> Remote Caching
+
 {}
-  For more info, see {}",
+  For more info, see {}
+  ",
         REMOTE_CACHING_INFO,
         base.ui.apply(UNDERLINE.apply_to(REMOTE_CACHING_URL))
     );
@@ -141,7 +143,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         .as_deref()
         .unwrap_or(user_response.user.username.as_str());
 
-    let selected_team = select_team(&teams_response.teams, user_display_name)?;
+    let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
 
     let team_id = match selected_team {
         SelectedTeam::User => user_response.user.id.as_str(),
@@ -171,7 +173,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
 {}
     ",
         base.ui.rainbow(">>> Success!"),
-        chosen_team_name,
+        base.ui.apply(BOLD.apply_to(chosen_team_name)),
         GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`")
     );
     Ok(())
@@ -189,7 +191,7 @@ fn should_enable_caching() -> Result<bool> {
 }
 
 #[cfg(test)]
-fn select_team<'a>(teams: &'a [Team], _: &'a str) -> Result<SelectedTeam<'a>> {
+fn select_team<'a>(_: &CommandBase, teams: &'a [Team], _: &'a str) -> Result<SelectedTeam<'a>> {
     let mut rng = rand::thread_rng();
     let idx = rng.gen_range(0..=(teams.len()));
     if idx == teams.len() {
@@ -200,16 +202,33 @@ fn select_team<'a>(teams: &'a [Team], _: &'a str) -> Result<SelectedTeam<'a>> {
 }
 
 #[cfg(not(test))]
-fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
+fn select_team<'a>(
+    base: &CommandBase,
+    teams: &'a [Team],
+    user_display_name: &'a str,
+) -> Result<SelectedTeam<'a>> {
     let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
 
     let theme = ColorfulTheme {
         active_item_style: Style::new().cyan().bold(),
         active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
+        prompt_prefix: Style::new().dim().bold().apply_to("?".to_string()),
+        values_style: Style::new().cyan(),
         ..ColorfulTheme::default()
     };
-    let selection = Select::with_theme(&theme)
+
+    let prompt = format!(
+        "{}\n  {}",
+        base.ui.apply(BOLD.apply_to(
+            "Which Vercel scope (and Remote Cache) do you want associated with this Turborepo?",
+        )),
+        base.ui
+            .apply(CYAN.apply_to("[Use arrows to move, type to filter]"))
+    );
+
+    let selection = FuzzySelect::with_theme(&theme)
+        .with_prompt(prompt)
         .items(&team_names)
         .default(0)
         .interact()?;
