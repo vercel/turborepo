@@ -71,16 +71,6 @@ const cwd = process.cwd();
         } finally {
           publishSema.release();
         }
-        // lerna publish in next step will fail if git status is not clean
-        // await execa(
-        //   `git`,
-        //   [
-        //     "update-index",
-        //     "--skip-worktree",
-        //     `${path.join(nativePackagesDir, platform, "package.json")}`,
-        //   ],
-        //   { stdio: "inherit" }
-        // );
       })
     );
 
@@ -135,26 +125,32 @@ const cwd = process.cwd();
     // );
 
     // Update optional dependencies versions
-    let nextPkg = JSON.parse(
-      await readFile(path.join(cwd, "packages/next-rs/package.json"))
+    let nextRsPath = path.join(cwd, "packages/next-rs");
+    let nextRsPkg = JSON.parse(
+      await readFile(path.join(nextRsPath, "package.json"))
     );
     for (let platform of platforms) {
-      let optionalDependencies = nextPkg.optionalDependencies || {};
+      let optionalDependencies = nextRsPkg.optionalDependencies || {};
       optionalDependencies["@next/rs-" + platform] = version;
-      nextPkg.optionalDependencies = optionalDependencies;
+      nextRsPkg.optionalDependencies = optionalDependencies;
     }
+    nextRsPkg.version = version;
     await writeFile(
-      path.join(path.join(cwd, "packages/next-rs/package.json")),
-      JSON.stringify(nextPkg, null, 2)
+      path.join(path.join(nextRsPath, "package.json")),
+      JSON.stringify(nextRsPkg, null, 2)
     );
-    // lerna publish in next step will fail if git status is not clean
-    // await execa(
-    //   "git",
-    //   ["update-index", "--skip-worktree", "packages/next/package.json"],
-    //   {
-    //     stdio: "inherit",
-    //   }
-    // );
+    await execa(
+      `npm`,
+      [
+        `publish`,
+        `${nextRsPath}`,
+        `--access`,
+        `public`,
+        `--tag canary`,
+        //...(version.includes("canary") ? ["--tag", "canary"] : []),
+      ],
+      { stdio: "inherit" }
+    );
   } catch (err) {
     console.error(err);
     process.exit(1);
