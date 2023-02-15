@@ -4,6 +4,15 @@ export type Schema = RootSchema | WorkspaceSchema;
 export interface BaseSchema {
   /** @default https://turbo.build/schema.json */
   $schema?: string;
+  /**
+   * An object representing the task dependency graph of your project. turbo interprets
+   * these conventions to schedule, execute, and cache the outputs of tasks in
+   * your project.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
+   *
+   * @default {}
+   */
   pipeline: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace
