@@ -92,6 +92,7 @@ enum RouterIncomingMessage {
     FullMiddleware {
         data: FullMiddlewareResponse,
     },
+    None,
     Error(StructuredError),
 }
 
@@ -100,6 +101,7 @@ enum RouterIncomingMessage {
 pub enum RouterResult {
     Rewrite(RewriteResponse),
     FullMiddleware(FullMiddlewareResponse),
+    None,
     Error,
 }
 
@@ -108,6 +110,7 @@ impl From<RouterIncomingMessage> for RouterResult {
         match value {
             RouterIncomingMessage::Rewrite { data } => Self::Rewrite(data),
             RouterIncomingMessage::FullMiddleware { data } => Self::FullMiddleware(data),
+            RouterIncomingMessage::None => Self::None,
             _ => Self::Error,
         }
     }
@@ -131,7 +134,7 @@ async fn extra_configs(
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .as_ecmascript_chunk_placeable();
     Ok(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]))
@@ -144,7 +147,7 @@ fn route_executor(context: AssetContextVc, project_path: FileSystemPathVc) -> As
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .into()
 }

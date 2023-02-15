@@ -40,6 +40,7 @@ use turbopack::{
 use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
+    compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueReporter, IssueSeverity, IssueVc},
@@ -255,6 +256,7 @@ async fn input_to_modules<'a>(
         )),
         Value::new(EnvironmentIntention::Api),
     );
+    let compile_time_info = CompileTimeInfo { environment: env }.cell();
     let glob_mappings = vec![
         (
             root,
@@ -269,7 +271,7 @@ async fn input_to_modules<'a>(
     ];
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
-        env,
+        compile_time_info,
         ModuleOptionsContext {
             enable_types: true,
             enable_mdx,
@@ -488,12 +490,6 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     let dir = current_dir().unwrap();
     let tt = create_tt();
     let task = tt.spawn_root_task(move || {
-        let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
-            current_dir: dir.clone(),
-            show_all,
-            log_detail,
-            log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
-        }));
         let dir = dir.clone();
         let args = args.clone();
         let sender = sender.clone();
@@ -505,6 +501,13 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
                 .await?
                 .strongly_consistent()
                 .await?;
+
+            let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
+                current_dir: dir.clone(),
+                show_all,
+                log_detail,
+                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
+            }));
             console_ui
                 .as_issue_reporter()
                 .report_issues(TransientInstance::new(issues), source);
