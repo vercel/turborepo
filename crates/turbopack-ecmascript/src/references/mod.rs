@@ -231,7 +231,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
             let pos = program.span().lo;
             let is_inside_node_modules = *path.contains("node_modules").await?;
-            if analyze_types && !is_inside_node_modules {
+            if analyze_types {
                 if let Some(comments) = comments.leading.get(&pos) {
                     for comment in comments.iter() {
                         if let CommentKind::Line = comment.kind {
