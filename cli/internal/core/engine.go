@@ -157,7 +157,13 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	tasksOnly := options.TasksOnly
 
 	traversalQueue := []string{}
-	missing := make(util.Set)
+
+	// make a map of taskNames passed in
+	missing := map[string]bool{}
+	for _, taskName := range taskNames {
+		missing[taskName] = true
+	}
+
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
@@ -172,7 +178,6 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 					var e *MissingTaskError
 					if errors.As(err, &e) {
-						missing.Add(taskName)
 						// Initially, non-package tasks are not required to exist, as long as some
 						// package in the list packages defines it as a package-task. Dependencies
 						// *are* required to have a definition.
@@ -181,7 +186,8 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 					return err
 				}
-
+				// delete Taskanem if it was found
+				delete(missing, taskName)
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
@@ -190,7 +196,10 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	visited := make(util.Set)
 
 	// validate that all tasks passed were found
-	missingList := missing.UnsafeListOfStrings()
+	missingList := []string{}
+	for t := range missing {
+		missingList = append(missingList, t)
+	}
 	sort.Strings(missingList)
 
 	if len(missingList) > 0 {
