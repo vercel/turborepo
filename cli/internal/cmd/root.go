@@ -9,7 +9,6 @@ import (
 	"runtime/trace"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turbo/cli/internal/cmd/auth"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/process"
