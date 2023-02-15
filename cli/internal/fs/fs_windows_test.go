@@ -13,6 +13,6 @@ func TestDifferentVolumes(t *testing.T) {
 		t.Errorf("DirContainsPath got error %v, want <nil>", err)
 	}
 	if contains {
-		t.Errof("DirContainsPath got true, want false")
+		t.Errorf("DirContainsPath got true, want false")
 	}
 }
