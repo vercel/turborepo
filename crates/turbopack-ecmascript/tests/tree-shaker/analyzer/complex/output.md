@@ -431,67 +431,106 @@ graph TD
 
 ```js
 "turbopack://chunk-0.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
-("module evaluation");
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
+"module evaluation";
+
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-10.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
 function getDog() {
-  return dog;
+    return dog;
 }
 function setDog(newDog) {
-  dog = newDog;
+    dog = newDog;
 }
 export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
+    initial: dog,
+    get: getDog,
+    set: setDog
 };
 export { dogRef };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-12.js";
+import "turbopack://chunk-12.js" assert {
+    __turbopack_chunk__: 12
+};
 export { cat };
+
 ```
 
 ## Module 4
 
 ```js
 "turbopack://chunk-3.js";
-import "turbopack://chunk-12.js";
+import "turbopack://chunk-12.js" assert {
+    __turbopack_chunk__: 12
+};
 export const initialCat = cat;
 export { initialCat };
+
 ```
 
 ## Module 5
 
 ```js
 "turbopack://chunk-4.js";
-import "turbopack://chunk-12.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-10.js";
+import "turbopack://chunk-12.js" assert {
+    __turbopack_chunk__: 12
+};
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
 export function getChimera() {
-  return cat + dog;
+    return cat + dog;
 }
 export { getChimera };
+
 ```
 
 ## Module 6
@@ -505,63 +544,111 @@ let dog = "dog";
 
 ```js
 "turbopack://chunk-6.js";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
 dog += "!";
+
 ```
 
 ## Module 8
 
 ```js
 "turbopack://chunk-7.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
 console.log(dog);
+
 ```
 
 ## Module 9
 
 ```js
 "turbopack://chunk-8.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 dog += "!";
+
 ```
 
 ## Module 10
 
 ```js
 "turbopack://chunk-9.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 console.log(dog);
+
 ```
 
 ## Module 11
 
 ```js
 "turbopack://chunk-10.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-9.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
 dog += "!";
+
 ```
 
 ## Module 12
 
 ```js
 "turbopack://chunk-11.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-10.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 console.log(dog);
+
 ```
 
 ## Module 13
@@ -598,68 +685,103 @@ console.log(dog);
 
 ```js
 "turbopack://chunk-0.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
 console.log(dog);
 console.log(dog);
 console.log(dog);
-("module evaluation");
+"module evaluation";
+
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
 function getDog() {
-  return dog;
+    return dog;
 }
 function setDog(newDog) {
-  dog = newDog;
+    dog = newDog;
 }
 export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
+    initial: dog,
+    get: getDog,
+    set: setDog
 };
 export { dogRef };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-9.js";
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
 export { cat };
+
 ```
 
 ## Module 4
 
 ```js
 "turbopack://chunk-3.js";
-import "turbopack://chunk-9.js";
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
 export const initialCat = cat;
 export { initialCat };
+
 ```
 
 ## Module 5
 
 ```js
 "turbopack://chunk-4.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
 export function getChimera() {
-  return cat + dog;
+    return cat + dog;
 }
 export { getChimera };
+
 ```
 
 ## Module 6
@@ -673,27 +795,42 @@ let dog = "dog";
 
 ```js
 "turbopack://chunk-6.js";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
 dog += "!";
+
 ```
 
 ## Module 8
 
 ```js
 "turbopack://chunk-7.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
 dog += "!";
+
 ```
 
 ## Module 9
 
 ```js
 "turbopack://chunk-8.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 dog += "!";
+
 ```
 
 ## Module 10

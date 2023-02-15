@@ -411,62 +411,103 @@ graph TD
 
 ```js
 "turbopack://chunk-0.js";
-import "turbopack://chunk-10.js";
-import "turbopack://chunk-12.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
+import "turbopack://chunk-12.js" assert {
+    __turbopack_chunk__: 12
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
 import "module";
 console.log(foobarCopy);
 import "other";
-("module evaluation");
+"module evaluation";
+
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-12.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
+import "turbopack://chunk-12.js" assert {
+    __turbopack_chunk__: 12
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
 export function external1() {
-  return internal() + foobar;
+    return internal() + foobar;
 }
 export { external1 };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
 export { foobar };
+
 ```
 
 ## Module 4
 
 ```js
 "turbopack://chunk-3.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 export { foo };
+
 ```
 
 ## Module 5
 
 ```js
 "turbopack://chunk-4.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-10.js";
-import "turbopack://chunk-11.js";
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
 export function external2() {
-  foobar += ".";
+    foobar += ".";
 }
 export { external2 };
+
 ```
 
 ## Module 6
@@ -487,8 +528,11 @@ export let foobar = "foo";
 
 ```js
 "turbopack://chunk-7.js";
-import "turbopack://chunk-6.js";
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
 export const foo = foobar;
+
 ```
 
 ## Module 9
@@ -502,43 +546,73 @@ const bar = "bar";
 
 ```js
 "turbopack://chunk-9.js";
-import "turbopack://chunk-8.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 foobar += bar;
+
 ```
 
 ## Module 11
 
 ```js
 "turbopack://chunk-10.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
 let foobarCopy = foobar;
+
 ```
 
 ## Module 12
 
 ```js
 "turbopack://chunk-11.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-10.js";
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-10.js" assert {
+    __turbopack_chunk__: 10
+};
 foobar += "foo";
+
 ```
 
 ## Module 13
 
 ```js
 "turbopack://chunk-12.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-9.js";
-import "turbopack://chunk-11.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-9.js" assert {
+    __turbopack_chunk__: 9
+};
+import "turbopack://chunk-11.js" assert {
+    __turbopack_chunk__: 11
+};
 function internal() {
-  return upper(foobar);
+    return upper(foobar);
 }
+
 ```
 
 ## Merged (module eval)
@@ -574,49 +648,71 @@ console.log(foobarCopy);
 
 ```js
 "turbopack://chunk-0.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 import "module";
 let foobarCopy = foobar;
 console.log(foobarCopy);
 import "other";
-("module evaluation");
+"module evaluation";
+
 ```
 
 ## Module 2
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
 export function external1() {
-  return internal() + foobar;
+    return internal() + foobar;
 }
 import { upper } from "module";
 function internal() {
-  return upper(foobar);
+    return upper(foobar);
 }
 export { external1 };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-7.js";
-import "turbopack://chunk-8.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
+import "turbopack://chunk-8.js" assert {
+    __turbopack_chunk__: 8
+};
 export { foobar };
+
 ```
 
 ## Module 4
 
 ```js
 "turbopack://chunk-3.js";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
 export const foo = foobar;
 export { foo };
+
 ```
 
 ## Module 5
@@ -647,18 +743,28 @@ const bar = "bar";
 
 ```js
 "turbopack://chunk-7.js";
-import "turbopack://chunk-6.js";
-import "turbopack://chunk-5.js";
+import "turbopack://chunk-6.js" assert {
+    __turbopack_chunk__: 6
+};
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
 foobar += bar;
+
 ```
 
 ## Module 9
 
 ```js
 "turbopack://chunk-8.js";
-import "turbopack://chunk-5.js";
-import "turbopack://chunk-7.js";
+import "turbopack://chunk-5.js" assert {
+    __turbopack_chunk__: 5
+};
+import "turbopack://chunk-7.js" assert {
+    __turbopack_chunk__: 7
+};
 foobar += "foo";
+
 ```
 
 ## Merged (module eval)

@@ -140,19 +140,25 @@ graph TD
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-3.js";
+import "turbopack://chunk-3.js" assert {
+    __turbopack_chunk__: 3
+};
 export const DOG = dog;
 export { DOG };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-3.js";
+import "turbopack://chunk-3.js" assert {
+    __turbopack_chunk__: 3
+};
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
+
 ```
 
 ## Module 4
@@ -182,19 +188,25 @@ const dog = "dog";
 
 ```js
 "turbopack://chunk-1.js";
-import "turbopack://chunk-3.js";
+import "turbopack://chunk-3.js" assert {
+    __turbopack_chunk__: 3
+};
 export const DOG = dog;
 export { DOG };
+
 ```
 
 ## Module 3
 
 ```js
 "turbopack://chunk-2.js";
-import "turbopack://chunk-3.js";
+import "turbopack://chunk-3.js" assert {
+    __turbopack_chunk__: 3
+};
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
+
 ```
 
 ## Module 4
