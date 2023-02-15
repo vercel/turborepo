@@ -1,0 +1,35 @@
+---
+title: Ignoring tasks
+description: Never do the same work twice.
+---
+
+# Ignoring Tasks
+
+[Build caching](/repo/docs/core-concepts/caching) will dramatically speed up your build pipelines - but you can do even better by using `npx turbo-ignore`. If your workspace is unaffected by your code changes, you can completely ignore executing a task altogether.
+
+## Using `turbo-ignore`
+
+To skip unaffected work with `npx turbo-ignore`, all you'll need is to make sure your git history is available.
+
+By default, `turbo-ignore` will run the build task in your current working directory. Under the hood, `turbo-ignore` compares the output of `--dry=json` from your previous commit to your current commit.
+
+Here's an example of the command that it will build:
+
+```bash
+npx turbo run build --filter=@example/web...[3c8387ffd98b751305fe3f0284befdd00cbd4610] --dry=json
+```
+
+Note that this command does not _execute_ the build task. Instead, it checks if a **dry run** of a build is different from the **dry run** of the task from the previous commit.
+
+## Customizing behavior
+
+If you'd like to change the default behavior, there are a few arguments available.
+
+- `--workspace`: Runs `turbo-ignore` in the workspace with the name provided
+- `--task`: Runs `turbo-ignore` with the specified task
+- `--directory`: Specify a directory to run `turbo-ignore` in
+- `--fallback`: A ref/head to compare against if no previously deployed SHA is available
+
+## Using `turbo-ignore` on Vercel
+
+To use `npx turbo-ignore` on Vercel, you can use the [Ignored Build Step](https://vercel.com/docs/concepts/projects/overview#ignored-build-step) feature. Vercel will automatically infer the correct arguments to successfully run `turbo-ignore`.
