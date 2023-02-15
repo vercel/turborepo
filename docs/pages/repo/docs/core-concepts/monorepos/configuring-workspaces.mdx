@@ -8,12 +8,12 @@ import Callout from "../../../../../components/Callout";
 # Configuring Workspaces
 
 Most monorepos can declare a `turbo.json` in the root directory with a uniform
-set of tasks that apply to all workspaces. But sometimes, a monorepo can contain
+[pipeline][2] that apply to all workspaces. Sometimes, a monorepo can contain
 workspaces that need to configure their tasks differently. To accommodate this,
 Turborepo enables you to extend the root configuration with a `turbo.json` in
 any workspace. This flexibility enables a more diverse set of apps and packages
 to co-exist, and allows workspace owners to maintain specialized tasks and
-configuration without affecting other inhabitants of the monorepo.
+configuration without affecting other apps and packages of the monorepo.
 
 ## How it Works
 
@@ -64,8 +64,8 @@ with a single `turbo.json` at the root like this:
 }
 ```
 
-But notice that both `.next/**` and `.svelte-kit/**` need to be specified as
-outputs, even though Next.js apps do not generate a `.svelte-kit` directory, and
+Notice that both `.next/**` and `.svelte-kit/**` need to be specified as
+[outputs][7], even though Next.js apps do not generate a `.svelte-kit` directory, and
 vice versa. With Workspace Configurations, you can instead add custom
 configuration in the SvelteKit workspace in `apps/my-svelte-kit-app/turbo.json`:
 
@@ -146,18 +146,18 @@ and remove it from the root:
 Now, the owners of `my-app`, can have full ownership over their `build` task,
 but continue to inherit any other tasks defined at the root.
 
-## Comparison to workspace-tasks defined in root `turbo.json`
+## Comparison to Workspace-specific tasks defined in root `turbo.json`
 
 At first glance, Workspace Configurations may sound a lot like the
 [`workspace#task` syntax][3] in the root `turbo.json`. The features are
-similar, but have one significant difference: when you declare a workspace-task
-in the root ` turbo.json``, it _completely_ overwrites the baseline task
-configuration. With a Workspace Config, the task configuration is merged
+similar, but have one significant difference: when you declare a Workspace-specific
+in the root `turbo.json`, it _completely_ overwrites the baseline task
+configuration. With a Workspace Configuration, the task configuration is merged
 instead.
 
 Consider the example of the monorepo with multiple Next.js apps and a Sveltekit
-app again. Without a workspace task, you might configure your root `turbo.json`
-like this:
+app again. Without a Workspace-specific task, you might configure your root
+`turbo.json` like this:
 
 ```jsonc filename="turbo.json"
 {
@@ -178,13 +178,13 @@ like this:
 
 This works, but it's important to understand that the `my-sveltekit-app#build`
 completely ovewrites `build` for the Sveltekit app. Any other config (such as
-`outputMode`) in the `build` config would need to be duplicated. With Workspace
+`outputMode`) in the `build` task would need to be duplicated. With Workspace
 Configurations, you don't need to duplicate any configuration. Just override
 what needs to be changed.
 
 <Callout type="info">
-  Although there are no plans to remove Workspace-Specific Task configurations,
-  we expect that Workspace Config can be used for most use cases instead.
+  Although there are no plans to remove Workspace-specific task configurations,
+  we expect that Workspace Configurations can be used for most use cases instead.
 </Callout>
 
 ## Limitations
@@ -196,8 +196,30 @@ they are intentional, rather than accidental:
 
 - Workspace Configurations cannot use [the `workspace#task` syntax][3]
 
-  The `workspace` is inferred based on the location of the config, and it is not
-  possible to change configuration for another workspace.
+  The `workspace` is inferred based on the _location_ of the config, and it is
+  not possible to change configuration for another workspace. For example, in a
+  Workspace Configuration for 'my-nextjs-app':
+
+  ```jsonc filename="apps/my-nextjs-app/turbo.json"
+  {
+    "pipeline": {
+      "my-nextjs-app#build": {
+        // ❌ This is not allowed. Even though it's
+        // referencing the correct workspace, "my-nextjs-app"
+        // is inferred, and we don't need to specify it again.
+        // This syntax also has different behavior, so we do not want to allow it.
+        // (see "Comparison to Workspace-specific tasks" section)
+      },
+      "my-sveltekit-app#build": {
+        // ❌ Changing configuration for the "my-sveltekit-app" workspace
+        // from Workspace Configuraton in "my-nextjs-app" is not allowed.
+      },
+      "build": {
+        // ✅ just use the task name!
+      },
+    }
+  }
+  ```
 
 - Workspace Configurations cannot override anything outside the `pipeline` key.
 
@@ -224,3 +246,4 @@ considered before running the `build` task.
 [4]: https://github.com/vercel/turbo/issues/new
 [5]: https://nextjs.org
 [6]: https://kit.svelte.dev/
+[7]: /repo/docs/reference/configuration#outputs
