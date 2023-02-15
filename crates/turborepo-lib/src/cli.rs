@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, link, login, logout, CommandBase},
+    commands::{bin, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -477,10 +477,23 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Unlink { .. }
-        | Command::Daemon { .. }
-        | Command::Prune { .. }
-        | Command::Run(_) => Ok(Payload::Go(Box::new(clap_args))),
+        Command::Unlink { .. } => {
+            if clap_args.test_run {
+                println!("Unlink test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+
+            if let Err(err) = unlink::unlink(&mut base) {
+                error!("error: {}", err.to_string())
+            };
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Daemon { .. } | Command::Prune { .. } | Command::Run(_) => {
+            Ok(Payload::Go(Box::new(clap_args)))
+        }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 

@@ -17,6 +17,7 @@ pub(crate) mod bin;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod unlink;
 
 pub struct CommandBase {
     pub repo_root: PathBuf,
@@ -48,6 +49,18 @@ impl CommandBase {
 
         self.repo_config.set(repo_config)?;
 
+        Ok(())
+    }
+
+    // NOTE: This deletes the repo config file. It does *not* remove the
+    // `RepoConfig` struct from `CommandBase`. This is fine because we
+    // currently do not have any commands that delete the repo config file
+    // and then attempt to read from it.
+    pub fn delete_repo_config(&mut self) -> Result<()> {
+        let repo_config_path = get_repo_config_path(&self.repo_root);
+        if repo_config_path.exists() {
+            std::fs::remove_file(repo_config_path)?;
+        }
         Ok(())
     }
 
