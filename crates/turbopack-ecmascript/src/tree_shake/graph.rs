@@ -11,8 +11,9 @@ use swc_core::{
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, ImportDecl, ImportSpecifier, Module, ModuleDecl, ModuleExportName,
-            ModuleItem, NamedExport, Stmt, VarDecl,
+            FnDecl, Id, Ident, ImportDecl, ImportSpecifier, KeyValueProp, Module, ModuleDecl,
+            ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
+            Stmt, VarDecl,
         },
         atoms::js_word,
         utils::find_pat_ids,
@@ -225,7 +226,16 @@ impl DepGraph {
                         specifiers,
                         src: box format!("turbopack://chunk-{}.js", dep).into(),
                         type_only: false,
-                        asserts: None,
+                        asserts: Some(box ObjectLit {
+                            span: DUMMY_SP,
+                            props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+                                key: PropName::Ident(Ident::new(
+                                    "__turbopack_chunk__".into(),
+                                    DUMMY_SP,
+                                )),
+                                value: (dep as f64).into(),
+                            }))],
+                        }),
                     })));
             }
 
