@@ -243,6 +243,10 @@
 <span id="243">243</span>
 <span id="244">244</span>
 <span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -261,6 +265,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
+    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
     resolve::{parse::RequestVc, pattern::Pattern},
@@ -284,19 +289,22 @@
 };
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_client_environment(browserslist_query: <span class="kw-2">&amp;</span>str) -&gt; EnvironmentVc {
-    EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::Browser(
-            BrowserEnvironment {
-                dom: <span class="bool-val">true</span>,
-                web_worker: <span class="bool-val">false</span>,
-                service_worker: <span class="bool-val">false</span>,
-                browserslist_query: browserslist_query.to_owned(),
-            }
-            .into(),
-        )),
-        Value::new(EnvironmentIntention::Client),
-    )
+</span><span class="kw">pub fn </span>get_client_compile_time_info(browserslist_query: <span class="kw-2">&amp;</span>str) -&gt; CompileTimeInfoVc {
+    CompileTimeInfo {
+        environment: EnvironmentVc::new(
+            Value::new(ExecutionEnvironment::Browser(
+                BrowserEnvironment {
+                    dom: <span class="bool-val">true</span>,
+                    web_worker: <span class="bool-val">false</span>,
+                    service_worker: <span class="bool-val">false</span>,
+                    browserslist_query: browserslist_query.to_owned(),
+                }
+                .into(),
+            )),
+            Value::new(EnvironmentIntention::Client),
+        ),
+    }
+    .cell()
 }
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -390,7 +398,7 @@
 </span><span class="kw">pub fn </span>get_client_asset_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
 ) -&gt; AssetContextVc {
@@ -398,14 +406,14 @@
     <span class="kw">let </span>module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
-        environment,
+        compile_time_info.environment(),
         ty,
         next_config,
     );
 
     <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
-        environment,
+        compile_time_info,
         module_options_context,
         resolve_options_context,
     )

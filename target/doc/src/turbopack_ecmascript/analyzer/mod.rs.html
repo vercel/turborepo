@@ -2862,6 +2862,12 @@
 <span id="2862">2862</span>
 <span id="2863">2863</span>
 <span id="2864">2864</span>
+<span id="2865">2865</span>
+<span id="2866">2866</span>
+<span id="2867">2867</span>
+<span id="2868">2868</span>
+<span id="2869">2869</span>
+<span id="2870">2870</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::Display,
@@ -5361,7 +5367,7 @@
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">use </span>anyhow::Result;
-    <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
+    <span class="kw">use </span>turbopack_core::compile_time_info::CompileTimeInfoVc;
 
     <span class="kw">use super</span>::{
         builtin::early_replace_builtin, well_known::replace_well_known, FreeVarKind, JsValue,
@@ -5374,7 +5380,10 @@
         <span class="prelude-val">Ok</span>((v, m))
     }
 
-    <span class="kw">pub async fn </span>visitor(v: JsValue, environment: EnvironmentVc) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
+    <span class="kw">pub async fn </span>visitor(
+        v: JsValue,
+        compile_time_info: CompileTimeInfoVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>new_value = <span class="kw">match </span>v {
             JsValue::Call(
                 <span class="kw">_</span>,
@@ -5409,7 +5418,7 @@
                 <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>((v, <span class="bool-val">false</span>)),
             },
             <span class="kw">_ </span>=&gt; {
-                <span class="kw">let </span>(<span class="kw-2">mut </span>v, m1) = replace_well_known(v, environment).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(<span class="kw-2">mut </span>v, m1) = replace_well_known(v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>m2 = replace_builtin(<span class="kw-2">&amp;mut </span>v);
                 <span class="kw">let </span>m = m1 || m2 || v.make_nested_operations_unknown();
                 <span class="kw">return </span><span class="prelude-val">Ok</span>((v, m));
@@ -5434,6 +5443,7 @@
     };
     <span class="kw">use </span>turbo_tasks::{util::FormatDuration, Value};
     <span class="kw">use </span>turbopack_core::{
+        compile_time_info::CompileTimeInfo,
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -5695,33 +5705,35 @@
     }
 
     <span class="kw">async fn </span>resolve(var_graph: <span class="kw-2">&amp;</span>VarGraph, val: JsValue) -&gt; JsValue {
-        turbo_tasks_testing::VcStorage::with(link(
-            var_graph,
-            val,
-            <span class="kw-2">&amp;</span><span class="kw">super</span>::test_utils::early_visitor,
-            <span class="kw-2">&amp;</span>(|val| {
-                Box::pin(<span class="kw">super</span>::test_utils::visitor(
-                    val,
-                    EnvironmentVc::new(
-                        Value::new(ExecutionEnvironment::NodeJsLambda(
-                            NodeJsEnvironment {
-                                compile_target: CompileTarget {
-                                    arch: Arch::X64,
-                                    platform: Platform::Linux,
-                                    endianness: Endianness::Little,
-                                    libc: Libc::Glibc,
-                                }
-                                .into(),
-                                ..Default::default()
+        turbo_tasks_testing::VcStorage::with(<span class="kw">async </span>{
+            <span class="kw">let </span>compile_time_info = CompileTimeInfo {
+                environment: EnvironmentVc::new(
+                    Value::new(ExecutionEnvironment::NodeJsLambda(
+                        NodeJsEnvironment {
+                            compile_target: CompileTarget {
+                                arch: Arch::X64,
+                                platform: Platform::Linux,
+                                endianness: Endianness::Little,
+                                libc: Libc::Glibc,
                             }
                             .into(),
-                        )),
-                        Value::new(EnvironmentIntention::ServerRendering),
-                    ),
-                ))
-            }),
-            Default::default(),
-        ))
+                            ..Default::default()
+                        }
+                        .into(),
+                    )),
+                    Value::new(EnvironmentIntention::ServerRendering),
+                ),
+            }
+            .cell();
+            link(
+                var_graph,
+                val,
+                <span class="kw-2">&amp;</span><span class="kw">super</span>::test_utils::early_visitor,
+                <span class="kw-2">&amp;</span>(|val| Box::pin(<span class="kw">super</span>::test_utils::visitor(val, compile_time_info))),
+                Default::default(),
+            )
+            .<span class="kw">await
+        </span>})
         .<span class="kw">await
         </span>.unwrap()
     }

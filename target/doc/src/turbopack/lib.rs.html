@@ -657,8 +657,8 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
+    compile_time_info::CompileTimeInfoVc,
     context::{AssetContext, AssetContextVc},
-    environment::EnvironmentVc,
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
     reference::all_referenced_assets,
     reference_type::ReferenceType,
@@ -741,7 +741,7 @@
             context.into(),
             Value::new(EcmascriptModuleAssetType::Ecmascript),
             <span class="kw-2">*</span>transforms,
-            context.environment(),
+            context.compile_time_info(),
         )
         .into(),
         ModuleType::Typescript(transforms) =&gt; EcmascriptModuleAssetVc::new(
@@ -749,7 +749,7 @@
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             <span class="kw-2">*</span>transforms,
-            context.environment(),
+            context.compile_time_info(),
         )
         .into(),
         ModuleType::TypescriptWithTypes(transforms) =&gt; EcmascriptModuleAssetVc::new(
@@ -757,7 +757,7 @@
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             <span class="kw-2">*</span>transforms,
-            context.environment(),
+            context.compile_time_info(),
         )
         .into(),
         ModuleType::TypescriptDeclaration(transforms) =&gt; EcmascriptModuleAssetVc::new(
@@ -765,7 +765,7 @@
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             <span class="kw-2">*</span>transforms,
-            context.environment(),
+            context.compile_time_info(),
         )
         .into(),
         ModuleType::Json =&gt; JsonModuleAssetVc::new(source).into(),
@@ -871,7 +871,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ModuleAssetContext {
     transitions: TransitionsByNameVc,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
     module_options_context: ModuleOptionsContextVc,
     resolve_options_context: ResolveOptionsContextVc,
     transition: <span class="prelude-ty">Option</span>&lt;TransitionVc&gt;,
@@ -882,13 +882,13 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
         transitions: TransitionsByNameVc,
-        environment: EnvironmentVc,
+        compile_time_info: CompileTimeInfoVc,
         module_options_context: ModuleOptionsContextVc,
         resolve_options_context: ResolveOptionsContextVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(ModuleAssetContext {
             transitions,
-            environment,
+            compile_time_info,
             module_options_context,
             resolve_options_context,
             transition: <span class="prelude-val">None</span>,
@@ -898,14 +898,14 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new_transition(
         transitions: TransitionsByNameVc,
-        environment: EnvironmentVc,
+        compile_time_info: CompileTimeInfoVc,
         module_options_context: ModuleOptionsContextVc,
         resolve_options_context: ResolveOptionsContextVc,
         transition: TransitionVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(ModuleAssetContext {
             transitions,
-            environment,
+            compile_time_info,
             module_options_context,
             resolve_options_context,
             transition: <span class="prelude-val">Some</span>(transition),
@@ -938,7 +938,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ModuleAssetContextVc::new(
             this.transitions,
-            this.environment,
+            this.compile_time_info,
             this.module_options_context,
             resolve_options_context,
         ))
@@ -948,8 +948,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>AssetContext <span class="kw">for </span>ModuleAssetContext {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>environment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvironmentVc {
-        <span class="self">self</span>.environment
+    </span><span class="kw">fn </span>compile_time_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompileTimeInfoVc {
+        <span class="self">self</span>.compile_time_info
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -1017,14 +1017,14 @@
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) = this.transition {
             <span class="kw">let </span>asset = transition.process_source(asset);
-            <span class="kw">let </span>environment = transition.process_environment(this.environment);
+            <span class="kw">let </span>compile_time_info = transition.process_compile_time_info(this.compile_time_info);
             <span class="kw">let </span>module_options_context =
                 transition.process_module_options_context(this.module_options_context);
             <span class="kw">let </span>resolve_options_context =
                 transition.process_resolve_options_context(this.resolve_options_context);
             <span class="kw">let </span>context = ModuleAssetContextVc::new(
                 this.transitions,
-                environment,
+                compile_time_info,
                 module_options_context,
                 resolve_options_context,
             );
@@ -1033,7 +1033,7 @@
         } <span class="kw">else </span>{
             <span class="kw">let </span>context = ModuleAssetContextVc::new(
                 this.transitions,
-                this.environment,
+                this.compile_time_info,
                 this.module_options_context,
                 this.resolve_options_context,
             );
@@ -1047,7 +1047,7 @@
             <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) = <span class="self">self</span>.transitions.<span class="kw">await</span><span class="question-mark">?</span>.get(transition) {
                 ModuleAssetContextVc::new_transition(
                     <span class="self">self</span>.transitions,
-                    <span class="self">self</span>.environment,
+                    <span class="self">self</span>.compile_time_info,
                     <span class="self">self</span>.module_options_context,
                     <span class="self">self</span>.resolve_options_context,
                     <span class="kw-2">*</span>transition,
@@ -1057,7 +1057,7 @@
                 <span class="comment">// TODO report issue
                 </span>ModuleAssetContextVc::new(
                     <span class="self">self</span>.transitions,
-                    <span class="self">self</span>.environment,
+                    <span class="self">self</span>.compile_time_info,
                     <span class="self">self</span>.module_options_context,
                     <span class="self">self</span>.resolve_options_context,
                 )

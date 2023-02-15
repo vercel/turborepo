@@ -79,6 +79,9 @@
 <span id="79">79</span>
 <span id="80">80</span>
 <span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
@@ -90,7 +93,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    environment::EnvironmentVc,
+    compile_time_info::CompileTimeInfoVc,
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceableVc;
@@ -101,7 +104,7 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextLayoutEntryTransition {
-    <span class="kw">pub </span>rsc_environment: EnvironmentVc,
+    <span class="kw">pub </span>rsc_compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>rsc_module_options_context: ModuleOptionsContextVc,
     <span class="kw">pub </span>rsc_resolve_options_context: ResolveOptionsContextVc,
     <span class="kw">pub </span>server_root: FileSystemPathVc,
@@ -119,8 +122,11 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>process_environment(<span class="kw-2">&amp;</span><span class="self">self</span>, _environment: EnvironmentVc) -&gt; EnvironmentVc {
-        <span class="self">self</span>.rsc_environment
+    </span><span class="kw">fn </span>process_compile_time_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _compile_time_info: CompileTimeInfoVc,
+    ) -&gt; CompileTimeInfoVc {
+        <span class="self">self</span>.rsc_compile_time_info
     }
 
     <span class="attr">#[turbo_tasks::function]

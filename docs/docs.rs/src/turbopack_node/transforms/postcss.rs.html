@@ -392,7 +392,7 @@
                         context,
                         Value::new(EcmascriptModuleAssetType::Ecmascript),
                         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
-                        context.environment(),
+                        context.compile_time_info(),
                     )
                     .as_ecmascript_chunk_placeable()
                 }),
@@ -423,7 +423,7 @@
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
         InnerAssetsVc::cell(HashMap::from([(<span class="string">&quot;CONFIG&quot;</span>.to_string(), config_asset)])),
     )
     .into()

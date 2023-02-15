@@ -449,8 +449,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
-    environment::EnvironmentVc,
     reference::AssetReferencesVc,
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -495,7 +495,7 @@
     <span class="kw">pub </span>context: AssetContextVc,
     <span class="kw">pub </span>ty: EcmascriptModuleAssetType,
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
-    <span class="kw">pub </span>environment: EnvironmentVc,
+    <span class="kw">pub </span>compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
 }
 
@@ -507,14 +507,14 @@
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,
-        environment: EnvironmentVc,
+        compile_time_info: CompileTimeInfoVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(EcmascriptModuleAsset {
             source,
             context,
             ty: ty.into_value(),
             transforms,
-            environment,
+            compile_time_info,
             inner_assets: <span class="prelude-val">None</span>,
         })
     }
@@ -525,7 +525,7 @@
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,
-        environment: EnvironmentVc,
+        compile_time_info: CompileTimeInfoVc,
         inner_assets: InnerAssetsVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(EcmascriptModuleAsset {
@@ -533,7 +533,7 @@
             context,
             ty: ty.into_value(),
             transforms,
-            environment,
+            compile_time_info,
             inner_assets: <span class="prelude-val">Some</span>(inner_assets),
         })
     }
@@ -555,7 +555,7 @@
             <span class="self">self</span>.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
-            this.environment,
+            this.compile_time_info,
         ))
     }
 

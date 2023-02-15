@@ -97,6 +97,9 @@
 <span id="97">97</span>
 <span id="98">98</span>
 <span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -110,7 +113,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{ChunkableAssetVc, ChunkingContextVc},
-    environment::EnvironmentVc,
+    compile_time_info::CompileTimeInfoVc,
     virtual_asset::VirtualAssetVc,
 };
 
@@ -125,7 +128,7 @@
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextClientTransition {
     <span class="kw">pub </span>is_app: bool,
-    <span class="kw">pub </span>client_environment: EnvironmentVc,
+    <span class="kw">pub </span>client_compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>client_module_options_context: ModuleOptionsContextVc,
     <span class="kw">pub </span>client_resolve_options_context: ResolveOptionsContextVc,
     <span class="kw">pub </span>client_chunking_context: ChunkingContextVc,
@@ -153,8 +156,11 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>process_environment(<span class="kw-2">&amp;</span><span class="self">self</span>, _environment: EnvironmentVc) -&gt; EnvironmentVc {
-        <span class="self">self</span>.client_environment
+    </span><span class="kw">fn </span>process_compile_time_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _compile_time_info: CompileTimeInfoVc,
+    ) -&gt; CompileTimeInfoVc {
+        <span class="self">self</span>.client_compile_time_info
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -719,6 +719,12 @@
 <span id="719">719</span>
 <span id="720">720</span>
 <span id="721">721</span>
+<span id="722">722</span>
+<span id="723">723</span>
+<span id="724">724</span>
+<span id="725">725</span>
+<span id="726">726</span>
+<span id="727">727</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -741,8 +747,9 @@
 };
 <span class="kw">use </span>turbopack_core::{
     chunk::dev::DevChunkingContextVc,
+    compile_time_info::CompileTimeInfoVc,
     context::{AssetContext, AssetContextVc},
-    environment::{EnvironmentVc, ServerAddrVc},
+    environment::ServerAddrVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -773,8 +780,9 @@
     fallback::get_fallback_page,
     next_client::{
         context::{
-            get_client_chunking_context, get_client_environment, get_client_module_options_context,
-            get_client_resolve_options_context, get_client_runtime_entries, ClientContextType,
+            get_client_chunking_context, get_client_compile_time_info,
+            get_client_module_options_context, get_client_resolve_options_context,
+            get_client_runtime_entries, ClientContextType,
         },
         transition::NextClientTransition,
     },
@@ -786,7 +794,7 @@
     next_config::NextConfigVc,
     next_route_matcher::NextParamsMatcherVc,
     next_server::context::{
-        get_server_environment, get_server_module_options_context,
+        get_server_compile_time_info, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
     util::pathname_for_path,
@@ -799,16 +807,20 @@
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    client_environment: EnvironmentVc,
+    client_compile_time_info: CompileTimeInfoVc,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
-    <span class="kw">let </span>client_chunking_context =
-        get_client_chunking_context(project_path, server_root, client_environment, ty);
+    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(
+        project_path,
+        server_root,
+        client_compile_time_info.environment(),
+        ty,
+    );
     <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
-        client_environment,
+        client_compile_time_info.environment(),
         ty,
         next_config,
     );
@@ -822,7 +834,7 @@
         client_chunking_context,
         client_module_options_context,
         client_resolve_options_context,
-        client_environment,
+        client_compile_time_info,
         runtime_entries: client_runtime_entries,
     }
     .cell()
@@ -851,7 +863,7 @@
             ty,
             next_config,
         ),
-        ssr_environment: get_server_environment(ty, process_env, server_addr),
+        ssr_environment: get_server_compile_time_info(ty, process_env, server_addr),
     }
     .cell()
     .into()
@@ -868,14 +880,14 @@
     server_addr: ServerAddrVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ServerContextType::AppRSC { app_dir });
-    <span class="kw">let </span>rsc_environment = get_server_environment(ty, process_env, server_addr);
+    <span class="kw">let </span>rsc_compile_time_info = get_server_compile_time_info(ty, process_env, server_addr);
     <span class="kw">let </span>rsc_resolve_options_context =
         get_server_resolve_options_context(project_path, ty, next_config);
     <span class="kw">let </span>rsc_module_options_context =
         get_server_module_options_context(project_path, execution_context, ty, next_config);
 
     NextLayoutEntryTransition {
-        rsc_environment,
+        rsc_compile_time_info,
         rsc_module_options_context,
         rsc_resolve_options_context,
         server_root,
@@ -892,7 +904,7 @@
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    client_environment: EnvironmentVc,
+    client_compile_time_info: CompileTimeInfoVc,
     ssr: bool,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
@@ -924,7 +936,7 @@
             server_root,
             app_dir,
             env,
-            client_environment,
+            client_compile_time_info,
             next_config,
         ),
     );
@@ -936,7 +948,7 @@
             execution_context,
             client_ty,
             server_root,
-            client_environment,
+            client_compile_time_info,
             next_config,
         )
         .into(),
@@ -956,7 +968,7 @@
     <span class="kw">let </span>ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(ssr_ty, env, server_addr),
+        get_server_compile_time_info(ssr_ty, env, server_addr),
         get_server_module_options_context(project_path, execution_context, ssr_ty, next_config),
         get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
@@ -993,7 +1005,7 @@
     }
     .resolve()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
+    <span class="kw">let </span>client_compile_time_info = get_client_compile_time_info(browserslist_query);
 
     <span class="kw">let </span>context_ssr = app_context(
         project_path,
@@ -1001,7 +1013,7 @@
         server_root,
         app_dir,
         env,
-        client_environment,
+        client_compile_time_info,
         <span class="bool-val">true</span>,
         next_config,
         server_addr,
@@ -1012,7 +1024,7 @@
         server_root,
         app_dir,
         env,
-        client_environment,
+        client_compile_time_info,
         <span class="bool-val">false</span>,
         next_config,
         server_addr,
@@ -1029,7 +1041,7 @@
         execution_context,
         server_root,
         env,
-        client_environment,
+        client_compile_time_info,
         next_config,
     );
 
@@ -1364,7 +1376,7 @@ import BOOTSTRAP from {};
             intermediate_output_path,
             intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
             this.server_root.join(<span class="string">&quot;_next/static/assets&quot;</span>),
-            context.environment(),
+            context.compile_time_info().environment(),
         )
         .layer(<span class="string">&quot;ssr&quot;</span>)
         .css_chunk_root_path(this.server_root.join(<span class="string">&quot;_next/static/chunks&quot;</span>))
@@ -1379,7 +1391,7 @@ import BOOTSTRAP from {};
                     EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
                     EcmascriptInputTransform::TypeScript,
                 ]),
-                context.environment(),
+                context.compile_time_info(),
             ),
             chunking_context,
             intermediate_output_path,

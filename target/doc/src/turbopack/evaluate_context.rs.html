@@ -38,8 +38,10 @@
 <span id="38">38</span>
 <span id="39">39</span>
 <span id="40">40</span>
+<span id="41">41</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
+    compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     resolve::options::ImportMapVc,
@@ -54,12 +56,12 @@
 </span><span class="kw">pub fn </span>node_evaluate_asset_context(import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;) -&gt; AssetContextVc {
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(Default::default()),
-        EnvironmentVc::new(
+        CompileTimeInfoVc::new(EnvironmentVc::new(
             Value::new(ExecutionEnvironment::NodeJsBuildTime(
                 NodeJsEnvironment::default().cell(),
             )),
             Value::new(EnvironmentIntention::Build),
-        ),
+        )),
         ModuleOptionsContext {
             enable_typescript_transform: <span class="bool-val">true</span>,
             ..Default::default()

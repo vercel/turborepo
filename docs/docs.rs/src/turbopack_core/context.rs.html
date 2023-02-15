@@ -41,7 +41,7 @@
 
 <span class="kw">use crate</span>::{
     asset::AssetVc,
-    environment::EnvironmentVc,
+    compile_time_info::CompileTimeInfoVc,
     reference_type::ReferenceType,
     resolve::{options::ResolveOptionsVc, parse::RequestVc, ResolveResultVc},
 };
@@ -51,7 +51,7 @@
 /// type (e. g. from SourceAsset to ModuleAsset).
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>AssetContext {
-    <span class="kw">fn </span>environment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvironmentVc;
+    <span class="kw">fn </span>compile_time_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompileTimeInfoVc;
     <span class="kw">fn </span>resolve_options(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         origin_path: FileSystemPathVc,

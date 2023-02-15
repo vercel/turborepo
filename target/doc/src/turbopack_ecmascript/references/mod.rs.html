@@ -2184,20 +2184,6 @@
 <span id="2184">2184</span>
 <span id="2185">2185</span>
 <span id="2186">2186</span>
-<span id="2187">2187</span>
-<span id="2188">2188</span>
-<span id="2189">2189</span>
-<span id="2190">2190</span>
-<span id="2191">2191</span>
-<span id="2192">2192</span>
-<span id="2193">2193</span>
-<span id="2194">2194</span>
-<span id="2195">2195</span>
-<span id="2196">2196</span>
-<span id="2197">2197</span>
-<span id="2198">2198</span>
-<span id="2199">2199</span>
-<span id="2200">2200</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2238,7 +2224,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    environment::EnvironmentVc,
+    compile_time_info::CompileTimeInfoVc,
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
@@ -2275,8 +2261,7 @@
         graph::{create_graph, Effect},
         linker::link,
         well_known::replace_well_known,
-        ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind,
-        WellKnownObjectKind,
+        FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind, WellKnownObjectKind,
     },
     errors,
     parse::{parse, ParseResult},
@@ -2294,7 +2279,7 @@
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
         imports::Reexport,
-        ModuleValue,
+        ConstantValue, ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
@@ -2385,7 +2370,7 @@
     origin: ResolveOriginVc,
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     <span class="kw">let </span>path = source.path();
@@ -2640,7 +2625,7 @@
                 link_value: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>F,
                 add_effects: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>G,
                 analysis: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>AnalyzeEcmascriptModuleResultBuilder,
-                environment: EnvironmentVc,
+                compile_time_info: CompileTimeInfoVc,
             ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
                 Box::pin(handle_call(
                     handler,
@@ -2654,7 +2639,7 @@
                     link_value,
                     add_effects,
                     analysis,
-                    environment,
+                    compile_time_info,
                 ))
             }
 
@@ -2674,7 +2659,7 @@
                 link_value: <span class="kw-2">&amp;</span>F,
                 add_effects: <span class="kw-2">&amp;</span>G,
                 analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
-                environment: EnvironmentVc,
+                compile_time_info: CompileTimeInfoVc,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
                 <span class="kw">fn </span>explain_args(args: <span class="kw-2">&amp;</span>[JsValue]) -&gt; (String, String) {
                     JsValue::explain_args(args, <span class="number">10</span>, <span class="number">2</span>)
@@ -2715,7 +2700,7 @@
                                 link_value,
                                 add_effects,
                                 analysis,
-                                environment,
+                                compile_time_info,
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         }
@@ -3005,7 +2990,7 @@
                             analysis.add_reference(NodePreGypConfigReferenceVc::new(
                                 source.path().parent(),
                                 pat.into(),
-                                environment.compile_target(),
+                                compile_time_info.environment().compile_target(),
                             ));
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                         }
@@ -3034,7 +3019,7 @@
                                     source.path().root().join(s.trim_start_matches(<span class="string">&quot;/ROOT/&quot;</span>));
                                 analysis.add_reference(NodeGypBuildReferenceVc::new(
                                     current_context,
-                                    environment.compile_target(),
+                                    compile_time_info.environment().compile_target(),
                                 ));
                                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                             }
@@ -3162,8 +3147,8 @@
                                     <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
                                     <span class="macro">vec!</span>[
                                         JsValue::FreeVar(FreeVarKind::Dirname),
-                                        JsValue::Constant(ConstantValue::StrWord(p.into())),
-                                        JsValue::Constant(ConstantValue::StrWord(<span class="string">&quot;intl&quot;</span>.into())),
+                                        p.into(),
+                                        <span class="string">&quot;intl&quot;</span>.into(),
                                     ],
                                 ))
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3306,7 +3291,7 @@
                 .get_mut()
                 .extend(effects.into_iter().map(Action::Effect).rev());
 
-            <span class="kw">let </span>linker = |value| value_visitor(source, origin, value, environment);
+            <span class="kw">let </span>linker = |value| value_visitor(source, origin, value, compile_time_info);
             <span class="comment">// There can be many references to import.meta, but only the first should hoist
             // the object allocation.
             </span><span class="kw">let </span><span class="kw-2">mut </span>first_import_meta = <span class="bool-val">true</span>;
@@ -3461,7 +3446,7 @@
                                     <span class="kw-2">&amp;</span>link_value,
                                     <span class="kw-2">&amp;</span>add_effects,
                                     <span class="kw-2">&amp;mut </span>analysis,
-                                    environment,
+                                    compile_time_info,
                                 )
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
                             }
@@ -3520,7 +3505,7 @@
                                     <span class="kw-2">&amp;</span>link_value,
                                     <span class="kw-2">&amp;</span>add_effects,
                                     <span class="kw-2">&amp;mut </span>analysis,
-                                    environment,
+                                    compile_time_info,
                                 )
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
                             }
@@ -3584,7 +3569,7 @@
                                 analysis.add_reference(UrlAssetReferenceVc::new(
                                     origin,
                                     RequestVc::parse(Value::new(pat)),
-                                    environment.rendering(),
+                                    compile_time_info.environment().rendering(),
                                     AstPathVc::cell(ast_path),
                                 ));
                             }
@@ -3775,9 +3760,9 @@
     source: AssetVc,
     origin: ResolveOriginVc,
     v: JsValue,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
-    <span class="kw">let </span>(<span class="kw-2">mut </span>v, modified) = value_visitor_inner(source, origin, v, environment).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(<span class="kw-2">mut </span>v, modified) = value_visitor_inner(source, origin, v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
     v.normalize_shallow();
     <span class="prelude-val">Ok</span>((v, modified))
 }
@@ -3786,136 +3771,123 @@
     source: AssetVc,
     origin: ResolveOriginVc,
     v: JsValue,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
-    <span class="prelude-val">Ok</span>((
-        <span class="kw">match </span>v {
-            JsValue::Call(
-                <span class="kw">_</span>,
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                args,
-            ) =&gt; {
-                <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                    <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                    <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
-                    <span class="kw">let </span>resolved = cjs_resolve(origin, request).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span><span class="kw-2">mut </span>values = resolved
-                        .primary
-                        .iter()
-                        .map(|result| <span class="kw">async move </span>{
-                            <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
-                                <span class="prelude-val">Some</span>(require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>)
-                            } <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>})
-                        })
-                        .try_join()
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.into_iter()
-                        .flatten()
-                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    <span class="kw">match </span>values.len() {
-                        <span class="number">0 </span>=&gt; JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
-                                <span class="kw">box </span>JsValue::WellKnownFunction(
-                                    WellKnownFunctionKind::RequireResolve,
-                                ),
-                                args,
-                            ))),
-                            <span class="string">&quot;unresolveable request&quot;</span>,
-                        ),
-                        <span class="number">1 </span>=&gt; values.pop().unwrap(),
-                        <span class="kw">_ </span>=&gt; JsValue::alternatives(values),
-                    }
-                } <span class="kw">else </span>{
-                    JsValue::Unknown(
+    <span class="kw">let </span>value = <span class="kw">match </span>v {
+        JsValue::Call(
+            <span class="kw">_</span>,
+            <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+            args,
+        ) =&gt; {
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
+                <span class="kw">let </span>resolved = cjs_resolve(origin, request).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>values = resolved
+                    .primary
+                    .iter()
+                    .map(|result| <span class="kw">async move </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                            <span class="prelude-val">Some</span>(require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>)
+                        } <span class="kw">else </span>{
+                            <span class="prelude-val">None
+                        </span>})
+                    })
+                    .try_join()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.into_iter()
+                    .flatten()
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                <span class="kw">match </span>values.len() {
+                    <span class="number">0 </span>=&gt; JsValue::Unknown(
                         <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
                             <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                             args,
                         ))),
-                        <span class="string">&quot;only a single argument is supported&quot;</span>,
-                    )
+                        <span class="string">&quot;unresolveable request&quot;</span>,
+                    ),
+                    <span class="number">1 </span>=&gt; values.pop().unwrap(),
+                    <span class="kw">_ </span>=&gt; JsValue::alternatives(values),
                 }
+            } <span class="kw">else </span>{
+                JsValue::Unknown(
+                    <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
+                        <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                        args,
+                    ))),
+                    <span class="string">&quot;only a single argument is supported&quot;</span>,
+                )
             }
-            JsValue::FreeVar(<span class="kw-2">ref </span>kind) =&gt; <span class="kw">match </span>kind {
-                FreeVarKind::Dirname =&gt; as_abs_path(source.path().parent()).<span class="kw">await</span><span class="question-mark">?</span>,
-                FreeVarKind::Filename =&gt; as_abs_path(source.path()).<span class="kw">await</span><span class="question-mark">?</span>,
+        }
+        JsValue::FreeVar(<span class="kw-2">ref </span>kind) =&gt; <span class="kw">match </span>kind {
+            FreeVarKind::Dirname =&gt; as_abs_path(source.path().parent()).<span class="kw">await</span><span class="question-mark">?</span>,
+            FreeVarKind::Filename =&gt; as_abs_path(source.path()).<span class="kw">await</span><span class="question-mark">?</span>,
 
-                FreeVarKind::Require =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
-                FreeVarKind::Define =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
-                FreeVarKind::Import =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
-                FreeVarKind::NodeProcess =&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-                }
-                FreeVarKind::Object =&gt; JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
-                <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(v)), <span class="string">&quot;unknown global&quot;</span>),
-            },
-            JsValue::Module(ModuleValue {
-                module: <span class="kw-2">ref </span>name, ..
-            }) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>name {
+            FreeVarKind::Require =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+            FreeVarKind::Define =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+            FreeVarKind::Import =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
+            FreeVarKind::NodeProcess =&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+            FreeVarKind::Object =&gt; JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
+            <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(v)), <span class="string">&quot;unknown global&quot;</span>),
+        },
+        JsValue::Module(ModuleValue {
+            module: <span class="kw-2">ref </span>name, ..
+        }) =&gt; {
+            <span class="kw">if </span><span class="kw-2">*</span>compile_time_info.environment().node_externals().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="comment">// TODO check externals
-                </span><span class="string">&quot;path&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::PathModule)
+                </span><span class="kw">match </span><span class="kw-2">&amp;**</span>name {
+                    <span class="string">&quot;path&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::PathModule),
+                    <span class="string">&quot;fs/promises&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::FsModule),
+                    <span class="string">&quot;fs&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::FsModule),
+                    <span class="string">&quot;child_process&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::ChildProcess),
+                    <span class="string">&quot;os&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::OsModule),
+                    <span class="string">&quot;process&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+                    <span class="string">&quot;@mapbox/node-pre-gyp&quot; </span>=&gt; {
+                        JsValue::WellKnownObject(WellKnownObjectKind::NodePreGyp)
+                    }
+                    <span class="string">&quot;node-gyp-build&quot; </span>=&gt; {
+                        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild)
+                    }
+                    <span class="string">&quot;bindings&quot; </span>=&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings),
+                    <span class="string">&quot;express&quot; </span>=&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpress),
+                    <span class="string">&quot;strong-globalize&quot; </span>=&gt; {
+                        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeStrongGlobalize)
+                    }
+                    <span class="string">&quot;resolve-from&quot; </span>=&gt; {
+                        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom)
+                    }
+                    <span class="string">&quot;@grpc/proto-loader&quot; </span>=&gt; {
+                        JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader)
+                    }
+                    <span class="kw">_ </span>=&gt; JsValue::Unknown(
+                        <span class="prelude-val">Some</span>(Arc::new(v)),
+                        <span class="string">&quot;cross module analyzing is not yet supported&quot;</span>,
+                    ),
                 }
-                <span class="string">&quot;fs/promises&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::FsModule)
-                }
-                <span class="string">&quot;fs&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::FsModule)
-                }
-                <span class="string">&quot;child_process&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::ChildProcess)
-                }
-                <span class="string">&quot;os&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::OsModule)
-                }
-                <span class="string">&quot;process&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-                }
-                <span class="string">&quot;@mapbox/node-pre-gyp&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::NodePreGyp)
-                }
-                <span class="string">&quot;node-gyp-build&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild)
-                }
-                <span class="string">&quot;bindings&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings)
-                }
-                <span class="string">&quot;express&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpress)
-                }
-                <span class="string">&quot;strong-globalize&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeStrongGlobalize)
-                }
-                <span class="string">&quot;resolve-from&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom)
-                }
-                <span class="string">&quot;@grpc/proto-loader&quot; </span><span class="kw">if </span><span class="kw-2">*</span>environment.node_externals().<span class="kw">await</span><span class="question-mark">? </span>=&gt; {
-                    JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader)
-                }
-                <span class="kw">_ </span>=&gt; JsValue::Unknown(
+            } <span class="kw">else </span>{
+                JsValue::Unknown(
                     <span class="prelude-val">Some</span>(Arc::new(v)),
                     <span class="string">&quot;cross module analyzing is not yet supported&quot;</span>,
-                ),
-            },
-            JsValue::Argument(..) =&gt; JsValue::Unknown(
-                <span class="prelude-val">Some</span>(Arc::new(v)),
-                <span class="string">&quot;cross function analyzing is not yet supported&quot;</span>,
-            ),
-            JsValue::Member(
-                <span class="kw">_</span>,
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-                <span class="kw">box </span>JsValue::Constant(value),
-            ) <span class="kw">if </span>value.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;turbopack&quot;</span>) =&gt; JsValue::Constant(ConstantValue::True),
-            <span class="kw">_ </span>=&gt; {
-                <span class="kw">let </span>(<span class="kw-2">mut </span>v, <span class="kw-2">mut </span>modified) = replace_well_known(v, environment).<span class="kw">await</span><span class="question-mark">?</span>;
-                modified = replace_builtin(<span class="kw-2">&amp;mut </span>v) || modified;
-                modified = modified || v.make_nested_operations_unknown();
-                <span class="kw">return </span><span class="prelude-val">Ok</span>((v, modified));
+                )
             }
-        },
-        <span class="bool-val">true</span>,
-    ))
+        }
+        JsValue::Argument(..) =&gt; JsValue::Unknown(
+            <span class="prelude-val">Some</span>(Arc::new(v)),
+            <span class="string">&quot;cross function analyzing is not yet supported&quot;</span>,
+        ),
+        JsValue::Member(
+            <span class="kw">_</span>,
+            <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+            <span class="kw">box </span>JsValue::Constant(value),
+        ) <span class="kw">if </span>value.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;turbopack&quot;</span>) =&gt; JsValue::Constant(ConstantValue::True),
+        <span class="kw">_ </span>=&gt; {
+            <span class="kw">let </span>(<span class="kw-2">mut </span>v, <span class="kw-2">mut </span>modified) = replace_well_known(v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
+            modified = replace_builtin(<span class="kw-2">&amp;mut </span>v) || modified;
+            modified = modified || v.make_nested_operations_unknown();
+            <span class="kw">return </span><span class="prelude-val">Ok</span>((v, modified));
+        }
+    };
+    <span class="prelude-val">Ok</span>((value, <span class="bool-val">true</span>))
 }
 
 <span class="attr">#[derive(Debug)]

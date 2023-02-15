@@ -44,7 +44,7 @@
 <span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
-<span class="kw">use </span>turbopack_core::{asset::AssetVc, environment::EnvironmentVc};
+<span class="kw">use </span>turbopack_core::{asset::AssetVc, compile_time_info::CompileTimeInfoVc};
 
 <span class="kw">use crate</span>::{
     module_options::ModuleOptionsContextVc, resolve_options_context::ResolveOptionsContextVc,
@@ -60,9 +60,9 @@
     </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc) -&gt; AssetVc {
         asset
     }
-    <span class="doccomment">/// Apply modifications to the environment
-    </span><span class="kw">fn </span>process_environment(<span class="kw-2">&amp;</span><span class="self">self</span>, environment: EnvironmentVc) -&gt; EnvironmentVc {
-        environment
+    <span class="doccomment">/// Apply modifications to the compile-time information
+    </span><span class="kw">fn </span>process_compile_time_info(<span class="kw-2">&amp;</span><span class="self">self</span>, compile_time_info: CompileTimeInfoVc) -&gt; CompileTimeInfoVc {
+        compile_time_info
     }
     <span class="doccomment">/// Apply modifications/wrapping to the module options context
     </span><span class="kw">fn </span>process_module_options_context(

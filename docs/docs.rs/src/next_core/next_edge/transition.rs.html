@@ -96,6 +96,9 @@
 <span id="96">96</span>
 <span id="97">97</span>
 <span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
@@ -108,7 +111,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{ChunkableAssetVc, ChunkingContextVc},
-    environment::EnvironmentVc,
+    compile_time_info::CompileTimeInfoVc,
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{chunk_group_files_asset::ChunkGroupFilesAsset, utils::stringify_js};
@@ -117,7 +120,7 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextEdgeTransition {
-    <span class="kw">pub </span>edge_environment: EnvironmentVc,
+    <span class="kw">pub </span>edge_compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>edge_chunking_context: ChunkingContextVc,
     <span class="kw">pub </span>edge_resolve_options_context: ResolveOptionsContextVc,
     <span class="kw">pub </span>output_path: FileSystemPathVc,
@@ -153,8 +156,11 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>process_environment(<span class="kw-2">&amp;</span><span class="self">self</span>, _environment: EnvironmentVc) -&gt; EnvironmentVc {
-        <span class="self">self</span>.edge_environment
+    </span><span class="kw">fn </span>process_compile_time_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _compile_time_info: CompileTimeInfoVc,
+    ) -&gt; CompileTimeInfoVc {
+        <span class="self">self</span>.edge_compile_time_info
     }
 
     <span class="attr">#[turbo_tasks::function]

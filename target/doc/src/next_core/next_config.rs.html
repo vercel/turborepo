@@ -1165,7 +1165,7 @@
             context,
             Value::new(EcmascriptModuleAssetType::Ecmascript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
-            context.environment(),
+            context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();
         EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[config_chunk])

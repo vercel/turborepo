@@ -109,6 +109,15 @@
 <span id="109">109</span>
 <span id="110">110</span>
 <span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -119,7 +128,9 @@
     transition::{Transition, TransitionVc},
     ModuleAssetContextVc,
 };
-<span class="kw">use </span>turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, environment::EnvironmentVc};
+<span class="kw">use </span>turbopack_core::{
+    asset::AssetVc, chunk::ChunkingContextVc, compile_time_info::CompileTimeInfoVc,
+};
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use </span><span class="kw">super</span>::with_chunks::WithChunksAsset;
@@ -133,7 +144,7 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextClientChunksTransition {
-    <span class="kw">pub </span>client_environment: EnvironmentVc,
+    <span class="kw">pub </span>client_compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>client_module_options_context: ModuleOptionsContextVc,
     <span class="kw">pub </span>client_resolve_options_context: ResolveOptionsContextVc,
     <span class="kw">pub </span>client_chunking_context: ChunkingContextVc,
@@ -148,16 +159,20 @@
         execution_context: ExecutionContextVc,
         ty: Value&lt;ClientContextType&gt;,
         server_root: FileSystemPathVc,
-        client_environment: EnvironmentVc,
+        client_compile_time_info: CompileTimeInfoVc,
         next_config: NextConfigVc,
     ) -&gt; NextClientChunksTransitionVc {
-        <span class="kw">let </span>client_chunking_context =
-            get_client_chunking_context(project_path, server_root, client_environment, ty);
+        <span class="kw">let </span>client_chunking_context = get_client_chunking_context(
+            project_path,
+            server_root,
+            client_compile_time_info.environment(),
+            ty,
+        );
 
         <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
             project_path,
             execution_context,
-            client_environment,
+            client_compile_time_info.environment(),
             ty,
             next_config,
         );
@@ -169,7 +184,7 @@
                 ty,
                 next_config,
             ),
-            client_environment,
+            client_compile_time_info,
             server_root,
         }
         .cell()
@@ -179,8 +194,11 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Transition <span class="kw">for </span>NextClientChunksTransition {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>process_environment(<span class="kw-2">&amp;</span><span class="self">self</span>, _environment: EnvironmentVc) -&gt; EnvironmentVc {
-        <span class="self">self</span>.client_environment
+    </span><span class="kw">fn </span>process_compile_time_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _compile_time_info: CompileTimeInfoVc,
+    ) -&gt; CompileTimeInfoVc {
+        <span class="self">self</span>.client_compile_time_info
     }
 
     <span class="attr">#[turbo_tasks::function]

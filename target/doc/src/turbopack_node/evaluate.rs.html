@@ -408,7 +408,7 @@
         intermediate_output_path,
         intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
         intermediate_output_path.join(<span class="string">&quot;assets&quot;</span>),
-        context.environment(),
+        context.compile_time_info().environment(),
     )
     .build();
 
@@ -417,7 +417,7 @@
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .as_asset();
 
@@ -442,7 +442,7 @@
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
         InnerAssetsVc::cell(HashMap::from([
             (<span class="string">&quot;INNER&quot;</span>.to_string(), module_asset),
             (<span class="string">&quot;RUNTIME&quot;</span>.to_string(), runtime_asset),

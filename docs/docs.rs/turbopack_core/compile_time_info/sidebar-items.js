@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["CompileTimeInfo",""],["CompileTimeInfoVc","Vc for [`CompileTimeInfo`]"]],"type":[["CompileTimeInfoReadRef","see [turbo_tasks::ReadRef]"]]};

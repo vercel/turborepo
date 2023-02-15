@@ -621,6 +621,8 @@
 <span id="621">621</span>
 <span id="622">622</span>
 <span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -663,6 +665,7 @@
 <span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
+    compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueReporter, IssueSeverity, IssueVc},
@@ -878,6 +881,7 @@
         )),
         Value::new(EnvironmentIntention::Api),
     );
+    <span class="kw">let </span>compile_time_info = CompileTimeInfo { environment: env }.cell();
     <span class="kw">let </span>glob_mappings = <span class="macro">vec!</span>[
         (
             root,
@@ -892,7 +896,7 @@
     ];
     <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
-        env,
+        compile_time_info,
         ModuleOptionsContext {
             enable_types: <span class="bool-val">true</span>,
             enable_mdx,

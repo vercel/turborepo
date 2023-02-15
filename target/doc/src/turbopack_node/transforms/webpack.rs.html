@@ -316,7 +316,7 @@
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .into()
 }

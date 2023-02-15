@@ -265,7 +265,7 @@
         this.context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         this.transforms,
-        this.context.environment(),
+        this.context.compile_time_info(),
     ))
 }
 

@@ -48,12 +48,23 @@
 <span id="48">48</span>
 <span id="49">49</span>
 <span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc};
-<span class="kw">use </span>turbopack_core::environment::{
-    EdgeWorkerEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, ServerAddrVc,
+<span class="kw">use </span>turbopack_core::{
+    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    environment::{
+        EdgeWorkerEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment,
+        ServerAddrVc,
+    },
 };
 
 <span class="kw">use crate</span>::{
@@ -62,13 +73,16 @@
 };
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_edge_environment(server_addr: ServerAddrVc) -&gt; EnvironmentVc {
-    EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::EdgeWorker(
-            EdgeWorkerEnvironment { server_addr }.into(),
-        )),
-        Value::new(EnvironmentIntention::Api),
-    )
+</span><span class="kw">pub fn </span>get_edge_compile_time_info(server_addr: ServerAddrVc) -&gt; CompileTimeInfoVc {
+    CompileTimeInfo {
+        environment: EnvironmentVc::new(
+            Value::new(ExecutionEnvironment::EdgeWorker(
+                EdgeWorkerEnvironment { server_addr }.into(),
+            )),
+            Value::new(EnvironmentIntention::Api),
+        ),
+    }
+    .cell()
 }
 
 <span class="attr">#[turbo_tasks::function]

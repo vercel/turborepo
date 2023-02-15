@@ -223,7 +223,7 @@
             this.client_context,
             turbo_tasks::Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
-            this.client_context.environment(),
+            this.client_context.compile_time_info(),
         );
 
         <span class="kw">let </span>chunk_group =

@@ -595,10 +595,36 @@
 <span id="595">595</span>
 <span id="596">596</span>
 <span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
+<span class="kw">use </span>turbopack_core::compile_time_info::CompileTimeInfoVc;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::{
@@ -608,7 +634,7 @@
 
 <span class="kw">pub async fn </span>replace_well_known(
     value: JsValue,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>value {
         JsValue::Call(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownFunction(kind), args) =&gt; (
@@ -616,7 +642,7 @@
                 kind,
                 JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;this is not analyzed yet&quot;</span>),
                 args,
-                environment,
+                compile_time_info,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>,
             <span class="bool-val">true</span>,
@@ -632,7 +658,7 @@
             (JsValue::Call(usize, callee, args), <span class="bool-val">false</span>)
         }
         JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownObject(kind), <span class="kw">box </span>prop) =&gt; (
-            well_known_object_member(kind, prop, environment).<span class="kw">await</span><span class="question-mark">?</span>,
+            well_known_object_member(kind, prop, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>,
             <span class="bool-val">true</span>,
         ),
         JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownFunction(kind), <span class="kw">box </span>prop) =&gt; {
@@ -646,7 +672,7 @@
     kind: WellKnownFunctionKind,
     _this: JsValue,
     args: Vec&lt;JsValue&gt;,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>kind {
         WellKnownFunctionKind::ObjectAssign =&gt; object_assign(args),
@@ -662,12 +688,22 @@
         ),
         WellKnownFunctionKind::Require =&gt; require(args),
         WellKnownFunctionKind::PathToFileUrl =&gt; path_to_file_url(args),
-        WellKnownFunctionKind::OsArch =&gt; environment.compile_target().<span class="kw">await</span><span class="question-mark">?</span>.arch.as_str().into(),
-        WellKnownFunctionKind::OsPlatform =&gt; {
-            environment.compile_target().<span class="kw">await</span><span class="question-mark">?</span>.platform.as_str().into()
-        }
+        WellKnownFunctionKind::OsArch =&gt; compile_time_info
+            .environment()
+            .compile_target()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.arch
+            .as_str()
+            .into(),
+        WellKnownFunctionKind::OsPlatform =&gt; compile_time_info
+            .environment()
+            .compile_target()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.platform
+            .as_str()
+            .into(),
         WellKnownFunctionKind::ProcessCwd =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(cwd) = <span class="kw-2">&amp;*</span>environment.cwd().<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(cwd) = <span class="kw-2">&amp;*</span>compile_time_info.environment().cwd().<span class="kw">await</span><span class="question-mark">? </span>{
                 cwd.clone().into()
             } <span class="kw">else </span>{
                 JsValue::Unknown(
@@ -679,7 +715,8 @@
                 )
             }
         }
-        WellKnownFunctionKind::OsEndianness =&gt; environment
+        WellKnownFunctionKind::OsEndianness =&gt; compile_time_info
+            .environment()
             .compile_target()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.endianness
@@ -981,7 +1018,7 @@
 <span class="kw">pub async fn </span>well_known_object_member(
     kind: WellKnownObjectKind,
     prop: JsValue,
-    environment: EnvironmentVc,
+    compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>kind {
         WellKnownObjectKind::GlobalObject =&gt; global_object(prop),
@@ -1000,7 +1037,7 @@
         WellKnownObjectKind::OsModule | WellKnownObjectKind::OsModuleDefault =&gt; {
             os_module_member(kind, prop)
         }
-        WellKnownObjectKind::NodeProcess =&gt; node_process_member(prop, environment).<span class="kw">await</span><span class="question-mark">?</span>,
+        WellKnownObjectKind::NodeProcess =&gt; node_process_member(prop, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>,
         WellKnownObjectKind::NodePreGyp =&gt; node_pre_gyp(prop),
         WellKnownObjectKind::NodeExpressApp =&gt; express(prop),
         WellKnownObjectKind::NodeProtobufLoader =&gt; protobuf_loader(prop),
@@ -1137,10 +1174,25 @@
     }
 }
 
-<span class="kw">async fn </span>node_process_member(prop: JsValue, environment: EnvironmentVc) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+<span class="kw">async fn </span>node_process_member(
+    prop: JsValue,
+    compile_time_info: CompileTimeInfoVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>prop.as_str() {
-        <span class="prelude-val">Some</span>(<span class="string">&quot;arch&quot;</span>) =&gt; environment.compile_target().<span class="kw">await</span><span class="question-mark">?</span>.arch.as_str().into(),
-        <span class="prelude-val">Some</span>(<span class="string">&quot;platform&quot;</span>) =&gt; environment.compile_target().<span class="kw">await</span><span class="question-mark">?</span>.platform.as_str().into(),
+        <span class="prelude-val">Some</span>(<span class="string">&quot;arch&quot;</span>) =&gt; compile_time_info
+            .environment()
+            .compile_target()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.arch
+            .as_str()
+            .into(),
+        <span class="prelude-val">Some</span>(<span class="string">&quot;platform&quot;</span>) =&gt; compile_time_info
+            .environment()
+            .compile_target()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.platform
+            .as_str()
+            .into(),
         <span class="prelude-val">Some</span>(<span class="string">&quot;cwd&quot;</span>) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::ProcessCwd),
         <span class="kw">_ </span>=&gt; JsValue::Unknown(
             <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
