@@ -1,4 +1,4 @@
-pub trait Loader {}
+pub trait Load {}
 
 pub struct Merger<L> {
     loader: L,
