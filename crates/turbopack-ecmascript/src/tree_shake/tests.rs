@@ -165,7 +165,7 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let uri_of_module: JsWord = "test".into();
+        let uri_of_module: JsWord = "entry.js".into();
 
         {
             let mut g = analyzer.g.clone();
