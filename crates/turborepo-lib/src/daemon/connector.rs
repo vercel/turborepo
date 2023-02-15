@@ -2,7 +2,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use command_group::AsyncCommandGroup;
@@ -43,6 +43,7 @@ impl DaemonConnector {
     /// 2. the server is not running
     /// 3. the server is unresponsive
     pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
+        let time = Instant::now();
         for _ in 0..Self::CONNECT_RETRY_MAX {
             let pid = self.get_or_start_daemon().await?;
             debug!("got daemon with pid: {}", pid);
@@ -59,7 +60,12 @@ impl DaemonConnector {
             };
 
             match client.handshake().await {
-                Ok(_) => return Ok(client.with_connect_settings(self)),
+                Ok(_) => {
+                    return {
+                        debug!("connected in {}ns", time.elapsed().as_micros());
+                        Ok(client.with_connect_settings(self))
+                    }
+                }
                 Err(DaemonError::VersionMismatch) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
