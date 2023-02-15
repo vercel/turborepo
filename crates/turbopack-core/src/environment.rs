@@ -229,6 +229,12 @@ impl EnvironmentVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn intention(self) -> Result<EnvironmentIntentionVc> {
+        let env = self.await?;
+        Ok(EnvironmentIntentionVc::cell(env.intention))
+    }
+
+    #[turbo_tasks::function]
     pub async fn rendering(self) -> Result<RenderingVc> {
         let env = self.await?;
         Ok(match env.execution {

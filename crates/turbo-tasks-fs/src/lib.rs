@@ -887,6 +887,11 @@ impl FileSystemPathVc {
     pub async fn is_inside_or_equal(self, other: FileSystemPathVc) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_inside_or_equal(&*other.await?)))
     }
+
+    #[turbo_tasks::function]
+    pub async fn contains(self, name: &str) -> Result<BoolVc> {
+        Ok(BoolVc::cell(self.await?.path.contains(name)))
+    }
 }
 
 impl Display for FileSystemPath {

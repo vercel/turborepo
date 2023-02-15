@@ -33,8 +33,11 @@ use turbo_tasks_memory::{
     viz, MemoryBackend,
 };
 use turbopack::{
-    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
+    emit_asset, emit_with_completion,
+    module_options::{ModuleOptionsContext, ModuleOptionsContextVc},
+    rebase::RebasedAssetVc,
+    resolve_options_context::ResolveOptionsContext,
+    transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
@@ -126,11 +129,6 @@ pub struct CommonArgs {
     #[cfg_attr(feature = "cli", clap(short, long))]
     #[cfg_attr(feature = "node-api", serde(default))]
     exact: bool,
-
-    /// Whether to enable mdx parsing while tracing dependencies
-    #[cfg_attr(feature = "cli", clap(long))]
-    #[cfg_attr(feature = "node-api", serde(default))]
-    enable_mdx: bool,
 
     /// Enable experimental garbage collection with the provided memory limit in
     /// MB.
@@ -242,7 +240,7 @@ async fn input_to_modules<'a>(
     input: Vec<String>,
     process_cwd: Option<String>,
     exact: bool,
-    enable_mdx: bool,
+    module_options: Option<ModuleOptionsContextVc>,
 ) -> Result<AssetsVc> {
     let root = fs.root();
     let env = EnvironmentVc::new(
@@ -270,12 +268,7 @@ async fn input_to_modules<'a>(
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         env,
-        ModuleOptionsContext {
-            enable_types: true,
-            enable_mdx,
-            ..Default::default()
-        }
-        .cell(),
+        module_options.unwrap_or_default(),
         ResolveOptionsContext {
             emulate_environment: Some(env),
             resolved_map: Some(
@@ -347,6 +340,7 @@ fn process_input(dir: &Path, context: &str, input: &[String]) -> Result<Vec<Stri
 pub async fn start(
     args: Arc<Args>,
     turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
+    module_options: Option<ModuleOptionsContext>,
 ) -> Result<Vec<String>> {
     register();
     let &CommonArgs {
@@ -431,6 +425,7 @@ pub async fn start(
                 println!("graph.html written");
             }
         },
+        module_options,
     )
     .await
 }
@@ -439,6 +434,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     args: Arc<Args>,
     create_tt: impl Fn() -> Arc<TurboTasks<B>>,
     final_finish: impl FnOnce(Arc<TurboTasks<B>>, TaskId, Duration) -> F,
+    module_options: Option<ModuleOptionsContext>,
 ) -> Result<Vec<String>> {
     let &CommonArgs {
         watch,
@@ -491,8 +487,13 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         let dir = dir.clone();
         let args = args.clone();
         let sender = sender.clone();
+        let module_options = module_options.clone();
         Box::pin(async move {
-            let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
+            let output = main_operation(
+                TransientValue::new(dir.clone()),
+                args.clone().into(),
+                module_options.map(|m| m.into()),
+            );
 
             let source = TransientValue::new(output.into());
             let issues = IssueVc::peek_issues_with_path(output)
@@ -532,6 +533,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
 async fn main_operation(
     current_dir: TransientValue<PathBuf>,
     args: TransientInstance<Args>,
+    module_options: Option<ModuleOptionsContextVc>,
 ) -> Result<StringsVc> {
     let dir = current_dir.into_value();
     let args = &*args;
@@ -539,7 +541,6 @@ async fn main_operation(
         ref input,
         watch,
         exact,
-        enable_mdx,
         ref context_directory,
         ref process_cwd,
         ..
@@ -553,7 +554,7 @@ async fn main_operation(
             let input = process_input(&dir, &context, input).unwrap();
             let mut result = BTreeSet::new();
             let fs = create_fs("context directory", &context, watch).await?;
-            let modules = input_to_modules(fs, input, process_cwd, exact, enable_mdx).await?;
+            let modules = input_to_modules(fs, input, process_cwd, exact, module_options).await?;
             for module in modules.iter() {
                 let set = all_assets(*module);
                 IssueVc::attach_context(module.path(), "gathering list of assets".to_string(), set)
@@ -571,7 +572,7 @@ async fn main_operation(
             let fs = create_fs("context directory", &context, watch).await?;
             let mut output_nft_assets = Vec::new();
             let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact, enable_mdx)
+            for module in input_to_modules(fs, input, process_cwd, exact, module_options)
                 .await?
                 .iter()
             {
@@ -597,7 +598,7 @@ async fn main_operation(
             let input_dir = fs.root();
             let output_dir = out_fs.root();
             let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact, enable_mdx)
+            for module in input_to_modules(fs, input, process_cwd, exact, module_options)
                 .await?
                 .iter()
             {

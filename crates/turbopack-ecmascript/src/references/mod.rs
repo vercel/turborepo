@@ -230,7 +230,8 @@ pub(crate) async fn analyze_ecmascript_module(
             let mut import_references = Vec::new();
 
             let pos = program.span().lo;
-            if analyze_types {
+            let is_inside_node_modules = *path.contains("node_modules").await?;
+            if analyze_types && !is_inside_node_modules {
                 if let Some(comments) = comments.leading.get(&pos) {
                     for comment in comments.iter() {
                         if let CommentKind::Line = comment.kind {
@@ -262,27 +263,30 @@ pub(crate) async fn analyze_ecmascript_module(
                     }
                 }
             }
-            comments.trailing.iter().for_each(|r| {
-                r.value().iter().for_each(|comment| match comment.kind {
-                    CommentKind::Line => {
-                        lazy_static! {
-                            static ref SOURCE_MAP_FILE_REFERENCE: Regex =
-                                Regex::new(r#"# sourceMappingURL=(.*?\.map)$"#).unwrap();
+            if !is_inside_node_modules {
+                comments.trailing.iter().for_each(|r| {
+                    r.value().iter().for_each(|comment| match comment.kind {
+                        CommentKind::Line => {
+                            lazy_static! {
+                                static ref SOURCE_MAP_FILE_REFERENCE: Regex =
+                                    Regex::new(r#"# sourceMappingURL=(.*?\.map)$"#).unwrap();
+                            }
+                            if let Some(m) = SOURCE_MAP_FILE_REFERENCE.captures(&comment.text) {
+                                let path = &m[1];
+                                // TODO this probably needs to be a field in EcmascriptModuleAsset
+                                // so it knows to use that SourceMap
+                                // when running code generation. The
+                                // reference is needed too for turbotrace
+                                analysis.add_reference(SourceMapReferenceVc::new(
+                                    source.path(),
+                                    source.path().parent().join(path),
+                                ))
+                            }
                         }
-                        if let Some(m) = SOURCE_MAP_FILE_REFERENCE.captures(&comment.text) {
-                            let path = &m[1];
-                            // TODO this probably needs to be a field in EcmascriptModuleAsset so it
-                            // knows to use that SourceMap when running code generation.
-                            // The reference is needed too for turbotrace
-                            analysis.add_reference(SourceMapReferenceVc::new(
-                                source.path(),
-                                source.path().parent().join(path),
-                            ))
-                        }
-                    }
-                    CommentKind::Block => {}
+                        CommentKind::Block => {}
+                    });
                 });
-            });
+            }
 
             let handler = Handler::with_emitter(
                 true,

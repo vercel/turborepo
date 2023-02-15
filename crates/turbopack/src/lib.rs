@@ -33,7 +33,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
     context::{AssetContext, AssetContextVc},
-    environment::EnvironmentVc,
+    environment::{EnvironmentIntention, EnvironmentVc},
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
     reference::all_referenced_assets,
     reference_type::ReferenceType,
@@ -110,6 +110,7 @@ async fn apply_module_type(
     context: ModuleAssetContextVc,
     module_type: ModuleTypeVc,
 ) -> Result<AssetVc> {
+    let intention = context.await?.environment.intention().await?;
     Ok(match &*module_type.await? {
         ModuleType::Ecmascript(transforms) => EcmascriptModuleAssetVc::new(
             source,
@@ -146,10 +147,28 @@ async fn apply_module_type(
         ModuleType::Json => JsonModuleAssetVc::new(source).into(),
         ModuleType::Raw => source,
         ModuleType::Css(transforms) => {
-            CssModuleAssetVc::new(source, context.into(), *transforms).into()
+            if matches!(
+                &*intention,
+                EnvironmentIntention::Api
+                    | EnvironmentIntention::Middleware
+                    | EnvironmentIntention::Data
+            ) {
+                source
+            } else {
+                CssModuleAssetVc::new(source, context.into(), *transforms).into()
+            }
         }
         ModuleType::CssModule(transforms) => {
-            ModuleCssModuleAssetVc::new(source, context.into(), *transforms).into()
+            if matches!(
+                &*intention,
+                EnvironmentIntention::Api
+                    | EnvironmentIntention::Middleware
+                    | EnvironmentIntention::Data
+            ) {
+                source
+            } else {
+                ModuleCssModuleAssetVc::new(source, context.into(), *transforms).into()
+            }
         }
         ModuleType::Static => StaticModuleAssetVc::new(source, context.into()).into(),
         ModuleType::Mdx(transforms) => {
