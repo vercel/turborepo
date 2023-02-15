@@ -75,20 +75,21 @@ func GetTurboDataDir() string {
 	return resp.Dir
 }
 
+// Go convention is to use an empty string for an uninitialized or null-valued
+// string. Rust convention is to use an Option<String> for the same purpose, which
+// is encoded on the Go side as *string. This converts between the two.
+func stringToRef(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
 func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
-	var fromCommitRef *string
-	if fromCommit != "" {
-		fromCommitRef = &fromCommit
-	}
-	var toCommitRef *string
-	if toCommit != "" {
-		toCommitRef = &toCommit
-	}
-	var relativeToRef *string
-	if relativeTo != "" {
-		relativeToRef = &relativeTo
-	}
+	fromCommitRef := stringToRef(fromCommit)
+	toCommitRef := stringToRef(toCommit)
+	relativeToRef := stringToRef(relativeTo)
 
 	req := ffi_proto.ChangedFilesReq{
 		RepoRoot:         repoRoot,

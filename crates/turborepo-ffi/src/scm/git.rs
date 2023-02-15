@@ -79,13 +79,12 @@ fn add_changed_files_from_commits(
     let to_commit = repo.find_commit(to_commit_oid)?;
     let from_tree = from_commit.tree()?;
     let to_tree = to_commit.tree()?;
-    let mut options = if let Some(relative_to) = relative_to {
+    let mut options = relative_to.map(|relative_to| {
         let mut options = DiffOptions::new();
         options.pathspec(relative_to);
-        Some(options)
-    } else {
-        None
-    };
+        options
+    });
+
     let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), options.as_mut())?;
     diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
 
