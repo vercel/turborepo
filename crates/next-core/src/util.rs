@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use swc_core::ecma::ast::Program;
 use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack::condition::ContextCondition;
+use turbopack::{condition::ContextCondition, module_options::WebpackLoadersOptionsVc};
 use turbopack_core::{
     asset::{Asset, AssetVc},
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -13,8 +13,23 @@ use turbopack_ecmascript::{
     parse::ParseResult,
     EcmascriptModuleAssetVc,
 };
+use turbopack_node::transforms::webpack::{
+    WebpackLoaderConfig, WebpackLoaderConfigs, WebpackLoaderConfigsVc,
+};
 
 use crate::next_config::NextConfigVc;
+
+const BABEL_CONFIG_FILES: &[&str] = &[
+    ".babelrc",
+    ".babelrc.json",
+    ".babelrc.js",
+    ".babelrc.mjs",
+    ".babelrc.cjs",
+    "babel.config.js",
+    "babel.config.json",
+    "babel.config.mjs",
+    "babel.config.cjs",
+];
 
 /// Converts a filename within the server root into a next pathname.
 #[turbo_tasks::function]
@@ -76,6 +91,72 @@ pub async fn foreign_code_context_condition(next_config: NextConfigVc) -> Result
         ])
     };
     Ok(result)
+}
+
+#[turbo_tasks::function]
+pub async fn maybe_add_babel_loader(
+    project_root: FileSystemPathVc,
+    webpack_options: WebpackLoadersOptionsVc,
+) -> Result<WebpackLoadersOptionsVc> {
+    let has_babel_config = {
+        let mut has_babel_config = false;
+        for filename in BABEL_CONFIG_FILES {
+            let metadata = project_root.join(filename).metadata().await;
+            if metadata.is_ok() {
+                has_babel_config = true;
+                break;
+            }
+        }
+        has_babel_config
+    };
+
+    if has_babel_config {
+        let mut options = (*webpack_options.await?).clone();
+        // TODO: Add `.ts` and `.tsx` when we support returning non-JS assets from
+        // loaders
+        for ext in [".js", ".jsx", ".cjs", ".mjs"] {
+            let configs = options.extension_to_loaders.get(ext);
+            let has_babel_loader = match configs {
+                None => false,
+                Some(configs) => {
+                    let mut has_babel_loader = false;
+                    for config in &(configs.await?).0 {
+                        let name = match config {
+                            WebpackLoaderConfig::LoaderName(name) => name,
+                            WebpackLoaderConfig::LoaderNameWithOptions {
+                                loader: name,
+                                options: _,
+                            } => name,
+                        };
+
+                        if name == "babel-loader" {
+                            has_babel_loader = true;
+                            break;
+                        }
+                    }
+                    has_babel_loader
+                }
+            };
+
+            if !has_babel_loader {
+                let loader = WebpackLoaderConfig::LoaderName("babel-loader".to_owned());
+                options.extension_to_loaders.insert(
+                    ext.to_owned(),
+                    if options.extension_to_loaders.contains_key(ext) {
+                        let mut new_configs = (options.extension_to_loaders[ext].await?).0.to_vec();
+                        new_configs.push(loader);
+                        WebpackLoaderConfigsVc::cell(WebpackLoaderConfigs(new_configs))
+                    } else {
+                        WebpackLoaderConfigsVc::cell(WebpackLoaderConfigs(vec![loader]))
+                    },
+                );
+            }
+        }
+
+        Ok(options.cell())
+    } else {
+        Ok(webpack_options)
+    }
 }
 
 #[derive(Default, PartialEq, Eq, Clone, Copy, Debug, TraceRawVcs, Serialize, Deserialize)]

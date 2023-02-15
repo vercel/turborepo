@@ -23,7 +23,7 @@ use crate::{
     next_build::get_postcss_package_mapping,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
-    util::foreign_code_context_condition,
+    util::{foreign_code_context_condition, maybe_add_babel_loader},
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -153,7 +153,10 @@ pub async fn get_server_module_options_context(
         postcss_package: Some(get_postcss_package_mapping(project_path)),
         ..Default::default()
     });
-    let enable_webpack_loaders = next_config.webpack_loaders_options().await?.clone_if();
+    let enable_webpack_loaders =
+        maybe_add_babel_loader(project_path, next_config.webpack_loaders_options())
+            .await?
+            .clone_if();
 
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {

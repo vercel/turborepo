@@ -36,7 +36,7 @@ use crate::{
         get_next_client_resolved_map,
     },
     react_refresh::assert_can_resolve_react_refresh,
-    util::foreign_code_context_condition,
+    util::{foreign_code_context_condition, maybe_add_babel_loader},
 };
 
 #[turbo_tasks::function]
@@ -118,6 +118,10 @@ pub async fn get_client_module_options_context(
         execution_context: Some(execution_context),
         ..Default::default()
     };
+
+    let webpack_loaders_options =
+        maybe_add_babel_loader(project_path, next_config.webpack_loaders_options());
+
     let module_options_context = ModuleOptionsContext {
         // We don't need to resolve React Refresh for each module. Instead,
         // we try resolve it once at the root and pass down a context to all
@@ -131,7 +135,7 @@ pub async fn get_client_module_options_context(
             postcss_package: Some(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
-        enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
+        enable_webpack_loaders: webpack_loaders_options.await?.clone_if(),
         enable_typescript_transform: true,
         rules: vec![(
             foreign_code_context_condition(next_config).await?,

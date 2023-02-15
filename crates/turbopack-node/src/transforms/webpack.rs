@@ -46,7 +46,7 @@ pub enum WebpackLoaderConfig {
 
 #[derive(Debug, Clone)]
 #[turbo_tasks::value(shared)]
-pub struct WebpackLoaderConfigs(Vec<WebpackLoaderConfig>);
+pub struct WebpackLoaderConfigs(pub Vec<WebpackLoaderConfig>);
 
 #[turbo_tasks::value]
 pub struct WebpackLoaders {
