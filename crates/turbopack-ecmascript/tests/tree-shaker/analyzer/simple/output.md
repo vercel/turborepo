@@ -132,14 +132,14 @@ graph TD
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-3.js";
 export const DOG = dog;
 export { DOG };
@@ -148,7 +148,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-3.js";
 const cat = "cat";
 export const CHIMERA = cat + dog;
@@ -158,8 +158,15 @@ export { CHIMERA };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 const dog = "dog";
+```
+
+## Merged (module eval)
+
+```js
+"turbopack://chunk-0.js";
+"module evaluation";
 ```
 
 # Modules (prod)
@@ -167,14 +174,14 @@ const dog = "dog";
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-3.js";
 export const DOG = dog;
 export { DOG };
@@ -183,7 +190,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-3.js";
 const cat = "cat";
 export const CHIMERA = cat + dog;
@@ -193,6 +200,13 @@ export { CHIMERA };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 const dog = "dog";
+```
+
+## Merged (module eval)
+
+```js
+"turbopack://chunk-0.js";
+"module evaluation";
 ```

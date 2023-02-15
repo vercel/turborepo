@@ -410,7 +410,7 @@ graph TD
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 import "turbopack://chunk-10.js";
 import "turbopack://chunk-12.js";
 import "turbopack://chunk-6.js";
@@ -427,7 +427,7 @@ import "other";
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-12.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-9.js";
@@ -441,7 +441,7 @@ export { external1 };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-9.js";
 import "turbopack://chunk-11.js";
@@ -451,7 +451,7 @@ export { foobar };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 import "turbopack://chunk-7.js";
 export { foo };
 ```
@@ -459,7 +459,7 @@ export { foo };
 ## Module 5
 
 ```js
-"turbopack://chunk-4";
+"turbopack://chunk-4.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-10.js";
 import "turbopack://chunk-11.js";
@@ -472,21 +472,21 @@ export { external2 };
 ## Module 6
 
 ```js
-"turbopack://chunk-5";
+"turbopack://chunk-5.js";
 import { upper } from "module";
 ```
 
 ## Module 7
 
 ```js
-"turbopack://chunk-6";
+"turbopack://chunk-6.js";
 export let foobar = "foo";
 ```
 
 ## Module 8
 
 ```js
-"turbopack://chunk-7";
+"turbopack://chunk-7.js";
 import "turbopack://chunk-6.js";
 export const foo = foobar;
 ```
@@ -494,14 +494,14 @@ export const foo = foobar;
 ## Module 9
 
 ```js
-"turbopack://chunk-8";
+"turbopack://chunk-8.js";
 const bar = "bar";
 ```
 
 ## Module 10
 
 ```js
-"turbopack://chunk-9";
+"turbopack://chunk-9.js";
 import "turbopack://chunk-8.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
@@ -511,7 +511,7 @@ foobar += bar;
 ## Module 11
 
 ```js
-"turbopack://chunk-10";
+"turbopack://chunk-10.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-9.js";
 let foobarCopy = foobar;
@@ -520,7 +520,7 @@ let foobarCopy = foobar;
 ## Module 12
 
 ```js
-"turbopack://chunk-11";
+"turbopack://chunk-11.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-9.js";
 import "turbopack://chunk-7.js";
@@ -531,7 +531,7 @@ foobar += "foo";
 ## Module 13
 
 ```js
-"turbopack://chunk-12";
+"turbopack://chunk-12.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-9.js";
@@ -541,12 +541,39 @@ function internal() {
 }
 ```
 
+## Merged (module eval)
+
+```js
+"turbopack://chunk-6.js";
+export let foobar = "foo";
+("turbopack://chunk-8.js");
+const bar = "bar";
+("turbopack://chunk-7.js");
+export const foo = foobar;
+("turbopack://chunk-9.js");
+foobar += bar;
+("turbopack://chunk-10.js");
+let foobarCopy = foobar;
+import { upper } from "module";
+("turbopack://chunk-5.js");
+("turbopack://chunk-11.js");
+foobar += "foo";
+("turbopack://chunk-12.js");
+function internal() {
+  return upper(foobar);
+}
+import "other";
+("turbopack://chunk-0.js");
+console.log(foobarCopy);
+("module evaluation");
+```
+
 # Modules (prod)
 
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-7.js";
 import "module";
@@ -559,7 +586,7 @@ import "other";
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-8.js";
@@ -576,7 +603,7 @@ export { external1 };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-8.js";
@@ -586,7 +613,7 @@ export { foobar };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 import "turbopack://chunk-5.js";
 export const foo = foobar;
 export { foo };
@@ -595,7 +622,7 @@ export { foo };
 ## Module 5
 
 ```js
-"turbopack://chunk-4";
+"turbopack://chunk-4.js";
 export function external2() {
   foobar += ".";
 }
@@ -605,21 +632,21 @@ export { external2 };
 ## Module 6
 
 ```js
-"turbopack://chunk-5";
+"turbopack://chunk-5.js";
 export let foobar = "foo";
 ```
 
 ## Module 7
 
 ```js
-"turbopack://chunk-6";
+"turbopack://chunk-6.js";
 const bar = "bar";
 ```
 
 ## Module 8
 
 ```js
-"turbopack://chunk-7";
+"turbopack://chunk-7.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-5.js";
 foobar += bar;
@@ -628,8 +655,25 @@ foobar += bar;
 ## Module 9
 
 ```js
-"turbopack://chunk-8";
+"turbopack://chunk-8.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-7.js";
 foobar += "foo";
+```
+
+## Merged (module eval)
+
+```js
+"turbopack://chunk-5.js";
+export let foobar = "foo";
+("turbopack://chunk-6.js");
+const bar = "bar";
+("turbopack://chunk-7.js");
+foobar += bar;
+import "module";
+import "other";
+("turbopack://chunk-0.js");
+let foobarCopy = foobar;
+console.log(foobarCopy);
+("module evaluation");
 ```

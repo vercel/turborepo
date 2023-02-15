@@ -430,7 +430,7 @@ graph TD
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 import "turbopack://chunk-7.js";
 import "turbopack://chunk-9.js";
 import "turbopack://chunk-11.js";
@@ -440,7 +440,7 @@ import "turbopack://chunk-11.js";
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-8.js";
@@ -465,7 +465,7 @@ export { dogRef };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-12.js";
 export { cat };
 ```
@@ -473,7 +473,7 @@ export { cat };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 import "turbopack://chunk-12.js";
 export const initialCat = cat;
 export { initialCat };
@@ -482,7 +482,7 @@ export { initialCat };
 ## Module 5
 
 ```js
-"turbopack://chunk-4";
+"turbopack://chunk-4.js";
 import "turbopack://chunk-12.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
@@ -497,14 +497,14 @@ export { getChimera };
 ## Module 6
 
 ```js
-"turbopack://chunk-5";
+"turbopack://chunk-5.js";
 let dog = "dog";
 ```
 
 ## Module 7
 
 ```js
-"turbopack://chunk-6";
+"turbopack://chunk-6.js";
 import "turbopack://chunk-5.js";
 dog += "!";
 ```
@@ -512,7 +512,7 @@ dog += "!";
 ## Module 8
 
 ```js
-"turbopack://chunk-7";
+"turbopack://chunk-7.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 console.log(dog);
@@ -521,7 +521,7 @@ console.log(dog);
 ## Module 9
 
 ```js
-"turbopack://chunk-8";
+"turbopack://chunk-8.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
@@ -531,7 +531,7 @@ dog += "!";
 ## Module 10
 
 ```js
-"turbopack://chunk-9";
+"turbopack://chunk-9.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-8.js";
@@ -542,7 +542,7 @@ console.log(dog);
 ## Module 11
 
 ```js
-"turbopack://chunk-10";
+"turbopack://chunk-10.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-8.js";
@@ -554,7 +554,7 @@ dog += "!";
 ## Module 12
 
 ```js
-"turbopack://chunk-11";
+"turbopack://chunk-11.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-8.js";
@@ -567,8 +567,29 @@ console.log(dog);
 ## Module 13
 
 ```js
-"turbopack://chunk-12";
+"turbopack://chunk-12.js";
 export let cat = "cat";
+```
+
+## Merged (module eval)
+
+```js
+"turbopack://chunk-5.js";
+let dog = "dog";
+("turbopack://chunk-6.js");
+dog += "!";
+("turbopack://chunk-7.js");
+console.log(dog);
+("turbopack://chunk-8.js");
+dog += "!";
+("turbopack://chunk-9.js");
+console.log(dog);
+("turbopack://chunk-10.js");
+dog += "!";
+("turbopack://chunk-11.js");
+console.log(dog);
+("turbopack://chunk-0.js");
+("module evaluation");
 ```
 
 # Modules (prod)
@@ -576,7 +597,7 @@ export let cat = "cat";
 ## Module 1
 
 ```js
-"turbopack://chunk-0";
+"turbopack://chunk-0.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
@@ -590,7 +611,7 @@ console.log(dog);
 ## Module 2
 
 ```js
-"turbopack://chunk-1";
+"turbopack://chunk-1.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
@@ -612,7 +633,7 @@ export { dogRef };
 ## Module 3
 
 ```js
-"turbopack://chunk-2";
+"turbopack://chunk-2.js";
 import "turbopack://chunk-9.js";
 export { cat };
 ```
@@ -620,7 +641,7 @@ export { cat };
 ## Module 4
 
 ```js
-"turbopack://chunk-3";
+"turbopack://chunk-3.js";
 import "turbopack://chunk-9.js";
 export const initialCat = cat;
 export { initialCat };
@@ -629,7 +650,7 @@ export { initialCat };
 ## Module 5
 
 ```js
-"turbopack://chunk-4";
+"turbopack://chunk-4.js";
 import "turbopack://chunk-9.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
@@ -644,14 +665,14 @@ export { getChimera };
 ## Module 6
 
 ```js
-"turbopack://chunk-5";
+"turbopack://chunk-5.js";
 let dog = "dog";
 ```
 
 ## Module 7
 
 ```js
-"turbopack://chunk-6";
+"turbopack://chunk-6.js";
 import "turbopack://chunk-5.js";
 dog += "!";
 ```
@@ -659,7 +680,7 @@ dog += "!";
 ## Module 8
 
 ```js
-"turbopack://chunk-7";
+"turbopack://chunk-7.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 dog += "!";
@@ -668,7 +689,7 @@ dog += "!";
 ## Module 9
 
 ```js
-"turbopack://chunk-8";
+"turbopack://chunk-8.js";
 import "turbopack://chunk-5.js";
 import "turbopack://chunk-6.js";
 import "turbopack://chunk-7.js";
@@ -678,6 +699,24 @@ dog += "!";
 ## Module 10
 
 ```js
-"turbopack://chunk-9";
+"turbopack://chunk-9.js";
 export let cat = "cat";
+```
+
+## Merged (module eval)
+
+```js
+"turbopack://chunk-5.js";
+let dog = "dog";
+("turbopack://chunk-6.js");
+dog += "!";
+("turbopack://chunk-7.js");
+dog += "!";
+("turbopack://chunk-8.js");
+dog += "!";
+("turbopack://chunk-0.js");
+console.log(dog);
+console.log(dog);
+console.log(dog);
+("module evaluation");
 ```
