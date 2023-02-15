@@ -8,18 +8,10 @@ license = "MPL-2.0"
 crate-type = ["staticlib"]
 
 [dependencies]
-anyhow = "1.0.69"
 directories = "4.0.1"
-dunce = "1.0.3"
-git2 = { version = "0.16.1", default-features = false, features = [
-  "vendored-libgit2",
-] }
 prost = "0.11.6"
 turborepo-scm = { path = "../turborepo-scm" }
 
 [build-dependencies]
 cbindgen = "0.24.3"
 prost-build = "0.11.6"
-
-[dev-dependencies]
-tempfile = "3.3.0"

@@ -46,7 +46,15 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 
 #[no_mangle]
 pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
-    let req: proto::ChangedFilesReq = buffer.into_proto().expect("buffer is valid protobuf");
+    let req: proto::ChangedFilesReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::ChangedFilesResp {
+                response: Some(proto::changed_files_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
 
     let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match turborepo_scm::git::changed_files(
