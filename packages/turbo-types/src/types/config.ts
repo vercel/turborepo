@@ -1,8 +1,36 @@
 /* This file generates the `schema.json` file. */
-export interface Schema {
+export type Schema = RootSchema | WorkspaceSchema;
+
+export interface BaseSchema {
   /** @default https://turbo.build/schema.json */
   $schema?: string;
+  pipeline: {
+    /**
+     * The name of a task that can be executed by turbo. If turbo finds a workspace
+     * package with a package.json scripts object with a matching key, it will apply the
+     * pipeline task configuration to that npm script during execution.
+     */
+    [script: string]: Pipeline;
+  };
+}
 
+export interface WorkspaceSchema extends BaseSchema {
+  /**
+   * This key is only available in Workspace Configs
+   * and cannot be used in your root turbo.json.
+   *
+   * Tells turbo to extend your root `turbo.json`
+   * and overrides with the keys provided
+   * in your Workspace Configs.
+   *
+   * Currently, only the "//" value is allowed.
+   *
+   * @default ["//"]
+   */
+  extends: string[];
+}
+
+export interface RootSchema extends BaseSchema {
   /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
@@ -34,23 +62,6 @@ export interface Schema {
    */
   globalEnv?: string[];
 
-  /**
-   * An object representing the task dependency graph of your project. turbo interprets
-   * these conventions to schedule, execute, and cache the outputs of tasks in
-   * your project.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
-   *
-   * @default {}
-   */
-  pipeline: {
-    /**
-     * The name of a task that can be executed by turbo. If turbo finds a workspace
-     * package with a package.json scripts object with a matching key, it will apply the
-     * pipeline task configuration to that npm script during execution.
-     */
-    [script: string]: Pipeline;
-  };
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
