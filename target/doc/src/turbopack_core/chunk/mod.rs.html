@@ -567,6 +567,8 @@
 <span id="567">567</span>
 <span id="568">568</span>
 <span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
 <span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
@@ -581,9 +583,10 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
+    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
-    TryFlatMapRecursiveJoinIterExt, TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbo_tasks_hash::DeterministicHash;
@@ -694,52 +697,15 @@
     /// All chunks should be loaded in parallel.
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-        <span class="kw">async fn </span>reference_to_chunks(
-            r: AssetReferenceVc,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>result = Vec::new();
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(pc) = ParallelChunkReferenceVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">if </span><span class="kw-2">*</span>pc.is_loaded_in_parallel().<span class="kw">await</span><span class="question-mark">? </span>{
-                    result = r
-                        .resolve_reference()
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.primary
-                        .iter()
-                        .map(|r| <span class="kw">async move </span>{
-                            <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(a) = r {
-                                ChunkVc::resolve_from(a).<span class="kw">await</span><span class="question-mark">?
-                            </span>} <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>})
-                        })
-                        .try_join()
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                }
-            }
-            <span class="prelude-val">Ok</span>(result.into_iter().flatten())
-        }
+        <span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(
+            [<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.entry],
+            SkipDuplicates::new(get_chunk_children),
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .collect();
 
-        <span class="kw">async fn </span>get_chunk_children(
-            chunk: ChunkVc,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
-            <span class="prelude-val">Ok</span>(chunk
-                .references()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
-                .copied()
-                .map(reference_to_chunks)
-                .try_join()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.into_iter()
-                .flatten())
-        }
-
-        <span class="kw">let </span>chunks = [<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.entry]
-            .into_iter()
-            .try_flat_map_recursive_join(get_chunk_children)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>chunks = ChunksVc::cell(chunks.into_iter().collect());
+        <span class="kw">let </span>chunks = ChunksVc::cell(chunks);
         <span class="kw">let </span>chunks = optimize(chunks, <span class="self">self</span>);
         <span class="kw">let </span>chunks = ChunksVc::cell(
             chunks
@@ -751,6 +717,44 @@
 
         <span class="prelude-val">Ok</span>(chunks)
     }
+}
+
+<span class="doccomment">/// Computes the list of all chunk children of a given chunk.
+</span><span class="kw">async fn </span>get_chunk_children(parent: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
+    <span class="prelude-val">Ok</span>(parent
+        .references()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.iter()
+        .copied()
+        .map(reference_to_chunks)
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .flatten())
+}
+
+<span class="doccomment">/// Get all parallel chunks from a parallel chunk reference.
+</span><span class="kw">async fn </span>reference_to_chunks(r: AssetReferenceVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>result = Vec::new();
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(pc) = ParallelChunkReferenceVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if </span><span class="kw-2">*</span>pc.is_loaded_in_parallel().<span class="kw">await</span><span class="question-mark">? </span>{
+            result = r
+                .resolve_reference()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.primary
+                .iter()
+                .map(|r| <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(a) = r {
+                        ChunkVc::resolve_from(a).<span class="kw">await</span><span class="question-mark">?
+                    </span>} <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>})
+                })
+                .try_join()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+    }
+    <span class="prelude-val">Ok</span>(result.into_iter().flatten())
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

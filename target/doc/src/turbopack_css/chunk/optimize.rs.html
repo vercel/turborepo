@@ -105,14 +105,31 @@
 <span id="105">105</span>
 <span id="106">106</span>
 <span id="107">107</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
-
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::TryJoinIterExt;
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::chunk::{
-    optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
+    optimize::{ChunkOptimizer, ChunkOptimizerVc},
     ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
 };
 
@@ -133,7 +150,19 @@
 </span><span class="kw">impl </span>ChunkOptimizer <span class="kw">for </span>CssChunkOptimizer {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, _chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-        optimize_by_common_parent(chunks, get_common_parent, optimize_css).<span class="kw">await
+        <span class="comment">// The CSS optimizer works under the constraint that the order in which
+        // CSS chunks are loaded must be preserved, as CSS rules
+        // precedence is determined by the order in which they are
+        // loaded. This means that we may not merge chunks that are not
+        // adjacent to each other in a valid reverse topological order.
+
+        // TODO(alexkirsz) It might be more interesting to only merge adjacent
+        // chunks when they are part of the same chunk subgraph.
+        // However, the optimizer currently does not have access to this
+        // information, as chunks are already fully flattened by the
+        // time they reach the optimizer.
+
+        </span>merge_adjacent_chunks(chunks).<span class="kw">await
     </span>}
 }
 
@@ -145,13 +174,11 @@
     }
 }
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_common_parent(chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathOptionVc&gt; {
-    <span class="prelude-val">Ok</span>(css(chunk).<span class="kw">await</span><span class="question-mark">?</span>.common_parent())
-}
-
-<span class="kw">async fn </span>merge_chunks(first: CssChunkVc, chunks: <span class="kw-2">&amp;</span>[CssChunkVc]) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkVc&gt; {
-    <span class="kw">let </span>chunks = chunks.iter().copied().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="kw">async fn </span>merge_chunks(
+    first: CssChunkVc,
+    chunks: <span class="kw">impl </span>IntoIterator&lt;Item = <span class="kw-2">&amp;</span>CssChunkVc&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkVc&gt; {
+    <span class="kw">let </span>chunks = chunks.into_iter().copied().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>main_entries = chunks
         .iter()
         .map(|c| c.main_entries)
@@ -166,51 +193,64 @@
     ))
 }
 
-<span class="doccomment">/// Max number of local chunks. Will be merged into a single chunk when over the
-/// threshold.
-</span><span class="kw">const </span>LOCAL_CHUNK_MERGE_THRESHOLD: usize = <span class="number">10</span>;
-<span class="doccomment">/// Max number of total chunks. Will be merged randomly to stay within the
-/// limit.
-</span><span class="kw">const </span>TOTAL_CHUNK_MERGE_THRESHOLD: usize = <span class="number">10</span>;
+<span class="doccomment">/// The maximum number of chunks to exist in a single chunk group. The optimizer
+/// will merge chunks into groups until it has at most this number of chunks.
+</span><span class="kw">const </span>MAX_CHUNK_COUNT: usize = <span class="number">20</span>;
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>optimize_css(local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, children: Vec&lt;ChunksVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
-    <span class="comment">// TODO optimize
-    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(local) = local {
-        <span class="comment">// Local chunks have the same common_parent and could be merged into fewer
-        // chunks. (We use a pretty large threshold for that.)
-        </span><span class="kw">let </span><span class="kw-2">mut </span>local = local.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(css).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// Merge all local chunks when they are too many
-        </span><span class="kw">if </span>local.len() &gt; LOCAL_CHUNK_MERGE_THRESHOLD {
-            <span class="kw">let </span>merged = take(<span class="kw-2">&amp;mut </span>local);
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(first) = merged.first().copied() {
-                local.push(merge_chunks(first, <span class="kw-2">&amp;</span>merged).<span class="kw">await</span><span class="question-mark">?</span>);
-            }
-        }
-        chunks.append(<span class="kw-2">&amp;mut </span>local);
-    }
-    <span class="kw">for </span>children <span class="kw">in </span>children {
-        <span class="kw">let </span><span class="kw-2">mut </span>children = children.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(css).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-        chunks.append(<span class="kw-2">&amp;mut </span>children);
-    }
-    <span class="comment">// Multiple very small chunks could be merged to avoid requests. (We use a small
-    // threshold for that.)
-    // TODO implement that
+<span class="doccomment">/// Groups adjacent chunks into at most `MAX_CHUNK_COUNT` groups.
+</span><span class="kw">fn </span>aggregate_adjacent_chunks(chunks: <span class="kw-2">&amp;</span>[ChunkVc]) -&gt; Vec&lt;Vec&lt;ChunkVc&gt;&gt; {
+    <span class="comment">// Each of the resulting merged chunks will have `chunks_per_merged_chunk`
+    // chunks in them, except for the first `chunks_mod` chunks, which will have
+    // one more chunk.
+    </span><span class="kw">let </span>chunks_per_merged_chunk = chunks.len() / MAX_CHUNK_COUNT;
+    <span class="kw">let </span><span class="kw-2">mut </span>chunks_mod = chunks.len() % MAX_CHUNK_COUNT;
 
-    // When there are too many chunks, try hard to reduce the number of chunks to
-    // limit the request count.
-    </span><span class="kw">if </span>chunks.len() &gt; TOTAL_CHUNK_MERGE_THRESHOLD {
-        <span class="kw">let </span>size = chunks.len().div_ceil(TOTAL_CHUNK_MERGE_THRESHOLD);
-        <span class="comment">// TODO be smarter in selecting the chunks to merge
-        // see ecmascript implementation
-        </span><span class="kw">for </span>merged <span class="kw">in </span>take(<span class="kw-2">&amp;mut </span>chunks).chunks(size) {
-            chunks.push(merge_chunks(<span class="kw-2">*</span>merged.first().unwrap(), merged).<span class="kw">await</span><span class="question-mark">?</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>chunks_vecs = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>current_chunks = <span class="macro">vec!</span>[];
+
+    <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter().copied() {
+        <span class="kw">if </span>current_chunks.len() &lt; chunks_per_merged_chunk {
+            current_chunks.push(chunk);
+        } <span class="kw">else if </span>current_chunks.len() == chunks_per_merged_chunk &amp;&amp; chunks_mod &gt; <span class="number">0 </span>{
+            current_chunks.push(chunk);
+            chunks_mod -= <span class="number">1</span>;
+            chunks_vecs.push(std::mem::take(<span class="kw-2">&amp;mut </span>current_chunks));
+        } <span class="kw">else </span>{
+            chunks_vecs.push(std::mem::take(<span class="kw-2">&amp;mut </span>current_chunks));
+            current_chunks.push(chunk);
         }
     }
-    <span class="prelude-val">Ok</span>(ChunksVc::cell(
-        chunks.into_iter().map(|c| c.as_chunk()).collect(),
-    ))
+
+    <span class="kw">if </span>!current_chunks.is_empty() {
+        chunks_vecs.push(current_chunks);
+    }
+
+    chunks_vecs
+}
+
+<span class="doccomment">/// Merges adjacent chunks into at most `MAX_CHUNK_COUNT` chunks.
+</span><span class="kw">async fn </span>merge_adjacent_chunks(chunks_vc: ChunksVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+    <span class="kw">let </span>chunks = chunks_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">if </span>chunks.len() &lt;= MAX_CHUNK_COUNT {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(chunks_vc);
+    }
+
+    <span class="kw">let </span>chunks = aggregate_adjacent_chunks(<span class="kw-2">&amp;</span>chunks);
+
+    <span class="kw">let </span>chunks = chunks
+        .into_iter()
+        .map(|chunks| <span class="kw">async move </span>{
+            <span class="kw">let </span>chunks = chunks.iter().copied().map(css).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+            merge_chunks(<span class="kw-2">*</span>chunks.first().unwrap(), <span class="kw-2">&amp;</span>chunks).<span class="kw">await
+        </span>})
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .map(|chunk| chunk.as_chunk())
+        .collect();
+
+    <span class="prelude-val">Ok</span>(ChunksVc::cell(chunks))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_css" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

@@ -281,6 +281,19 @@
 <span id="281">281</span>
 <span id="282">282</span>
 <span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -311,7 +324,10 @@
     code_gen::{CodeGenerateable, CodeGenerateableVc},
     parse::{parse, ParseResult, ParseResultSourceMap, ParseResultVc},
     path_visitor::ApplyVisitors,
-    references::{analyze_css_stylesheet, import::ImportAssetReferenceVc},
+    references::{
+        analyze_css_stylesheet, compose::CssModuleComposeReferenceVc,
+        import::ImportAssetReferenceVc,
+    },
     transform::CssInputTransformsVc,
     CssModuleAssetType,
 };
@@ -453,14 +469,24 @@
         <span class="kw">let </span>context = <span class="self">self</span>.context;
 
         <span class="kw">for </span>reference <span class="kw">in </span>references.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(import) = ImportAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">for </span>result <span class="kw">in </span>import.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(import_ref) = ImportAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">for </span>result <span class="kw">in </span>import_ref.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
                     <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
                             imports.push(CssImport::Internal(
-                                import,
+                                import_ref,
                                 placeable.as_chunk_item(context),
                             ));
+                        }
+                    }
+                }
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(compose_ref) =
+                CssModuleComposeReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
+            </span>{
+                <span class="kw">for </span>result <span class="kw">in </span>compose_ref.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+                    <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                            imports.push(CssImport::Composes(placeable.as_chunk_item(context)));
                         }
                     }
                 }

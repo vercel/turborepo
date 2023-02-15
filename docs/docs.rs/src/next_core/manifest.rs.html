@@ -206,8 +206,9 @@
 <span class="kw">use </span>mime::{APPLICATION_JAVASCRIPT_UTF_8, APPLICATION_JSON};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbo_tasks::{
+    graph::{GraphTraversal, NonDeterministic},
     primitives::{StringVc, StringsVc},
-    TryFlatMapRecursiveJoinIterExt, TryJoinIterExt,
+    TryJoinIterExt,
 };
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::asset::AssetContentVc;
@@ -263,19 +264,18 @@
             <span class="prelude-val">Ok</span>(content_source.get_children().<span class="kw">await</span><span class="question-mark">?</span>.clone_value())
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>routes = this
-            .page_roots
-            .iter()
-            .copied()
-            .try_flat_map_recursive_join(get_content_source_children)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .map(content_source_to_pathname)
-            .try_join()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .flatten()
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>routes = GraphTraversal::&lt;NonDeterministic&lt;<span class="kw">_</span>&gt;&gt;::visit(
+            this.page_roots.iter().copied(),
+            get_content_source_children,
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .map(content_source_to_pathname)
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .flatten()
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         routes.sort_by_cached_key(|s| s.split(<span class="string">&#39;/&#39;</span>).map(PageSortKey::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;());
 

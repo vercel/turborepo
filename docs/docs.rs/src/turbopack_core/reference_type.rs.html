@@ -121,6 +121,7 @@
 <span id="121">121</span>
 <span id="122">122</span>
 <span id="123">123</span>
+<span id="124">124</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 
 <span class="comment">// These enums list well-known types, which we use internally. Plugins might add
@@ -147,6 +148,7 @@
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 </span><span class="kw">pub enum </span>CssReferenceSubType {
     AtImport,
+    Compose,
     Custom(u8),
     Undefined,
 }

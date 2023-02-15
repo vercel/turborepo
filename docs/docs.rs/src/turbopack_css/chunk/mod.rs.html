@@ -471,6 +471,7 @@
 <span id="471">471</span>
 <span id="472">472</span>
 <span id="473">473</span>
+<span id="474">474</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -861,6 +862,7 @@
 </span><span class="kw">pub enum </span>CssImport {
     External(StringVc),
     Internal(ImportAssetReferenceVc, CssChunkItemVc),
+    Composes(CssChunkItemVc),
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
