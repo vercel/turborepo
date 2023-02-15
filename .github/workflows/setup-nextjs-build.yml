@@ -69,8 +69,9 @@ jobs:
       - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
-          repository: vercel/next.js
-          ref: ${{ env.NEXTJS_VERSION }}
+          repository: kwonoj/next.js
+          #ref: ${{ env.NEXTJS_VERSION }}
+          ref: passed-test-output
 
       - name: Checkout failed test lists
         uses: actions/checkout@v3
