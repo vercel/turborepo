@@ -213,7 +213,7 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
 
     let (tx, mut rx) = mpsc::channel(1);
 
-    let mut watcher = RecommendedWatcher::new(
+    let mut watcher = notify::PollWatcher::new(
         move |res| match (res, action) {
             (
                 Ok(Event {
@@ -245,7 +245,7 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Er
             }
             _ => {}
         },
-        Config::default(),
+        Config::default().with_poll_interval(Duration::from_millis(10)),
     )?;
 
     debug!("creating {:?}", parent);
