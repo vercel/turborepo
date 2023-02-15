@@ -188,6 +188,13 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 	visited := make(util.Set)
 
+	if len(traversalQueue) == 0 {
+		if len(taskNames) == 1 {
+			return fmt.Errorf("Could not find \"%s\" in project", taskNames[0])
+		}
+		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(taskNames, ", "))
+	}
+
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
 	for len(traversalQueue) > 0 {
 		// pop off the first item from the traversalQueue

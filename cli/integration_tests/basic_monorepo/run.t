@@ -4,13 +4,11 @@ Setup
 
 $ running non-existent tasks works
   $ ${TURBO} run doesnotexist
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running doesnotexist in 2 packages (esc)
-  \xe2\x80\xa2 Remote caching disabled (esc)
-  
-  No tasks were executed as part of this run.
-  
-   Tasks:    0 successful, 0 total
-  Cached:    0 cached, 0 total
-    Time:\s*[\.0-9]+m?s  (re)
-  
+   ERROR  run failed: error preparing engine: Could not find "doesnotexist" in project
+  Turbo error: error preparing engine: Could not find "doesnotexist" in project
+  [1]
+
+  $ ${TURBO} run doesnotexist alsono
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist, alsono
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist, alsono
+  [1]
