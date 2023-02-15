@@ -3,7 +3,6 @@ import * as React from "react";
 import type { Issue } from "@vercel/turbopack-runtime/types/protocol";
 
 import * as Bus from "./bus";
-import { TYPE_REACT_ERROR } from "./bus";
 import { ShadowPortal } from "./components/ShadowPortal";
 import { Errors, SupportedErrorEvent } from "./container/Errors";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -168,7 +167,7 @@ export default function ReactDevOverlay({
   const onComponentError = React.useCallback(
     (error: Error, componentStack: string | null) => {
       Bus.emit({
-        type: TYPE_REACT_ERROR,
+        type: Bus.TYPE_REACT_ERROR,
         error,
         componentStack,
       });
