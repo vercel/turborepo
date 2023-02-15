@@ -1,0 +1,62 @@
+---
+title: Ignoring tasks
+description: Never do the same work twice.
+---
+
+import Callout from '../../../../../components/Callout'
+
+# Ignoring Tasks
+
+[Build caching](/repo/docs/core-concepts/caching) can dramatically speed up your build tasks - but you can do even better by using `npx turbo-ignore`. If your workspace is unaffected by your code changes, you can completely skip executing a task altogether.
+
+## Using `turbo-ignore`
+
+To skip unaffected work with `npx turbo-ignore`, ensure that your git history is available and run the command.
+
+By default, `turbo-ignore` will run the **build** task in the current working directory. Under the hood, `turbo-ignore` compares the output of `--dry=json` from your previous commit to your current commit.
+
+Here's an example of the command that will be built and ran:
+
+```bash
+npx turbo run build --filter=@example/web...[3c8387ffd98b751305fe3f0284befdd00cbd4610] --dry=json
+```
+
+Note that this command does not _execute_ the build task. Instead, it checks if a **dry run** of a build is different from the **dry run** of the task from the previous commit.
+
+If `turbo-ignore` finds that the task can be skipped, it will exit the process with a `0` code. If changes have been found, the process will exist with `1`.
+
+<Callout type="info">On Vercel, the previously deployed SHA will be used instead of the previous commit.</Callout>
+
+## Customizing behavior
+
+If you'd like to change the default behavior, there are a few flags available:
+
+- `--workspace`: Specifies the workspace for the filter command used by `turbo-ignore`. Defaults to the `name` field of the `package.json` in the directory where `turbo-ignore` is invoked.
+- `--task`: Specifies the task for the command that `turbo-ignore` will invoke. Defaults to `build`.
+- `--directory`: Specify a directory where `turbo-ignore` will run.
+- `--fallback`: Specify a ref/head to compare against.
+
+## Example
+
+Let's say you want to skip the unit tests for your `web` workspace when there aren't any changes to your `web` application or its package dependencies. In practice, hitting the cache with a `>>> FULL TURBO` will speed things up quite a bit but there will still be time spent installing `npm` dependencies, creating upcoming CI infrastructure, or doing other types of work that can take awhile.
+
+Ideally, we would do a quick check to see if any of that work needs to happen in the first place.
+
+After we've checked out the repo but **before** any other work, we can take a few seconds to check that our `web` tests have changed since the previous commit.
+
+```bash
+npx turbo-ignore --workspace=web --task=test
+```
+
+This command will:
+
+- filter for the `web` workspace
+- create the `dry` output for your `test` task at the _current_ commit
+- create the `dry` output for your `test` task at the _previous_ commit
+- compare the results of the two `dry` outputs
+
+If the outputs match, your `test` task doesn't need to run at all. You can skip all of the extra work that you would have done only to find out that you're `FULL TURBO` for this task.
+
+## Using `turbo-ignore` on Vercel
+
+To use `npx turbo-ignore` on Vercel, you can use the [Ignored Build Step](https://vercel.com/docs/concepts/projects/overview#ignored-build-step) feature. Vercel will automatically infer the correct arguments to successfully run `turbo-ignore`.
