@@ -10,10 +10,11 @@ import Callout from "../../../../../components/Callout";
 Most monorepos can declare a `turbo.json` in the root directory with a uniform
 [pipeline][2] that apply to all workspaces. Sometimes, a monorepo can contain
 workspaces that need to configure their tasks differently. To accommodate this,
-Turborepo enables you to extend the root configuration with a `turbo.json` in
-any workspace. This flexibility enables a more diverse set of apps and packages
-to co-exist, and allows workspace owners to maintain specialized tasks and
-configuration without affecting other apps and packages of the monorepo.
+starting in version 1.8, Turborepo enables you to extend the root configuration
+with a `turbo.json` in any workspace. This flexibility enables a more diverse
+set of apps and packages to co-exist, and allows workspace owners to maintain
+specialized tasks and configuration without affecting other apps and packages of
+the monorepo.
 
 ## How it Works
 
