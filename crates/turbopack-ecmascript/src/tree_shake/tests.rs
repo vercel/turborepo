@@ -1,9 +1,10 @@
 use std::{fmt::Write, hash::Hash, path::PathBuf, sync::Arc};
 
+use anyhow::Error;
 use swc_core::{
     common::SourceMap,
     ecma::{
-        ast::{EsVersion, Id},
+        ast::{EsVersion, Expr, ExprStmt, Id, Lit, Module, ModuleItem, Stmt},
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
     },
@@ -12,6 +13,7 @@ use swc_core::{
 
 use super::{
     graph::{DepGraph, InternedGraph, ItemId, ItemIdKind},
+    merge::Merger,
     Analyzer,
 };
 
@@ -172,6 +174,12 @@ fn run(input: PathBuf) {
                 writeln!(s, "## Module {}", i + 1).unwrap();
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
+
+            let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
+            let module = merger.merge_recursively(modules[0].clone()).unwrap();
+
+            writeln!(s, "## Merged").unwrap();
+            writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
         }
 
         {
@@ -184,6 +192,12 @@ fn run(input: PathBuf) {
                 writeln!(s, "## Module {}", i + 1).unwrap();
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
+
+            let mut merger = Merger::new(SingleModuleLoader { modules: &&modules });
+            let module = merger.merge_recursively(modules[0].clone()).unwrap();
+
+            writeln!(s, "## Merged").unwrap();
+            writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
         }
 
         NormalizedOutput::from(s)
@@ -193,6 +207,30 @@ fn run(input: PathBuf) {
         Ok(())
     })
     .unwrap();
+}
+
+struct SingleModuleLoader<'a> {
+    modules: &'a [Module],
+}
+
+impl super::merge::Load for SingleModuleLoader<'_> {
+    fn load(&mut self, uri: &str) -> Result<Option<Module>, Error> {
+        for module in self.modules {
+            match &module.body[0] {
+                ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                    expr: box Expr::Lit(Lit::Str(s)),
+                    ..
+                })) => {
+                    if uri == &*s.value {
+                        return Ok(Some(module.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) -> String {
