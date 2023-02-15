@@ -8,7 +8,7 @@ const { readFile, readdir, writeFile } = require("fs/promises");
 const cwd = process.cwd();
 
 (async function () {
-  const execa = await import("execa");
+  const { execa } = await import("execa");
 
   try {
     const publishSema = new Sema(2);
@@ -26,7 +26,7 @@ const cwd = process.cwd();
         await publishSema.acquire();
 
         try {
-          let binaryName = `next-swc.${platform}.node`;
+          let binaryName = `next-rs.${platform}.node`;
           await copy(
             path.join(cwd, "packages/next-rs/native", binaryName),
             path.join(nativePackagesDir, platform, binaryName)
