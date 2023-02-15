@@ -36,7 +36,7 @@ use turbopack::{
     emit_asset, emit_with_completion,
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc},
     rebase::RebasedAssetVc,
-    resolve_options_context::ResolveOptionsContext,
+    resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
@@ -241,6 +241,7 @@ async fn input_to_modules<'a>(
     process_cwd: Option<String>,
     exact: bool,
     module_options: Option<ModuleOptionsContextVc>,
+    resolve_options: Option<ResolveOptionsContextVc>,
 ) -> Result<AssetsVc> {
     let root = fs.root();
     let env = EnvironmentVc::new(
@@ -265,11 +266,23 @@ async fn input_to_modules<'a>(
             ImportMapping::Ignore.into(),
         ),
     ];
-    let context: AssetContextVc = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(HashMap::new()),
-        env,
-        module_options.unwrap_or_default(),
-        ResolveOptionsContext {
+    let resolve_options_context = match resolve_options {
+        Some(r) => {
+            let mut resolve_options = (&*r.await?).clone();
+            if resolve_options.emulate_environment.is_none() {
+                resolve_options.emulate_environment = Some(env);
+            }
+            if resolve_options.resolved_map.is_none() {
+                resolve_options.resolved_map = Some(
+                    ResolvedMap {
+                        by_glob: glob_mappings,
+                    }
+                    .cell(),
+                );
+            }
+            resolve_options.cell()
+        }
+        None => ResolveOptionsContext {
             emulate_environment: Some(env),
             resolved_map: Some(
                 ResolvedMap {
@@ -280,6 +293,12 @@ async fn input_to_modules<'a>(
             ..Default::default()
         }
         .cell(),
+    };
+    let context: AssetContextVc = ModuleAssetContextVc::new(
+        TransitionsByNameVc::cell(HashMap::new()),
+        env,
+        module_options.unwrap_or_default(),
+        resolve_options_context,
     )
     .into();
     let mut list = Vec::new();
@@ -341,6 +360,7 @@ pub async fn start(
     args: Arc<Args>,
     turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
     module_options: Option<ModuleOptionsContext>,
+    resolve_options: Option<ResolveOptionsContext>,
 ) -> Result<Vec<String>> {
     register();
     let &CommonArgs {
@@ -426,6 +446,7 @@ pub async fn start(
             }
         },
         module_options,
+        resolve_options,
     )
     .await
 }
@@ -435,6 +456,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     create_tt: impl Fn() -> Arc<TurboTasks<B>>,
     final_finish: impl FnOnce(Arc<TurboTasks<B>>, TaskId, Duration) -> F,
     module_options: Option<ModuleOptionsContext>,
+    resolve_options: Option<ResolveOptionsContext>,
 ) -> Result<Vec<String>> {
     let &CommonArgs {
         watch,
@@ -488,11 +510,13 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         let args = args.clone();
         let sender = sender.clone();
         let module_options = module_options.clone();
+        let resolve_options = resolve_options.clone();
         Box::pin(async move {
             let output = main_operation(
                 TransientValue::new(dir.clone()),
                 args.clone().into(),
                 module_options.map(|m| m.into()),
+                resolve_options.map(|r| r.into()),
             );
 
             let source = TransientValue::new(output.into());
@@ -534,6 +558,7 @@ async fn main_operation(
     current_dir: TransientValue<PathBuf>,
     args: TransientInstance<Args>,
     module_options: Option<ModuleOptionsContextVc>,
+    resolve_options: Option<ResolveOptionsContextVc>,
 ) -> Result<StringsVc> {
     let dir = current_dir.into_value();
     let args = &*args;
@@ -554,7 +579,15 @@ async fn main_operation(
             let input = process_input(&dir, &context, input).unwrap();
             let mut result = BTreeSet::new();
             let fs = create_fs("context directory", &context, watch).await?;
-            let modules = input_to_modules(fs, input, process_cwd, exact, module_options).await?;
+            let modules = input_to_modules(
+                fs,
+                input,
+                process_cwd,
+                exact,
+                module_options,
+                resolve_options,
+            )
+            .await?;
             for module in modules.iter() {
                 let set = all_assets(*module);
                 IssueVc::attach_context(module.path(), "gathering list of assets".to_string(), set)
@@ -571,19 +604,21 @@ async fn main_operation(
             let input = process_input(&dir, &context, input).unwrap();
             let fs = create_fs("context directory", &context, watch).await?;
             let mut output_nft_assets = Vec::new();
-            let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact, module_options)
-                .await?
-                .iter()
+            for module in input_to_modules(
+                fs,
+                input,
+                process_cwd,
+                exact,
+                module_options,
+                resolve_options,
+            )
+            .await?
+            .iter()
             {
                 let nft_asset = NftJsonAssetVc::new(*module);
                 let path = nft_asset.path().await?.path.clone();
                 output_nft_assets.push(path);
-                emits.push(emit_asset(nft_asset.into()));
-            }
-            // Wait for all files to be emitted
-            for emit in emits {
-                emit.await?;
+                emit_asset(nft_asset.into()).await?;
             }
             return Ok(StringsVc::cell(output_nft_assets));
         }
@@ -597,17 +632,19 @@ async fn main_operation(
             let out_fs = create_fs("output directory", &output, watch).await?;
             let input_dir = fs.root();
             let output_dir = out_fs.root();
-            let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact, module_options)
-                .await?
-                .iter()
+            for module in input_to_modules(
+                fs,
+                input,
+                process_cwd,
+                exact,
+                module_options,
+                resolve_options,
+            )
+            .await?
+            .iter()
             {
                 let rebased = RebasedAssetVc::new(*module, input_dir, output_dir).into();
-                emits.push(emit_with_completion(rebased, output_dir));
-            }
-            // Wait for all files to be emitted
-            for emit in emits {
-                emit.await?;
+                emit_with_completion(rebased, output_dir).await?;
             }
         }
         Args::Size { common: _ } => todo!(),
