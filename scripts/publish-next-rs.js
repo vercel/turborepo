@@ -75,54 +75,55 @@ const cwd = process.cwd();
     );
 
     // Update name/version of wasm packages and publish
-    // let wasmDir = path.join(cwd, "crates/next-rs-wasm");
+    let wasmDir = path.join(cwd, "crates/next-rs-wasm");
 
-    // await Promise.all(
-    //   ["web", "nodejs"].map(async (wasmTarget) => {
-    //     await publishSema.acquire();
+    await Promise.all(
+      ["web", "nodejs"].map(async (wasmTarget) => {
+        await publishSema.acquire();
 
-    //     let wasmPkg = JSON.parse(
-    //       await readFile(path.join(wasmDir, `pkg-${wasmTarget}/package.json`))
-    //     );
-    //     wasmPkg.name = `@next/swc-wasm-${wasmTarget}`;
-    //     wasmPkg.version = version;
+        let wasmPkg = JSON.parse(
+          await readFile(path.join(wasmDir, `pkg-${wasmTarget}/package.json`))
+        );
+        wasmPkg.name = `@next/rs-wasm-${wasmTarget}`;
+        wasmPkg.version = version;
 
-    //     await writeFile(
-    //       path.join(wasmDir, `pkg-${wasmTarget}/package.json`),
-    //       JSON.stringify(wasmPkg, null, 2)
-    //     );
+        await writeFile(
+          path.join(wasmDir, `pkg-${wasmTarget}/package.json`),
+          JSON.stringify(wasmPkg, null, 2)
+        );
 
-    //     try {
-    //       // await execa(
-    //       //   `npm`,
-    //       //   [
-    //       //     "publish",
-    //       //     `${path.join(wasmDir, `pkg-${wasmTarget}`)}`,
-    //       //     "--access",
-    //       //     "public",
-    //       //     ...(version.includes("canary") ? ["--tag", "canary"] : []),
-    //       //   ],
-    //       //   { stdio: "inherit" }
-    //       // );
-    //     } catch (err) {
-    //       // don't block publishing other versions on single platform error
-    //       console.error(`Failed to publish`, wasmTarget, err);
+        try {
+          await execa(
+            `npm`,
+            [
+              "publish",
+              `${path.join(wasmDir, `pkg-${wasmTarget}`)}`,
+              "--access",
+              "public",
+              `--tag canary`,
+              //...(version.includes("canary") ? ["--tag", "canary"] : []),
+            ],
+            { stdio: "inherit" }
+          );
+        } catch (err) {
+          // don't block publishing other versions on single platform error
+          console.error(`Failed to publish`, wasmTarget, err);
 
-    //       if (
-    //         err.message &&
-    //         err.message.includes(
-    //           "You cannot publish over the previously published versions"
-    //         )
-    //       ) {
-    //         console.error("Ignoring already published error", wasmTarget);
-    //       } else {
-    //         // throw err
-    //       }
-    //     } finally {
-    //       publishSema.release();
-    //     }
-    //   })
-    // );
+          if (
+            err.message &&
+            err.message.includes(
+              "You cannot publish over the previously published versions"
+            )
+          ) {
+            console.error("Ignoring already published error", wasmTarget);
+          } else {
+            // throw err
+          }
+        } finally {
+          publishSema.release();
+        }
+      })
+    );
 
     // Update optional dependencies versions
     let nextRsPath = path.join(cwd, "packages/next-rs");

@@ -8,7 +8,7 @@
     "build-native-woa": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --features plugin,native-tls --js false native",
     "build-native-no-plugin": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --js false native",
     "build-native-no-plugin-woa": "napi build --platform -p next-rs-napi --cargo-name next_rs_napi --cargo-flags=--no-default-features --features native-tls --js false native",
-    "build-wasm": "wasm-pack build crates/wasm --scope=next",
+    "build-wasm": "wasm-pack build ../../crates/next-rs-wasm --scope=next",
     "cache-build-native": "echo $(ls native)",
     "test-pack": "cd ../../ && pnpm test-pack next-rs"
   },
@@ -31,8 +31,7 @@
     }
   },
   "dependencies": {
-    "@napi-rs/triples": "1.1.0",
-    "@next/rs-darwin-arm64": "file:../../crates/next-rs-napi/npm/darwin-arm64"
+    "@napi-rs/triples": "1.1.0"
   },
   "devDependencies": {
     "@napi-rs/cli": "2.14.7"
