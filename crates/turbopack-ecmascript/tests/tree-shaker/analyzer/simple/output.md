@@ -132,15 +132,13 @@ graph TD
 ## Module 1
 
 ```js
-"turbopack://chunk-0.js";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"turbopack://chunk-1.js";
-import "turbopack://chunk-3.js" assert {
+import "entry.js" assert {
     __turbopack_chunk__: 3
 };
 export const DOG = dog;
@@ -151,8 +149,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"turbopack://chunk-2.js";
-import "turbopack://chunk-3.js" assert {
+import "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
@@ -164,14 +161,12 @@ export { CHIMERA };
 ## Module 4
 
 ```js
-"turbopack://chunk-3.js";
 const dog = "dog";
 ```
 
 ## Merged (module eval)
 
 ```js
-"turbopack://chunk-0.js";
 "module evaluation";
 ```
 
@@ -180,15 +175,13 @@ const dog = "dog";
 ## Module 1
 
 ```js
-"turbopack://chunk-0.js";
 "module evaluation";
 ```
 
 ## Module 2
 
 ```js
-"turbopack://chunk-1.js";
-import "turbopack://chunk-3.js" assert {
+import "entry.js" assert {
     __turbopack_chunk__: 3
 };
 export const DOG = dog;
@@ -199,8 +192,7 @@ export { DOG };
 ## Module 3
 
 ```js
-"turbopack://chunk-2.js";
-import "turbopack://chunk-3.js" assert {
+import "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
@@ -212,13 +204,11 @@ export { CHIMERA };
 ## Module 4
 
 ```js
-"turbopack://chunk-3.js";
 const dog = "dog";
 ```
 
 ## Merged (module eval)
 
 ```js
-"turbopack://chunk-0.js";
 "module evaluation";
 ```
