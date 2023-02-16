@@ -324,6 +324,18 @@
 <span id="324">324</span>
 <span id="325">325</span>
 <span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -347,9 +359,9 @@
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    OptionEcmascriptModuleAssetVc,
 };
 <span class="kw">use </span>turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
@@ -473,40 +485,38 @@
     context: AssetContextVc,
     project_path: FileSystemPathVc,
     configs: StringsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceableVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;OptionEcmascriptModuleAssetVc&gt; {
     <span class="kw">let </span>find_config_result = find_context_file(project_path, configs);
     <span class="kw">let </span>config_asset = <span class="kw">match </span><span class="kw-2">&amp;*</span>find_config_result.<span class="kw">await</span><span class="question-mark">? </span>{
-        FindContextFileResult::Found(config_path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(SourceAssetVc::new(<span class="kw-2">*</span>config_path)),
+        FindContextFileResult::Found(config_path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(as_es_module_asset(
+            SourceAssetVc::new(<span class="kw-2">*</span>config_path).as_asset(),
+            context,
+        )),
         FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
     };
-    <span class="kw">let </span>config_asset: AssetVc = <span class="kw">match </span>config_asset {
-        <span class="prelude-val">Some</span>(c) =&gt; c.into(),
-        <span class="prelude-val">None </span>=&gt; {
-            <span class="kw">let </span>configs = configs.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="prelude-val">Some</span>(config_path) = configs.first() <span class="kw">else </span>{
-                <span class="macro">bail!</span>(<span class="string">&quot;no config path provided&quot;</span>);
-            };
-            VirtualAssetVc::new(project_path.join(config_path), File::from(<span class="string">&quot;&quot;</span>).into()).into()
-        }
-    };
+    <span class="prelude-val">Ok</span>(OptionEcmascriptModuleAssetVc::cell(config_asset))
+}
 
-    <span class="prelude-val">Ok</span>(EcmascriptModuleAssetVc::new(
-        config_asset,
+<span class="kw">fn </span>as_es_module_asset(asset: AssetVc, context: AssetContextVc) -&gt; EcmascriptModuleAssetVc {
+    EcmascriptModuleAssetVc::new(
+        asset,
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
     )
-    .into())
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>watch_files_hack(
+</span><span class="kw">async fn </span>watch_files_hack(
     context: AssetContextVc,
     project_path: FileSystemPathVc,
-) -&gt; EcmascriptChunkPlaceablesVc {
-    <span class="kw">let </span>next_config = get_config(context, project_path, next_configs());
-    EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[next_config])
+) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceablesVc&gt; {
+    <span class="kw">let </span>next_config = get_config(context, project_path, next_configs()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>next_config {
+        <span class="prelude-val">Some</span>(c) =&gt; EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[c.as_ecmascript_chunk_placeable()]),
+        <span class="prelude-val">None </span>=&gt; EcmascriptChunkPlaceablesVc::empty(),
+    })
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -515,19 +525,33 @@
     project_path: FileSystemPathVc,
     page_extensions: StringsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;InnerAssetsVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>inner = HashMap::new();
+    <span class="kw">let </span>middleware_config =
+        get_config(context, project_path, middleware_files(page_extensions)).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>middleware_config = get_config(context, project_path, middleware_files(page_extensions));
-    inner.insert(
-        <span class="string">&quot;MIDDLEWARE_CHUNK_GROUP&quot;</span>.to_string(),
-        context.with_transition(<span class="string">&quot;next-edge&quot;</span>).process(
-            middleware_config.into(),
+    <span class="comment">// The router.ts file expects a manifest of chunks for the middleware. If there
+    // is no middleware file, then we need to generate a default empty manifest
+    // and we cannot process it with the next-edge transition because it
+    // requires a real file for some reason.
+    </span><span class="kw">let </span>middleware_manifest = <span class="kw">match </span><span class="kw-2">&amp;*</span>middleware_config {
+        <span class="prelude-val">Some</span>(c) =&gt; context.with_transition(<span class="string">&quot;next-edge&quot;</span>).process(
+            c.as_asset(),
             Value::new(ReferenceType::EcmaScriptModules(
                 EcmaScriptModulesReferenceSubType::Undefined,
             )),
         ),
-    );
+        <span class="prelude-val">None </span>=&gt; as_es_module_asset(
+            VirtualAssetVc::new(
+                project_path.join(<span class="string">&quot;middleware.js&quot;</span>),
+                File::from(<span class="string">&quot;export default [];&quot;</span>).into(),
+            )
+            .as_asset(),
+            context,
+        )
+        .as_asset(),
+    };
 
+    <span class="kw">let </span><span class="kw-2">mut </span>inner = HashMap::new();
+    inner.insert(<span class="string">&quot;MIDDLEWARE_CHUNK_GROUP&quot;</span>.to_string(), middleware_manifest);
     <span class="prelude-val">Ok</span>(InnerAssetsVc::cell(inner))
 }
 

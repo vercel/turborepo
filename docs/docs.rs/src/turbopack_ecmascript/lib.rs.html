@@ -398,6 +398,10 @@
 <span id="398">398</span>
 <span id="399">399</span>
 <span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -498,6 +502,10 @@
     <span class="kw">pub </span>compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
 }
+
+<span class="doccomment">/// An optional [EcmascriptModuleAsset]
+</span><span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>OptionEcmascriptModuleAsset(<span class="prelude-ty">Option</span>&lt;EcmascriptModuleAssetVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptModuleAssetVc {
