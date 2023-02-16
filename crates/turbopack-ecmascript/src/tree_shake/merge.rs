@@ -53,7 +53,7 @@ where
                             if let Some(dep) = self.loader.load(&import.src.value, chunk_id)? {
                                 let mut dep = self.merge_recursively(dep)?;
 
-                                content.append(&mut dep.body);
+                                extra_body.append(&mut dep.body);
                             } else {
                                 content.push(ModuleItem::ModuleDecl(ModuleDecl::Import(import)));
                             }
