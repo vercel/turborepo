@@ -179,6 +179,8 @@
 <span id="179">179</span>
 <span id="180">180</span>
 <span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
@@ -228,6 +230,7 @@
 <span class="doccomment">/// Renders a module as static HTML in a node.js process.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>render_static(
+    cwd: FileSystemPathVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
@@ -242,6 +245,7 @@
         intermediate_output_path,
     );
     <span class="kw">let </span>renderer_pool = get_renderer_pool(
+        cwd,
         intermediate_asset,
         intermediate_output_path,
         output_root,

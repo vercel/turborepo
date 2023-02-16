@@ -275,6 +275,10 @@
 <span id="275">275</span>
 <span id="276">276</span>
 <span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -321,6 +325,7 @@
 /// to this directory.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>create_node_rendered_source(
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
@@ -330,6 +335,7 @@
     fallback_page: DevHtmlAssetVc,
 ) -&gt; ContentSourceVc {
     <span class="kw">let </span>source = NodeRenderContentSource {
+        cwd,
         specificity,
         server_root,
         route_match,
@@ -353,6 +359,7 @@
 <span class="doccomment">/// see [create_node_rendered_source]
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>NodeRenderContentSource {
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
@@ -462,8 +469,8 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
-        <span class="kw">let </span>this = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span>this.route_match.params(<span class="kw-2">&amp;</span><span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span>source.route_match.params(<span class="kw-2">&amp;</span><span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Non matching path provided&quot;</span>));
         };
         <span class="kw">let </span>ContentSourceData {
@@ -475,12 +482,13 @@
         } = <span class="kw-2">&amp;*</span>data <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Missing request data&quot;</span>));
         };
-        <span class="kw">let </span>entry = this.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>entry = source.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = render_static(
-            this.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
+            source.cwd,
+            source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
-            this.runtime_entries,
-            this.fallback_page,
+            source.runtime_entries,
+            source.fallback_page,
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
@@ -490,7 +498,7 @@
                 url: url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, this.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
+                path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
         );

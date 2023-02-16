@@ -198,6 +198,10 @@
 <span id="198">198</span>
 <span id="199">199</span>
 <span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -223,6 +227,7 @@
 <span class="doccomment">/// Creates a [NodeApiContentSource].
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>create_node_api_source(
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     pathname: StringVc,
@@ -231,6 +236,7 @@
     runtime_entries: EcmascriptChunkPlaceablesVc,
 ) -&gt; ContentSourceVc {
     NodeApiContentSource {
+        cwd,
         specificity,
         server_root,
         pathname,
@@ -250,6 +256,7 @@
 /// to this directory.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>NodeApiContentSource {
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     pathname: StringVc,
@@ -314,8 +321,8 @@
     }
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
-        <span class="kw">let </span>this = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span>this.route_match.params(<span class="kw-2">&amp;</span><span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span>source.route_match.params(<span class="kw-2">&amp;</span><span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Non matching path provided&quot;</span>));
         };
         <span class="kw">let </span>ContentSourceData {
@@ -328,11 +335,12 @@
         } = <span class="kw-2">&amp;*</span>data <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Missing request data&quot;</span>));
         };
-        <span class="kw">let </span>entry = this.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>entry = source.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ContentSourceContent::HttpProxy(render_proxy(
-            this.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
+            source.cwd,
+            source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
-            this.runtime_entries,
+            source.runtime_entries,
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,

@@ -1678,6 +1678,15 @@
 <span id="1678">1678</span>
 <span id="1679">1679</span>
 <span id="1680">1680</span>
+<span id="1681">1681</span>
+<span id="1682">1682</span>
+<span id="1683">1683</span>
+<span id="1684">1684</span>
+<span id="1685">1685</span>
+<span id="1686">1686</span>
+<span id="1687">1687</span>
+<span id="1688">1688</span>
+<span id="1689">1689</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1741,6 +1750,7 @@
 <span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">crate</span>::util::is_windows_raw_path;
 <span class="kw">use crate</span>::{
+    attach::AttachedFileSystemVc,
     retry::{retry_blocking, retry_future},
     rope::{Rope, RopeReadRef, RopeReader},
 };
@@ -3346,12 +3356,20 @@
     }
 }
 
-<span class="kw">pub async fn </span>to_sys_path(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PathBuf&gt;&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(fs) = DiskFileSystemVc::resolve_from(path.fs()).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">let </span>sys_path = fs.<span class="kw">await</span><span class="question-mark">?</span>.to_sys_path(path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(sys_path));
+<span class="kw">pub async fn </span>to_sys_path(<span class="kw-2">mut </span>path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PathBuf&gt;&gt; {
+    <span class="kw">loop </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fs) = AttachedFileSystemVc::resolve_from(path.fs()).<span class="kw">await</span><span class="question-mark">? </span>{
+            path = fs.get_inner_fs_path(path);
+            <span class="kw">continue</span>;
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fs) = DiskFileSystemVc::resolve_from(path.fs()).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">let </span>sys_path = fs.<span class="kw">await</span><span class="question-mark">?</span>.to_sys_path(path).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(sys_path));
+        }
+
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
-    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
 }
 
 <span class="kw">pub fn </span>register() {

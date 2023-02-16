@@ -342,6 +342,7 @@
 <span id="342">342</span>
 <span id="343">343</span>
 <span id="344">344</span>
+<span id="345">345</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -352,7 +353,7 @@
     path::PathBuf,
 };
 
-<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::{stream::FuturesUnordered, TryStreamExt};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">pub use </span>node_entry::{
@@ -360,7 +361,7 @@
 };
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
-<span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
+<span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -526,6 +527,7 @@
 <span class="doccomment">/// Creates a node.js renderer pool for an entrypoint.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>get_renderer_pool(
+    cwd: FileSystemPathVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -549,16 +551,16 @@
 
     emit(intermediate_asset, output_root).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>cwd = output_root;
     <span class="kw">let </span>entrypoint = intermediate_output_path.join(<span class="string">&quot;index.js&quot;</span>);
 
-    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(cwd), <span class="prelude-val">Some</span>(entrypoint)) = (to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">?</span>, to_sys_path(entrypoint).<span class="kw">await</span><span class="question-mark">?</span>)
-    {
-        <span class="kw">let </span>pool = NodeJsPool::new(cwd, entrypoint, HashMap::new(), <span class="number">4</span>, debug);
-        <span class="prelude-val">Ok</span>(pool.cell())
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;can only render from a disk filesystem&quot;</span>))
-    }
+    <span class="kw">let </span><span class="prelude-val">Some</span>(cwd) = to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `cwd = {}`&quot;</span>, cwd.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
+    };
+    <span class="kw">let </span><span class="prelude-val">Some</span>(entrypoint) = to_sys_path(entrypoint).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `entrypoint = {}`&quot;</span>, entrypoint.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
+    };
+
+    <span class="prelude-val">Ok</span>(NodeJsPool::new(cwd, entrypoint, HashMap::new(), <span class="number">4</span>, debug).cell())
 }
 
 <span class="doccomment">/// Converts a module graph into node.js executable assets

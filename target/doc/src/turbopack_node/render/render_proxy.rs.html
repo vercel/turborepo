@@ -150,6 +150,10 @@
 <span id="150">150</span>
 <span id="151">151</span>
 <span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -166,6 +170,7 @@
 <span class="doccomment">/// Renders a module as static HTML in a node.js process.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>render_proxy(
+    cwd: FileSystemPathVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
@@ -179,13 +184,16 @@
         module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
         intermediate_output_path,
     );
-    <span class="kw">let </span>renderer_pool = get_renderer_pool(
+
+    <span class="kw">let </span>pool = get_renderer_pool(
+        cwd,
         intermediate_asset,
         intermediate_output_path,
         output_root,
         <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
-    );
-    <span class="kw">let </span>pool = renderer_pool.<span class="kw">await</span><span class="question-mark">?</span>;
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">let </span><span class="kw-2">mut </span>operation = <span class="kw">match </span>pool.operation().<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(operation) =&gt; operation,
         <span class="prelude-val">Err</span>(err) =&gt; {
