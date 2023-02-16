@@ -389,7 +389,7 @@ graph TD
 ## Module 1
 
 ```js
-import "entry.js" assert {
+import { foobarCopy } from "entry.js" assert {
     __turbopack_chunk__: 9
 };
 import "entry.js" assert {
@@ -443,10 +443,10 @@ export { foo };
 ## Module 4
 
 ```js
-import "entry.js" assert {
+import { internal } from "entry.js" assert {
     __turbopack_chunk__: 11
 };
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -490,7 +490,7 @@ export let foobar = "foo";
 ## Module 7
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 export const foo = foobar;
@@ -506,10 +506,10 @@ const bar = "bar";
 ## Module 9
 
 ```js
-import "entry.js" assert {
+import { bar } from "entry.js" assert {
     __turbopack_chunk__: 7
 };
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -522,7 +522,7 @@ foobar += bar;
 ## Module 10
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -535,7 +535,7 @@ let foobarCopy = foobar;
 ## Module 11
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -554,7 +554,7 @@ foobar += "foo";
 ## Module 12
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -594,7 +594,7 @@ console.log(foobarCopy);
 ## Module 1
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -626,7 +626,7 @@ export { foobar };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 export const foo = foobar;
@@ -637,7 +637,7 @@ export { foo };
 ## Module 4
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -681,10 +681,10 @@ const bar = "bar";
 ## Module 8
 
 ```js
-import "entry.js" assert {
+import { bar } from "entry.js" assert {
     __turbopack_chunk__: 6
 };
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 foobar += bar;
@@ -694,7 +694,7 @@ foobar += bar;
 ## Module 9
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {

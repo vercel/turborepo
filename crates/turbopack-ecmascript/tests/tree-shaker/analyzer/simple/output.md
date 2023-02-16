@@ -138,7 +138,7 @@ graph TD
 ## Module 2
 
 ```js
-import "entry.js" assert {
+import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 export const DOG = dog;
@@ -149,7 +149,7 @@ export { DOG };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
@@ -181,7 +181,7 @@ const dog = "dog";
 ## Module 2
 
 ```js
-import "entry.js" assert {
+import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 export const DOG = dog;
@@ -192,7 +192,7 @@ export { DOG };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
