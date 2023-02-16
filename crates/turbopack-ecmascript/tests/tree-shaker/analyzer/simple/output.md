@@ -141,9 +141,9 @@ graph TD
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
-export const DOG = dog;
+const DOG = dog;
 export { DOG };
-export { DOG } from "__turbopack_fake__" assert {
+export { DOG } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -156,12 +156,12 @@ import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
-export const CHIMERA = cat + dog;
+const CHIMERA = cat + dog;
 export { CHIMERA };
-export { cat } from "__turbopack_fake__" assert {
+export { cat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
-export { CHIMERA } from "__turbopack_fake__" assert {
+export { CHIMERA } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -171,7 +171,7 @@ export { CHIMERA } from "__turbopack_fake__" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -197,9 +197,9 @@ export { dog } from "__turbopack_fake__" assert {
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
-export const DOG = dog;
+const DOG = dog;
 export { DOG };
-export { DOG } from "__turbopack_fake__" assert {
+export { DOG } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -212,12 +212,12 @@ import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
 const cat = "cat";
-export const CHIMERA = cat + dog;
+const CHIMERA = cat + dog;
 export { CHIMERA };
-export { cat } from "__turbopack_fake__" assert {
+export { cat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
-export { CHIMERA } from "__turbopack_fake__" assert {
+export { CHIMERA } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -227,7 +227,7 @@ export { CHIMERA } from "__turbopack_fake__" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 

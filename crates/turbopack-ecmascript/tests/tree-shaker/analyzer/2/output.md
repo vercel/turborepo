@@ -503,8 +503,8 @@ export { external2 };
 ## Chunk 5
 
 ```js
-export let foobar = "foo";
-export { foobar } from "__turbopack_fake__" assert {
+let foobar = "foo";
+export { foobar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -516,8 +516,8 @@ export { foobar } from "__turbopack_fake__" assert {
 import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
-export const foo = foobar;
-export { foo } from "__turbopack_fake__" assert {
+const foo = foobar;
+export { foo } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -527,7 +527,7 @@ export { foo } from "__turbopack_fake__" assert {
 
 ```js
 const bar = "bar";
-export { bar } from "__turbopack_fake__" assert {
+export { bar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -559,7 +559,7 @@ import "entry.js" assert {
     __turbopack_chunk__: 8
 };
 let foobarCopy = foobar;
-export { foobarCopy } from "__turbopack_fake__" assert {
+export { foobarCopy } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -609,21 +609,21 @@ function internal() {
 import "module";
 import { upper } from "module";
 import "other";
-export let foobar = "foo";
-export { foobar } from "__turbopack_fake__" assert {
+let foobar = "foo";
+export { foobar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 const bar = "bar";
-export { bar } from "__turbopack_fake__" assert {
+export { bar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
-export const foo = foobar;
-export { foo } from "__turbopack_fake__" assert {
+const foo = foobar;
+export { foo } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 foobar += bar;
 let foobarCopy = foobar;
-export { foobarCopy } from "__turbopack_fake__" assert {
+export { foobarCopy } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 import { upper } from "module";
@@ -652,7 +652,7 @@ let foobarCopy = foobar;
 console.log(foobarCopy);
 import "other";
 "module evaluation";
-export { foobarCopy } from "__turbopack_fake__" assert {
+export { foobarCopy } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -703,9 +703,9 @@ export { foobar };
 import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
-export const foo = foobar;
+const foo = foobar;
 export { foo };
-export { foo } from "__turbopack_fake__" assert {
+export { foo } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -723,8 +723,8 @@ export { external2 };
 ## Chunk 5
 
 ```js
-export let foobar = "foo";
-export { foobar } from "__turbopack_fake__" assert {
+let foobar = "foo";
+export { foobar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -734,7 +734,7 @@ export { foobar } from "__turbopack_fake__" assert {
 
 ```js
 const bar = "bar";
-export { bar } from "__turbopack_fake__" assert {
+export { bar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -771,19 +771,19 @@ foobar += "foo";
 ```js
 import "module";
 import "other";
-export let foobar = "foo";
-export { foobar } from "__turbopack_fake__" assert {
+let foobar = "foo";
+export { foobar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 const bar = "bar";
-export { bar } from "__turbopack_fake__" assert {
+export { bar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 foobar += bar;
 let foobarCopy = foobar;
 console.log(foobarCopy);
 "module evaluation";
-export { foobarCopy } from "__turbopack_fake__" assert {
+export { foobarCopy } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 

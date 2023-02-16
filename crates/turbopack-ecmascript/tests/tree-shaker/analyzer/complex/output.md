@@ -473,13 +473,13 @@ function getDog() {
 function setDog(newDog) {
     dog = newDog;
 }
-export const dogRef = {
+const dogRef = {
     initial: dog,
     get: getDog,
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "__turbopack_fake__" assert {
+export { dogRef } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -501,9 +501,9 @@ export { cat };
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
 };
-export const initialCat = cat;
+const initialCat = cat;
 export { initialCat };
-export { initialCat } from "__turbopack_fake__" assert {
+export { initialCat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -538,7 +538,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -652,8 +652,8 @@ console.log(dog);
 ## Chunk 12
 
 ```js
-export let cat = "cat";
-export { cat } from "__turbopack_fake__" assert {
+let cat = "cat";
+export { cat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -663,7 +663,7 @@ export { cat } from "__turbopack_fake__" assert {
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 dog += "!";
@@ -721,13 +721,13 @@ function getDog() {
 function setDog(newDog) {
     dog = newDog;
 }
-export const dogRef = {
+const dogRef = {
     initial: dog,
     get: getDog,
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "__turbopack_fake__" assert {
+export { dogRef } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -749,9 +749,9 @@ export { cat };
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
 };
-export const initialCat = cat;
+const initialCat = cat;
 export { initialCat };
-export { initialCat } from "__turbopack_fake__" assert {
+export { initialCat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -786,7 +786,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -834,8 +834,8 @@ dog += "!";
 ## Chunk 9
 
 ```js
-export let cat = "cat";
-export { cat } from "__turbopack_fake__" assert {
+let cat = "cat";
+export { cat } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 
@@ -845,7 +845,7 @@ export { cat } from "__turbopack_fake__" assert {
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake__" assert {
+export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 dog += "!";
