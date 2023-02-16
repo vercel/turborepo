@@ -457,7 +457,7 @@ where
         })
         .collect();
 
-    if assets.len() == 0 {
+    if assets.is_empty() {
         return Ok(vec![]);
     }
 
@@ -533,7 +533,7 @@ where
         }
     }
 
-    if new_processed_assets.len() > 0 && new_chunk_items_count > 0 {
+    if !new_processed_assets.is_empty() && new_chunk_items_count > 0 {
         let mut state = state.lock();
         state.processed_assets.extend(new_processed_assets);
         state.chunk_items_count += new_chunk_items_count;
