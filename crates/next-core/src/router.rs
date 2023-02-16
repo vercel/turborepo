@@ -290,8 +290,6 @@ pub async fn route(
     let configs = config_assets(context, project_path, next_config.page_extensions());
     let router_asset = route_executor(context, project_path, configs);
 
-    // dbg!(router_asset.dbg().await?);
-
     // TODO this is a hack to get these files watched.
     let next_config = watch_files_hack(context, project_path);
 
