@@ -45,6 +45,7 @@ First, we declare our tasks inside `turbo.json`:
     "build": {
       // ^build means build must be run in dependencies
       // before it can be run in this workspace
+      "outputs": [".svelte/**"],
       "dependsOn": ["^build"]
     },
     "test": {},
@@ -83,7 +84,8 @@ The `pipeline` configuration declares which tasks depend on each other in your m
       // topological dependencies' and devDependencies'
       // `build` tasks  being completed first. The `^` symbol
       // indicates an upstream dependency.
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".svelte-kit/**"]
     },
     "test": {
       // A workspace's `test` task depends on that workspace's
@@ -120,7 +122,10 @@ If both tasks are in the same workspace, you can specify the relationship like t
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
-    "build": {},
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".svelte-kit/**"]
+    },
     "deploy": {
       // A workspace's `deploy` task depends on the `build`,
       // task of the same workspace being completed.
@@ -145,7 +150,8 @@ The `^` symbol explicitly declares that the task has a dependency on a task in a
     "build": {
       // "A workspace's `build` command depends on its dependencies'
       // and devDependencies' `build` commands being completed first"
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".svelte-kit/**"]
     }
   }
 }
@@ -179,7 +185,8 @@ The example below describes the `deploy` script of a `frontend` application that
   "pipeline": {
     // Standard configuration
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".svelte-kit/**"]
     },
     "test": {
       "dependsOn": ["^build"]
@@ -224,7 +231,8 @@ A sample pipeline that defines the root task `format` and opts the root into `te
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".svelte-kit/**"]
     },
     "test": {
       "dependsOn": ["^build"],
