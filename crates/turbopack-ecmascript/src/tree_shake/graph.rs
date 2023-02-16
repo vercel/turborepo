@@ -68,6 +68,8 @@ pub(super) struct ItemData {
     /// If the module item is hoisted?
     pub is_hoisted: bool,
 
+    pub pure: bool,
+
     /// Variables declared or bound by this module item?
     pub var_decls: Vec<Id>,
 
@@ -111,6 +113,7 @@ impl Default for ItemData {
             eventual_write_vars: Default::default(),
             side_effects: Default::default(),
             content: ModuleItem::dummy(),
+            pure: Default::default(),
         }
     }
 }
@@ -258,7 +261,7 @@ impl DepGraph {
             data: &FxHashMap<ItemId, ItemData>,
             group: &mut Vec<ItemId>,
             start_ix: u32,
-            starting: &FxHashSet<u32>,
+            global_done: &mut FxHashSet<u32>,
             group_done: &mut FxHashSet<u32>,
         ) -> bool {
             // TODO: Consider cycles
@@ -271,13 +274,17 @@ impl DepGraph {
                 .idx_graph
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
-                if !starting.contains(&dep_ix) && group_done.insert(dep_ix) {
+                let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
+
+                if global_done.insert(dep_ix)
+                    || (data.get(&dep_id).map_or(false, |data| data.pure)
+                        && group_done.insert(dep_ix))
+                {
                     changed = true;
 
-                    let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
 
-                    add_to_group(graph, data, group, dep_ix, starting, group_done);
+                    add_to_group(graph, data, group, dep_ix, global_done, group_done);
                 }
             }
 
@@ -291,7 +298,7 @@ impl DepGraph {
         // group.
 
         let mut groups = vec![];
-        let mut starting = FxHashSet::default();
+        let mut global_done = FxHashSet::default();
 
         // Module evaluation node and export nodes starts a group
         for id in self.g.graph_ix.iter() {
@@ -299,7 +306,7 @@ impl DepGraph {
 
             if id.index == usize::MAX {
                 groups.push((vec![id.clone()], FxHashSet::default()));
-                starting.insert(ix);
+                global_done.insert(ix);
                 continue;
             }
         }
@@ -309,16 +316,16 @@ impl DepGraph {
             // If a node is reachable from two or more nodes, it should be in a
             // separate group.
 
-            if starting.contains(&(ix as u32)) {
+            if global_done.contains(&(ix as u32)) {
                 continue;
             }
 
             // Don't store a pure item in a separate chunk
-            if data.get(id).map_or(false, |data| !data.side_effects) {
+            if data.get(id).map_or(false, |data| data.pure) {
                 continue;
             }
 
-            let count = starting
+            let count = global_done
                 .iter()
                 .filter(|&&staring_point| {
                     has_path_connecting(&self.g.idx_graph, staring_point, ix as _, None)
@@ -327,7 +334,7 @@ impl DepGraph {
 
             if count >= 2 {
                 groups.push((vec![id.clone()], FxHashSet::default()));
-                starting.insert(ix as u32);
+                global_done.insert(ix as u32);
             }
         }
 
@@ -339,7 +346,7 @@ impl DepGraph {
             for (group, group_done) in &mut groups {
                 let start = group[0].clone();
                 let start_ix = self.g.get_node(&start);
-                if add_to_group(&self.g, data, group, start_ix, &starting, group_done) {
+                if add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done) {
                     changed = true;
                 }
             }
@@ -494,6 +501,7 @@ impl DepGraph {
                             ItemData {
                                 is_hoisted: true,
                                 var_decls: vec![local],
+                                pure: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                                     specifiers: vec![s.clone()],
                                     ..item.clone()
