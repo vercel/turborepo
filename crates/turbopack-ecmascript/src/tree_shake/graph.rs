@@ -603,7 +603,7 @@ impl DepGraph {
                             eventual_read_vars: read_vars,
                             eventual_write_vars: write_vars,
                             var_decls: vec![f.ident.to_id()],
-                            content: item.clone(),
+                            content: ModuleItem::Stmt(Stmt::Decl(Decl::Fn(f.clone()))),
                             ..Default::default()
                         },
                     );
