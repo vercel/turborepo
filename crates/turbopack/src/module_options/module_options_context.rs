@@ -61,6 +61,8 @@ pub struct ModuleOptionsContext {
     #[serde(default)]
     pub enable_mdx: bool,
     #[serde(default)]
+    pub enable_sourcemap_parse: bool,
+    #[serde(default)]
     pub preset_env_versions: Option<EnvironmentVc>,
     #[serde(default)]
     pub custom_ecmascript_app_transforms: Vec<EcmascriptInputTransform>,

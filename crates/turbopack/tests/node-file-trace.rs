@@ -150,6 +150,7 @@ static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
     case::sharp("integration/sharp.js")
 )]
 #[cfg_attr(not(target_os = "windows"), case::sharp("integration/sharp.js"))]
+#[case::skip_sourcemap_in_node_modules("integration/skip-sourcemap-in-node-modules/index.js")]
 #[case::simple("integration/simple.js")]
 #[case::socket_io("integration/socket.io.js")]
 #[case::source_map("integration/source-map/index.js")]

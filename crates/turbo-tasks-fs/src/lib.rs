@@ -888,6 +888,13 @@ impl FileSystemPathVc {
     pub async fn is_inside_or_equal(self, other: FileSystemPathVc) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_inside_or_equal(&*other.await?)))
     }
+
+    #[turbo_tasks::function]
+    pub async fn contains_folder(self, name: &str) -> Result<BoolVc> {
+        Ok(BoolVc::cell(
+            self.await?.path.split("/").any(|seg| seg == name),
+        ))
+    }
 }
 
 impl Display for FileSystemPath {

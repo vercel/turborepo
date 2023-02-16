@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::BoolVc, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 
 use crate::{
@@ -34,4 +34,5 @@ pub trait AssetContext {
         reference_type: Value<ReferenceType>,
     ) -> ResolveResultVc;
     fn with_transition(&self, transition: &str) -> AssetContextVc;
+    fn enable_sourcemap_parse(&self) -> BoolVc;
 }
