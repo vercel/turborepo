@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
+use turborepo_api_client::APIClient;
 
 use crate::{
-    client::APIClient,
     config::{
         default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
         RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
@@ -28,10 +28,11 @@ pub struct CommandBase {
     repo_config: OnceCell<RepoConfig>,
     client_config: OnceCell<ClientConfig>,
     args: Args,
+    version: &'static str,
 }
 
 impl CommandBase {
-    pub fn new(args: Args, repo_root: PathBuf) -> Result<Self> {
+    pub fn new(args: Args, repo_root: PathBuf, version: &'static str) -> Result<Self> {
         Ok(Self {
             repo_root,
             ui: args.ui(),
@@ -39,6 +40,7 @@ impl CommandBase {
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
             client_config: OnceCell::new(),
+            version,
         })
     }
 
@@ -132,7 +134,7 @@ impl CommandBase {
 
         let api_url = repo_config.api_url();
         let timeout = client_config.remote_cache_timeout();
-        APIClient::new(api_url, timeout)
+        APIClient::new(api_url, timeout, self.version)
     }
 
     pub fn daemon_file_root(&self) -> turborepo_paths::AbsoluteNormalizedPathBuf {
