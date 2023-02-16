@@ -4,8 +4,8 @@ Setup
 
 # Running non-existent tasks errors
   $ ${TURBO} run doesnotexist
-   ERROR  run failed: error preparing engine: Could not find "doesnotexist" in project
-  Turbo error: error preparing engine: Could not find "doesnotexist" in project
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
   [1]
 
 # Multiple non-existent tasks also error
@@ -16,6 +16,6 @@ Setup
 
 # One good and one bad task does not error
   $ ${TURBO} run build doesnotexist
-   ERROR  run failed: error preparing engine: Could not find "doesnotexist" in project
-  Turbo error: error preparing engine: Could not find "doesnotexist" in project
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
   [1]

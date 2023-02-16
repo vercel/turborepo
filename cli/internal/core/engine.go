@@ -158,11 +158,8 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 	traversalQueue := []string{}
 
-	// make a map of taskNames passed in
-	missing := map[string]bool{}
-	for _, taskName := range taskNames {
-		missing[taskName] = true
-	}
+	// get a set of taskNames passed in. we'll remove the ones that have a definition
+	missing := util.SetFromStrings(taskNames)
 
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
@@ -186,8 +183,8 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 					return err
 				}
-				// delete Taskanem if it was found
-				delete(missing, taskName)
+				// delete taskName if it was found
+				missing.Delete(taskName)
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
@@ -196,16 +193,10 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	visited := make(util.Set)
 
 	// validate that all tasks passed were found
-	missingList := []string{}
-	for t := range missing {
-		missingList = append(missingList, t)
-	}
+	missingList := missing.UnsafeListOfStrings()
 	sort.Strings(missingList)
 
 	if len(missingList) > 0 {
-		if len(missingList) == 1 {
-			return fmt.Errorf("Could not find \"%s\" in project", missingList[0])
-		}
 		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(missingList, ", "))
 	}
 
