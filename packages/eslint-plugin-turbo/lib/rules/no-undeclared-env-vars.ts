@@ -7,7 +7,7 @@ const meta: Rule.RuleMetaData = {
   type: "problem",
   docs: {
     description:
-      "Do not allow the use of `process.env` without including the env key in turbo.json",
+      "Do not allow the use of `process.env` without including the env key in any turbo.json",
     category: "Configuration Issues",
     recommended: true,
     url: `https://github.com/vercel/turbo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
@@ -18,9 +18,12 @@ const meta: Rule.RuleMetaData = {
       default: {},
       additionalProperties: false,
       properties: {
-        turboConfig: {
+        turboConfigs: {
           require: false,
-          type: "object",
+          type: "array",
+          items: {
+            type: "object",
+          },
         },
         allowList: {
           default: [],
@@ -64,10 +67,10 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   });
 
   const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
-  const turboConfig = options?.[0]?.turboConfig;
+  const turboConfigs = options?.[0]?.turboConfigs;
   const turboVars = getEnvVarDependencies({
+    turboConfigs,
     cwd,
-    turboConfig,
   });
 
   // if this returns null, something went wrong reading from the turbo config
@@ -86,7 +89,8 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     ) {
       context.report({
         node,
-        message: "${{ envKey }} is not listed as a dependency in turbo.json",
+        message:
+          "${{ envKey }} is not listed as a dependency in any turbo.json",
         data: { envKey },
       });
     }

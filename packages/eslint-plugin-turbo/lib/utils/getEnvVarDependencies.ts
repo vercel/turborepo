@@ -1,5 +1,5 @@
-import findTurboConfig from "./findTurboConfig";
-import type { Schema } from "turbo-types";
+import { getTurboConfigs } from "turbo-utils";
+import { Schema } from "turbo-types";
 
 function findDependsOnEnvVars({
   dependencies,
@@ -21,36 +21,45 @@ function findDependsOnEnvVars({
 
 function getEnvVarDependencies({
   cwd,
-  turboConfig,
+  turboConfigs,
 }: {
   cwd: string | undefined;
-  turboConfig?: Schema;
+  turboConfigs?: Array<Schema>;
 }): Set<string> | null {
-  const turboJsonContent = turboConfig || findTurboConfig({ cwd });
-  if (!turboJsonContent) {
-    return null;
+  let allTurboConfigs = turboConfigs;
+  if (!allTurboConfigs) {
+    allTurboConfigs = Object.values(getTurboConfigs(cwd));
   }
-  const {
-    globalDependencies,
-    globalEnv = [],
-    pipeline = {},
-  } = turboJsonContent;
 
-  const allEnvVars: Array<string> = [
-    ...findDependsOnEnvVars({
-      dependencies: globalDependencies,
-    }),
-    ...globalEnv,
-  ];
+  if (!allTurboConfigs.length) {
+    return new Set();
+  }
 
-  Object.values(pipeline).forEach(({ env, dependsOn }) => {
-    if (dependsOn) {
-      allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
+  const allEnvVars: Array<string> = [];
+  allTurboConfigs.forEach((config) => {
+    // handle globals
+    if (!("extends" in config)) {
+      const { globalDependencies = [], globalEnv = [] } = config;
+
+      allEnvVars.push(
+        ...findDependsOnEnvVars({
+          dependencies: globalDependencies,
+        }),
+        ...globalEnv
+      );
     }
 
-    if (env) {
-      allEnvVars.push(...env);
-    }
+    // handle pipelines
+    const { pipeline = {} } = config;
+    Object.values(pipeline).forEach(({ env, dependsOn }) => {
+      if (dependsOn) {
+        allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
+      }
+
+      if (env) {
+        allEnvVars.push(...env);
+      }
+    });
   });
 
   return new Set(allEnvVars);

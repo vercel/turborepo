@@ -88,7 +88,7 @@ describe("eslint cache is busted", () => {
           messages: [
             {
               message:
-                "$NONEXISTENT is not listed as a dependency in turbo.json",
+                "$NONEXISTENT is not listed as a dependency in any turbo.json",
             },
           ],
         },

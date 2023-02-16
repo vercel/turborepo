@@ -7,28 +7,30 @@ const ruleTester = new RuleTester({
 });
 
 const getTestTurboConfig = () => {
-  return {
-    $schema: "./docs/public/schema.json",
-    globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
-    globalDependencies: ["$GLOBAL_ENV_KEY"],
-    pipeline: {
-      test: {
-        outputs: ["coverage/**/*"],
-        dependsOn: ["^build"],
-      },
-      lint: {
-        outputs: [],
-      },
-      dev: {
-        cache: false,
-      },
-      build: {
-        outputs: ["dist/**/*", ".next/**/*"],
-        env: ["NEW_STYLE_ENV_KEY"],
-        dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+  return [
+    {
+      $schema: "./docs/public/schema.json",
+      globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      pipeline: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*"],
+          env: ["NEW_STYLE_ENV_KEY"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
       },
     },
-  };
+  ];
 };
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
@@ -37,52 +39,52 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: `
         const { NEW_STYLE_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: `
         const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: `
         const val = process.env["$NEW_STYLE_GLOBAL_ENV_KEY"];
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: `
         const x = process.env.GLOBAL_ENV_KEY;
         const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: "var x = process.env.GLOBAL_ENV_KEY;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: "let x = process.env.TASK_ENV_KEY;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: "const x = process.env.ANOTHER_KEY_VALUE;",
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
@@ -94,7 +96,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -106,7 +108,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"],
         },
       ],
@@ -118,7 +120,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -131,7 +133,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -144,7 +146,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -157,7 +159,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -170,65 +172,71 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
     },
     {
       code: "const getEnv = (key) => process.env[key];",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: "function getEnv(key) { return process.env[key]; }",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
     {
       code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
     },
   ],
 
   invalid: [
     {
       code: "let { X } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
-      errors: [{ message: "$X is not listed as a dependency in turbo.json" }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
+      errors: [
+        { message: "$X is not listed as a dependency in any turbo.json" },
+      ],
     },
     {
       code: "const { X, Y, Z } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
       errors: [
-        { message: "$X is not listed as a dependency in turbo.json" },
-        { message: "$Y is not listed as a dependency in turbo.json" },
-        { message: "$Z is not listed as a dependency in turbo.json" },
+        { message: "$X is not listed as a dependency in any turbo.json" },
+        { message: "$Y is not listed as a dependency in any turbo.json" },
+        { message: "$Z is not listed as a dependency in any turbo.json" },
       ],
     },
     {
       code: "const { X, Y: NewName, Z } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
       errors: [
-        { message: "$X is not listed as a dependency in turbo.json" },
-        { message: "$Y is not listed as a dependency in turbo.json" },
-        { message: "$Z is not listed as a dependency in turbo.json" },
+        { message: "$X is not listed as a dependency in any turbo.json" },
+        { message: "$Y is not listed as a dependency in any turbo.json" },
+        { message: "$Z is not listed as a dependency in any turbo.json" },
       ],
     },
     {
       code: "var x = process.env.NOT_THERE;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ turboConfigs: getTestTurboConfig() }],
       errors: [
-        { message: "$NOT_THERE is not listed as a dependency in turbo.json" },
+        {
+          message: "$NOT_THERE is not listed as a dependency in any turbo.json",
+        },
       ],
     },
     {
       code: "var x = process.env.KEY;",
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
-      errors: [{ message: "$KEY is not listed as a dependency in turbo.json" }],
+      errors: [
+        { message: "$KEY is not listed as a dependency in any turbo.json" },
+      ],
     },
     {
       code: `
@@ -237,20 +245,26 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
         },
       ],
       errors: [
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
-        { message: "$ENV_VAR_ONE is not listed as a dependency in turbo.json" },
-        { message: "$ENV_VAR_TWO is not listed as a dependency in turbo.json" },
+        {
+          message:
+            "$ENV_VAR_ONE is not listed as a dependency in any turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_TWO is not listed as a dependency in any turbo.json",
+        },
       ],
     },
     {
@@ -261,21 +275,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -287,21 +301,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -313,21 +327,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -339,21 +353,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          turboConfigs: getTestTurboConfig(),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
