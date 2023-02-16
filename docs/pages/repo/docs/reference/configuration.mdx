@@ -271,7 +271,7 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
       // A workspace's `test` task depends on that workspace's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
       // A workspace's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]

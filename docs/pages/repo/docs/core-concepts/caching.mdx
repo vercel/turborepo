@@ -61,7 +61,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "test": {
