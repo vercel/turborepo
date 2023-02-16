@@ -13,14 +13,12 @@
       "outputs": [".next/**"],
       "dependsOn": ["^build", "rss", "schema"]
     },
-
     "dev": {
       "dependsOn": ["schema"]
     },
     "schema": {
       "outputs": ["public/schema.json"]
     },
-
     "rss": {
       "outputs": ["public/feed.xml"]
     }
