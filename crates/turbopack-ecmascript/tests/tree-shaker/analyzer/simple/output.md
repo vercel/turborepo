@@ -120,9 +120,11 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(0, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
-    N2["Items: [ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
-    N1 --> N2;
+    N1["Items: [ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
+    N2["Items: [ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
+    N3["Items: [ItemId(0, VarDeclarator(0))]"];
+    N1 --> N3;
+    N2 --> N3;
 ```
 
 # Modules (dev)
@@ -137,9 +139,8 @@ graph TD
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 2
+    __turbopack_chunk__: 3
 };
-const dog = "dog";
 export const DOG = dog;
 export { DOG };
 
@@ -148,10 +149,19 @@ export { DOG };
 ## Module 3
 
 ```js
-const dog = "dog";
+import "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
+
+```
+
+## Module 4
+
+```js
+const dog = "dog";
 ```
 
 ## Merged (module eval)
@@ -172,9 +182,8 @@ export { CHIMERA };
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 2
+    __turbopack_chunk__: 3
 };
-const dog = "dog";
 export const DOG = dog;
 export { DOG };
 
@@ -183,10 +192,19 @@ export { DOG };
 ## Module 3
 
 ```js
-const dog = "dog";
+import "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
+
+```
+
+## Module 4
+
+```js
+const dog = "dog";
 ```
 
 ## Merged (module eval)
