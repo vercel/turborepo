@@ -86,7 +86,7 @@ impl Lockfile for NpmLockfile {
                             .find_map(|possible_key| {
                                 self.packages.get(&possible_key).map(|entry| {
                                     let version = entry.version.as_deref().ok_or_else(|| {
-                                        Error::MissingVersion("".into(), possible_key.clone())
+                                        Error::MissingVersion(possible_key.clone())
                                     })?;
                                     Ok((possible_key, version))
                                 })
