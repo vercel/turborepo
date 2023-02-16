@@ -623,6 +623,7 @@
 <span id="623">623</span>
 <span id="624">624</span>
 <span id="625">625</span>
+<span id="626">626</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -868,7 +869,8 @@
     <span class="prelude-val">Ok</span>(apply_module_type(current_source, context, module_type))
 }
 
-<span class="attr">#[turbo_tasks::value]
+<span class="attr">#[derive(Debug)]
+#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ModuleAssetContext {
     transitions: TransitionsByNameVc,
     compile_time_info: CompileTimeInfoVc,

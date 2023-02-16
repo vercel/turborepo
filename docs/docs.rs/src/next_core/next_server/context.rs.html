@@ -246,6 +246,45 @@
 <span id="246">246</span>
 <span id="247">247</span>
 <span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -281,6 +320,7 @@
     PagesData { pages_dir: FileSystemPathVc },
     AppSSR { app_dir: FileSystemPathVc },
     AppRSC { app_dir: FileSystemPathVc },
+    Middleware,
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -359,6 +399,24 @@
                 ..resolve_options_context
             }
         }
+        ServerContextType::Middleware =&gt; {
+            <span class="kw">let </span>resolve_options_context = ResolveOptionsContext {
+                enable_node_modules: <span class="bool-val">true</span>,
+                enable_node_externals: <span class="bool-val">true</span>,
+                module: <span class="bool-val">true</span>,
+                custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
+                ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: <span class="bool-val">true</span>,
+                enable_react: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    foreign_code_context_condition,
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
+            }
+        }
     }
     .cell())
 }
@@ -382,6 +440,7 @@
                 ServerContextType::AppRSC { .. } =&gt; {
                     Value::new(EnvironmentIntention::ServerRendering)
                 }
+                ServerContextType::Middleware =&gt; Value::new(EnvironmentIntention::Middleware),
             },
         ),
     }
@@ -452,6 +511,25 @@
             };
             ModuleOptionsContext {
                 enable_jsx: <span class="bool-val">true</span>,
+                enable_postcss_transform,
+                enable_webpack_loaders,
+                enable_typescript_transform: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    foreign_code_context_condition,
+                    module_options_context.clone().cell(),
+                )],
+                custom_rules,
+                ..module_options_context
+            }
+        }
+        ServerContextType::Middleware =&gt; {
+            <span class="kw">let </span>module_options_context = ModuleOptionsContext {
+                execution_context: <span class="prelude-val">Some</span>(execution_context),
+                ..Default::default()
+            };
+            ModuleOptionsContext {
+                enable_jsx: <span class="bool-val">true</span>,
+                enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform,
                 enable_webpack_loaders,
                 enable_typescript_transform: <span class="bool-val">true</span>,

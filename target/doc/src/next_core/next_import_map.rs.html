@@ -446,6 +446,8 @@
 <span id="446">446</span>
 <span id="447">447</span>
 <span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::Result;
@@ -645,6 +647,7 @@
                 );
             }
         }
+        ServerContextType::Middleware =&gt; {}
     }
 
     <span class="prelude-val">Ok</span>(import_map.cell())
@@ -777,6 +780,7 @@
                 request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react-dom/*&quot;</span>),
             );
         }
+        ServerContextType::Middleware =&gt; {}
     }
     <span class="prelude-val">Ok</span>(())
 }

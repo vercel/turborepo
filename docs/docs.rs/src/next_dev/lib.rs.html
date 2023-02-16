@@ -588,6 +588,8 @@
 <span id="588">588</span>
 <span id="589">589</span>
 <span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -968,7 +970,9 @@
         CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, page_source]).into(),
     )
     .into();
-    <span class="kw">let </span>router_source = NextRouterContentSourceVc::new(main_source, execution_context).into();
+    <span class="kw">let </span>router_source =
+        NextRouterContentSourceVc::new(main_source, execution_context, next_config, server_addr)
+            .into();
     <span class="kw">let </span>source = RouterContentSource {
         routes: <span class="macro">vec!</span>[
             (<span class="string">&quot;__turbopack__/&quot;</span>.to_string(), introspect),

@@ -728,6 +728,7 @@
 <span id="728">728</span>
 <span id="729">729</span>
 <span id="730">730</span>
+<span id="731">731</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
@@ -744,7 +745,7 @@
     asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::{AssetContext, AssetContextVc},
-    environment::ServerAddrVc,
+    environment::{EnvironmentIntention, ServerAddrVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -866,7 +867,8 @@
     .cell()
     .into();
 
-    <span class="kw">let </span>edge_compile_time_info = get_edge_compile_time_info(server_addr);
+    <span class="kw">let </span>edge_compile_time_info =
+        get_edge_compile_time_info(server_addr, Value::new(EnvironmentIntention::Api));
 
     <span class="kw">let </span>edge_chunking_context = DevChunkingContextVc::builder(
         project_path,

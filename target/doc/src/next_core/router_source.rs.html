@@ -138,24 +138,49 @@
 <span id="138">138</span>
 <span id="139">139</span>
 <span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
-<span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+<span class="kw">use </span>turbopack_core::{
+    environment::ServerAddrVc,
+    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+};
 <span class="kw">use </span>turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
     ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult, RewriteVc,
 };
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
-<span class="kw">use </span><span class="kw">crate</span>::router::{route, RouterRequest, RouterResult};
+<span class="kw">use crate</span>::{
+    next_config::NextConfigVc,
+    router::{route, RouterRequest, RouterResult},
+};
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextRouterContentSource {
     <span class="doccomment">/// A wrapped content source from which we will fetch assets.
     </span>inner: ContentSourceVc,
     execution_context: ExecutionContextVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -164,10 +189,14 @@
     </span><span class="kw">pub fn </span>new(
         inner: ContentSourceVc,
         execution_context: ExecutionContextVc,
+        next_config: NextConfigVc,
+        server_addr: ServerAddrVc,
     ) -&gt; NextRouterContentSourceVc {
         NextRouterContentSource {
             inner,
             execution_context,
+            next_config,
+            server_addr,
         }
         .cell()
     }
@@ -217,7 +246,12 @@
         }
         .cell();
 
-        <span class="kw">let </span>res = route(this.execution_context, request);
+        <span class="kw">let </span>res = route(
+            this.execution_context,
+            request,
+            this.next_config,
+            this.server_addr,
+        );
         <span class="kw">let </span><span class="prelude-val">Ok</span>(res) = res.<span class="kw">await else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(this
                 .inner

@@ -55,6 +55,9 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -73,13 +76,16 @@
 };
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_edge_compile_time_info(server_addr: ServerAddrVc) -&gt; CompileTimeInfoVc {
+</span><span class="kw">pub fn </span>get_edge_compile_time_info(
+    server_addr: ServerAddrVc,
+    intention: Value&lt;EnvironmentIntention&gt;,
+) -&gt; CompileTimeInfoVc {
     CompileTimeInfo {
         environment: EnvironmentVc::new(
             Value::new(ExecutionEnvironment::EdgeWorker(
                 EdgeWorkerEnvironment { server_addr }.into(),
             )),
-            Value::new(EnvironmentIntention::Api),
+            intention,
         ),
     }
     .cell()

@@ -1151,7 +1151,7 @@
     import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
     import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
 
-    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()));
+    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()), <span class="prelude-val">None</span>);
     <span class="kw">let </span>find_config_result = find_context_file(project_root, next_configs());
     <span class="kw">let </span>config_asset = <span class="kw">match </span><span class="kw-2">&amp;*</span>find_config_result.<span class="kw">await</span><span class="question-mark">? </span>{
         FindContextFileResult::Found(config_path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(SourceAssetVc::new(<span class="kw-2">*</span>config_path)),

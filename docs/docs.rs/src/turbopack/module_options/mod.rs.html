@@ -415,7 +415,7 @@
                         };
                         <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
-                                node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map)),
+                                node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map), <span class="prelude-val">None</span>),
                                 execution_context,
                             )
                             .into()]),
@@ -524,7 +524,7 @@
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(<span class="macro">vec!</span>[
                             WebpackLoadersVc::new(
-                                node_evaluate_asset_context(<span class="prelude-val">None</span>),
+                                node_evaluate_asset_context(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
                                 execution_context,
                                 <span class="kw-2">*</span>loaders,
                             )
