@@ -471,7 +471,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 9
 };
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 10
 };
 export function external2() {
