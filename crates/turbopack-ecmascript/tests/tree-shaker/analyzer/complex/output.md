@@ -527,7 +527,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 10
 };
-export function getChimera() {
+function getChimera() {
     return cat + dog;
 }
 export { getChimera };
@@ -775,7 +775,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 8
 };
-export function getChimera() {
+function getChimera() {
     return cat + dog;
 }
 export { getChimera };

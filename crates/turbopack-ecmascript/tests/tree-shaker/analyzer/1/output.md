@@ -455,7 +455,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 10
 };
-export function external1() {
+function external1() {
     return internal() + foobar;
 }
 export { external1 };
@@ -474,7 +474,7 @@ import "entry.js" assert {
 import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 10
 };
-export function external2() {
+function external2() {
     foobar += ".";
 }
 export { external2 };
@@ -683,7 +683,7 @@ import { upper } from "module";
 function internal() {
     return upper(foobar);
 }
-export function external1() {
+function external1() {
     return internal() + foobar;
 }
 export { external1 };
@@ -693,7 +693,7 @@ export { external1 };
 ## Chunk 4
 
 ```js
-export function external2() {
+function external2() {
   foobar += ".";
 }
 export { external2 };
