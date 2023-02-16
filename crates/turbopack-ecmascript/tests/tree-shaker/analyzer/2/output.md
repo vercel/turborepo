@@ -592,19 +592,19 @@ function internal() {
 ## Merged (module eval)
 
 ```js
+import "module";
+import { upper } from "module";
+import "other";
 export let foobar = "foo";
 const bar = "bar";
 export const foo = foobar;
 foobar += bar;
 let foobarCopy = foobar;
-foobar += "foo";
 import { upper } from "module";
+foobar += "foo";
 function internal() {
   return upper(foobar);
 }
-import "module";
-import { upper } from "module";
-import "other";
 console.log(foobarCopy);
 ("module evaluation");
 ```
@@ -728,11 +728,11 @@ foobar += "foo";
 ## Merged (module eval)
 
 ```js
+import "module";
+import "other";
 export let foobar = "foo";
 const bar = "bar";
 foobar += bar;
-import "module";
-import "other";
 let foobarCopy = foobar;
 console.log(foobarCopy);
 ("module evaluation");
