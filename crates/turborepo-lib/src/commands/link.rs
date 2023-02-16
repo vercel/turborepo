@@ -16,11 +16,11 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
+use turborepo_api_client::{APIClient, CachingStatus, Team};
 
 #[cfg(not(test))]
 use crate::ui::CYAN;
 use crate::{
-    client::{APIClient, CachingStatus, Team},
     commands::CommandBase,
     ui::{BOLD, GREY, UNDERLINE},
 };
@@ -304,12 +304,12 @@ mod test {
     use axum::{routing::get, Json, Router};
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
+    use turborepo_api_client::{
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse,
+    };
 
     use crate::{
-        client::{
-            CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
-            UserResponse,
-        },
         commands::{link, CommandBase},
         config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
         ui::UI,
@@ -349,6 +349,7 @@ mod test {
                     .unwrap(),
             ),
             args: Args::default(),
+            version: "",
         };
 
         link::link(&mut base, false).await.unwrap();
