@@ -123,10 +123,12 @@ impl MemoryBackend {
         }
     }
 
+    #[inline(always)]
     pub fn with_task<T>(&self, id: TaskId, func: impl FnOnce(&Task) -> T) -> T {
         func(self.memory_tasks.get(*id).unwrap())
     }
 
+    #[inline(always)]
     pub fn with_scope<T>(&self, id: TaskScopeId, func: impl FnOnce(&TaskScope) -> T) -> T {
         func(self.memory_task_scopes.get(*id).unwrap())
     }
