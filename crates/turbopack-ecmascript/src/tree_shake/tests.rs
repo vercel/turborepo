@@ -174,7 +174,7 @@ fn run(input: PathBuf) {
 
             writeln!(s, "# Modules (dev)").unwrap();
             for (i, module) in modules.iter().enumerate() {
-                writeln!(s, "## Module {}", i + 1).unwrap();
+                writeln!(s, "## Chunk {}", i).unwrap();
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
 
@@ -195,7 +195,7 @@ fn run(input: PathBuf) {
 
             writeln!(s, "# Modules (prod)").unwrap();
             for (i, module) in modules.iter().enumerate() {
-                writeln!(s, "## Module {}", i + 1).unwrap();
+                writeln!(s, "## Chunk {}", i).unwrap();
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
             }
 
