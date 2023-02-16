@@ -13,10 +13,10 @@ use swc_core::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
             FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
             Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
-            PropName, PropOrSpread, Stmt, VarDecl,
+            PropName, PropOrSpread, Stmt, Str, VarDecl,
         },
         atoms::{js_word, JsWord},
-        utils::find_pat_ids,
+        utils::{find_pat_ids, quote_ident},
     },
 };
 
@@ -286,6 +286,11 @@ impl DepGraph {
                 // Emit `export { foo }`
                 for var in data.write_vars.iter() {
                     if required_vars.remove(var) {
+                        let assertion_prop = PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+                            key: quote_ident!("__turbopack_var__").into(),
+                            value: box true.into(),
+                        }));
+
                         chunk
                             .body
                             .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
@@ -299,9 +304,16 @@ impl DepGraph {
                                             is_type_only: false,
                                         },
                                     )],
-                                    src: None,
+                                    src: Some(box Str {
+                                        span: DUMMY_SP,
+                                        value: uri_of_module.clone(),
+                                        raw: None,
+                                    }),
                                     type_only: false,
-                                    asserts: None,
+                                    asserts: Some(box ObjectLit {
+                                        span: DUMMY_SP,
+                                        props: vec![assertion_prop],
+                                    }),
                                 },
                             )));
                     }
