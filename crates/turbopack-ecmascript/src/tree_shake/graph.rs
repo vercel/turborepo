@@ -11,9 +11,9 @@ use swc_core::{
     ecma::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, Ident, ImportDecl, ImportSpecifier, KeyValueProp, Module, ModuleDecl,
-            ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
-            Stmt, VarDecl,
+            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
+            Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
+            PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
         utils::find_pat_ids,
@@ -215,11 +215,40 @@ impl DepGraph {
                 shebang: None,
             };
 
+            let mut required_vars = group
+                .iter()
+                .flat_map(|id| {
+                    let data = data.get(id).unwrap();
+
+                    data.read_vars
+                        .iter()
+                        .chain(data.write_vars.iter())
+                        .chain(data.eventual_read_vars.iter())
+                        .chain(data.eventual_write_vars.iter())
+                })
+                .collect::<FxHashSet<_>>();
+
             for dep in groups
                 .idx_graph
                 .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
             {
                 let mut specifiers = vec![];
+
+                let deps = groups.graph_ix.get_index(dep as usize).unwrap();
+                for dep in deps {
+                    let data = data.get(dep).unwrap();
+
+                    for var in &data.var_decls {
+                        if required_vars.contains(var) {
+                            specifiers.push(ImportSpecifier::Named(ImportNamedSpecifier {
+                                span: DUMMY_SP,
+                                local: var.clone().into(),
+                                imported: None,
+                                is_type_only: false,
+                            }));
+                        }
+                    }
+                }
 
                 chunk
                     .body
