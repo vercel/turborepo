@@ -47,10 +47,10 @@ impl ContentSource for RouterContentSource {
         ContentSourcesVc::cell(sources)
     }
 
-    #[turbo_tasks::function]
-    fn base_path(&self) -> OptionStringVc {
-        self.base_path
-    }
+    // #[turbo_tasks::function]
+    // fn base_path(&self) -> OptionStringVc {
+    // self.base_path
+    // }
 }
 
 #[turbo_tasks::function]

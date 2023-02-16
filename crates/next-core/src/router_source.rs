@@ -124,6 +124,8 @@ impl ContentSource for NextRouterContentSource {
             this.next_config,
             this.server_addr,
         );
+        dbg!(&(request.dbg().await?, res.await));
+
         let Ok(res) = res.await else {
             return Ok(invalid(path, raw_query, this.inner));
         };

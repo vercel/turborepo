@@ -78,6 +78,7 @@ fn lookup_turbopack_header<T>(
 where
     T: RouteMatcher,
 {
+    dbg!(&data.headers);
     Ok(if let Some(headers) = &data.headers {
         if let Some(found) = headers.get(TURBOPACK_NEXT_VALID_ROUTE) {
             match found.as_str() {

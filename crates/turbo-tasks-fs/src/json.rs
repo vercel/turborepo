@@ -44,6 +44,7 @@ impl UnparseableJson {
 
     pub fn from_serde_path_to_error(e: serde_path_to_error::Error<serde_json::Error>) -> Self {
         let inner = e.inner();
+        dbg!(inner);
         Self {
             message: inner.to_string().into(),
             path: Some(e.path().to_string()),

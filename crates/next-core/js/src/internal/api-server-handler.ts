@@ -149,6 +149,7 @@ export default function startHandler(handler: Handler): void {
     const responseData: Buffer[] = [];
     const responseHeaders: ResponseHeaders = {
       status: clientResponse.statusCode!,
+      // TODO
       headers: toPairs(clientResponse.rawHeaders),
     };
 
