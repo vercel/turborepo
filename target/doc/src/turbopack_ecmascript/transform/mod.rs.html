@@ -275,6 +275,17 @@
 <span id="275">275</span>
 <span id="276">276</span>
 <span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -535,6 +546,17 @@
             EcmascriptInputTransform::Custom =&gt; <span class="macro">todo!</span>(),
         }
         <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">pub fn </span>remove_shebang(program: <span class="kw-2">&amp;mut </span>Program) {
+    <span class="kw">match </span>program {
+        Program::Module(m) =&gt; {
+            m.shebang = <span class="prelude-val">None</span>;
+        }
+        Program::Script(s) =&gt; {
+            s.shebang = <span class="prelude-val">None</span>;
+        }
     }
 }
 

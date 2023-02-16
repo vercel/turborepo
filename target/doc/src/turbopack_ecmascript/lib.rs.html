@@ -402,6 +402,11 @@
 <span id="402">402</span>
 <span id="403">403</span>
 <span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -474,6 +479,7 @@
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     code_gen::CodeGenerateable,
     references::analyze_ecmascript_module,
+    transform::remove_shebang,
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -745,6 +751,10 @@
                 }
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::hygiene::hygiene());
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::fixer::fixer(<span class="prelude-val">None</span>));
+
+                <span class="comment">// we need to remove any shebang before bundling as it&#39;s only valid as the first
+                // line in a js file (not in a chunk item wrapped in the runtime)
+                </span>remove_shebang(<span class="kw-2">&amp;mut </span>program);
             });
 
             <span class="kw">let </span><span class="kw-2">mut </span>bytes: Vec&lt;u8&gt; = <span class="macro">vec!</span>[];
