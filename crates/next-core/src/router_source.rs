@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value};
 use turbopack_core::{
     environment::ServerAddrVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
@@ -76,6 +76,21 @@ pub const TURBOPACK_NEXT_VALID_ROUTE: &str = "x-turbopack-valid-route";
 pub const TURBOPACK_NEXT_VALID_ROUTE_TRUE: &str = "1";
 pub const TURBOPACK_NEXT_VALID_ROUTE_FALSE: &str = "0";
 
+fn invalid(path: &str, query: &str, next: ContentSourceVc) -> ContentSourceResultVc {
+    ContentSourceResultVc::exact(
+        ContentSourceContent::Rewrite(RewriteVc::new(
+            format!("/{}?{}", path, query),
+            vec![(
+                TURBOPACK_NEXT_VALID_ROUTE.to_string(),
+                TURBOPACK_NEXT_VALID_ROUTE_FALSE.to_string(),
+            )],
+            next,
+        ))
+        .cell()
+        .into(),
+    )
+}
+
 #[turbo_tasks::value_impl]
 impl ContentSource for NextRouterContentSource {
     #[turbo_tasks::function]
@@ -110,29 +125,13 @@ impl ContentSource for NextRouterContentSource {
             this.server_addr,
         );
         let Ok(res) = res.await else {
-            return Ok(this
-                .inner
-                .get(path, Value::new(ContentSourceData::default())));
+            return Ok(invalid(path, raw_query, this.inner));
         };
 
         Ok(match &*res {
-            RouterResult::Error => {
-                // TODO: emit error
-                this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
-            }
-            RouterResult::None => ContentSourceResultVc::exact(
-                ContentSourceContent::Rewrite(RewriteVc::new(
-                    format!("/{}?{}", path, raw_query),
-                    vec![(
-                        TURBOPACK_NEXT_VALID_ROUTE.to_string(),
-                        TURBOPACK_NEXT_VALID_ROUTE_FALSE.to_string(),
-                    )],
-                    this.inner,
-                ))
-                .cell()
-                .into(),
-            ),
+            // TODO: emit error
+            RouterResult::Error => invalid(path, raw_query, this.inner),
+            RouterResult::None => invalid(path, raw_query, this.inner),
             RouterResult::Rewrite(data) => {
                 let mut headers = data.headers.clone();
                 headers.push((

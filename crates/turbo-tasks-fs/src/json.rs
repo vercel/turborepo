@@ -47,7 +47,7 @@ impl UnparseableJson {
         Self {
             message: inner.to_string().into(),
             path: Some(e.path().to_string()),
-            start_location: Some((inner.line() - 1, inner.column() - 1)),
+            start_location: Some((inner.line(), inner.column())),
             end_location: None,
         }
     }
