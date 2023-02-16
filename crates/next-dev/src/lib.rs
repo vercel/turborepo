@@ -422,6 +422,7 @@ pub async fn get_assets_root(
     next_config: NextConfigVc,
 ) -> Result<FileSystemPathVc> {
     Ok(
+        // TODO: Should this be using `asset_prefix`?
         if let Some(base_path) = next_config.base_path().await?.as_deref() {
             server_root.join(base_path)
         } else {
