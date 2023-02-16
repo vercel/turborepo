@@ -1461,11 +1461,11 @@ impl Task {
             let schedule_self =
                 self.add_self_to_new_scope(&mut state, root_scope, backend, turbo_tasks);
 
-            let mut merging_scopes = 0;
+            let mut merging_scopes = Vec::with_capacity(scopes.len());
             // remove self from old scopes
             for (scope, count) in scopes.iter() {
                 if *count > 0 {
-                    merging_scopes += 1;
+                    merging_scopes.push(*scope);
                     self.remove_self_from_scope_full(&mut state, *scope, backend, turbo_tasks);
                 }
             }
@@ -1480,7 +1480,7 @@ impl Task {
                     backend.with_task(*child, |child| {
                         child.add_to_scope_internal(
                             root_scope,
-                            merging_scopes,
+                            merging_scopes.len(),
                             backend,
                             turbo_tasks,
                         );
@@ -1495,9 +1495,9 @@ impl Task {
                 }
 
                 // Remove children from old scopes
-                turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                    Job::RemoveFromScopes(children, scopes.into_iter().map(|(id, _)| id).collect()),
-                ));
+                turbo_tasks.schedule_backend_foreground_job(
+                    backend.create_backend_job(Job::RemoveFromScopes(children, merging_scopes)),
+                );
                 None
             } else {
                 Some(state)
