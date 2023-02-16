@@ -51,6 +51,12 @@ async function run() {
 
   core.setOutput("new_tag", nextTag);
   await createTag(octokit, nextTag, commitSha);
+
+  // TODO: generate real release notes
+  core.setOutput(
+    "changelog",
+    `See the commit diff at https://github.com/vercel/turbo/compare/${lastTag.name}...${nextTag}`
+  );
 }
 
 /**
