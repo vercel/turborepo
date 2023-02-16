@@ -24,7 +24,9 @@ use tokio::task_local;
 use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    get_invalidator,
+    primitives::{RawVcSet, RawVcSetVc},
+    registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId, TryJoinIterExt,
     TurboTasksBackendApi, ValueTypeId,
 };
 
@@ -80,6 +82,11 @@ enum TaskType {
     /// applied.
     Once(OnceTaskFn),
 
+    /// A task that reads all collectibles of a certain trait from a
+    /// [TaskScope]. It will do that by recursively calling ReadCollectibles on
+    /// child scopes, so that results by scope are cached.
+    ReadCollectibles(TaskScopeId, TraitTypeId),
+
     /// A normal persistent task
     Persistent(Arc<PersistentTaskType>),
 }
@@ -89,6 +96,11 @@ impl Debug for TaskType {
         match self {
             Self::Root(..) => f.debug_tuple("Root").finish(),
             Self::Once(..) => f.debug_tuple("Once").finish(),
+            Self::ReadCollectibles(scope_id, trait_id) => f
+                .debug_tuple("ReadCollectibles")
+                .field(scope_id)
+                .field(&registry::get_trait(*trait_id).name)
+                .finish(),
             Self::Persistent(ty) => Debug::fmt(ty, f),
         }
     }
@@ -99,6 +111,7 @@ impl Display for TaskType {
         match self {
             Self::Root(..) => f.debug_tuple("Root").finish(),
             Self::Once(..) => f.debug_tuple("Once").finish(),
+            Self::ReadCollectibles(..) => f.debug_tuple("ReadCollectibles").finish(),
             Self::Persistent(ty) => Display::fmt(ty, f),
         }
     }
@@ -443,9 +456,28 @@ impl Task {
         }
     }
 
+    pub(crate) fn new_read_collectibles(
+        id: TaskId,
+        target_scope: TaskScopeId,
+        trait_type_id: TraitTypeId,
+        stats_type: StatsType,
+    ) -> Self {
+        let ty = TaskType::ReadCollectibles(target_scope, trait_type_id);
+        let description = Self::get_event_description_static(id, &ty);
+        Self {
+            id,
+            ty,
+            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+                description,
+                stats_type,
+            ))),
+        }
+    }
+
     pub(crate) fn is_pure(&self) -> bool {
         match &self.ty {
             TaskType::Persistent(_) => true,
+            TaskType::ReadCollectibles(..) => true,
             TaskType::Root(_) => false,
             TaskType::Once(_) => false,
         }
@@ -465,36 +497,18 @@ impl Task {
     }
 
     pub(crate) fn get_description(&self) -> String {
-        match &self.ty {
-            TaskType::Root(..) => format!("[{}] root", self.id),
-            TaskType::Once(..) => format!("[{}] once", self.id),
-            TaskType::Persistent(ty) => match &**ty {
-                PersistentTaskType::Native(native_fn, _) => {
-                    format!("[{}] {}", self.id, registry::get_function(*native_fn).name)
-                }
-                PersistentTaskType::ResolveNative(native_fn, _) => {
-                    format!(
-                        "[{}] [resolve] {}",
-                        self.id,
-                        registry::get_function(*native_fn).name
-                    )
-                }
-                PersistentTaskType::ResolveTrait(trait_type, fn_name, _) => {
-                    format!(
-                        "[{}] [resolve trait] {} in trait {}",
-                        self.id,
-                        fn_name,
-                        registry::get_trait(*trait_type).name
-                    )
-                }
-            },
-        }
+        Self::format_description(&self.ty, self.id)
     }
 
     fn format_description(ty: &TaskType, id: TaskId) -> String {
         match ty {
             TaskType::Root(..) => format!("[{}] root", id),
             TaskType::Once(..) => format!("[{}] once", id),
+            TaskType::ReadCollectibles(_, trait_type_id) => format!(
+                "[{}] read collectibles({})",
+                id,
+                registry::get_trait(*trait_type_id).name
+            ),
             TaskType::Persistent(ty) => match &**ty {
                 PersistentTaskType::Native(native_fn, _) => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
@@ -617,7 +631,7 @@ impl Task {
         if !self.try_start_execution(&mut state, turbo_tasks, backend) {
             return None;
         }
-        let future = self.make_execution_future(&mut state, turbo_tasks);
+        let future = self.make_execution_future(state, backend, turbo_tasks);
         Some(TaskExecutionSpec { future })
     }
 
@@ -672,24 +686,44 @@ impl Task {
     /// Prepares task execution and returns a future that will execute the task.
     fn make_execution_future(
         self: &Task,
-        mut state: &mut TaskState,
+        mut state: FullTaskWriteGuard<'_>,
+        backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         match &self.ty {
-            TaskType::Root(bound_fn) => bound_fn(),
-            TaskType::Once(mutex) => mutex.lock().take().expect("Task can only be executed once"),
+            TaskType::Root(bound_fn) => {
+                drop(state);
+                bound_fn()
+            }
+            TaskType::Once(mutex) => {
+                drop(state);
+                mutex.lock().take().expect("Task can only be executed once")
+            }
+            &TaskType::ReadCollectibles(scope_id, trait_type_id) => {
+                drop(state);
+                Task::make_read_collectibles_execution_future(
+                    self.id,
+                    scope_id,
+                    trait_type_id,
+                    backend,
+                    turbo_tasks,
+                )
+            }
             TaskType::Persistent(ty) => match &**ty {
                 PersistentTaskType::Native(native_fn, inputs) => {
-                    if let PrepareTaskType::Native(bound_fn) = &state.prepared_type {
+                    let future = if let PrepareTaskType::Native(bound_fn) = &state.prepared_type {
                         bound_fn()
                     } else {
                         let bound_fn = registry::get_function(*native_fn).bind(inputs);
                         let future = bound_fn();
                         state.prepared_type = PrepareTaskType::Native(bound_fn);
                         future
-                    }
+                    };
+                    drop(state);
+                    future
                 }
                 PersistentTaskType::ResolveNative(ref native_fn, inputs) => {
+                    drop(state);
                     let native_fn = *native_fn;
                     let inputs = inputs.clone();
                     let turbo_tasks = turbo_tasks.pin();
@@ -700,6 +734,7 @@ impl Task {
                     ))
                 }
                 PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
+                    drop(state);
                     let trait_type = *trait_type;
                     let name = name.clone();
                     let inputs = inputs.clone();
@@ -1662,6 +1697,9 @@ impl Task {
         match &self.ty {
             TaskType::Root(_) => StatsTaskType::Root(self.id),
             TaskType::Once(_) => StatsTaskType::Once(self.id),
+            TaskType::ReadCollectibles(_, trait_type_id) => {
+                StatsTaskType::ReadCollectibles(*trait_type_id)
+            }
             TaskType::Persistent(ty) => match &**ty {
                 PersistentTaskType::Native(f, _) => StatsTaskType::Native(*f),
                 PersistentTaskType::ResolveNative(f, _) => StatsTaskType::ResolveNative(*f),
@@ -1876,29 +1914,60 @@ impl Task {
         }
     }
 
-    pub(crate) fn try_read_task_collectibles(
+    fn make_read_collectibles_execution_future(
+        task_id: TaskId,
+        scope_id: TaskScopeId,
+        trait_type_id: TraitTypeId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
+        let (mut current, children) = backend.with_scope(scope_id, |scope| {
+            scope.read_collectibles_and_children(scope_id, trait_type_id, task_id)
+        });
+        log_scope_update!("reading collectibles from {scope_id}: {:?}", current);
+        let children = children
+            .into_iter()
+            .map(|child| {
+                let task = backend.get_or_create_read_collectibles_task(
+                    child,
+                    trait_type_id,
+                    task_id,
+                    &*turbo_tasks,
+                );
+                // Safety: RawVcSet is a transparent value
+                unsafe {
+                    RawVc::TaskOutput(task).into_transparent_read::<RawVcSet, AutoSet<RawVc>>()
+                }
+            })
+            .collect::<Vec<_>>();
+        Box::pin(async move {
+            let children = children.into_iter().try_join().await?;
+            for child in children {
+                for v in child.iter() {
+                    current.add(*v);
+                }
+            }
+            Ok(RawVcSetVc::cell(current.iter().copied().collect()).into())
+        })
+    }
+
+    pub(crate) fn read_task_collectibles(
         &self,
         reader: TaskId,
         trait_id: TraitTypeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
+    ) -> RawVcSetVc {
         let mut state = self.full_state_mut();
         state = self.ensure_root_scoped(state, backend, turbo_tasks);
-        // We need to wait for all foreground jobs to be finished as there could be
-        // ongoing add_to_scope jobs that need to be finished before reading
-        // from scopes
-        if let Err(listener) = turbo_tasks.try_foreground_done() {
-            return Ok(Err(listener));
-        }
         if let TaskScopes::Root(scope_id) = state.scopes {
-            backend.with_scope(scope_id, |scope| {
-                if let Some(l) = scope.has_unfinished_tasks() {
-                    return Ok(Err(l));
-                }
-                let set = scope.read_collectibles(scope_id, trait_id, reader, backend);
-                Ok(Ok(set))
-            })
+            let task = backend.get_or_create_read_collectibles_task(
+                scope_id,
+                trait_id,
+                reader,
+                turbo_tasks,
+            );
+            RawVc::TaskOutput(task).into()
         } else {
             panic!("It's not possible to read collectibles from a non-root scope")
         }

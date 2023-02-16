@@ -27,6 +27,7 @@ use crate::{
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
+    primitives::RawVcSetVc,
     raw_vc::{CellId, RawVc},
     registry,
     task_input::{SharedReference, TaskInput},
@@ -91,11 +92,7 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
         index: CellId,
     ) -> Result<Result<CellContent, EventListener>>;
 
-    fn try_read_task_collectibles(
-        &self,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> RawVcSetVc;
 
     fn emit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
     fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
@@ -400,18 +397,25 @@ impl<B: Backend> TurboTasks<B> {
                     if this.stopped.load(Ordering::Acquire) {
                         return false;
                     }
-                    if let Some(execution) = this.backend.try_start_task_execution(task_id, &*this)
-                    {
-                        // Setup thread locals
-                        let (result, duration, instant) = CELL_COUNTERS
-                            .scope(Default::default(), async {
-                                let (result, duration, instant) = TimedFuture::new(
-                                    AssertUnwindSafe(execution.future).catch_unwind(),
+
+                    // Setup thread locals
+                    if let Some((result, duration, instant)) = CELL_COUNTERS
+                        .scope(Default::default(), async {
+                            if let Some(execution) =
+                                this.backend.try_start_task_execution(task_id, &*this)
+                            {
+                                Some(
+                                    TimedFuture::new(
+                                        AssertUnwindSafe(execution.future).catch_unwind(),
+                                    )
+                                    .await,
                                 )
-                                .await;
-                                (result, duration, instant)
-                            })
-                            .await;
+                            } else {
+                                None
+                            }
+                        })
+                        .await
+                    {
                         if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
                             println!(
                                 "{} took {}",
@@ -811,12 +815,8 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
             .try_read_own_task_cell_untracked(current_task, index, self)
     }
 
-    fn try_read_task_collectibles(
-        &self,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
-        self.backend.try_read_task_collectibles(
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> RawVcSetVc {
+        self.backend.read_task_collectibles(
             task,
             trait_id,
             current_task("reading collectibles"),
@@ -1229,19 +1229,6 @@ pub(crate) async fn read_task_cell_untracked(
 ) -> Result<CellContent> {
     loop {
         match this.try_read_task_cell_untracked(id, index)? {
-            Ok(result) => return Ok(result),
-            Err(listener) => listener.await,
-        }
-    }
-}
-
-pub(crate) async fn read_task_collectibles(
-    this: &dyn TurboTasksApi,
-    id: TaskId,
-    trait_id: TraitTypeId,
-) -> Result<AutoSet<RawVc>> {
-    loop {
-        match this.try_read_task_collectibles(id, trait_id)? {
             Ok(result) => return Ok(result),
             Err(listener) => listener.await,
         }

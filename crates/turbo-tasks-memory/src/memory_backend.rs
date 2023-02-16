@@ -1,10 +1,10 @@
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     cell::RefCell,
     cmp::min,
     collections::VecDeque,
     future::Future,
-    hash::BuildHasherDefault,
+    hash::{BuildHasher, BuildHasherDefault, Hash},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -24,6 +24,7 @@ use turbo_tasks::{
         TransientTaskType,
     },
     event::EventListener,
+    primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
     CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
@@ -48,6 +49,8 @@ pub struct MemoryBackend {
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
     task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
+    read_collectibles_task_cache:
+        DashMap<(TaskScopeId, TraitTypeId), TaskId, BuildHasherDefault<FxHasher>>,
     memory_limit: usize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
@@ -76,6 +79,7 @@ impl MemoryBackend {
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
+            read_collectibles_task_cache: DashMap::default(),
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
@@ -263,6 +267,93 @@ impl MemoryBackend {
             }
         }
     }
+
+    pub(crate) fn get_or_create_read_collectibles_task(
+        &self,
+        scope_id: TaskScopeId,
+        trait_type: TraitTypeId,
+        parent_task: TaskId,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> TaskId {
+        if let Some(task) = self.lookup_and_connect_task(
+            parent_task,
+            &self.read_collectibles_task_cache,
+            &(scope_id, trait_type),
+            turbo_tasks,
+        ) {
+            // fast pass without creating a new task
+            task
+        } else {
+            // slow pass with key lock
+            let id = turbo_tasks.get_fresh_task_id();
+            let task =
+                Task::new_read_collectibles(id, scope_id, trait_type, turbo_tasks.stats_type());
+            // Safety: We have a fresh task id that nobody knows about yet
+            unsafe {
+                self.insert_and_connect_fresh_task(
+                    parent_task,
+                    &self.read_collectibles_task_cache,
+                    (scope_id, trait_type),
+                    id,
+                    task,
+                    turbo_tasks,
+                )
+            }
+        }
+    }
+
+    /// # Safty
+    ///
+    /// `new_id` must be an unused task id
+    unsafe fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
+        &self,
+        parent_task: TaskId,
+        task_cache: &DashMap<K, TaskId, H>,
+        key: K,
+        new_id: TaskId,
+        task: Task,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> TaskId {
+        // Safety: We have a fresh task id that nobody knows about yet
+        unsafe {
+            self.memory_tasks.insert(*new_id, task);
+        }
+        let result_task = match task_cache.entry(key) {
+            Entry::Vacant(entry) => {
+                // This is the most likely case
+                entry.insert(new_id);
+                new_id
+            }
+            Entry::Occupied(entry) => {
+                // Safety: We have a fresh task id that nobody knows about yet
+                unsafe {
+                    self.memory_tasks.remove(*new_id);
+                    turbo_tasks.reuse_task_id(new_id);
+                }
+                *entry.get()
+            }
+        };
+        self.connect_task_child(parent_task, result_task, turbo_tasks);
+        result_task
+    }
+
+    fn lookup_and_connect_task<K: Hash + Eq, Q, H: BuildHasher + Clone>(
+        &self,
+        parent_task: TaskId,
+        task_cache: &DashMap<K, TaskId, H>,
+        key: &Q,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> Option<TaskId>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        task_cache.get(key).map(|task| {
+            self.connect_task_child(parent_task, *task, turbo_tasks);
+
+            *task
+        })
+    }
 }
 
 impl Backend for MemoryBackend {
@@ -447,15 +538,15 @@ impl Backend for MemoryBackend {
         })
     }
 
-    fn try_read_task_collectibles(
+    fn read_task_collectibles(
         &self,
         id: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
+    ) -> RawVcSetVc {
         self.with_task(id, |task| {
-            task.try_read_task_collectibles(reader, trait_id, self, turbo_tasks)
+            task.read_task_collectibles(reader, trait_id, self, turbo_tasks)
         })
     }
 
@@ -521,12 +612,10 @@ impl Backend for MemoryBackend {
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
-        let result = if let Some(task) = self.task_cache.get(&task_type).map(|task| *task) {
+        if let Some(task) =
+            self.lookup_and_connect_task(parent_task, &self.task_cache, &task_type, turbo_tasks)
+        {
             // fast pass without creating a new task
-            self.connect_task_child(parent_task, task, turbo_tasks);
-
-            // TODO maybe force (background) scheduling to avoid inactive tasks hanging in
-            // "in progress" until they become active
             task
         } else {
             // It's important to avoid overallocating memory as this will go into the task
@@ -538,27 +627,16 @@ impl Backend for MemoryBackend {
             let task = Task::new_persistent(id, task_type.clone(), turbo_tasks.stats_type());
             // Safety: We have a fresh task id that nobody knows about yet
             unsafe {
-                self.memory_tasks.insert(*id, task);
+                self.insert_and_connect_fresh_task(
+                    parent_task,
+                    &self.task_cache,
+                    task_type,
+                    id,
+                    task,
+                    turbo_tasks,
+                )
             }
-            let result_task = match self.task_cache.entry(task_type) {
-                Entry::Vacant(entry) => {
-                    // This is the most likely case
-                    entry.insert(id);
-                    id
-                }
-                Entry::Occupied(entry) => {
-                    // Safety: We have a fresh task id that nobody knows about yet
-                    unsafe {
-                        self.memory_tasks.remove(*id);
-                        turbo_tasks.reuse_task_id(id);
-                    }
-                    *entry.get()
-                }
-            };
-            self.connect_task_child(parent_task, result_task, turbo_tasks);
-            result_task
-        };
-        result
+        }
     }
 
     fn create_transient_task(

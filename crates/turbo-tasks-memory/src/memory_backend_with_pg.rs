@@ -26,6 +26,7 @@ use turbo_tasks::{
         ActivateResult, DeactivateResult, PersistResult, PersistTaskState, PersistedGraph,
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
     },
+    primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec, SharedError},
     CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
@@ -1395,13 +1396,13 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         }
     }
 
-    fn try_read_task_collectibles(
+    fn read_task_collectibles(
         &self,
         _task: TaskId,
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
+    ) -> RawVcSetVc {
         todo!()
     }
 
