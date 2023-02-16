@@ -228,6 +228,12 @@ impl DepGraph {
                 })
                 .collect::<FxHashSet<_>>();
 
+            for item in group {
+                if let ItemIdKind::Export(id) = &item.kind {
+                    required_vars.insert(id);
+                }
+            }
+
             for dep in groups
                 .idx_graph
                 .neighbors_directed(ix as u32, petgraph::Direction::Outgoing)
