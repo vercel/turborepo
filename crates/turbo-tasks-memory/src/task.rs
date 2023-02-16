@@ -974,7 +974,7 @@ impl Task {
     pub(crate) fn add_to_scope_internal_shallow(
         &self,
         id: TaskScopeId,
-        is_optimization_scope: bool,
+        merging_scopes: usize,
         depth: usize,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
@@ -1020,17 +1020,17 @@ impl Task {
                 }
 
                 if depth < usize::BITS as usize {
-                    if is_optimization_scope {
-                        *optimization_counter =
-                            optimization_counter.saturating_sub(children.len() >> depth)
+                    *optimization_counter += 1;
+                    if merging_scopes > 0 {
+                        *optimization_counter = optimization_counter.saturating_sub(merging_scopes);
                     } else {
-                        *optimization_counter += children.len() >> depth;
-                        if *optimization_counter >= 0x10000 {
+                        const SCOPE_OPTIMIZATION_THRESHOLD: usize = 1024;
+                        if *optimization_counter * children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
                             list.remove(id);
                             drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
                             return self.add_to_scope_internal_shallow(
                                 id,
-                                is_optimization_scope,
+                                merging_scopes,
                                 depth,
                                 backend,
                                 turbo_tasks,
@@ -1060,22 +1060,15 @@ impl Task {
     pub(crate) fn add_to_scope_internal(
         &self,
         id: TaskScopeId,
-        is_optimization_scope: bool,
+        merging_scopes: usize,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
-        self.add_to_scope_internal_shallow(
-            id,
-            is_optimization_scope,
-            0,
-            backend,
-            turbo_tasks,
-            &mut queue,
-        );
+        self.add_to_scope_internal_shallow(id, merging_scopes, 0, backend, turbo_tasks, &mut queue);
 
-        run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
+        run_add_to_scope_queue(queue, id, merging_scopes, backend, turbo_tasks);
     }
 
     fn add_self_to_new_scope(
@@ -1332,7 +1325,7 @@ impl Task {
         }
     }
 
-    pub(crate) fn remove_root_or_initial_scope(
+    fn remove_root_or_initial_scope(
         &self,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
@@ -1468,9 +1461,11 @@ impl Task {
             let schedule_self =
                 self.add_self_to_new_scope(&mut state, root_scope, backend, turbo_tasks);
 
+            let mut merging_scopes = 0;
             // remove self from old scopes
             for (scope, count) in scopes.iter() {
                 if *count > 0 {
+                    merging_scopes += 1;
                     self.remove_self_from_scope_full(&mut state, *scope, backend, turbo_tasks);
                 }
             }
@@ -1483,7 +1478,12 @@ impl Task {
                 // Add children to new root scope
                 for child in children.iter() {
                     backend.with_task(*child, |child| {
-                        child.add_to_scope_internal(root_scope, true, backend, turbo_tasks);
+                        child.add_to_scope_internal(
+                            root_scope,
+                            merging_scopes,
+                            backend,
+                            turbo_tasks,
+                        );
                     })
                 }
 
@@ -1759,7 +1759,7 @@ impl Task {
                 for scope in scopes.iter() {
                     #[cfg(not(feature = "report_expensive"))]
                     {
-                        child.add_to_scope_internal(scope, false, backend, turbo_tasks);
+                        child.add_to_scope_internal(scope, 0, backend, turbo_tasks);
                     }
                     #[cfg(feature = "report_expensive")]
                     {
@@ -1768,7 +1768,7 @@ impl Task {
                         use turbo_tasks::util::FormatDuration;
 
                         let start = Instant::now();
-                        child.add_to_scope_internal(scope, false, backend, turbo_tasks);
+                        child.add_to_scope_internal(scope, 0, backend, turbo_tasks);
                         let elapsed = start.elapsed();
                         if elapsed.as_millis() >= 10 {
                             println!(
@@ -2474,7 +2474,7 @@ const SPLIT_OFF_QUEUE_AT: usize = 100;
 pub fn run_add_to_scope_queue(
     mut queue: VecDeque<(TaskId, usize)>,
     id: TaskScopeId,
-    is_optimization_scope: bool,
+    merging_scopes: usize,
     backend: &MemoryBackend,
     turbo_tasks: &dyn TurboTasksBackendApi,
 ) {
@@ -2482,7 +2482,7 @@ pub fn run_add_to_scope_queue(
         backend.with_task(child, |child| {
             child.add_to_scope_internal_shallow(
                 id,
-                is_optimization_scope,
+                merging_scopes,
                 depth,
                 backend,
                 turbo_tasks,
@@ -2491,9 +2491,13 @@ pub fn run_add_to_scope_queue(
         });
         while queue.len() > SPLIT_OFF_QUEUE_AT {
             let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
-            turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                Job::AddToScopeQueue(split_off_queue, id, is_optimization_scope),
-            ));
+            turbo_tasks.schedule_backend_foreground_job(
+                backend.create_backend_job(Job::AddToScopeQueue(
+                    split_off_queue,
+                    id,
+                    merging_scopes,
+                )),
+            );
         }
     }
 }
