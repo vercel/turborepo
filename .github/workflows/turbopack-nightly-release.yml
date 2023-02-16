@@ -31,5 +31,5 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.tag_version.outputs.new_tag }}
-          name: Turbopack Release ${{ steps.tag_version.outputs.new_tag }}
-          omitBody: true
+          name: Turbopack Nightly Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
