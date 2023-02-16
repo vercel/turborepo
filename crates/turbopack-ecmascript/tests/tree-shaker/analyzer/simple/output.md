@@ -143,7 +143,7 @@ import { dog } from "entry.js" assert {
 };
 export const DOG = dog;
 export { DOG };
-export { DOG } from "entry.js" assert {
+export { DOG } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -158,10 +158,10 @@ import { dog } from "entry.js" assert {
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
-export { cat } from "entry.js" assert {
+export { cat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
-export { CHIMERA } from "entry.js" assert {
+export { CHIMERA } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -171,7 +171,7 @@ export { CHIMERA } from "entry.js" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -199,7 +199,7 @@ import { dog } from "entry.js" assert {
 };
 export const DOG = dog;
 export { DOG };
-export { DOG } from "entry.js" assert {
+export { DOG } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -214,10 +214,10 @@ import { dog } from "entry.js" assert {
 const cat = "cat";
 export const CHIMERA = cat + dog;
 export { CHIMERA };
-export { cat } from "entry.js" assert {
+export { cat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
-export { CHIMERA } from "entry.js" assert {
+export { CHIMERA } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -227,7 +227,7 @@ export { CHIMERA } from "entry.js" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 

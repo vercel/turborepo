@@ -479,7 +479,7 @@ export const dogRef = {
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "entry.js" assert {
+export { dogRef } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -503,7 +503,7 @@ import { cat } from "entry.js" assert {
 };
 export const initialCat = cat;
 export { initialCat };
-export { initialCat } from "entry.js" assert {
+export { initialCat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -538,7 +538,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -653,7 +653,7 @@ console.log(dog);
 
 ```js
 export let cat = "cat";
-export { cat } from "entry.js" assert {
+export { cat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -663,7 +663,7 @@ export { cat } from "entry.js" assert {
 
 ```js
 let dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 dog += "!";
@@ -727,7 +727,7 @@ export const dogRef = {
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "entry.js" assert {
+export { dogRef } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -751,7 +751,7 @@ import { cat } from "entry.js" assert {
 };
 export const initialCat = cat;
 export { initialCat };
-export { initialCat } from "entry.js" assert {
+export { initialCat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -786,7 +786,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -835,7 +835,7 @@ dog += "!";
 
 ```js
 export let cat = "cat";
-export { cat } from "entry.js" assert {
+export { cat } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 
@@ -845,7 +845,7 @@ export { cat } from "entry.js" assert {
 
 ```js
 let dog = "dog";
-export { dog } from "entry.js" assert {
+export { dog } from "__turbopack_fake__" assert {
     __turbopack_var__: true
 };
 dog += "!";
