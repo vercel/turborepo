@@ -6,8 +6,12 @@ use turbopack::{
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
-use turbopack_core::environment::{
-    EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc, ServerAddrVc,
+use turbopack_core::{
+    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    environment::{
+        EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc,
+        ServerAddrVc,
+    },
 };
 use turbopack_ecmascript::EcmascriptInputTransform;
 use turbopack_node::execution_context::ExecutionContextVc;
@@ -29,6 +33,7 @@ pub enum ServerContextType {
     PagesData { pages_dir: FileSystemPathVc },
     AppSSR { app_dir: FileSystemPathVc },
     AppRSC { app_dir: FileSystemPathVc },
+    Middleware,
 }
 
 #[turbo_tasks::function]
@@ -107,28 +112,52 @@ pub async fn get_server_resolve_options_context(
                 ..resolve_options_context
             }
         }
+        ServerContextType::Middleware => {
+            let resolve_options_context = ResolveOptionsContext {
+                enable_node_modules: true,
+                enable_node_externals: true,
+                module: true,
+                custom_conditions: vec!["development".to_string()],
+                ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: true,
+                enable_react: true,
+                rules: vec![(
+                    foreign_code_context_condition,
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
+            }
+        }
     }
     .cell())
 }
 
 #[turbo_tasks::function]
-pub fn get_server_environment(
+pub fn get_server_compile_time_info(
     ty: Value<ServerContextType>,
     process_env: ProcessEnvVc,
     server_addr: ServerAddrVc,
-) -> EnvironmentVc {
-    EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsLambda(
-            NodeJsEnvironmentVc::current(process_env, server_addr),
-        )),
-        match ty.into_value() {
-            ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
-                Value::new(EnvironmentIntention::ServerRendering)
-            }
-            ServerContextType::AppSSR { .. } => Value::new(EnvironmentIntention::Prerendering),
-            ServerContextType::AppRSC { .. } => Value::new(EnvironmentIntention::ServerRendering),
-        },
-    )
+) -> CompileTimeInfoVc {
+    CompileTimeInfo {
+        environment: EnvironmentVc::new(
+            Value::new(ExecutionEnvironment::NodeJsLambda(
+                NodeJsEnvironmentVc::current(process_env, server_addr),
+            )),
+            match ty.into_value() {
+                ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
+                    Value::new(EnvironmentIntention::ServerRendering)
+                }
+                ServerContextType::AppSSR { .. } => Value::new(EnvironmentIntention::Prerendering),
+                ServerContextType::AppRSC { .. } => {
+                    Value::new(EnvironmentIntention::ServerRendering)
+                }
+                ServerContextType::Middleware => Value::new(EnvironmentIntention::Middleware),
+            },
+        ),
+    }
+    .cell()
 }
 
 #[turbo_tasks::function]
@@ -195,6 +224,25 @@ pub async fn get_server_module_options_context(
             };
             ModuleOptionsContext {
                 enable_jsx: true,
+                enable_postcss_transform,
+                enable_webpack_loaders,
+                enable_typescript_transform: true,
+                rules: vec![(
+                    foreign_code_context_condition,
+                    module_options_context.clone().cell(),
+                )],
+                custom_rules,
+                ..module_options_context
+            }
+        }
+        ServerContextType::Middleware => {
+            let module_options_context = ModuleOptionsContext {
+                execution_context: Some(execution_context),
+                ..Default::default()
+            };
+            ModuleOptionsContext {
+                enable_jsx: true,
+                enable_styled_jsx: true,
                 enable_postcss_transform,
                 enable_webpack_loaders,
                 enable_typescript_transform: true,

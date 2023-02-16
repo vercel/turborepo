@@ -679,6 +679,9 @@ function getTestSummary(
       .join(" \n")}`;
   }
 
+  console.log("Newly failed tests", JSON.stringify(newFailedTests, null, 2));
+  console.log("Fixed tests", JSON.stringify(fixedTests, null, 2));
+
   // Store a json payload to share via slackapi/slack-github-action into Slack channel
   if (shouldShareTestSummaryToSlack) {
     let resultsSummary = "";
@@ -882,15 +885,19 @@ async function run() {
   const isMultipleComments = comments.length > 1;
 
   try {
-    if (!prNumber) {
-      return;
-    }
-
     // Store the list of failed test paths to a file
     fs.writeFileSync(
       "./failed-test-path-list.json",
-      JSON.stringify(failedTestLists, null, 2)
+      JSON.stringify(
+        failedTestLists.filter((x) => x.length > 5),
+        null,
+        2
+      )
     );
+
+    if (!prNumber) {
+      return;
+    }
 
     if (failedJobResults.result.length === 0) {
       console.log("No failed test results found :tada:");
