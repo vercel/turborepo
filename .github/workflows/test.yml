@@ -1034,17 +1034,6 @@ jobs:
           file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
-  next_js_integration:
-    name: Execute Next.js integration workflow
-    needs: [determine_jobs]
-    permissions:
-      pull-requests: write
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
-    uses: ./.github/workflows/nextjs-integration-test.yml
-    # Uncomment to test against a specific version of Next.js
-    # with:
-    # version: v13.1.6-canary.0
-
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest

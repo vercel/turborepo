@@ -66,11 +66,18 @@ jobs:
       - name: tune linux network
         run: sudo ethtool -K eth0 tx off rx off
 
-      - name: Checkout
+      - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
           ref: ${{ env.NEXTJS_VERSION }}
+
+      - name: Checkout failed test lists
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/turbo
+          ref: nextjs-integration-test-data
+          path: integration-test-data
 
       - uses: actions/cache@v3
         id: restore-build

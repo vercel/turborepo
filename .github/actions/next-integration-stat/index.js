@@ -16471,11 +16471,22 @@
           currentTestFailedNames: [],
         }
       );
-      console.log("Current test summary", {
-        currentTestFailedCaseCount,
-        currentTestFailedSuiteCount,
-        currentTestFailedNames,
-      });
+      console.log(
+        "Current test summary",
+        JSON.stringify(
+          {
+            currentTestFailedSuiteCount,
+            currentTestPassedSuiteCount,
+            currentTestTotalSuiteCount,
+            currentTestFailedCaseCount,
+            currentTestPassedCaseCount,
+            currentTestTotalCaseCount,
+            currentTestFailedNames,
+          },
+          null,
+          2
+        )
+      );
       if (!baseResults) {
         console.log("There's no base to compare");
         return `### Test summary
@@ -16516,11 +16527,22 @@
           baseTestFailedNames: [],
         }
       );
-      console.log("Base test summary", {
-        baseTestFailedSuiteCount,
-        baseTestFailedCaseCount,
-        baseTestFailedNames,
-      });
+      console.log(
+        "Base test summary",
+        JSON.stringify(
+          {
+            baseTestFailedSuiteCount,
+            baseTestPassedSuiteCount,
+            baseTestTotalSuiteCount,
+            baseTestFailedCaseCount,
+            baseTestPassedCaseCount,
+            baseTestTotalCaseCount,
+            baseTestFailedNames,
+          },
+          null,
+          2
+        )
+      );
       let testSuiteDiff = ":zero:";
       const suiteCountDiff =
         baseTestFailedSuiteCount - currentTestFailedSuiteCount;
@@ -16572,6 +16594,11 @@
           .map((t) => (t.length > 5 ? `\t- ${t}` : t))
           .join(" \n")}`;
       }
+      console.log(
+        "Newly failed tests",
+        JSON.stringify(newFailedTests, null, 2)
+      );
+      console.log("Fixed tests", JSON.stringify(fixedTests, null, 2));
       // Store a json payload to share via slackapi/slack-github-action into Slack channel
       if (shouldShareTestSummaryToSlack) {
         let resultsSummary = "";
@@ -16715,27 +16742,31 @@
             }
             groupedFails[ancestorKey].push(fail);
           }
-          commentValues.push(`\`${failedTest}\``);
-          failedTestLists.push(failedTest);
-          for (const group of Object.keys(groupedFails).sort()) {
-            const fails = groupedFails[group];
-            commentValues.push(`\n`);
-            fails.forEach((fail) => {
-              commentValues.push(`- ${group} > ${fail.title}`);
-            });
-          }
-          const strippedResultMessage =
-            resultMessage.length >= 50000
-              ? resultMessage.substring(0, 50000) +
-                `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
-              : resultMessage;
-          if (resultMessage.length >= 50000) {
-            console.log(
-              "Test result messages are too long, comment will post stripped."
-            );
+          if (!failedTestLists.includes(failedTest)) {
+            commentValues.push(`\`${failedTest}\``);
+            failedTestLists.push(failedTest);
           }
           commentValues.push(`\n`);
+          // Currently there are too many test failures to post since it creates several comments.
+          // Only expands if explicitly requested in the option.
           if (shouldExpandResultMessages) {
+            for (const group of Object.keys(groupedFails).sort()) {
+              const fails = groupedFails[group];
+              commentValues.push(`\n`);
+              fails.forEach((fail) => {
+                commentValues.push(`- ${group} > ${fail.title}`);
+              });
+            }
+            const strippedResultMessage =
+              resultMessage.length >= 50000
+                ? resultMessage.substring(0, 50000) +
+                  `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
+                : resultMessage;
+            if (resultMessage.length >= 50000) {
+              console.log(
+                "Test result messages are too long, comment will post stripped."
+              );
+            }
             commentValues.push(`<details>`);
             commentValues.push(`<summary>Expand output</summary>`);
             commentValues.push(strippedResultMessage);
@@ -16777,14 +16808,18 @@
         ];
         const isMultipleComments = comments.length > 1;
         try {
-          if (!prNumber) {
-            return;
-          }
           // Store the list of failed test paths to a file
           fs.writeFileSync(
             "./failed-test-path-list.json",
-            JSON.stringify(failedTestLists, null, 2)
+            JSON.stringify(
+              failedTestLists.filter((x) => x.length > 5),
+              null,
+              2
+            )
           );
+          if (!prNumber) {
+            return;
+          }
           if (failedJobResults.result.length === 0) {
             console.log("No failed test results found :tada:");
             yield postCommentAsync(

@@ -93,6 +93,7 @@ opt-level = 3
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 indexmap = { version = "1.9.2" }
+indoc = "1.0"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 swc_core = { version = "0.59.26" }
