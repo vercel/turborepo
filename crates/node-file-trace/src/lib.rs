@@ -580,11 +580,7 @@ async fn main_operation(
                 let nft_asset = NftJsonAssetVc::new(*module);
                 let path = nft_asset.path().await?.path.clone();
                 output_nft_assets.push(path);
-                emits.push(emit_asset(nft_asset.into()));
-            }
-            // Wait for all files to be emitted
-            for emit in emits {
-                emit.await?;
+                emit_asset(nft_asset.into()).await?;
             }
             return Ok(StringsVc::cell(output_nft_assets));
         }
@@ -604,11 +600,7 @@ async fn main_operation(
                 .iter()
             {
                 let rebased = RebasedAssetVc::new(*module, input_dir, output_dir).into();
-                emits.push(emit_with_completion(rebased, output_dir));
-            }
-            // Wait for all files to be emitted
-            for emit in emits {
-                emit.await?;
+                emit_with_completion(rebased, output_dir).await?;
             }
         }
         Args::Size { common: _ } => todo!(),
