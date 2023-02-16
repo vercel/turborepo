@@ -231,7 +231,7 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "outputs": ["dist/**", ".svelte-kit/**"],
+      "outputs": [".svelte-kit/**", "dist/**"],
       "dependsOn": ["^build"]
     },
     "test": {
