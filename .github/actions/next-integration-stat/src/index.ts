@@ -71,13 +71,12 @@ const BOT_COMMENT_MARKER = `<!-- __marker__ next.js integration stats __marker__
 // Header for the test report.
 const commentTitlePre = `## Failing next.js integration test suites`;
 
-// Download logs for a job in a workflow run by reading redirect url from workflow log response.
-async function fetchJobLogsFromWorkflow(
+async function findNextJsVersionFromBuildLogs(
   octokit: Octokit,
   token: string,
   job: Job
-): Promise<{ nextjsVersion: string; logs: string; job: Job }> {
-  console.log("Checking test results for the job ", job.name);
+): Promise<string> {
+  console.log("Checking logs for the job ", job.name);
 
   // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
   const jobLogRedirectResponse =
@@ -112,9 +111,51 @@ async function fetchJobLogsFromWorkflow(
     ?.split("RUNNING NEXTJS VERSION:")
     .pop()
     ?.trim()!;
+
+  console.log("Found Next.js version: ", nextjsVersion);
+
+  return nextjsVersion;
+}
+
+// Download logs for a job in a workflow run by reading redirect url from workflow log response.
+async function fetchJobLogsFromWorkflow(
+  octokit: Octokit,
+  token: string,
+  job: Job
+): Promise<{ logs: string; job: Job }> {
+  console.log("Checking test results for the job ", job.name);
+
+  // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
+  const jobLogRedirectResponse =
+    await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+      accept: "application/vnd.github+json",
+      ...context.repo,
+      job_id: job.id,
+    });
+
+  // fetch the actual logs
+  const jobLogsResponse = await nodeFetch(jobLogRedirectResponse.url, {
+    headers: {
+      Authorization: `token ${token}`,
+    },
+  });
+
+  if (!jobLogsResponse.ok) {
+    throw new Error(
+      `Failed to get logsUrl, got status ${jobLogsResponse.status}`
+    );
+  }
+
+  // this should be the check_run's raw logs including each line
+  // prefixed with a timestamp in format 2020-03-02T18:42:30.8504261Z
+  const logText: string = await jobLogsResponse.text();
+  const dateTimeStripped = logText
+    .split("\n")
+    .map((line) => line.substr("2020-03-02T19:39:16.8832288Z ".length));
+
   const logs = dateTimeStripped.join("\n");
 
-  return { nextjsVersion, logs, job };
+  return { logs, job };
 }
 
 // Filter out logs that does not contain failed tests, then parse test results into json
@@ -122,7 +163,7 @@ function collectFailedTestResults(
   splittedLogs: Array<string>,
   job: Job
 ): Array<FailedJobResult> {
-  return splittedLogs
+  const ret = splittedLogs
     .filter((logs) => {
       if (
         !logs.includes(`failed to pass within`) ||
@@ -136,35 +177,48 @@ function collectFailedTestResults(
       return true;
     })
     .map((logs) => {
-      let failedTest = logs.split(`failed to pass within`).shift();
+      const failedSplitLogs = logs.split(`failed to pass within`);
+      let logLine = failedSplitLogs.shift();
+      const ret = [];
 
-      // Look for the failed test file name
-      failedTest = failedTest?.includes("test/")
-        ? failedTest?.split("\n").pop()?.trim()
-        : "";
+      while (logLine) {
+        let failedTest = logLine;
+        // Look for the failed test file name
+        failedTest = failedTest?.includes("test/")
+          ? failedTest?.split("\n").pop()?.trim()
+          : "";
 
-      console.log("Failed test: ", { job: job.name, failedTest });
+        // Parse JSON-stringified test output between marker
+        try {
+          const testData = logs
+            ?.split("--test output start--")
+            .pop()
+            ?.split("--test output end--")
+            ?.shift()
+            ?.trim()!;
 
-      // Parse JSON-stringified test output between marker
-      try {
-        const testData = logs
-          ?.split("--test output start--")
-          .pop()
-          ?.split("--test output end--")
-          ?.shift()
-          ?.trim()!;
-
-        return {
-          job: job.name,
-          name: failedTest,
-          data: JSON.parse(testData),
-        };
-      } catch (_) {
-        console.log(`Failed to parse test data`);
-        return null;
+          ret.push({
+            job: job.name,
+            name: failedTest,
+            data: JSON.parse(testData),
+          });
+          logLine = failedSplitLogs.shift();
+        } catch (_) {
+          console.log(`Failed to parse test data`);
+        }
       }
+
+      return ret;
     })
+    .flatMap((x) => x)
     .filter(Boolean) as Array<FailedJobResult>;
+
+  console.log(`Found failed test results from job`, {
+    job: job.name,
+    failedTests: ret.map((x) => x.name),
+  });
+
+  return ret;
 }
 
 // Collect necessary inputs to run actions,
@@ -174,13 +228,19 @@ async function getInputs(): Promise<{
   octokit: Octokit;
   prNumber: number | undefined;
   sha: string;
-  existingComment: ExistingComment;
+  shouldExpandResultMessages: boolean;
 }> {
   const token = getInput("token");
+  const shouldExpandResultMessages =
+    getInput("expand_result_messages") === "true";
   const shouldDiffWithMain = getInput("diff_base") === "main";
   if (getInput("diff_base") !== "main" && getInput("diff_base") !== "release") {
     console.error('Invalid diff_base, must be "main" or "release"');
     process.exit(1);
+  }
+
+  if (!shouldExpandResultMessages) {
+    console.log("Test report comment will not include result messages.");
   }
 
   const octokit = getOctokit(token);
@@ -188,10 +248,9 @@ async function getInputs(): Promise<{
   const prNumber = context?.payload?.pull_request?.number;
   const sha = context?.sha;
 
-  let comments: Awaited<
-    ReturnType<typeof octokit.rest.issues.listComments>
-  > | null = null;
-  let existingComment: ExistingComment;
+  let comments:
+    | Awaited<ReturnType<typeof octokit.rest.issues.listComments>>["data"]
+    | null = null;
 
   if (prNumber) {
     console.log("Trying to collect integration stats for PR", {
@@ -199,17 +258,32 @@ async function getInputs(): Promise<{
       sha: sha,
     });
 
-    comments = await octokit.rest.issues.listComments({
+    comments = await octokit.paginate(octokit.rest.issues.listComments, {
       ...context.repo,
       issue_number: prNumber,
+      per_page: 200,
     });
 
-    // Get a comment from the bot if it exists
-    existingComment = comments?.data.find(
+    console.log("Found total comments for PR", comments?.length || 0);
+
+    // Get a comment from the bot if it exists, delete all of them.
+    // Due to test report can exceed single comment size limit, it can be multiple comments and sync those is not trivial.
+    // Instead, we just delete all of them and post a new one.
+    const existingComments = comments?.filter(
       (comment) =>
         comment?.user?.login === "github-actions[bot]" &&
         comment?.body?.includes(BOT_COMMENT_MARKER)
     );
+
+    if (existingComments?.length) {
+      console.log("Found existing comments, deleting them");
+      for (const comment of existingComments) {
+        await octokit.rest.issues.deleteComment({
+          ...context.repo,
+          comment_id: comment.id,
+        });
+      }
+    }
   } else {
     info("No PR number found in context, will not try to post comment.");
   }
@@ -228,7 +302,7 @@ async function getInputs(): Promise<{
     octokit,
     prNumber,
     sha,
-    existingComment,
+    shouldExpandResultMessages,
   };
 }
 
@@ -248,9 +322,21 @@ async function getFailedJobResults(
     }
   );
 
+  // Filter out next.js build setup jobs
+  const nextjsBuildSetupJob = jobs?.find((job) =>
+    /Build Next.js for the turbopack integration test$/.test(job.name)
+  );
+
+  // Next.js build setup jobs includes the version of next.js that is being tested, try to read it.
+  const nextjsVersion = await findNextJsVersionFromBuildLogs(
+    octokit,
+    token,
+    nextjsBuildSetupJob
+  );
+
   // Filter out next.js integration test jobs
   const integrationTestJobs = jobs?.filter((job) =>
-    /Next\.js integration test \([^)]*\)$/.test(job.name)
+    /Next\.js integration test \([^)]*\) \([^)]*\)$/.test(job.name)
   );
   console.log(jobs?.map((j) => j.name));
 
@@ -267,6 +353,7 @@ async function getFailedJobResults(
   );
 
   const testResultManifest: TestResultManifest = {
+    nextjsVersion,
     ref: sha,
   } as any;
 
@@ -281,9 +368,7 @@ async function getFailedJobResults(
       }
       return true;
     })
-    .reduce((acc, { logs, nextjsVersion, job }) => {
-      testResultManifest.nextjsVersion = nextjsVersion;
-
+    .reduce((acc, { logs, job }) => {
       // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
       const splittedLogs = logs
         .split("NEXT_INTEGRATION_TEST: true")
@@ -337,17 +422,32 @@ async function getTestResultDiffBase(
 
   // If base is main, get the tree under `test-results/main`
   // Otherwise iterate over all the trees under `test-results` then find latest next.js release
-  let baseTree:
+  let testResultJsonTree:
     | Awaited<
         ReturnType<Awaited<Octokit["rest"]["git"]["getTree"]>>
-      >["data"]["tree"][number]
+      >["data"]["tree"]
     | undefined;
+
   if (shouldDiffWithMain) {
     console.log("Trying to find latest test results from main branch");
-    baseTree = testResultsTree.find((tree) => tree.path === "main");
+    const baseTree = testResultsTree.find((tree) => tree.path === "main");
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // Now tree should point the list of .json for the actual test results
+    testResultJsonTree = (
+      await octokit.rest.git.getTree({
+        ...context.repo,
+        tree_sha: baseTree.sha,
+      })
+    ).data.tree;
   } else {
     console.log("Trying to find latest test results from next.js release");
-    baseTree = testResultsTree
+    const baseTree = testResultsTree
       .filter((tree) => tree.path !== "main")
       .reduce((acc, value) => {
         if (!acc) {
@@ -355,23 +455,17 @@ async function getTestResultDiffBase(
         }
 
         return semver.gt(value.path, acc.path) ? value : acc;
-      }, null as any as typeof baseTree);
+      }, null);
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // If the results is for the release, no need to traverse down the tree
+    testResultJsonTree = [baseTree];
   }
-
-  if (!baseTree || !baseTree.sha) {
-    console.log("There is no base to compare test results against");
-    return null;
-  }
-
-  console.log("Found base tree", baseTree);
-
-  // Now tree should point the list of .json for the actual test results
-  const testResultJsonTree = (
-    await octokit.rest.git.getTree({
-      ...context.repo,
-      tree_sha: baseTree.sha,
-    })
-  ).data.tree;
 
   if (!testResultJsonTree) {
     console.log("There is no test results stored in the base yet");
@@ -457,7 +551,9 @@ function getTestSummary(
       acc.currentTestFailedCaseCount += data.numFailedTests;
       acc.currentTestPassedCaseCount += data.numPassedTests;
       acc.currentTestTotalCaseCount += data.numTotalTests;
-      acc.currentTestFailedNames.push(name);
+      if (name.length > 2) {
+        acc.currentTestFailedNames.push(name);
+      }
 
       return acc;
     },
@@ -505,7 +601,10 @@ function getTestSummary(
       acc.baseTestFailedCaseCount += data.numFailedTests;
       acc.baseTestPassedCaseCount += data.numPassedTests;
       acc.baseTestTotalCaseCount += data.numTotalTests;
-      acc.baseTestFailedNames.push(name);
+
+      if (name.length > 2) {
+        acc.baseTestFailedNames.push(name);
+      }
       return acc;
     },
     {
@@ -564,17 +663,24 @@ function getTestSummary(
     (name) => !baseTestFailedNames.includes(name)
   );
 
+  /*
+  //NOTE: upstream test can be flaky, so this can appear intermittently
+  //even if there aren't actual fix. To avoid confusion, do not display this
+  //for now.
   if (fixedTests.length > 0) {
     ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
-      .map((t) => `\t- ${t}`)
+      .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
-  }
+  }*/
 
   if (newFailedTests.length > 0) {
     ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
-      .map((t) => `\t- ${t}`)
+      .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
   }
+
+  console.log("Newly failed tests", JSON.stringify(newFailedTests, null, 2));
+  console.log("Fixed tests", JSON.stringify(fixedTests, null, 2));
 
   // Store a json payload to share via slackapi/slack-github-action into Slack channel
   if (shouldShareTestSummaryToSlack) {
@@ -625,10 +731,51 @@ function getTestSummary(
   return ret;
 }
 
+// Create a markdown formatted comment body for the PR
+// with marker prefix to look for existing comment for the subsequent runs.
+const createFormattedComment = (comment: {
+  header: Array<string>;
+  contents: Array<string>;
+}) => {
+  return (
+    [
+      `${commentTitlePre} ${BOT_COMMENT_MARKER}`,
+      ...(comment.header ?? []),
+    ].join(`\n`) +
+    `\n\n` +
+    comment.contents.join(`\n`)
+  );
+};
+
+// Higher order fn to create a function that creates a comment on a PR
+const createCommentPostAsync =
+  (octokit: Octokit, prNumber?: number) => async (body: string) => {
+    if (!prNumber) {
+      console.log(
+        "This workflow run doesn't seem to be triggered via PR, there's no corresponding PR number. Skipping creating a comment."
+      );
+      return;
+    }
+
+    const result = await octokit.rest.issues.createComment({
+      ...context.repo,
+      issue_number: prNumber,
+      body,
+    });
+
+    console.log("Created a new comment", result.data.html_url);
+  };
+
 // An action report failed next.js integration test with --turbo
 async function run() {
-  const { token, octokit, shouldDiffWithMain, prNumber, sha, existingComment } =
-    await getInputs();
+  const {
+    token,
+    octokit,
+    shouldDiffWithMain,
+    prNumber,
+    sha,
+    shouldExpandResultMessages,
+  } = await getInputs();
 
   // determine if we want to report summary into slack channel.
   // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
@@ -642,105 +789,146 @@ async function run() {
   // Get the base to compare against
   const baseResults = await getTestResultDiffBase(octokit, shouldDiffWithMain);
 
-  let fullCommentBody = "";
-  if (failedJobResults.result.length === 0) {
-    console.log("No failed test results found :tada:");
-    fullCommentBody =
-      `### Next.js test passes :green_circle: ${BOT_COMMENT_MARKER}` +
-      `\nCommit: ${sha}\n`;
-    return;
-  } else {
-    // Comment body to post test report with summary & full details.
-    fullCommentBody =
-      // Put the header title with marer comment to identify the comment for subsequent runs.
-      `${commentTitlePre} ${BOT_COMMENT_MARKER}` + `\nCommit: ${sha}\n`;
+  const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
-    fullCommentBody += getTestSummary(
-      sha,
-      shouldDiffWithMain,
-      baseResults,
-      failedJobResults,
-      shouldReportSlack
+  const failedTestLists = [];
+
+  // Consturct a comment body to post test report with summary & full details.
+  const comments = failedJobResults.result.reduce((acc, value, idx) => {
+    const { name: failedTest, data: testData } = value;
+
+    const commentValues = [];
+    // each job have nested array of test results
+    // Fill in each individual test suite failures
+    const groupedFails = {};
+    const testResult = testData.testResults?.[0];
+    const resultMessage = stripAnsi(testResult?.message);
+    const failedAssertions = testResult?.assertionResults?.filter(
+      (res) => res.status === "failed"
     );
 
-    // Append full test report to the comment body, with collapsed <details>
-    fullCommentBody += `\n<details>\n<summary>Full test report</summary>\n`;
-    // Iterate over job results to construct full test report
-    failedJobResults.result.forEach(
-      ({ job, name: failedTest, data: testData }) => {
-        // each job have nested array of test results
-        // Fill in each individual test suite failures
-        const groupedFails = {};
-        const testResult = testData.testResults?.[0];
-        const resultMessage = stripAnsi(testResult?.message);
-        const failedAssertions = testResult?.assertionResults?.filter(
-          (res) => res.status === "failed"
-        );
+    for (const fail of failedAssertions ?? []) {
+      const ancestorKey = fail?.ancestorTitles?.join(" > ")!;
 
-        for (const fail of failedAssertions ?? []) {
-          const ancestorKey = fail?.ancestorTitles?.join(" > ")!;
-
-          if (!groupedFails[ancestorKey]) {
-            groupedFails[ancestorKey] = [];
-          }
-          groupedFails[ancestorKey].push(fail);
-        }
-
-        if (existingComment?.body?.includes(sha)) {
-          if (failedTest && existingComment.body?.includes(failedTest)) {
-            console.log(
-              `Suite is already included in current comment on ${prNumber}`
-            );
-            // the check_suite comment already says this test failed
-            return;
-          }
-          fullCommentBody = existingComment.body;
-        }
-
-        fullCommentBody += `\n\`${failedTest}\` `;
-
-        for (const group of Object.keys(groupedFails).sort()) {
-          const fails = groupedFails[group];
-          fullCommentBody +=
-            `\n- ` +
-            fails.map((fail) => `${group} > ${fail.title}`).join("\n- ");
-        }
-
-        fullCommentBody += `\n\n<details>`;
-        fullCommentBody += `\n<summary>Expand output</summary>`;
-        fullCommentBody += `\n\n${resultMessage}`;
-        fullCommentBody += `\n</details>\n`;
+      if (!groupedFails[ancestorKey]) {
+        groupedFails[ancestorKey] = [];
       }
-    );
+      groupedFails[ancestorKey].push(fail);
+    }
 
-    // Close </details>
-    fullCommentBody += `</details>\n`;
-  }
+    commentValues.push(`\`${failedTest}\``);
+    failedTestLists.push(failedTest);
+
+    for (const group of Object.keys(groupedFails).sort()) {
+      const fails = groupedFails[group];
+      commentValues.push(`\n`);
+      fails.forEach((fail) => {
+        commentValues.push(`- ${group} > ${fail.title}`);
+      });
+    }
+
+    const strippedResultMessage =
+      resultMessage.length >= 50000
+        ? resultMessage.substring(0, 50000) +
+          `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
+        : resultMessage;
+    if (resultMessage.length >= 50000) {
+      console.log(
+        "Test result messages are too long, comment will post stripped."
+      );
+    }
+
+    commentValues.push(`\n`);
+
+    if (shouldExpandResultMessages) {
+      commentValues.push(`<details>`);
+      commentValues.push(`<summary>Expand output</summary>`);
+      commentValues.push(strippedResultMessage);
+      commentValues.push(`</details>`);
+      commentValues.push(`\n`);
+    }
+
+    // Check last comment body's length, append or either create new comment depends on the length of the text.
+    const commentIdxToUpdate = acc.length - 1;
+    if (
+      acc.length === 0 ||
+      commentValues.join(`\n`).length +
+        acc[commentIdxToUpdate].contents.join(`\n`).length >
+        60000
+    ) {
+      acc.push({
+        header: [`Commit: ${sha}`],
+        contents: commentValues,
+      });
+    } else {
+      acc[commentIdxToUpdate].contents.push(...commentValues);
+    }
+    return acc;
+  }, []);
+
+  const commentsWithSummary = [
+    // First comment is always a summary
+    {
+      header: [`Commit: ${sha}`],
+      contents: [
+        getTestSummary(
+          sha,
+          shouldDiffWithMain,
+          baseResults,
+          failedJobResults,
+          shouldReportSlack
+        ),
+      ],
+    },
+    ...comments,
+  ];
+  const isMultipleComments = comments.length > 1;
 
   try {
+    // Store the list of failed test paths to a file
+    fs.writeFileSync(
+      "./failed-test-path-list.json",
+      JSON.stringify(
+        failedTestLists.filter((x) => x.length > 5),
+        null,
+        2
+      )
+    );
+
     if (!prNumber) {
       return;
     }
 
-    if (!existingComment) {
-      console.log("No existing comment found, creating a new one");
-      const result = await octokit.rest.issues.createComment({
-        ...context.repo,
-        issue_number: prNumber,
-        body: fullCommentBody,
-      });
+    if (failedJobResults.result.length === 0) {
+      console.log("No failed test results found :tada:");
+      await postCommentAsync(
+        `### Next.js test passes :green_circle: ${BOT_COMMENT_MARKER}` +
+          `\nCommit: ${sha}\n`
+      );
+      return;
+    }
 
-      console.log("Created a new comment", result.data.html_url);
-    } else {
-      console.log("Existing comment found, updating it");
-
-      const result = await octokit.rest.issues.updateComment({
-        ...context.repo,
-        comment_id: existingComment.id,
-        body: fullCommentBody,
-      });
-
-      console.log("Updated existing comment", result.data.html_url);
+    for (const [idx, comment] of commentsWithSummary.entries()) {
+      const value = {
+        ...comment,
+      };
+      if (isMultipleComments) {
+        value.header.push(
+          `**(Report ${idx + 1}/${commentsWithSummary.length})**`
+        );
+      }
+      // Add collapsible details for full test report
+      if (idx > 0) {
+        value.contents = [
+          `<details>`,
+          `<summary>Expand full test reports</summary>`,
+          `\n`,
+          ...value.contents,
+          `</details>`,
+        ];
+      }
+      const commentBodyText = createFormattedComment(value);
+      await postCommentAsync(commentBodyText);
     }
   } catch (error) {
     console.error("Failed to post comment", error);

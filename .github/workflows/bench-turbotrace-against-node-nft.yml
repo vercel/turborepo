@@ -1,4 +1,4 @@
-name: Bench Turbo trace against @vercel/nft
+name: Bench Turbotrace against @vercel/nft
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
     name: bench
 
     env:
-      BUILD_ARGS: --release -p turbopack --features bench_against_node_nft bench_against_node_nft
+      BENCH_ARGS: --release -p turbopack --features bench_against_node_nft bench_against_node_nft
 
     steps:
       - uses: actions/checkout@v3

@@ -37,7 +37,10 @@ func Test_filter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	packageJSONs := make(graph.WorkspaceInfos)
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("project-0")
 	packageJSONs["project-0"] = &fs.PackageJSON{
@@ -291,7 +294,7 @@ func Test_filter(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			r := &Resolver{
 				Graph:          graph,
-				WorkspaceInfos: packageJSONs,
+				WorkspaceInfos: workspaceInfos,
 				Cwd:            root,
 				Inference:      tc.PackageInference,
 			}
@@ -306,7 +309,7 @@ func Test_filter(t *testing.T) {
 	t.Run("report unmatched filters", func(t *testing.T) {
 		r := &Resolver{
 			Graph:          graph,
-			WorkspaceInfos: packageJSONs,
+			WorkspaceInfos: workspaceInfos,
 			Cwd:            root,
 		}
 		pkgs, err := r.getFilteredPackages([]*TargetSelector{
@@ -338,7 +341,10 @@ func Test_matchScopedPackage(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(graph.WorkspaceInfos)
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -347,7 +353,7 @@ func Test_matchScopedPackage(t *testing.T) {
 	}
 	r := &Resolver{
 		Graph:          graph,
-		WorkspaceInfos: packageJSONs,
+		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
@@ -371,7 +377,10 @@ func Test_matchExactPackages(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(graph.WorkspaceInfos)
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -385,7 +394,7 @@ func Test_matchExactPackages(t *testing.T) {
 	}
 	r := &Resolver{
 		Graph:          graph,
-		WorkspaceInfos: packageJSONs,
+		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
@@ -409,7 +418,10 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(graph.WorkspaceInfos)
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -423,7 +435,7 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 	}
 	r := &Resolver{
 		Graph:          graph,
-		WorkspaceInfos: packageJSONs,
+		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
@@ -452,7 +464,10 @@ func Test_SCM(t *testing.T) {
 	head1Changed.Add(util.RootPkgName)
 	head2Changed := make(util.Set)
 	head2Changed.Add("package-3")
-	packageJSONs := make(graph.WorkspaceInfos)
+	workspaceInfos := graph.WorkspaceInfos{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("package-1")
 	packageJSONs["package-1"] = &fs.PackageJSON{
@@ -479,7 +494,7 @@ func Test_SCM(t *testing.T) {
 
 	r := &Resolver{
 		Graph:          graph,
-		WorkspaceInfos: packageJSONs,
+		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
 		PackagesChangedInRange: func(fromRef string, toRef string) (util.Set, error) {
 			if fromRef == "HEAD~1" && toRef == "HEAD" {
