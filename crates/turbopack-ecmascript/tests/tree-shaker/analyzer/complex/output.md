@@ -479,6 +479,9 @@ export const dogRef = {
     set: setDog
 };
 export { dogRef };
+export { dogRef } from "entry.js" assert {
+    __turbopack_var__: true
+};
 
 ```
 
@@ -500,6 +503,9 @@ import { cat } from "entry.js" assert {
 };
 export const initialCat = cat;
 export { initialCat };
+export { initialCat } from "entry.js" assert {
+    __turbopack_var__: true
+};
 
 ```
 
@@ -532,6 +538,10 @@ export { getChimera };
 
 ```js
 let dog = "dog";
+export { dog } from "entry.js" assert {
+    __turbopack_var__: true
+};
+
 ```
 
 ## Chunk 6
@@ -643,19 +653,27 @@ console.log(dog);
 
 ```js
 export let cat = "cat";
+export { cat } from "entry.js" assert {
+    __turbopack_var__: true
+};
+
 ```
 
 ## Merged (module eval)
 
 ```js
 let dog = "dog";
+export { dog } from "entry.js" assert {
+    __turbopack_var__: true
+};
 dog += "!";
 console.log(dog);
 dog += "!";
 console.log(dog);
 dog += "!";
 console.log(dog);
-("module evaluation");
+"module evaluation";
+
 ```
 
 # Modules (prod)
@@ -709,6 +727,9 @@ export const dogRef = {
     set: setDog
 };
 export { dogRef };
+export { dogRef } from "entry.js" assert {
+    __turbopack_var__: true
+};
 
 ```
 
@@ -730,6 +751,9 @@ import { cat } from "entry.js" assert {
 };
 export const initialCat = cat;
 export { initialCat };
+export { initialCat } from "entry.js" assert {
+    __turbopack_var__: true
+};
 
 ```
 
@@ -762,6 +786,10 @@ export { getChimera };
 
 ```js
 let dog = "dog";
+export { dog } from "entry.js" assert {
+    __turbopack_var__: true
+};
+
 ```
 
 ## Chunk 6
@@ -807,17 +835,25 @@ dog += "!";
 
 ```js
 export let cat = "cat";
+export { cat } from "entry.js" assert {
+    __turbopack_var__: true
+};
+
 ```
 
 ## Merged (module eval)
 
 ```js
 let dog = "dog";
+export { dog } from "entry.js" assert {
+    __turbopack_var__: true
+};
 dog += "!";
 dog += "!";
 dog += "!";
 console.log(dog);
 console.log(dog);
 console.log(dog);
-("module evaluation");
+"module evaluation";
+
 ```
