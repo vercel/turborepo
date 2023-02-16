@@ -358,51 +358,16 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(1, ImportOfModule), ItemId(8, Normal), ItemId(12, ImportOfModule), ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(0, Normal), ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
-    N2["Items: [ItemId(Export((Atom('foobar' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('foo' type=inline), #0)))]"];
-    N4["Items: [ItemId(11, Normal), ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
-    N5["Items: [ItemId(1, ImportBinding(0))]"];
-    N6["Items: [ItemId(2, VarDeclarator(0))]"];
-    N7["Items: [ItemId(3, VarDeclarator(0))]"];
-    N8["Items: [ItemId(4, VarDeclarator(0))]"];
-    N9["Items: [ItemId(5, Normal)]"];
-    N10["Items: [ItemId(6, VarDeclarator(0))]"];
-    N11["Items: [ItemId(7, Normal)]"];
-    N12["Items: [ItemId(10, Normal)]"];
-    N0 --> N10;
-    N0 --> N12;
-    N0 --> N6;
-    N0 --> N9;
-    N0 --> N11;
-    N0 --> N7;
-    N0 --> N5;
-    N1 --> N12;
-    N1 --> N6;
-    N1 --> N9;
-    N1 --> N11;
-    N2 --> N6;
-    N2 --> N9;
-    N2 --> N11;
-    N3 --> N7;
-    N4 --> N7;
-    N4 --> N10;
-    N4 --> N11;
-    N7 --> N6;
-    N9 --> N8;
-    N9 --> N6;
-    N9 --> N7;
-    N10 --> N6;
-    N10 --> N9;
-    N11 --> N6;
-    N11 --> N9;
-    N11 --> N7;
-    N11 --> N10;
-    N12 --> N5;
-    N12 --> N6;
-    N12 --> N9;
-    N12 --> N11;
+    N0["Items: [ItemId(1, ImportOfModule), ItemId(1, ImportBinding(0)), ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(4, VarDeclarator(0)), ItemId(5, Normal), ItemId(6, VarDeclarator(0)), ItemId(7, Normal), ItemId(8, Normal), ItemId(10, Normal), ItemId(12, ImportOfModule), ItemId(ModuleEvaluation)]"];
+    N1["Items: [ItemId(0, Normal), ItemId(1, ImportBinding(0)), ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(4, VarDeclarator(0)), ItemId(5, Normal), ItemId(6, VarDeclarator(0)), ItemId(7, Normal), ItemId(10, Normal), ItemId(Export((Atom('external1' type=dynamic), #0)))]"];
+    N2["Items: [ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(4, VarDeclarator(0)), ItemId(5, Normal), ItemId(6, VarDeclarator(0)), ItemId(7, Normal), ItemId(Export((Atom('foobar' type=inline), #0)))]"];
+    N3["Items: [ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('foo' type=inline), #0)))]"];
+    N4["Items: [ItemId(2, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(4, VarDeclarator(0)), ItemId(5, Normal), ItemId(6, VarDeclarator(0)), ItemId(7, Normal), ItemId(11, Normal), ItemId(Export((Atom('external2' type=dynamic), #0)))]"];
+    N0 --> N4;
+    N0 --> N1;
+    N1 --> N4;
+    N2 --> N4;
+    N3 --> N4;
 ```
 
 # Modules (dev)
@@ -411,28 +376,23 @@ graph TD
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_chunk__: 4
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 1
 };
 import "module";
+import { upper } from "module";
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
 console.log(foobarCopy);
+function internal() {
+    return upper(foobar);
+}
 import "other";
 "module evaluation";
 
@@ -442,19 +402,20 @@ import "other";
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
+    __turbopack_chunk__: 4
 };
 export function external1() {
     return internal() + foobar;
+}
+import { upper } from "module";
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
+function internal() {
+    return upper(foobar);
 }
 export { external1 };
 
@@ -464,14 +425,14 @@ export { external1 };
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 4
 };
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
 export { foobar };
 
 ```
@@ -480,8 +441,10 @@ export { foobar };
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 4
 };
+export let foobar = "foo";
+export const foo = foobar;
 export { foo };
 
 ```
@@ -489,135 +452,58 @@ export { foo };
 ## Module 5
 
 ```js
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 10
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
 export function external2() {
-    foobar += ".";
+  foobar += ".";
 }
 export { external2 };
-
-```
-
-## Module 6
-
-```js
-import { upper } from "module";
-```
-
-## Module 7
-
-```js
-export let foobar = "foo";
-```
-
-## Module 8
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-export const foo = foobar;
-
-```
-
-## Module 9
-
-```js
-const bar = "bar";
-```
-
-## Module 10
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-foobar += bar;
-
-```
-
-## Module 11
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-let foobarCopy = foobar;
-
-```
-
-## Module 12
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 10
-};
-foobar += "foo";
-
-```
-
-## Module 13
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-function internal() {
-    return upper(foobar);
-}
-
 ```
 
 ## Merged (module eval)
 
 ```js
 export let foobar = "foo";
-const bar = "bar";
 export const foo = foobar;
+const bar = "bar";
 foobar += bar;
 let foobarCopy = foobar;
+foobar += "foo";
+export function external2() {
+  foobar += ".";
+}
+export { external2 };
 import { upper } from "module";
+export function external1() {
+  return internal() + foobar;
+}
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
 foobar += "foo";
 function internal() {
   return upper(foobar);
 }
+export { external1 };
 import "module";
+import { upper } from "module";
 import "other";
+export let foobar = "foo";
+export const foo = foobar;
+const bar = "bar";
+foobar += bar;
+let foobarCopy = foobar;
+foobar += "foo";
 console.log(foobarCopy);
+function internal() {
+  return upper(foobar);
+}
 ("module evaluation");
 ```
 
@@ -627,12 +513,15 @@ console.log(foobarCopy);
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 2
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 3
 };
 import "module";
+export let foobar = "foo";
+const bar = "bar";
+foobar += bar;
 let foobarCopy = foobar;
 console.log(foobarCopy);
 import "other";
@@ -644,18 +533,19 @@ import "other";
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 3
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_chunk__: 2
 };
 export function external1() {
     return internal() + foobar;
 }
 import { upper } from "module";
+export let foobar = "foo";
+const bar = "bar";
+foobar += bar;
+foobar += "foo";
 function internal() {
     return upper(foobar);
 }
@@ -667,14 +557,12 @@ export { external1 };
 
 ```js
 import "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 3
 };
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
+export let foobar = "foo";
+const bar = "bar";
+foobar += bar;
+foobar += "foo";
 export { foobar };
 
 ```
@@ -682,12 +570,9 @@ export { foobar };
 ## Module 4
 
 ```js
-import "entry.js" assert {
-    __turbopack_chunk__: 5
-};
+export let foobar = "foo";
 export const foo = foobar;
 export { foo };
-
 ```
 
 ## Module 5
@@ -699,52 +584,22 @@ export function external2() {
 export { external2 };
 ```
 
-## Module 6
-
-```js
-export let foobar = "foo";
-```
-
-## Module 7
-
-```js
-const bar = "bar";
-```
-
-## Module 8
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-foobar += bar;
-
-```
-
-## Module 9
-
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-foobar += "foo";
-
-```
-
 ## Merged (module eval)
 
 ```js
 export let foobar = "foo";
+export const foo = foobar;
+export { foo };
+export let foobar = "foo";
 const bar = "bar";
 foobar += bar;
+foobar += "foo";
+export { foobar };
 import "module";
 import "other";
+export let foobar = "foo";
+const bar = "bar";
+foobar += bar;
 let foobarCopy = foobar;
 console.log(foobarCopy);
 ("module evaluation");
