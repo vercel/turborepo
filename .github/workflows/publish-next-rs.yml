@@ -64,46 +64,46 @@ jobs:
         settings:
           # pnpm is aliased here temporarily until the build docker
           # image is updated past Node.js v14.19 (current 14.18.1)
-          # - host: macos-latest
-          #   target: "x86_64-apple-darwin"
-          #   build: |
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
-          #     pnpm build:nextrs --release --target x86_64-apple-darwin
-          #     strip -x packages/next-rs/native/next-rs.*.node
-          # - host: windows-latest
-          #   build: |
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
-          #     turbo run build:nextrs -- --release --target x86_64-pc-windows-msvc
-          #   target: "x86_64-pc-windows-msvc"
-          # - host: windows-latest
-          #   build: |
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
-          #     turbo run build:nextrs-no-plugin -- --release --target i686-pc-windows-msvc
-          #   target: "i686-pc-windows-msvc"
-          # - host: ubuntu-latest
-          #   target: "x86_64-unknown-linux-gnu"
-          #   docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-x64
-          #   build: >-
-          #     set -e &&
-          #     rustup toolchain install "${RUST_TOOLCHAIN}" &&
-          #     rustup default "${RUST_TOOLCHAIN}" &&
-          #     rustup target add x86_64-unknown-linux-gnu &&
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
-          #     unset CC_x86_64_unknown_linux_gnu && unset CC &&
-          #     turbo run build:nextrs -- --release --target x86_64-unknown-linux-gnu &&
-          #     strip packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: "x86_64-unknown-linux-musl"
-          #   docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-alpine
-          #   build: >-
-          #     set -e &&
-          #     apk add --no-cache libc6-compat &&
-          #     rustup toolchain install "${RUST_TOOLCHAIN}" &&
-          #     rustup default "${RUST_TOOLCHAIN}" &&
-          #     rustup target add x86_64-unknown-linux-musl &&
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
-          #     turbo run build:nextrs -- --release --target x86_64-unknown-linux-musl &&
-          #     strip packages/next-rs/native/next-rs.*.node
+          - host: macos-latest
+            target: "x86_64-apple-darwin"
+            build: |
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
+              pnpm build:nextrs --release --target x86_64-apple-darwin
+              strip -x packages/next-rs/native/next-rs.*.node
+          - host: windows-latest
+            build: |
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
+              pnpm run build:nextrs --release --target x86_64-pc-windows-msvc
+            target: "x86_64-pc-windows-msvc"
+          - host: windows-latest
+            build: |
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
+              turbo run build:nextrs-no-plugin -- --release --target i686-pc-windows-msvc
+            target: "i686-pc-windows-msvc"
+          - host: ubuntu-latest
+            target: "x86_64-unknown-linux-gnu"
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-x64
+            build: >-
+              set -e &&
+              rustup toolchain install "${RUST_TOOLCHAIN}" &&
+              rustup default "${RUST_TOOLCHAIN}" &&
+              rustup target add x86_64-unknown-linux-gnu &&
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
+              unset CC_x86_64_unknown_linux_gnu && unset CC &&
+              pnpm run build:nextrs --release --target x86_64-unknown-linux-gnu &&
+              strip packages/next-rs/native/next-rs.*.node
+          - host: ubuntu-latest
+            target: "x86_64-unknown-linux-musl"
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-alpine
+            build: >-
+              set -e &&
+              apk add --no-cache libc6-compat &&
+              rustup toolchain install "${RUST_TOOLCHAIN}" &&
+              rustup default "${RUST_TOOLCHAIN}" &&
+              rustup target add x86_64-unknown-linux-musl &&
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
+              pnpm run build:nextrs --release --target x86_64-unknown-linux-musl &&
+              strip packages/next-rs/native/next-rs.*.node
           - host: macos-latest
             target: "aarch64-apple-darwin"
             build: |
@@ -115,78 +115,76 @@ jobs:
               npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
               pnpm run build:nextrs --release --target aarch64-apple-darwin
               strip -x packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: "aarch64-unknown-linux-gnu"
-          #   docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-aarch64
-          #   build: >-
-          #     set -e &&
-          #     export JEMALLOC_SYS_WITH_LG_PAGE=16 &&
-          #     rustup toolchain install "${RUST_TOOLCHAIN}" &&
-          #     rustup default "${RUST_TOOLCHAIN}" &&
-          #     rustup target add aarch64-unknown-linux-gnu &&
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
-          #     export CC_aarch64_unknown_linux_gnu=/usr/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-gcc &&
-          #     turbo run build:nextrs -- --release --target aarch64-unknown-linux-gnu &&
-          #     llvm-strip -x packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: "armv7-unknown-linux-gnueabihf"
-          #   setup: |
-          #     sudo apt-get update
-          #     sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf -y
-          #   build: |
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
-          #     turbo run build:nextrs-no-plugin -- --release --target armv7-unknown-linux-gnueabihf
-          #     arm-linux-gnueabihf-strip packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: aarch64-linux-android
-          #   build: |
-          #     export CLANG_VERSION=`ls ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang | sed 's/ *$//g'`
-          #     export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-          #     export CC="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-          #     export CXX="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
-          #     export AR="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          #     export PATH="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
-          #     touch "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
-          #     chmod 777 "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
-          #     echo "INPUT(-lunwind)" > "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
-          #     turbo run build:nextrs -- --release --target aarch64-linux-android
-          #     ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: armv7-linux-androideabi
-          #   build: |
-          #     export CLANG_VERSION=`ls ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang | sed 's/ *$//g'`
-          #     export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
-          #     export CC="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
-          #     export CXX="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++"
-          #     export AR="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          #     export PATH="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
-          #     touch "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
-          #     chmod 777 "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
-          #     echo "INPUT(-lunwind)" > "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
-          #     turbo run build:nextrs-no-plugin -- --release --target armv7-linux-androideabi
-          #     ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip packages/next-rs/native/next-rs.*.node
-          # - host: ubuntu-latest
-          #   target: "aarch64-unknown-linux-musl"
-          #   docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-alpine
-          #   build: >-
-          #     set -e &&
-          #     apk add --no-cache libc6-compat &&
-          #     export JEMALLOC_SYS_WITH_LG_PAGE=16 &&
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
-          #     rustup toolchain install "${RUST_TOOLCHAIN}" &&
-          #     rustup default "${RUST_TOOLCHAIN}" &&
-          #     rustup target add aarch64-unknown-linux-musl &&
-          #     turbo run build:nextrs -- --release --target aarch64-unknown-linux-musl &&
-          #     llvm-strip -x packages/next-rs/native/next-rs.*.node
-          # - host: windows-latest
-          #   target: "aarch64-pc-windows-msvc"
-          #   build: |
-          #     npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
-          #     turbo run build:nextrs-no-plugin-woa -- --release --target aarch64-pc-windows-msvc --cargo-flags=--no-default-features
-    #if: ${{ needs.build.outputs.isRelease == 'true' || (needs.build.outputs.turboToken != 'empty') }}
-    #needs: build
+          - host: ubuntu-latest
+            target: "aarch64-unknown-linux-gnu"
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-aarch64
+            build: >-
+              set -e &&
+              export JEMALLOC_SYS_WITH_LG_PAGE=16 &&
+              rustup toolchain install "${RUST_TOOLCHAIN}" &&
+              rustup default "${RUST_TOOLCHAIN}" &&
+              rustup target add aarch64-unknown-linux-gnu &&
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
+              export CC_aarch64_unknown_linux_gnu=/usr/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-gcc &&
+              pnpm run build:nextrs --release --target aarch64-unknown-linux-gnu &&
+              llvm-strip -x packages/next-rs/native/next-rs.*.node
+          - host: ubuntu-latest
+            target: "armv7-unknown-linux-gnueabihf"
+            setup: |
+              sudo apt-get update
+              sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf -y
+            build: |
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
+              turbo run build:nextrs-no-plugin -- --release --target armv7-unknown-linux-gnueabihf
+              arm-linux-gnueabihf-strip packages/next-rs/native/next-rs.*.node
+          - host: ubuntu-latest
+            target: aarch64-linux-android
+            build: |
+              export CLANG_VERSION=`ls ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang | sed 's/ *$//g'`
+              export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+              export CC="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+              export CXX="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+              export AR="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+              export PATH="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
+              touch "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
+              chmod 777 "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
+              echo "INPUT(-lunwind)" > "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/aarch64/libgcc.a"
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi
+              pnpm run build:nextrs --release --target aarch64-linux-android
+              ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip packages/next-rs/native/next-rs.*.node
+          - host: ubuntu-latest
+            target: armv7-linux-androideabi
+            build: |
+              export CLANG_VERSION=`ls ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang | sed 's/ *$//g'`
+              export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
+              export CC="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
+              export CXX="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++"
+              export AR="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+              export PATH="${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
+              touch "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
+              chmod 777 "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
+              echo "INPUT(-lunwind)" > "${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/${CLANG_VERSION}/lib/linux/arm/libgcc.a"
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
+              turbo run build:nextrs-no-plugin -- --release --target armv7-linux-androideabi
+              ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip packages/next-rs/native/next-rs.*.node
+          - host: ubuntu-latest
+            target: "aarch64-unknown-linux-musl"
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2022-10-24-alpine
+            build: >-
+              set -e &&
+              apk add --no-cache libc6-compat &&
+              export JEMALLOC_SYS_WITH_LG_PAGE=16 &&
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" && if [ ! -f $(dirname $(which yarn))/pnpm ]; then ln -s $(which yarn) $(dirname $(which yarn))/pnpm;fi &&
+              rustup toolchain install "${RUST_TOOLCHAIN}" &&
+              rustup default "${RUST_TOOLCHAIN}" &&
+              rustup target add aarch64-unknown-linux-musl &&
+              pnpm run build:nextrs --release --target aarch64-unknown-linux-musl &&
+              llvm-strip -x packages/next-rs/native/next-rs.*.node
+          - host: windows-latest
+            target: "aarch64-pc-windows-msvc"
+            build: |
+              npm i -g "@napi-rs/cli@${NAPI_CLI_VERSION}" "turbo@${TURBO_VERSION}" "pnpm@${PNPM_VERSION}"
+              turbo run build:nextrs-no-plugin-woa -- --release --target aarch64-pc-windows-msvc --cargo-flags=--no-default-features
     name: stable - ${{ matrix.settings.target }} - node@16
     runs-on: ${{ matrix.settings.host }}
     env:
