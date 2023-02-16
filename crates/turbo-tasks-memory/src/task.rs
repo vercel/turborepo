@@ -975,10 +975,9 @@ impl Task {
         &self,
         id: TaskScopeId,
         merging_scopes: usize,
-        depth: usize,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-        queue: &mut VecDeque<(TaskId, usize)>,
+        queue: &mut VecDeque<TaskId>,
     ) {
         let mut state = self.full_state_mut();
         let TaskState {
@@ -1019,31 +1018,28 @@ impl Task {
                     return;
                 }
 
-                if depth < usize::BITS as usize {
-                    *optimization_counter += 1;
-                    if merging_scopes > 0 {
-                        *optimization_counter = optimization_counter.saturating_sub(merging_scopes);
-                    } else {
-                        const SCOPE_OPTIMIZATION_THRESHOLD: usize = 1024;
-                        if *optimization_counter * children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
-                            list.remove(id);
-                            drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
-                            return self.add_to_scope_internal_shallow(
-                                id,
-                                merging_scopes,
-                                depth,
-                                backend,
-                                turbo_tasks,
-                                queue,
-                            );
-                        }
+                *optimization_counter += 1;
+                if merging_scopes > 0 {
+                    *optimization_counter = optimization_counter.saturating_sub(merging_scopes);
+                } else {
+                    const SCOPE_OPTIMIZATION_THRESHOLD: usize = 1024;
+                    if *optimization_counter * children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
+                        list.remove(id);
+                        drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
+                        return self.add_to_scope_internal_shallow(
+                            id,
+                            merging_scopes,
+                            backend,
+                            turbo_tasks,
+                            queue,
+                        );
                     }
                 }
 
                 if queue.capacity() == 0 {
                     queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * 2));
                 }
-                queue.extend(children.iter().copied().map(|child| (child, depth + 1)));
+                queue.extend(children.iter().copied());
 
                 // add to dirty list of the scope (potentially schedule)
                 let schedule_self =
@@ -1066,7 +1062,7 @@ impl Task {
     ) {
         // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
-        self.add_to_scope_internal_shallow(id, merging_scopes, 0, backend, turbo_tasks, &mut queue);
+        self.add_to_scope_internal_shallow(id, merging_scopes, backend, turbo_tasks, &mut queue);
 
         run_add_to_scope_queue(queue, id, merging_scopes, backend, turbo_tasks);
     }
@@ -2472,18 +2468,17 @@ const SPLIT_OFF_QUEUE_AT: usize = 100;
 
 /// Adds a list of tasks and their children to a scope, recursively.
 pub fn run_add_to_scope_queue(
-    mut queue: VecDeque<(TaskId, usize)>,
+    mut queue: VecDeque<TaskId>,
     id: TaskScopeId,
     merging_scopes: usize,
     backend: &MemoryBackend,
     turbo_tasks: &dyn TurboTasksBackendApi,
 ) {
-    while let Some((child, depth)) = queue.pop_front() {
+    while let Some(child) = queue.pop_front() {
         backend.with_task(child, |child| {
             child.add_to_scope_internal_shallow(
                 id,
                 merging_scopes,
-                depth,
                 backend,
                 turbo_tasks,
                 &mut queue,

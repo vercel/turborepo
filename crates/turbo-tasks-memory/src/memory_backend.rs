@@ -591,7 +591,7 @@ pub(crate) enum Job {
     ScheduleWhenDirtyFromScope(AutoSet<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
-    AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, usize),
+    AddToScopeQueue(VecDeque<TaskId>, TaskScopeId, usize),
     /// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
     /// split off work.
     RemoveFromScopeQueue(VecDeque<TaskId>, TaskScopeId),
