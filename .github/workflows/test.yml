@@ -572,7 +572,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib --features rustls-tls
+          cargo test -p turborepo-lib -p turborepo-scm --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
