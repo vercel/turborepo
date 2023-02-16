@@ -485,9 +485,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             let mut base = CommandBase::new(clap_args, repo_root)?;
 
-            if let Err(err) = unlink::unlink(&mut base) {
-                error!("error: {}", err.to_string())
-            };
+            unlink::unlink(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
