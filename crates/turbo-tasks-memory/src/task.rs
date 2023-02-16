@@ -91,6 +91,24 @@ enum TaskType {
     Persistent(Arc<PersistentTaskType>),
 }
 
+enum TaskTypeForDescription {
+    Root,
+    Once,
+    ReadCollectibles(TraitTypeId),
+    Persistent(Arc<PersistentTaskType>),
+}
+
+impl TaskTypeForDescription {
+    fn from(task_type: &TaskType) -> Self {
+        match task_type {
+            TaskType::Root(..) => Self::Root,
+            TaskType::Once(..) => Self::Once,
+            TaskType::ReadCollectibles(.., trait_id) => Self::ReadCollectibles(*trait_id),
+            TaskType::Persistent(ty) => Self::Persistent(ty.clone()),
+        }
+    }
+}
+
 impl Debug for TaskType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -497,19 +515,19 @@ impl Task {
     }
 
     pub(crate) fn get_description(&self) -> String {
-        Self::format_description(&self.ty, self.id)
+        Self::format_description(&TaskTypeForDescription::from(&self.ty), self.id)
     }
 
-    fn format_description(ty: &TaskType, id: TaskId) -> String {
+    fn format_description(ty: &TaskTypeForDescription, id: TaskId) -> String {
         match ty {
-            TaskType::Root(..) => format!("[{}] root", id),
-            TaskType::Once(..) => format!("[{}] once", id),
-            TaskType::ReadCollectibles(_, trait_type_id) => format!(
+            TaskTypeForDescription::Root => format!("[{}] root", id),
+            TaskTypeForDescription::Once => format!("[{}] once", id),
+            TaskTypeForDescription::ReadCollectibles(trait_type_id) => format!(
                 "[{}] read collectibles({})",
                 id,
                 registry::get_trait(*trait_type_id).name
             ),
-            TaskType::Persistent(ty) => match &**ty {
+            TaskTypeForDescription::Persistent(ty) => match &**ty {
                 PersistentTaskType::Native(native_fn, _) => {
                     format!("[{}] {}", id, registry::get_function(*native_fn).name)
                 }
@@ -536,8 +554,8 @@ impl Task {
         id: TaskId,
         ty: &TaskType,
     ) -> impl Fn() -> String + Send + Sync {
-        let ty = Self::format_description(ty, id);
-        move || ty.clone()
+        let ty = TaskTypeForDescription::from(ty);
+        move || Self::format_description(&ty, id)
     }
 
     fn get_event_description(&self) -> impl Fn() -> String + Send + Sync {
