@@ -629,14 +629,7 @@ impl DepGraph {
                             decls: vec![decl.clone()],
                             ..*v.clone()
                         });
-                        let content = if item.is_module_decl() {
-                            ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-                                span: item.span(),
-                                decl: Decl::Var(var_decl),
-                            }))
-                        } else {
-                            ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)))
-                        };
+                        let content = ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl)));
                         items.insert(
                             id,
                             ItemData {
