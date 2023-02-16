@@ -125,6 +125,14 @@ impl MemoryBackend {
         for id in self.task_cache.clone().into_read_only().values() {
             func(*id);
         }
+        for id in self
+            .read_collectibles_task_cache
+            .clone()
+            .into_read_only()
+            .values()
+        {
+            func(*id);
+        }
     }
 
     #[inline(always)]
