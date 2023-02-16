@@ -280,6 +280,34 @@ impl DepGraph {
                 chunk.body.push(data[g].content.clone());
             }
 
+            for g in group {
+                let data = data.get(g).unwrap();
+
+                // Emit `export { foo }`
+                for var in data.write_vars.iter() {
+                    if required_vars.remove(var) {
+                        chunk
+                            .body
+                            .push(ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(
+                                NamedExport {
+                                    span: DUMMY_SP,
+                                    specifiers: vec![ExportSpecifier::Named(
+                                        ExportNamedSpecifier {
+                                            span: DUMMY_SP,
+                                            orig: ModuleExportName::Ident(var.clone().into()),
+                                            exported: None,
+                                            is_type_only: false,
+                                        },
+                                    )],
+                                    src: None,
+                                    type_only: false,
+                                    asserts: None,
+                                },
+                            )));
+                    }
+                }
+            }
+
             modules.push(chunk);
         }
 
