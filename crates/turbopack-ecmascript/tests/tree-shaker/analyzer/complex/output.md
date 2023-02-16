@@ -427,7 +427,7 @@ graph TD
 
 # Modules (dev)
 
-## Module 1
+## Chunk 0
 
 ```js
 import "entry.js" assert {
@@ -443,7 +443,7 @@ import "entry.js" assert {
 
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -482,7 +482,7 @@ export { dogRef };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { cat } from "entry.js" assert {
@@ -492,7 +492,7 @@ export { cat };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 import { cat } from "entry.js" assert {
@@ -503,7 +503,7 @@ export { initialCat };
 
 ```
 
-## Module 5
+## Chunk 4
 
 ```js
 import { cat } from "entry.js" assert {
@@ -528,13 +528,13 @@ export { getChimera };
 
 ```
 
-## Module 6
+## Chunk 5
 
 ```js
 let dog = "dog";
 ```
 
-## Module 7
+## Chunk 6
 
 ```js
 import { dog } from "entry.js" assert {
@@ -544,7 +544,7 @@ dog += "!";
 
 ```
 
-## Module 8
+## Chunk 7
 
 ```js
 import { dog } from "entry.js" assert {
@@ -557,7 +557,7 @@ console.log(dog);
 
 ```
 
-## Module 9
+## Chunk 8
 
 ```js
 import { dog } from "entry.js" assert {
@@ -573,7 +573,7 @@ dog += "!";
 
 ```
 
-## Module 10
+## Chunk 9
 
 ```js
 import { dog } from "entry.js" assert {
@@ -592,7 +592,7 @@ console.log(dog);
 
 ```
 
-## Module 11
+## Chunk 10
 
 ```js
 import { dog } from "entry.js" assert {
@@ -614,7 +614,7 @@ dog += "!";
 
 ```
 
-## Module 12
+## Chunk 11
 
 ```js
 import { dog } from "entry.js" assert {
@@ -639,7 +639,7 @@ console.log(dog);
 
 ```
 
-## Module 13
+## Chunk 12
 
 ```js
 export let cat = "cat";
@@ -660,7 +660,7 @@ console.log(dog);
 
 # Modules (prod)
 
-## Module 1
+## Chunk 0
 
 ```js
 import { dog } from "entry.js" assert {
@@ -682,7 +682,7 @@ console.log(dog);
 
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -712,7 +712,7 @@ export { dogRef };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { cat } from "entry.js" assert {
@@ -722,7 +722,7 @@ export { cat };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 import { cat } from "entry.js" assert {
@@ -733,7 +733,7 @@ export { initialCat };
 
 ```
 
-## Module 5
+## Chunk 4
 
 ```js
 import { cat } from "entry.js" assert {
@@ -758,13 +758,13 @@ export { getChimera };
 
 ```
 
-## Module 6
+## Chunk 5
 
 ```js
 let dog = "dog";
 ```
 
-## Module 7
+## Chunk 6
 
 ```js
 import { dog } from "entry.js" assert {
@@ -774,7 +774,7 @@ dog += "!";
 
 ```
 
-## Module 8
+## Chunk 7
 
 ```js
 import { dog } from "entry.js" assert {
@@ -787,7 +787,7 @@ dog += "!";
 
 ```
 
-## Module 9
+## Chunk 8
 
 ```js
 import { dog } from "entry.js" assert {
@@ -803,7 +803,7 @@ dog += "!";
 
 ```
 
-## Module 10
+## Chunk 9
 
 ```js
 export let cat = "cat";

@@ -129,13 +129,13 @@ graph TD
 
 # Modules (dev)
 
-## Module 1
+## Chunk 0
 
 ```js
 "module evaluation";
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -146,7 +146,7 @@ export { DOG };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { dog } from "entry.js" assert {
@@ -158,7 +158,7 @@ export { CHIMERA };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 const dog = "dog";
@@ -172,13 +172,13 @@ const dog = "dog";
 
 # Modules (prod)
 
-## Module 1
+## Chunk 0
 
 ```js
 "module evaluation";
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -189,7 +189,7 @@ export { DOG };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { dog } from "entry.js" assert {
@@ -201,7 +201,7 @@ export { CHIMERA };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 const dog = "dog";

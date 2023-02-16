@@ -386,7 +386,7 @@ graph TD
 
 # Modules (dev)
 
-## Module 1
+## Chunk 0
 
 ```js
 import { foobarCopy } from "entry.js" assert {
@@ -414,7 +414,7 @@ console.log(foobarCopy);
 
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -430,7 +430,7 @@ export { foobar };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { foo } from "entry.js" assert {
@@ -440,7 +440,7 @@ export { foo };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 import { internal } from "entry.js" assert {
@@ -462,7 +462,7 @@ export { external1 };
 
 ```
 
-## Module 5
+## Chunk 4
 
 ```js
 import "entry.js" assert {
@@ -481,13 +481,13 @@ export { external2 };
 
 ```
 
-## Module 6
+## Chunk 5
 
 ```js
 export let foobar = "foo";
 ```
 
-## Module 7
+## Chunk 6
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -497,13 +497,13 @@ export const foo = foobar;
 
 ```
 
-## Module 8
+## Chunk 7
 
 ```js
 const bar = "bar";
 ```
 
-## Module 9
+## Chunk 8
 
 ```js
 import { bar } from "entry.js" assert {
@@ -519,7 +519,7 @@ foobar += bar;
 
 ```
 
-## Module 10
+## Chunk 9
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -532,7 +532,7 @@ let foobarCopy = foobar;
 
 ```
 
-## Module 11
+## Chunk 10
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -551,7 +551,7 @@ foobar += "foo";
 
 ```
 
-## Module 12
+## Chunk 11
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -591,7 +591,7 @@ console.log(foobarCopy);
 
 # Modules (prod)
 
-## Module 1
+## Chunk 0
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -607,7 +607,7 @@ console.log(foobarCopy);
 
 ```
 
-## Module 2
+## Chunk 1
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -623,7 +623,7 @@ export { foobar };
 
 ```
 
-## Module 3
+## Chunk 2
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -634,7 +634,7 @@ export { foo };
 
 ```
 
-## Module 4
+## Chunk 3
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -657,7 +657,7 @@ export { external1 };
 
 ```
 
-## Module 5
+## Chunk 4
 
 ```js
 export function external2() {
@@ -666,19 +666,19 @@ export function external2() {
 export { external2 };
 ```
 
-## Module 6
+## Chunk 5
 
 ```js
 export let foobar = "foo";
 ```
 
-## Module 7
+## Chunk 6
 
 ```js
 const bar = "bar";
 ```
 
-## Module 8
+## Chunk 7
 
 ```js
 import { bar } from "entry.js" assert {
@@ -691,7 +691,7 @@ foobar += bar;
 
 ```
 
-## Module 9
+## Chunk 8
 
 ```js
 import { foobar } from "entry.js" assert {
