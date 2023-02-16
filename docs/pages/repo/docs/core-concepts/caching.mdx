@@ -315,7 +315,7 @@ For example, consider a monorepo with three workspaces: a Next.js project, a Cre
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**", "dist/**"],
+      "outputs": [".next/**", "!.next/cache/**" "dist/**"],
       "dependsOn": ["^build"]
     }
   }
