@@ -304,11 +304,7 @@ impl DepGraph {
                                             is_type_only: false,
                                         },
                                     )],
-                                    src: Some(box Str {
-                                        span: DUMMY_SP,
-                                        value: uri_of_module.clone(),
-                                        raw: None,
-                                    }),
+                                    src: Some(box "__turbopack_fake_url__".into()),
                                     type_only: false,
                                     asserts: Some(box ObjectLit {
                                         span: DUMMY_SP,
