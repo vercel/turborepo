@@ -417,7 +417,7 @@ console.log(foobarCopy);
 ## Module 2
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {
@@ -433,7 +433,7 @@ export { foobar };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { foo } from "entry.js" assert {
     __turbopack_chunk__: 6
 };
 export { foo };
@@ -610,7 +610,7 @@ console.log(foobarCopy);
 ## Module 2
 
 ```js
-import "entry.js" assert {
+import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
 import "entry.js" assert {

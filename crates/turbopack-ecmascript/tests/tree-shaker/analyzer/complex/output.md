@@ -485,7 +485,7 @@ export { dogRef };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
 };
 export { cat };
@@ -715,7 +715,7 @@ export { dogRef };
 ## Module 3
 
 ```js
-import "entry.js" assert {
+import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
 };
 export { cat };
