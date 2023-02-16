@@ -102,12 +102,8 @@ Check my-app#build output
     }
   }
 
-$ Non-existent tasks don't throw an error
+Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-  {
-    "packages": [
-      "my-app",
-      "util"
-    ],
-    "tasks": []
-  }
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
+  [1]

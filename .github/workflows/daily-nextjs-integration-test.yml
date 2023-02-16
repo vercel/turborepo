@@ -1,0 +1,18 @@
+# A workflow to run next.js integration test with turbopack for each day.
+# This runs against main branch with latest Next.js release.
+name: Daily Next.js integration test with turbopack
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  # Trigger actual next.js integration tests.
+  next_js_integration:
+    name: Execute Next.js integration workflow
+    permissions:
+      pull-requests: write
+    uses: ./.github/workflows/nextjs-integration-test.yml
+    with:
+      force_post_to_slack: true
