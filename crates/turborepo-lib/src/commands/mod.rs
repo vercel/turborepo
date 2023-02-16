@@ -56,7 +56,7 @@ impl CommandBase {
     // `RepoConfig` struct from `CommandBase`. This is fine because we
     // currently do not have any commands that delete the repo config file
     // and then attempt to read from it.
-    pub fn delete_repo_config(&mut self) -> Result<()> {
+    pub fn delete_repo_config_file(&mut self) -> Result<()> {
         let repo_config_path = get_repo_config_path(&self.repo_root);
         if repo_config_path.exists() {
             std::fs::remove_file(repo_config_path)?;
