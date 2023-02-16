@@ -273,6 +273,7 @@ impl MemoryBackend {
         scope_id: TaskScopeId,
         trait_type: TraitTypeId,
         parent_task: TaskId,
+        root_scoped: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
         if let Some(task) = self.lookup_and_connect_task(
@@ -296,6 +297,7 @@ impl MemoryBackend {
                     (scope_id, trait_type),
                     id,
                     task,
+                    root_scoped,
                     turbo_tasks,
                 )
             }
@@ -312,11 +314,13 @@ impl MemoryBackend {
         key: K,
         new_id: TaskId,
         task: Task,
+        root_scoped: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
         // Safety: We have a fresh task id that nobody knows about yet
-        unsafe {
-            self.memory_tasks.insert(*new_id, task);
+        let task = unsafe { self.memory_tasks.insert(*new_id, task) };
+        if root_scoped {
+            task.make_root_scoped(self, turbo_tasks);
         }
         let result_task = match task_cache.entry(key) {
             Entry::Vacant(entry) => {
@@ -633,6 +637,7 @@ impl Backend for MemoryBackend {
                     task_type,
                     id,
                     task,
+                    false,
                     turbo_tasks,
                 )
             }
@@ -698,7 +703,7 @@ impl Job {
             Job::RemoveFromScopes(tasks, scopes) => {
                 for task in tasks {
                     backend.with_task(task, |task| {
-                        task.remove_from_scopes(scopes.iter().cloned(), backend, turbo_tasks)
+                        task.remove_from_scopes(scopes.iter().copied(), backend, turbo_tasks)
                     });
                 }
                 backend.scope_add_remove_priority.finish_high();

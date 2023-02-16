@@ -1410,6 +1410,15 @@ impl Task {
         }
     }
 
+    pub fn make_root_scoped(
+        &self,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        let state = self.full_state_mut();
+        self.make_root_scoped_internal(state, backend, turbo_tasks);
+    }
+
     fn make_root_scoped_internal<'a>(
         &self,
         mut state: FullTaskWriteGuard<'a>,
@@ -1950,6 +1959,7 @@ impl Task {
                     child,
                     trait_type_id,
                     task_id,
+                    false,
                     &*turbo_tasks,
                 );
                 // Safety: RawVcSet is a transparent value
@@ -1983,6 +1993,7 @@ impl Task {
                 scope_id,
                 trait_id,
                 reader,
+                true,
                 turbo_tasks,
             );
             RawVc::TaskOutput(task).into()
