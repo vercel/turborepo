@@ -45,7 +45,7 @@ If you'd like to change more of the default behavior, there are a few flags avai
 
 ## Example
 
-Let's say you want to skip the unit tests for your `web` workspace when there aren't any changes to your `web` application or its package dependencies. In practice, hitting the cache with a `>>> FULL TURBO` will speed things up quite a bit but there will still be time spent installing `npm` dependencies, creating upcoming CI infrastructure, or doing other types of work that can take awhile.
+Let's say you want to skip the unit tests for your `web` workspace when there aren't any changes to your `web` application (or its package dependencies). If you are already using [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching), you will probably get a cache hit, but you would still spend time provisioning the CI container, installing `npm` dependencies, and other things that can take a while.
 
 Ideally, we would do a quick check to see if any of that work needs to happen in the first place.
 
