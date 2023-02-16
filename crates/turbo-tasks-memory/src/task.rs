@@ -418,6 +418,8 @@ use self::meta_state::{
     FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
 };
 
+const SCOPE_OPTIMIZATION_THRESHOLD: usize = 255;
+
 impl Task {
     pub(crate) fn new_persistent(
         id: TaskId,
@@ -1075,7 +1077,6 @@ impl Task {
                 if merging_scopes > 0 {
                     *optimization_counter = optimization_counter.saturating_sub(merging_scopes);
                 } else {
-                    const SCOPE_OPTIMIZATION_THRESHOLD: usize = 1024;
                     if *optimization_counter * children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
                         list.remove(id);
                         drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
@@ -1813,6 +1814,13 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if state.children.insert(child_id) {
+            if let TaskScopes::Inner(_, optimization_counter) = &state.scopes {
+                if *optimization_counter * state.children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
+                    state.children.remove(&child_id);
+                    drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
+                    return self.connect_child(child_id, backend, turbo_tasks);
+                }
+            }
             let scopes = state.scopes.clone();
             drop(state);
 
