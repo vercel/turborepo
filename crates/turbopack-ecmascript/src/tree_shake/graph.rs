@@ -201,7 +201,7 @@ impl DepGraph {
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
     ) -> Vec<Module> {
-        let groups = self.finalize();
+        let groups = self.finalize(data);
 
         let mut modules = vec![];
 
@@ -248,10 +248,14 @@ impl DepGraph {
         modules
     }
 
-    pub(super) fn finalize(&self) -> InternedGraph<Vec<ItemId>> {
+    pub(super) fn finalize(
+        &self,
+        data: &FxHashMap<ItemId, ItemData>,
+    ) -> InternedGraph<Vec<ItemId>> {
         /// Returns true if it should be called again
         fn add_to_group(
             graph: &InternedGraph<ItemId>,
+            data: &FxHashMap<ItemId, ItemData>,
             group: &mut Vec<ItemId>,
             start_ix: u32,
             done: &mut FxHashSet<u32>,
@@ -274,7 +278,7 @@ impl DepGraph {
                     let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
 
-                    add_to_group(graph, group, dep_ix, done);
+                    add_to_group(graph, data, group, dep_ix, done);
                 }
             }
 
@@ -310,6 +314,11 @@ impl DepGraph {
                 continue;
             }
 
+            // Don't store a pure item in a separate chunk
+            if data.get(id).map_or(false, |data| !data.side_effects) {
+                continue;
+            }
+
             let count = done
                 .iter()
                 .filter(|&&staring_point| {
@@ -331,7 +340,7 @@ impl DepGraph {
             for group in &mut groups {
                 let start = group[0].clone();
                 let start_ix = self.g.get_node(&start);
-                if add_to_group(&self.g, group, start_ix, &mut done) {
+                if add_to_group(&self.g, data, group, start_ix, &mut done) {
                     changed = true;
                 }
             }

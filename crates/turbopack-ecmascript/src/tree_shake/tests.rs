@@ -152,7 +152,7 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let mut condensed = analyzer.g.finalize();
+        let mut condensed = analyzer.g.finalize(&analyzer.items);
 
         writeln!(s, "# Final").unwrap();
         writeln!(
