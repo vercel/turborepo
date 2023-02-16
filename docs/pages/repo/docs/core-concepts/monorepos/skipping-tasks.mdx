@@ -13,7 +13,7 @@ import Callout from '../../../../../components/Callout'
 
 To skip unaffected work, ensure that your git history is available and run `npx turbo-ignore`.
 
-By default, `turbo-ignore` will run the **build** task in the current working directory. Under the hood, `turbo-ignore` uses the output of `--dry=json` from your parent commit to your current commit to identify affected packages.
+`turbo-ignore` uses a combination of the `--filter` and `--dry=json` flags to find changes from the parent commit to the current commit to identify affected packages. By default, `turbo-ignore` finds the difference for the **build task in the current working directory**, but you can [customize this behavior with flags](#customizing-behavior).
 
 Here's an example of the command that will be built and ran:
 
@@ -21,7 +21,7 @@ Here's an example of the command that will be built and ran:
 npx turbo run build --filter=@example/web...[3c8387ffd98b751305fe3f0284befdd00cbd4610] --dry=json
 ```
 
-Note that this command does not _execute_ the build task. Instead, it uses a **dry run** to see if your code changes will affect your build compared to your parent commit.
+Note that a dry run does not _execute_ the build task. Instead, it checks your packages to see if your code changes will affect your build (or other task) in only a few seconds.
 
 If `turbo-ignore` finds that the task can be skipped, it will exit the process with a `0` code. If changes have been found, the process will exit with `1`.
 
