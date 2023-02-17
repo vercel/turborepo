@@ -647,6 +647,9 @@ impl TaskScopeState {
                 let (collectibles, dependent_tasks) = entry.get_mut();
                 let old_value = collectibles.get(&collectible);
                 let new_value = old_value - count as isize;
+                // NOTE: The read_collectibles need to be invalidated when negative count
+                // changes. Each negative count will eliminate one child scope emitted
+                // collectible. So changing from -1 to -2 might affect the visible collectibles.
                 if collectibles.remove_count(collectible, count) || new_value < 0 {
                     let notify = take(dependent_tasks);
                     if collectibles.is_unset() {
