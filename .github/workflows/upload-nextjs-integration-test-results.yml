@@ -33,6 +33,7 @@ jobs:
       # Read next.js version from test results, set necessary environment variables.
       - name: Print test results
         run: |
+          rm -rf ./test-results/main/slack-payload.json
           ls -al ./test-results/main
           echo "Print failed test path list:"
           cat ./test-results/main/failed-test-path-list.json

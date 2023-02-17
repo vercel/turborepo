@@ -68,7 +68,6 @@ type Command struct {
 	Daemon *DaemonPayload `json:"daemon"`
 	Prune  *PrunePayload  `json:"prune"`
 	Run    *RunPayload    `json:"run"`
-	Unlink *struct{}      `json:"unlink"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed

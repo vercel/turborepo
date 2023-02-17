@@ -31,6 +31,7 @@ And a `turbo.json`:
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
+      "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "test": {
@@ -223,7 +224,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
     # ...
