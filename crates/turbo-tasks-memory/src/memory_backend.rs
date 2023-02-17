@@ -690,7 +690,13 @@ pub(crate) enum Job {
     ScheduleWhenDirtyFromScope(AutoSet<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
-    AddToScopeQueue(VecDeque<TaskId>, TaskScopeId, usize),
+    AddToScopeQueue {
+        queue: VecDeque<TaskId>,
+        scope: TaskScopeId,
+        /// Number of scopes that are currently being merged into this scope.
+        /// This information is only used for optimization.
+        merging_scopes: usize,
+    },
     /// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
     /// split off work.
     RemoveFromScopeQueue(VecDeque<TaskId>, TaskScopeId),
@@ -737,11 +743,15 @@ impl Job {
                     })
                 }
             }
-            Job::AddToScopeQueue(queue, id, merging_scopes) => {
+            Job::AddToScopeQueue {
+                queue,
+                scope,
+                merging_scopes,
+            } => {
                 backend
                     .scope_add_remove_priority
                     .run_low(async {
-                        run_add_to_scope_queue(queue, id, merging_scopes, backend, turbo_tasks);
+                        run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
                     .await;
             }

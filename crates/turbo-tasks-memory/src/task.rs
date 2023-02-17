@@ -2604,13 +2604,13 @@ pub fn run_add_to_scope_queue(
         #[cfg(not(feature = "inline_add_to_scope"))]
         while queue.len() > SPLIT_OFF_QUEUE_AT {
             let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
-            turbo_tasks.schedule_backend_foreground_job(
-                backend.create_backend_job(Job::AddToScopeQueue(
-                    split_off_queue,
-                    id,
+            turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
+                Job::AddToScopeQueue {
+                    queue: split_off_queue,
+                    scope: id,
                     merging_scopes,
-                )),
-            );
+                },
+            ));
         }
     }
 }
