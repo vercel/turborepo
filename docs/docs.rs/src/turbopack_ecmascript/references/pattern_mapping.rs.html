@@ -346,7 +346,7 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if </span><span class="kw-2">*</span>resolve_type == ResolveType::EsmAsync {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>((loader, <span class="kw">_</span>)) =
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(loader) =
                     EcmascriptChunkItemVc::from_async_asset(context, chunkable).<span class="kw">await</span><span class="question-mark">?
                 </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Single(

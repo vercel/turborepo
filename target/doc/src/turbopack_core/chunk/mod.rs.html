@@ -567,8 +567,6 @@
 <span id="567">567</span>
 <span id="568">568</span>
 <span id="569">569</span>
-<span id="570">570</span>
-<span id="571">571</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
 <span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
@@ -930,7 +928,7 @@
     <span class="kw">async fn </span>from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, ChunkableAssetVc)&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt;;
 }
 
 <span class="kw">pub async fn </span>chunk_content_split&lt;I: FromChunkableAsset&gt;(
@@ -1080,12 +1078,10 @@
                                 .push(ChunkGroupVc::from_asset(chunkable_asset, context));
                         }
                         ChunkingType::SeparateAsync =&gt; {
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>((manifest_loader_item, manifest_chunk)) =
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) =
                                 I::from_async_asset(context, chunkable_asset).<span class="kw">await</span><span class="question-mark">?
                             </span>{
-                                inner_chunk_items.push(manifest_loader_item);
-                                inner_chunk_groups
-                                    .push(ChunkGroupVc::from_asset(manifest_chunk, context));
+                                inner_chunk_items.push(chunk_item);
                             } <span class="kw">else </span>{
                                 external_asset_references.push(reference);
                                 <span class="kw">continue </span><span class="lifetime">&#39;outer</span>;

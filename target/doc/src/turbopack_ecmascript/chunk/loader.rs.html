@@ -310,6 +310,44 @@
 <span id="310">310</span>
 <span id="311">311</span>
 <span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -320,9 +358,11 @@
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc, ChunksVc,
     },
-    reference::AssetReferencesVc,
+    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
+    resolve::{ResolveResult, ResolveResultVc},
 };
 
 <span class="kw">use crate</span>::{
@@ -376,7 +416,11 @@
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ManifestLoaderItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
+        AssetReferencesVc::cell(<span class="macro">vec!</span>[ManifestChunkAssetReference {
+            manifest: <span class="self">self</span>.manifest,
+        }
+        .cell()
+        .into()])
     }
 }
 
@@ -620,6 +664,38 @@ __turbopack_export_value__(Promise.all(chunks.map(__turbopack_load__)));&quot;
                 .map(Into::into)
                 .collect(),
         ))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>ManifestChunkAssetReference {
+    manifest: ManifestChunkAssetVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ManifestChunkAssetReference {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
+            <span class="string">&quot;referenced manifest {}&quot;</span>,
+            <span class="self">self</span>.manifest.path().to_string().<span class="kw">await</span><span class="question-mark">?
+        </span>)))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ManifestChunkAssetReference {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
+        ResolveResult::asset(<span class="self">self</span>.manifest.into()).cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>ManifestChunkAssetReference {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; ChunkingTypeOptionVc {
+        ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::Separate))
     }
 }
 </code></pre></div>

@@ -1311,9 +1311,6 @@
 <span id="1311">1311</span>
 <span id="1312">1312</span>
 <span id="1313">1313</span>
-<span id="1314">1314</span>
-<span id="1315">1315</span>
-<span id="1316">1316</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -2563,12 +2560,9 @@
     <span class="kw">async fn </span>from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, ChunkableAssetVc)&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>chunk = ManifestChunkAssetVc::new(asset, context);
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((
-            ManifestLoaderItemVc::new(context, chunk).into(),
-            chunk.into(),
-        )))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(ManifestLoaderItemVc::new(context, chunk).into()))
     }
 }
 
