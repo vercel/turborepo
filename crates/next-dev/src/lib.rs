@@ -351,7 +351,7 @@ async fn source(
         turbo_tasks: turbo_tasks.into(),
     }
     .cell()
-    .into();
+    .as_content_source();
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
     let manifest_source = DevManifestContentSource {
@@ -371,28 +371,31 @@ async fn source(
         roots: HashSet::from([main_source.into()]),
     }
     .cell()
-    .into();
+    .as_content_source();
     let main_source = main_source.into();
-    let source_maps = SourceMapContentSourceVc::new(main_source).into();
-    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
+    let source_maps = SourceMapContentSourceVc::new(main_source).as_content_source();
+    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).as_content_source();
     let img_source = NextImageContentSourceVc::new(
         CombinedContentSourceVc::new(vec![static_source, page_source]).into(),
     )
-    .into();
+    .as_content_source();
     let router_source =
         NextRouterContentSourceVc::new(main_source, execution_context, next_config, server_addr)
             .into();
     let source = RouterContentSource {
         routes: vec![
-            ("__turbopack__/".to_string(), introspect),
-            ("__turbo_tasks__/".to_string(), viz),
+            ("__turbopack__/".to_string(), introspect.resolve().await?),
+            ("__turbo_tasks__/".to_string(), viz.resolve().await?),
             (
                 "__nextjs_original-stack-frame".to_string(),
-                source_map_trace,
+                source_map_trace.resolve().await?,
             ),
             // TODO: Load path from next.config.js
-            ("_next/image".to_string(), img_source),
-            ("__turbopack_sourcemap__/".to_string(), source_maps),
+            ("_next/image".to_string(), img_source.resolve().await?),
+            (
+                "__turbopack_sourcemap__/".to_string(),
+                source_maps.resolve().await?,
+            ),
         ],
         fallback: router_source,
     }

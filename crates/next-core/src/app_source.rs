@@ -505,6 +505,12 @@ async fn create_app_source_for_directory(
         );
     }
 
+    let sources = sources
+        .into_iter()
+        .map(|source| source.resolve())
+        .try_join()
+        .await?;
+
     Ok(CombinedContentSource { sources }.cell())
 }
 

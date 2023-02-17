@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
-    Value,
+    TryJoinIterExt, Value,
 };
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
@@ -287,10 +287,10 @@ pub async fn create_page_source(
     Ok(CombinedContentSource {
         sources: vec![
             // Match _next/404 first to ensure rewrites work properly.
-            force_not_found_source,
-            page_source.into(),
-            fallback_source.into(),
-            fallback_not_found_source,
+            force_not_found_source.resolve().await?,
+            page_source.as_content_source().resolve().await?,
+            fallback_source.as_content_source().resolve().await?,
+            fallback_not_found_source.resolve().await?,
         ],
     }
     .cell()
@@ -656,7 +656,11 @@ async fn create_page_source_for_directory(
     sources.sort_by_key(|(k, _)| *k);
 
     Ok(CombinedContentSource {
-        sources: sources.into_iter().map(|(_, v)| v).collect(),
+        sources: sources
+            .into_iter()
+            .map(|(_, v)| v.resolve())
+            .try_join()
+            .await?,
     }
     .cell())
 }
