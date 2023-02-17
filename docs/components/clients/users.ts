@@ -532,7 +532,7 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.comparastore.com",
     pinned: true,
     style: {
-      width: 175
+      width: 175,
     },
   },
   {
