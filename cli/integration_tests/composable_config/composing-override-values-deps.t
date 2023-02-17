@@ -42,3 +42,14 @@ Setup
    Tasks:    3 successful, 3 total
   Cached:    0 cached, 3 total
     Time:\s*[\.0-9]+m?s  (re)
+
+  $ ${TURBO} run override-values-task-with-deps-2 --filter=override-values --dry=json | jq '.tasks | map(select(.taskId == "override-values#override-values-task-with-deps-2")) | .[0].resolvedTaskDefinition'
+  {
+    "outputs": [],
+    "cache": true,
+    "dependsOn": [],
+    "inputs": [],
+    "outputMode": "full",
+    "env": [],
+    "persistent": false
+  }
