@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value};
 use turbopack_core::{
     environment::ServerAddrVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
@@ -61,6 +61,30 @@ fn need_data(source: ContentSourceVc, path: &str) -> ContentSourceResultVc {
     )
 }
 
+/// If the route was resolved correctly by the Next.js router, this header will
+/// be set to "1". Otherwise, it will be set to "0".
+///
+/// We need to differentiate between the two cases because the Next.js router
+/// will apply rewrites and other URL modifications such as stripping the
+/// base path.
+///
+/// For instance, if the base path is configured to be "/base", then we need to
+/// handle "/base/page" and "/page" differently. However, once we go through the
+/// Next.js router, both paths will be rewritten to "/page" and we won't be able
+/// to tell which one was valid according to the router.
+pub const TURBOPACK_NEXT_VALID_ROUTE: &str = "x-turbopack-valid-route";
+pub const TURBOPACK_NEXT_VALID_ROUTE_TRUE: &str = "1";
+pub const TURBOPACK_NEXT_VALID_ROUTE_FALSE: &str = "0";
+
+fn invalid(path: &str, query: &str, next: ContentSourceVc) -> ContentSourceResultVc {
+    // TODO: Strip basepath
+    ContentSourceResultVc::exact(
+        ContentSourceContent::Rewrite(RewriteVc::new(format!("/{}?{}", path, query), next))
+            .cell()
+            .into(),
+    )
+}
+
 #[turbo_tasks::value_impl]
 impl ContentSource for NextRouterContentSource {
     #[turbo_tasks::function]
@@ -94,21 +118,16 @@ impl ContentSource for NextRouterContentSource {
             this.next_config,
             this.server_addr,
         );
+        dbg!(&(request.dbg().await?, res.await));
+
         let Ok(res) = res.await else {
-            return Ok(this
-                .inner
-                .get(path, Value::new(ContentSourceData::default())));
+            return Ok(invalid(path, raw_query, this.inner));
         };
 
         Ok(match &*res {
-            RouterResult::Error => {
-                // TODO: emit error
-                this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
-            }
-            RouterResult::None => this
-                .inner
-                .get(path, Value::new(ContentSourceData::default())),
+            // TODO: emit error
+            RouterResult::Error => invalid(path, raw_query, this.inner),
+            RouterResult::None => invalid(path, raw_query, this.inner),
             RouterResult::Rewrite(data) => {
                 // TODO: We can't set response headers on the returned content.
                 ContentSourceResultVc::exact(

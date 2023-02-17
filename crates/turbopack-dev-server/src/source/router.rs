@@ -9,6 +9,7 @@ use crate::source::ContentSourcesVc;
 /// ContentSource will serve all other subpaths.
 #[turbo_tasks::value(shared)]
 pub struct RouterContentSource {
+    pub prefix: StringVc,
     pub routes: Vec<(String, ContentSourceVc)>,
     pub fallback: ContentSourceVc,
 }
@@ -33,6 +34,7 @@ impl ContentSource for RouterContentSource {
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
+        // TODO: prefix. But path is annoying
         let (source, path) = self.get_source(path);
         Ok(source.resolve().await?.get(path, data))
     }

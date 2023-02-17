@@ -16,18 +16,14 @@ use super::{
 
 #[turbo_tasks::value(shared)]
 pub struct StaticAssetsContentSource {
-    pub prefix: String,
+    pub prefix: StringVc,
     pub dir: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
 impl StaticAssetsContentSourceVc {
     #[turbo_tasks::function]
-    pub fn new(prefix: String, dir: FileSystemPathVc) -> StaticAssetsContentSourceVc {
-        let mut prefix = prefix;
-        if !prefix.is_empty() && !prefix.ends_with('/') {
-            prefix.push('/');
-        }
+    pub fn new(prefix: StringVc, dir: FileSystemPathVc) -> StaticAssetsContentSourceVc {
         StaticAssetsContentSource { prefix, dir }.cell()
     }
 }
@@ -41,17 +37,22 @@ impl ContentSource for StaticAssetsContentSource {
         _data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         if !path.is_empty() {
-            if let Some(path) = path.strip_prefix(&self.prefix) {
-                let path = self.dir.join(path);
-                let ty = path.get_type().await?;
-                if matches!(
-                    &*ty,
-                    FileSystemEntryType::File | FileSystemEntryType::Symlink
-                ) {
-                    let content = SourceAssetVc::new(path).as_asset().content();
-                    return Ok(ContentSourceResultVc::exact(
-                        ContentSourceContentVc::static_content(content.into()).into(),
-                    ));
+            let prefix = self.prefix.await?;
+            // If the prefix isn't empty, we need to strip the leading '/'.
+            let prefix = prefix.strip_prefix('/').unwrap_or(&prefix);
+            if let Some(path) = path.strip_prefix(prefix) {
+                if prefix.is_empty() || path.starts_with('/') {
+                    let path = self.dir.join(path);
+                    let ty = path.get_type().await?;
+                    if matches!(
+                        &*ty,
+                        FileSystemEntryType::File | FileSystemEntryType::Symlink
+                    ) {
+                        let content = SourceAssetVc::new(path).as_asset().content();
+                        return Ok(ContentSourceResultVc::exact(
+                            ContentSourceContentVc::static_content(content.into()).into(),
+                        ));
+                    }
                 }
             }
         }
@@ -69,6 +70,7 @@ impl Introspectable for StaticAssetsContentSource {
     #[turbo_tasks::function]
     async fn children(&self) -> Result<IntrospectableChildrenVc> {
         let dir = self.dir.read_dir().await?;
+        let prefix = self.prefix.await?;
         let children = match &*dir {
             DirectoryContent::NotFound => Default::default(),
             DirectoryContent::Entries(entries) => entries
@@ -79,7 +81,7 @@ impl Introspectable for StaticAssetsContentSource {
                             IntrospectableAssetVc::new(SourceAssetVc::new(*path).as_asset())
                         }
                         DirectoryEntry::Directory(path) => StaticAssetsContentSourceVc::new(
-                            format!("{prefix}{name}", prefix = self.prefix),
+                            StringVc::cell(format!("{prefix}/{name}")),
                             *path,
                         )
                         .into(),

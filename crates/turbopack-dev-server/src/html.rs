@@ -16,6 +16,7 @@ use turbopack_core::{
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub struct DevHtmlAsset {
+    root: FileSystemPathVc,
     path: FileSystemPathVc,
     chunk_groups: Vec<ChunkGroupVc>,
     body: Option<String>,
@@ -53,8 +54,13 @@ impl Asset for DevHtmlAsset {
 
 impl DevHtmlAssetVc {
     /// Create a new dev HTML asset.
-    pub fn new(path: FileSystemPathVc, chunk_groups: Vec<ChunkGroupVc>) -> Self {
+    pub fn new(
+        root: FileSystemPathVc,
+        path: FileSystemPathVc,
+        chunk_groups: Vec<ChunkGroupVc>,
+    ) -> Self {
         DevHtmlAsset {
+            root,
             path,
             chunk_groups,
             body: None,
@@ -64,11 +70,13 @@ impl DevHtmlAssetVc {
 
     /// Create a new dev HTML asset.
     pub fn new_with_body(
+        root: FileSystemPathVc,
         path: FileSystemPathVc,
         chunk_groups: Vec<ChunkGroupVc>,
         body: String,
     ) -> Self {
         DevHtmlAsset {
+            root,
             path,
             chunk_groups,
             body: Some(body),
@@ -99,7 +107,7 @@ impl DevHtmlAssetVc {
     #[turbo_tasks::function]
     async fn html_content(self) -> Result<DevHtmlAssetContentVc> {
         let this = self.await?;
-        let context_path = this.path.parent().await?;
+        let context_path = this.root.await?;
 
         let mut chunk_paths = vec![];
         for chunk_group in &this.chunk_groups {

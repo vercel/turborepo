@@ -29,6 +29,7 @@ pub async fn create_web_entry_source(
     execution_context: ExecutionContextVc,
     entry_requests: Vec<RequestVc>,
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     env: ProcessEnvVc,
     eager_compile: bool,
     browserslist_query: &str,
@@ -48,6 +49,7 @@ pub async fn create_web_entry_source(
     let chunking_context = get_client_chunking_context(
         project_root,
         server_root,
+        assets_root,
         compile_time_info.environment(),
         ty,
     );
@@ -93,7 +95,8 @@ pub async fn create_web_entry_source(
         .await?;
 
     let entry_asset = DevHtmlAssetVc::new(
-        server_root.join("index.html"),
+        server_root,
+        assets_root.join("index.html"),
         chunks.into_iter().map(ChunkGroupVc::from_chunk).collect(),
     )
     .into();

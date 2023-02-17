@@ -10,17 +10,14 @@ use turbopack_core::{
     reference::AssetReference,
     resolve::PrimaryResolveResult,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        asset_graph::AssetGraphContentSourceVc,
-        conditional::ConditionalContentSourceVc,
-        lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        specificity::SpecificityVc,
-        ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
-        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
-    },
+use turbopack_dev_server::source::{
+    asset_graph::AssetGraphContentSourceVc,
+    conditional::ConditionalContentSourceVc,
+    lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
+    specificity::SpecificityVc,
+    ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
+    ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
+    ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
@@ -30,6 +27,7 @@ use super::{
 };
 use crate::{
     external_asset_entrypoints, get_intermediate_asset,
+    html_error::FallbackPageAssetVc,
     node_entry::{NodeEntry, NodeEntryVc},
     route_matcher::{RouteMatcher, RouteMatcherVc},
 };
@@ -49,7 +47,7 @@ pub fn create_node_rendered_source(
     pathname: StringVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 ) -> ContentSourceVc {
     let source = NodeRenderContentSource {
         cwd,
@@ -83,7 +81,7 @@ pub struct NodeRenderContentSource {
     pathname: StringVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 }
 
 #[turbo_tasks::value_impl]

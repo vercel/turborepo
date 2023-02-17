@@ -30,6 +30,9 @@ const loadNextConfig = async (silent) => {
     );
   }
 
+  console.log(nextConfig);
+  await new Promise((r) => setTimeout(r, 10));
+
   return nextConfig;
 };
 

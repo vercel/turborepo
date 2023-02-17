@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
@@ -51,13 +51,14 @@ pub struct NextConfig {
     pub rewrites: Rewrites,
     pub transpile_packages: Option<Vec<String>>,
 
+    pub asset_prefix: String,
+    pub base_path: String,
+
     // unsupported
     cross_origin: Option<String>,
     compiler: Option<CompilerConfig>,
     amp: AmpConfig,
     analytics_id: String,
-    asset_prefix: String,
-    base_path: String,
     clean_dist_dir: bool,
     compress: bool,
     dev_indicators: DevIndicatorsConfig,
@@ -524,6 +525,18 @@ impl NextConfigVc {
         };
         let alias_map: ResolveAliasMap = resolve_alias.try_into()?;
         Ok(alias_map.cell())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn base_path(self) -> Result<StringVc> {
+        let this = self.await?;
+        Ok(StringVc::cell(this.base_path.clone()))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn asset_prefix(self) -> Result<StringVc> {
+        let this = self.await?;
+        Ok(StringVc::cell(this.asset_prefix.clone()))
     }
 }
 

@@ -27,6 +27,7 @@ use crate::{
 /// `_devMiddlewareManifest.json` which are used for client side navigation.
 #[turbo_tasks::value(shared)]
 pub struct DevManifestContentSource {
+    pub base_path: StringVc,
     pub page_roots: Vec<ContentSourceVc>,
     pub next_config: NextConfigVc,
 }
@@ -38,18 +39,29 @@ impl DevManifestContentSourceVc {
     async fn find_routes(self) -> Result<StringsVc> {
         let this = &*self.await?;
 
+        let base_path = this.base_path.await?;
+
         async fn content_source_to_pathname(
             content_source: ContentSourceVc,
+            base_path: &str,
         ) -> Result<Option<String>> {
             // TODO This shouldn't use casts but an public api instead
             if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
-                return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
+                return Ok(Some(format!(
+                    "{}/{}",
+                    base_path,
+                    api_source.get_pathname().await?
+                )));
             }
 
             if let Some(page_source) =
                 NodeRenderContentSourceVc::resolve_from(content_source).await?
             {
-                return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
+                return Ok(Some(format!(
+                    "{}/{}",
+                    base_path,
+                    page_source.get_pathname().await?
+                )));
             }
 
             Ok(None)
@@ -67,7 +79,7 @@ impl DevManifestContentSourceVc {
         )
         .await?
         .into_iter()
-        .map(content_source_to_pathname)
+        .map(|content_source| content_source_to_pathname(content_source, &base_path))
         .try_join()
         .await?
         .into_iter()

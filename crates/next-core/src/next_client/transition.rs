@@ -30,7 +30,7 @@ pub struct NextClientTransition {
     pub client_module_options_context: ModuleOptionsContextVc,
     pub client_resolve_options_context: ResolveOptionsContextVc,
     pub client_chunking_context: ChunkingContextVc,
-    pub server_root: FileSystemPathVc,
+    pub assets_root: FileSystemPathVc,
     pub runtime_entries: RuntimeEntriesVc,
 }
 
@@ -93,7 +93,7 @@ impl Transition for NextClientTransition {
         let asset = ChunkGroupFilesAsset {
             asset: chunkable_asset,
             chunking_context: self.client_chunking_context,
-            base_path: self.server_root.join("_next"),
+            base_path: self.assets_root.join("_next"),
             runtime_entries: Some(runtime_entries),
         };
 
