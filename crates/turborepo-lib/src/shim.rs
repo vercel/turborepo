@@ -16,7 +16,7 @@ use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};
-use semver::Version;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
@@ -25,7 +25,7 @@ use crate::{
     cli,
     files::{
         package_json,
-        yarn_rc::{self, YarnRc},
+        yarn_rc::{self, YarnRc}, turbo_json,
     },
     get_version,
     package_manager::Globs,
@@ -55,6 +55,23 @@ fn turbo_version_has_shim(version: &str) -> bool {
     }
 
     version.major > 1
+}
+
+fn turbo_version_in_range(version: &str, root_path: PathBuf) -> bool {
+    let version = Version::parse(version).unwrap();
+
+    turbo_json::read(root_path)
+        .ok()
+        .and_then(|turbo_json| {
+            Version::parse(&turbo_json.turbo_version).ok()
+        })
+        .and_then(|specified_version| {
+            match version == specified_version {
+                true => Some(true),
+                false => None,
+            }
+        })
+        .is_some()
 }
 
 #[derive(Debug)]
@@ -583,11 +600,19 @@ impl RepoState {
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
-            try_check_for_updates(&shim_args, get_version());
+            let global_version = get_version();
+            try_check_for_updates(&shim_args, global_version);
+            debug!("Running command as global turbo");
+
+            if !turbo_version_in_range(global_version, &self.root) {
+                return Err(anyhow!(
+                    "Project specifies that version is 9, you're running 8."
+                ));
+            }
+
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
             env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
-            debug!("Running command as global turbo");
             cli::run(Some(self))
         }
     }
