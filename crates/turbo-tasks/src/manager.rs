@@ -123,20 +123,48 @@ pub enum StatsType {
 }
 
 pub trait TaskIdProvider {
-    fn get_fresh_task_id(&self) -> TaskId;
-    /// # Safety
-    ///
-    /// It must be ensured that the id is no longer used
-    unsafe fn reuse_task_id(&self, id: TaskId);
+    fn get_fresh_task_id(&self) -> Unused<TaskId>;
+    fn reuse_task_id(&self, id: Unused<TaskId>);
 }
 
 impl TaskIdProvider for IdFactory<TaskId> {
-    fn get_fresh_task_id(&self) -> TaskId {
-        self.get()
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
+        // Safety: This is a fresh id from the factory
+        unsafe { Unused::new_unchecked(self.get()) }
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { self.reuse(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        unsafe { self.reuse(id.into()) }
+    }
+}
+
+/// A wrapper around a value that is unused.
+pub struct Unused<T> {
+    inner: T,
+}
+
+impl<T> Unused<T> {
+    /// Creates a new unused value.
+    ///
+    /// # Safety
+    ///
+    /// The wrapped value must not be used.
+    pub unsafe fn new_unchecked(inner: T) -> Self {
+        Self { inner }
+    }
+
+    /// Get the inner value, without consuming the `Unused` wrapper.
+    ///
+    /// # Safety
+    ///
+    /// The user need to make sure that the value stays unused.
+    pub unsafe fn get_unchecked(&self) -> &T {
+        &self.inner
+    }
+
+    /// Unwraps the value, consuming the `Unused` wrapper.
+    pub fn into(self) -> T {
+        self.inner
     }
 }
 
@@ -181,22 +209,22 @@ impl StatsType {
 }
 
 impl TaskIdProvider for &dyn TurboTasksBackendApi {
-    fn get_fresh_task_id(&self) -> TaskId {
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
         (*self).get_fresh_task_id()
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { (*self).reuse_task_id(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        (*self).reuse_task_id(id)
     }
 }
 
 impl TaskIdProvider for &dyn TaskIdProvider {
-    fn get_fresh_task_id(&self) -> TaskId {
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
         (*self).get_fresh_task_id()
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { (*self).reuse_task_id(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        (*self).reuse_task_id(id)
     }
 }
 
@@ -975,12 +1003,13 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
 }
 
 impl<B: Backend> TaskIdProvider for TurboTasks<B> {
-    fn get_fresh_task_id(&self) -> TaskId {
-        self.task_id_factory.get()
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
+        // Safety: This is a fresh id from the factory
+        unsafe { Unused::new_unchecked(self.task_id_factory.get()) }
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { self.task_id_factory.reuse(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        unsafe { self.task_id_factory.reuse(id.into()) }
     }
 }
 

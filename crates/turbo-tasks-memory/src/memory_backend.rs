@@ -26,7 +26,7 @@ use turbo_tasks::{
     event::EventListener,
     primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
 use crate::{
@@ -295,36 +295,37 @@ impl MemoryBackend {
         } else {
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
-            let task =
-                Task::new_read_collectibles(id, scope_id, trait_type, turbo_tasks.stats_type());
-            // Safety: We have a fresh task id that nobody knows about yet
-            unsafe {
-                self.insert_and_connect_fresh_task(
-                    parent_task,
-                    &self.read_collectibles_task_cache,
-                    (scope_id, trait_type),
-                    id,
-                    task,
-                    root_scoped,
-                    turbo_tasks,
-                )
-            }
+            let task = Task::new_read_collectibles(
+                // Safety: That task will hold the value, but we are still in
+                // control of the task
+                *unsafe { id.get_unchecked() },
+                scope_id,
+                trait_type,
+                turbo_tasks.stats_type(),
+            );
+            self.insert_and_connect_fresh_task(
+                parent_task,
+                &self.read_collectibles_task_cache,
+                (scope_id, trait_type),
+                id,
+                task,
+                root_scoped,
+                turbo_tasks,
+            )
         }
     }
 
-    /// # Safty
-    ///
-    /// `new_id` must be an unused task id
-    unsafe fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
+    fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
         &self,
         parent_task: TaskId,
         task_cache: &DashMap<K, TaskId, H>,
         key: K,
-        new_id: TaskId,
+        new_id: Unused<TaskId>,
         task: Task,
         root_scoped: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
+        let new_id = new_id.into();
         // Safety: We have a fresh task id that nobody knows about yet
         let task = unsafe { self.memory_tasks.insert(*new_id, task) };
         if root_scoped {
@@ -340,6 +341,7 @@ impl MemoryBackend {
                 // Safety: We have a fresh task id that nobody knows about yet
                 unsafe {
                     self.memory_tasks.remove(*new_id);
+                    let new_id = Unused::new_unchecked(new_id);
                     turbo_tasks.reuse_task_id(new_id);
                 }
                 *entry.get()
@@ -636,19 +638,22 @@ impl Backend for MemoryBackend {
             let task_type = Arc::new(task_type);
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
-            let task = Task::new_persistent(id, task_type.clone(), turbo_tasks.stats_type());
-            // Safety: We have a fresh task id that nobody knows about yet
-            unsafe {
-                self.insert_and_connect_fresh_task(
-                    parent_task,
-                    &self.task_cache,
-                    task_type,
-                    id,
-                    task,
-                    false,
-                    turbo_tasks,
-                )
-            }
+            let task = Task::new_persistent(
+                // Safety: That task will hold the value, but we are still in
+                // control of the task
+                *unsafe { id.get_unchecked() },
+                task_type.clone(),
+                turbo_tasks.stats_type(),
+            );
+            self.insert_and_connect_fresh_task(
+                parent_task,
+                &self.task_cache,
+                task_type,
+                id,
+                task,
+                false,
+                turbo_tasks,
+            )
         }
     }
 
@@ -665,6 +670,7 @@ impl Backend for MemoryBackend {
             scope.increment_unfinished_tasks(self);
         });
         let stats_type = turbo_tasks.stats_type();
+        let id = id.into();
         let task = match task_type {
             TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _, stats_type),
             TransientTaskType::Once(f) => Task::new_once(id, scope, f, stats_type),
