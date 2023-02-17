@@ -37,7 +37,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
@@ -48,7 +48,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"lint": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
@@ -70,7 +70,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"publish": {
-			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "TaskDependencies", "TopologicalDependencies", "ShouldCache"}),
+			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
@@ -120,7 +120,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
