@@ -26,6 +26,9 @@ const BABEL_CONFIG_FILES: &[&str] = &[
     "babel.config.cjs",
 ];
 
+/// If the user has a babel configuration file (see list above) alongside their
+/// `next.config.js` configuration, automatically add `babel-loader` as a
+/// webpack loader for each eligible file type if it doesn't already exist.
 #[turbo_tasks::function]
 pub async fn maybe_add_babel_loader(
     project_root: FileSystemPathVc,
