@@ -8,8 +8,8 @@ use turbopack_core::{
     asset::Asset,
     resolve::{
         options::{
-            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
-            ResolvedMapVc,
+            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc,
+            ResolveOptionsVc, ResolvedMap, ResolvedMapVc,
         },
         parse::RequestVc,
         pattern::Pattern,
@@ -378,15 +378,29 @@ pub async fn insert_next_shared_aliases(
     );
 
     import_map.insert_wildcard_alias(
-        "@swc/helpers",
+        "@swc/helpers/",
         ImportMapping::PrimaryAlternative(
-            "@swc/helpers".to_string(),
-            Some(get_next_package(project_path)),
+            "./*".to_string(),
+            Some(get_swc_helpers_package(project_path)),
         )
         .cell(),
     );
 
     Ok(())
+}
+
+#[turbo_tasks::function]
+fn package_lookup_resolve_options(project_root: FileSystemPathVc) -> ResolveOptionsVc {
+    resolve_options(
+        project_root,
+        ResolveOptionsContext {
+            enable_node_modules: true,
+            enable_node_native_modules: true,
+            custom_conditions: vec!["development".to_string()],
+            ..Default::default()
+        }
+        .cell(),
+    )
 }
 
 #[turbo_tasks::function]
@@ -396,16 +410,21 @@ pub async fn get_next_package(project_root: FileSystemPathVc) -> Result<FileSyst
         RequestVc::parse(Value::new(Pattern::Constant(
             "next/package.json".to_string(),
         ))),
-        resolve_options(
-            project_root,
-            ResolveOptionsContext {
-                enable_node_modules: true,
-                enable_node_native_modules: true,
-                custom_conditions: vec!["development".to_string()],
-                ..Default::default()
-            }
-            .cell(),
-        ),
+        package_lookup_resolve_options(project_root),
+    );
+    let assets = result.primary_assets().await?;
+    let asset = assets.first().context("Next.js package not found")?;
+    Ok(asset.path().parent())
+}
+
+#[turbo_tasks::function]
+pub async fn get_swc_helpers_package(project_root: FileSystemPathVc) -> Result<FileSystemPathVc> {
+    let result = resolve(
+        get_next_package(project_root),
+        RequestVc::parse(Value::new(Pattern::Constant(
+            "@swc/helpers/package.json".to_string(),
+        ))),
+        package_lookup_resolve_options(project_root),
     );
     let assets = result.primary_assets().await?;
     let asset = assets.first().context("Next.js package not found")?;
