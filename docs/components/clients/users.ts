@@ -534,5 +534,17 @@ export const users: Array<TurboUser> = [
     style: {
       width: 175
     },
-  }
+  },
+  {
+    caption: "Block Protocol",
+    image: "/images/logos/blockprotocol.svg",
+    infoLink: "https://blockprotocol.org/",
+    pinned: true,
+  },
+  {
+    caption: "HASH",
+    image: "/images/logos/hash.svg",
+    infoLink: "https://hash.dev/",
+    pinned: true,
+  },
 ];
