@@ -360,9 +360,11 @@ async fn source(
     }
     .cell()
     .into();
-    let static_source =
-        StaticAssetsContentSourceVc::new(next_config.base_path(), project_path.join("public"))
-            .into();
+    let static_source = StaticAssetsContentSourceVc::new(
+        next_config.turbopack_base_path(),
+        project_path.join("public"),
+    )
+    .into();
     let manifest_source = DevManifestContentSource {
         base_path: next_config.base_path(),
         page_roots: vec![app_source, page_source],

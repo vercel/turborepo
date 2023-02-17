@@ -51,7 +51,6 @@ pub struct NextConfig {
     pub rewrites: Rewrites,
     pub transpile_packages: Option<Vec<String>>,
 
-    pub asset_prefix: String,
     pub base_path: String,
 
     // unsupported
@@ -59,6 +58,7 @@ pub struct NextConfig {
     compiler: Option<CompilerConfig>,
     amp: AmpConfig,
     analytics_id: String,
+    asset_prefix: String,
     clean_dist_dir: bool,
     compress: bool,
     dev_indicators: DevIndicatorsConfig,
@@ -527,16 +527,36 @@ impl NextConfigVc {
         Ok(alias_map.cell())
     }
 
+    /// The basepath as Next uses it. Either:
+    /// - An empty string
+    /// - A string with a leading slash and without a trailing slash.
     #[turbo_tasks::function]
     pub async fn base_path(self) -> Result<StringVc> {
         let this = self.await?;
         Ok(StringVc::cell(this.base_path.clone()))
     }
 
+    /// The basepath as Turbopack uses it. Either:
+    /// - An empty string
+    /// - A string without a leading slash and with a trailing slash.
+    ///
+    /// The difference in representation is because our ContentSource receives a
+    /// path without a leading slash, for reasons I don't understand.
     #[turbo_tasks::function]
-    pub async fn asset_prefix(self) -> Result<StringVc> {
-        let this = self.await?;
-        Ok(StringVc::cell(this.asset_prefix.clone()))
+    pub async fn turbopack_base_path(self) -> Result<StringVc> {
+        let base_path = &self.await?.base_path;
+        if base_path.is_empty() {
+            return Ok(StringVc::empty());
+        }
+        debug_assert!(
+            base_path.starts_with('/'),
+            "Next guarantees basePath contains leading slash",
+        );
+        debug_assert!(
+            !base_path.ends_with('/'),
+            "Next guarantees basePath omits trailing slash",
+        );
+        Ok(StringVc::cell(format!("{}/", &base_path[1..])))
     }
 }
 
