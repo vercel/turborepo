@@ -1554,6 +1554,17 @@ impl Task {
                 }
 
                 // Remove children from old scopes
+                #[cfg(feature = "inline_remove_from_scope")]
+                for task in children {
+                    backend.with_task(task, |task| {
+                        task.remove_from_scopes(
+                            merging_scopes.iter().copied(),
+                            backend,
+                            turbo_tasks,
+                        )
+                    });
+                }
+                #[cfg(not(feature = "inline_remove_from_scope"))]
                 turbo_tasks.schedule_backend_foreground_job(
                     backend.create_backend_job(Job::RemoveFromScopes(children, merging_scopes)),
                 );
@@ -2590,6 +2601,7 @@ pub fn run_add_to_scope_queue(
                 &mut queue,
             );
         });
+        #[cfg(not(feature = "inline_add_to_scope"))]
         while queue.len() > SPLIT_OFF_QUEUE_AT {
             let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
             turbo_tasks.schedule_backend_foreground_job(
@@ -2614,6 +2626,7 @@ pub fn run_remove_from_scope_queue(
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         });
+        #[cfg(not(feature = "inline_remove_from_scope"))]
         while queue.len() > SPLIT_OFF_QUEUE_AT {
             let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
 
