@@ -418,7 +418,22 @@ use self::meta_state::{
     FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
 };
 
-const SCOPE_OPTIMIZATION_THRESHOLD: usize = 255;
+/// Heuristic when a task should switch to root scoped.
+///
+/// The `optimization_counter` is a number how often a scope has been added to
+/// this task (and therefore to all child tasks as well). We can assume that all
+/// scopes might eventually be removed again. We assume that more scopes per
+/// task have higher cost, so we want to avoid that. We assume that adding and
+/// removing scopes again and again is not great. But having too many root
+/// scopes is also not great as it hurts strongly consistent reads and read
+/// collectibles.
+///
+/// The current implementation uses a heuristic that says that the cost is
+/// linear to the number of added scoped and linear to the number of children.
+fn should_optimize_to_root_scoped(optimization_counter: usize, children_count: usize) -> bool {
+    const SCOPE_OPTIMIZATION_THRESHOLD: usize = 255;
+    optimization_counter * children_count > SCOPE_OPTIMIZATION_THRESHOLD
+}
 
 impl Task {
     pub(crate) fn new_persistent(
@@ -1077,7 +1092,7 @@ impl Task {
                 if merging_scopes > 0 {
                     *optimization_counter = optimization_counter.saturating_sub(merging_scopes);
                 } else {
-                    if *optimization_counter * children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
+                    if should_optimize_to_root_scoped(*optimization_counter, children.len()) {
                         list.remove(id);
                         drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
                         return self.add_to_scope_internal_shallow(
@@ -1826,7 +1841,7 @@ impl Task {
         let mut state = self.full_state_mut();
         if state.children.insert(child_id) {
             if let TaskScopes::Inner(_, optimization_counter) = &state.scopes {
-                if *optimization_counter * state.children.len() > SCOPE_OPTIMIZATION_THRESHOLD {
+                if should_optimize_to_root_scoped(*optimization_counter, state.children.len()) {
                     state.children.remove(&child_id);
                     drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
                     return self.connect_child(child_id, backend, turbo_tasks);
