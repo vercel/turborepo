@@ -26,6 +26,7 @@ use turbopack_node::execution_context::ExecutionContextVc;
 
 use super::transforms::get_next_client_transforms_rules;
 use crate::{
+    babel::maybe_add_babel_loader,
     embed_js::attached_next_js_package_path,
     env::env_for_js,
     next_build::get_postcss_package_mapping,
@@ -36,7 +37,7 @@ use crate::{
         get_next_client_resolved_map,
     },
     react_refresh::assert_can_resolve_react_refresh,
-    util::{foreign_code_context_condition, maybe_add_babel_loader},
+    util::foreign_code_context_condition,
 };
 
 #[turbo_tasks::function]

@@ -3,6 +3,7 @@
 
 mod app_render;
 mod app_source;
+mod babel;
 mod embed_js;
 pub mod env;
 mod fallback;

@@ -20,10 +20,11 @@ use super::{
     resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
 };
 use crate::{
+    babel::maybe_add_babel_loader,
     next_build::get_postcss_package_mapping,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
-    util::{foreign_code_context_condition, maybe_add_babel_loader},
+    util::foreign_code_context_condition,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
