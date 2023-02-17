@@ -415,7 +415,7 @@
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>RewriteResponse {
     <span class="kw">pub </span>url: String,
-    <span class="kw">pub </span>headers: Vec&lt;String&gt;,
+    <span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -423,7 +423,7 @@
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>MiddlewareHeadersResponse {
     <span class="kw">pub </span>status_code: u16,
-    <span class="kw">pub </span>headers: Vec&lt;String&gt;,
+    <span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]

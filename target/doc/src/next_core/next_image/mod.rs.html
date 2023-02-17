@@ -179,7 +179,7 @@
             ContentSourceContent::HttpProxy(
                 ProxyResult {
                     status: <span class="number">302</span>,
-                    headers: <span class="macro">vec!</span>[<span class="string">&quot;Location&quot;</span>.to_string(), url.clone()],
+                    headers: <span class="macro">vec!</span>[(<span class="string">&quot;Location&quot;</span>.to_string(), url.clone())],
                     body: <span class="string">&quot;&quot;</span>.into(),
                 }
                 .cell(),

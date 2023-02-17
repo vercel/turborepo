@@ -581,7 +581,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ResponseHeaders {
     <span class="kw">pub </span>status: u16,
-    <span class="kw">pub </span>headers: Vec&lt;String&gt;,
+    <span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
 }
 
 <span class="attr">#[derive(Serialize)]

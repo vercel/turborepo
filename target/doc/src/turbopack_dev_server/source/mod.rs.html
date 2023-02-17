@@ -555,7 +555,7 @@
     <span class="doccomment">/// The HTTP status code to return.
     </span><span class="kw">pub </span>status: u16,
     <span class="doccomment">/// Headers arranged as contiguous (name, value) pairs.
-    </span><span class="kw">pub </span>headers: Vec&lt;String&gt;,
+    </span><span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
     <span class="doccomment">/// The body to return.
     </span><span class="kw">pub </span>body: Rope,
 }
