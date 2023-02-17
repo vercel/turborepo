@@ -1,88 +1,100 @@
 import { RULES } from "../../lib/constants";
 import rule from "../../lib/rules/no-undeclared-env-vars";
 import { RuleTester } from "eslint";
+import path from "path";
 
 const ruleTester = new RuleTester({
   parserOptions: { ecmaVersion: 2020 },
 });
 
-const getTestTurboConfig = () => {
-  return {
-    $schema: "./docs/public/schema.json",
-    globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
-    globalDependencies: ["$GLOBAL_ENV_KEY"],
-    pipeline: {
-      test: {
-        outputs: ["coverage/**/*"],
-        dependsOn: ["^build"],
-      },
-      lint: {
-        outputs: [],
-      },
-      dev: {
-        cache: false,
-      },
-      build: {
-        outputs: ["dist/**/*", ".next/**/*"],
-        env: ["NEW_STYLE_ENV_KEY"],
-        dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
-      },
-    },
-  };
-};
-
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `
+        const { ENV_2 } = process.env;
+      `,
+      options: [{ cwd: path.join(__dirname, "../fixtures/workspace-configs") }],
+      filename: path.join(
+        __dirname,
+        "../fixtures/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
+        const { ENV_1 } = process.env;
+      `,
+      options: [{ cwd: path.join(__dirname, "../fixtures/workspace-configs") }],
+      filename: path.join(
+        __dirname,
+        "../fixtures/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
+        const { ENV_1 } = process.env;
+      `,
+      options: [{ cwd: "/some/random/path" }],
+    },
+    {
+      code: `
+        const { CI } = process.env;
+      `,
+      options: [{ cwd: path.join(__dirname, "../fixtures/workspace-configs") }],
+      filename: path.join(
+        __dirname,
+        "../fixtures/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: `
         const { NEW_STYLE_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: `
         const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: `
         const val = process.env["$NEW_STYLE_GLOBAL_ENV_KEY"];
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: `
         const x = process.env.GLOBAL_ENV_KEY;
         const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = process.env;
       `,
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: "var x = process.env.GLOBAL_ENV_KEY;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: "let x = process.env.TASK_ENV_KEY;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: "const x = process.env.ANOTHER_KEY_VALUE;",
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
@@ -94,7 +106,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -106,7 +118,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"],
         },
       ],
@@ -118,7 +130,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -131,7 +143,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -144,7 +156,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -157,7 +169,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -170,65 +182,84 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
     },
     {
       code: "const getEnv = (key) => process.env[key];",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: "function getEnv(key) { return process.env[key]; }",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
     {
       code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
     },
   ],
 
   invalid: [
     {
+      code: `
+        const { ENV_2 } = process.env;
+      `,
+      options: [{ cwd: path.join(__dirname, "../fixtures/workspace-configs") }],
+      filename: path.join(
+        __dirname,
+        "../fixtures/workspace-configs/apps/docs/index.js"
+      ),
+      errors: [
+        { message: "$ENV_2 is not listed as a dependency in any turbo.json" },
+      ],
+    },
+    {
       code: "let { X } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
-      errors: [{ message: "$X is not listed as a dependency in turbo.json" }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
+      errors: [
+        { message: "$X is not listed as a dependency in any turbo.json" },
+      ],
     },
     {
       code: "const { X, Y, Z } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
       errors: [
-        { message: "$X is not listed as a dependency in turbo.json" },
-        { message: "$Y is not listed as a dependency in turbo.json" },
-        { message: "$Z is not listed as a dependency in turbo.json" },
+        { message: "$X is not listed as a dependency in any turbo.json" },
+        { message: "$Y is not listed as a dependency in any turbo.json" },
+        { message: "$Z is not listed as a dependency in any turbo.json" },
       ],
     },
     {
       code: "const { X, Y: NewName, Z } = process.env;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
       errors: [
-        { message: "$X is not listed as a dependency in turbo.json" },
-        { message: "$Y is not listed as a dependency in turbo.json" },
-        { message: "$Z is not listed as a dependency in turbo.json" },
+        { message: "$X is not listed as a dependency in any turbo.json" },
+        { message: "$Y is not listed as a dependency in any turbo.json" },
+        { message: "$Z is not listed as a dependency in any turbo.json" },
       ],
     },
     {
       code: "var x = process.env.NOT_THERE;",
-      options: [{ turboConfig: getTestTurboConfig() }],
+      options: [{ cwd: path.join(__dirname, "../fixtures/configs/single") }],
       errors: [
-        { message: "$NOT_THERE is not listed as a dependency in turbo.json" },
+        {
+          message: "$NOT_THERE is not listed as a dependency in any turbo.json",
+        },
       ],
     },
     {
       code: "var x = process.env.KEY;",
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
-      errors: [{ message: "$KEY is not listed as a dependency in turbo.json" }],
+      errors: [
+        { message: "$KEY is not listed as a dependency in any turbo.json" },
+      ],
     },
     {
       code: `
@@ -237,20 +268,26 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
         },
       ],
       errors: [
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
-        { message: "$ENV_VAR_ONE is not listed as a dependency in turbo.json" },
-        { message: "$ENV_VAR_TWO is not listed as a dependency in turbo.json" },
+        {
+          message:
+            "$ENV_VAR_ONE is not listed as a dependency in any turbo.json",
+        },
+        {
+          message:
+            "$ENV_VAR_TWO is not listed as a dependency in any turbo.json",
+        },
       ],
     },
     {
@@ -261,21 +298,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -287,21 +324,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -313,21 +350,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
@@ -339,21 +376,21 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfig: getTestTurboConfig(),
+          cwd: path.join(__dirname, "../fixtures/configs/single"),
         },
       ],
       errors: [
         {
           message:
-            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$GLOBAL_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "$TASK_ENV_KEY_NEW is not listed as a dependency in any turbo.json",
         },
         {
           message:
-            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
+            "$ENV_VAR_NOT_ALLOWED is not listed as a dependency in any turbo.json",
         },
       ],
     },
