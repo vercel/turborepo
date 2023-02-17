@@ -65,16 +65,15 @@ impl ContentSource for NextSourceMapTraceContentSource {
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        let path = match file.path().strip_prefix('/') {
-            Some(p) => p,
-            _ => return Ok(ContentSourceResultVc::not_found()),
-        };
         let id = file
             .query_pairs()
             .find_map(|(k, v)| if k == "id" { Some(v) } else { None });
 
         let this = self_vc.await?;
-        let result = this.asset_source.get(path, Default::default()).await?;
+        let result = this
+            .asset_source
+            .get(file.path(), Default::default())
+            .await?;
         let content = match &*result {
             ContentSourceResult::Result { get_content, .. } => {
                 get_content.get(Default::default()).await?

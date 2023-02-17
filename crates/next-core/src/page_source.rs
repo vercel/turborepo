@@ -248,7 +248,7 @@ pub async fn create_page_source(
         server_root,
         output_path.join("force_not_found"),
         SpecificityVc::exact(),
-        NextExactMatcherVc::new(StringVc::cell("_next/404".to_string())).into(),
+        NextExactMatcherVc::new(StringVc::cell("/_next/404".to_string())).into(),
     );
     let fallback_not_found_source = create_not_found_page_source(
         project_path,
@@ -388,7 +388,7 @@ async fn create_page_source_for_file(
         )
     } else {
         let data_route_matcher =
-            NextPrefixSuffixParamsMatcherVc::new(pathname, "_next/data/development/", ".json");
+            NextPrefixSuffixParamsMatcherVc::new(pathname, "/_next/data/development/", ".json");
 
         let ssr_entry = SsrEntry {
             context: server_context,
@@ -496,7 +496,7 @@ async fn create_not_found_page_source(
     let (page_asset, pathname) =
         if let Some(not_found_page_asset) = get_not_found_page(pages_dir, page_extensions).await? {
             // If a 404 page is defined, the pathname should be 404.
-            (not_found_page_asset, StringVc::cell("404".to_string()))
+            (not_found_page_asset, StringVc::cell("/404".to_string()))
         } else {
             (
                 // The error page asset must be within the context path so it can depend on the
@@ -506,7 +506,7 @@ async fn create_not_found_page_source(
                     "entry/error.tsx",
                 ),
                 // If no 404 page is defined, the pathname should be _error.
-                StringVc::cell("_error".to_string()),
+                StringVc::cell("/_error".to_string()),
             )
         };
 

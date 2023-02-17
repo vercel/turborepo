@@ -142,6 +142,8 @@ impl ContentSource for AssetGraphContentSource {
     ) -> Result<ContentSourceResultVc> {
         let assets = self_vc.all_assets_map().strongly_consistent().await?;
 
+        // Remove leading slash.
+        let path = &path[1..];
         if let Some(asset) = assets.get(path) {
             {
                 let this = self_vc.await?;

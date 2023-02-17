@@ -73,13 +73,13 @@ impl PathRegexBuilder {
     /// Creates a new [PathRegexBuilder].
     pub fn new() -> Self {
         Self {
-            regex_str: "^".to_string(),
+            regex_str: "^/".to_string(),
             named_params: Default::default(),
         }
     }
 
     fn include_slash(&self) -> bool {
-        self.regex_str.len() > 1
+        self.regex_str.len() > 2
     }
 
     fn push_str(&mut self, str: &str) {

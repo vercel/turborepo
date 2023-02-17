@@ -58,7 +58,8 @@ impl PageLoaderAssetVc {
         writeln!(
             result,
             "const PAGE_PATH = {};\n",
-            stringify_js(&format!("/{}", &*this.pathname.await?))
+            // TODO
+            stringify_js(&this.pathname.await?)
         )?;
 
         let base_code = next_js_file("entry/page-loader.ts");

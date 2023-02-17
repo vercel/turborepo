@@ -146,7 +146,7 @@ impl GetContentSourceContent for NodeApiGetContentResult {
                 url: url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", self.path),
+                path: self.path.to_string(),
             }
             .cell(),
             *body,

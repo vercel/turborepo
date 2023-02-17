@@ -82,7 +82,7 @@ impl ContentSource for NextRouterContentSource {
         };
 
         let request = RouterRequest {
-            pathname: format!("/{path}"),
+            pathname: path.to_string(),
             method: method.clone(),
             raw_headers: raw_headers.clone(),
             raw_query: raw_query.clone(),

@@ -42,8 +42,8 @@ impl ContentSource for StaticAssetsContentSource {
         path: &str,
         _data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        if !path.is_empty() {
-            if let Some(path) = path.strip_prefix(&self.prefix) {
+        if let Some(path) = path.strip_prefix(&self.prefix) {
+            if !path.is_empty() {
                 let path = self.dir.join(path);
                 let ty = path.get_type().await?;
                 if matches!(

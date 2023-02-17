@@ -40,15 +40,14 @@ pub async fn resolve_source_request(
 ) -> Result<ResolveSourceRequestResultVc> {
     let mut data = ContentSourceData::default();
     let mut current_source = source;
-    // Remove leading slash.
-    let original_path = request.uri.path().to_string();
-    let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
+    let original_path = request.uri.path();
+    let mut current_asset_path = urlencoding::decode(original_path)?.into_owned();
     let mut request_overwrites = (*request).clone();
     loop {
         let result = current_source.get(&current_asset_path, Value::new(data));
         handle_issues(
             result,
-            &original_path,
+            original_path,
             "get content from source",
             issue_reporter,
         )
@@ -74,8 +73,7 @@ pub async fn resolve_source_request(
                         if new_source == current_source && new_uri == request_overwrites.uri {
                             bail!("rewrite loop detected: {}", new_uri);
                         }
-                        let new_asset_path =
-                            urlencoding::decode(&new_uri.path()[1..])?.into_owned();
+                        let new_asset_path = urlencoding::decode(new_uri.path())?.into_owned();
 
                         current_source = new_source;
                         request_overwrites.uri = new_uri;

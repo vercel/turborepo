@@ -353,7 +353,7 @@ async fn source(
     .cell()
     .into();
     let static_source =
-        StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
+        StaticAssetsContentSourceVc::new("/".to_string(), project_path.join("public")).into();
     let manifest_source = DevManifestContentSource {
         page_roots: vec![app_source, page_source],
         next_config,
@@ -384,15 +384,15 @@ async fn source(
             .into();
     let source = RouterContentSource {
         routes: vec![
-            ("__turbopack__/".to_string(), introspect),
-            ("__turbo_tasks__/".to_string(), viz),
+            ("/__turbopack__/".to_string(), introspect),
+            ("/__turbo_tasks__/".to_string(), viz),
             (
-                "__nextjs_original-stack-frame".to_string(),
+                "/__nextjs_original-stack-frame".to_string(),
                 source_map_trace,
             ),
             // TODO: Load path from next.config.js
-            ("_next/image".to_string(), img_source),
-            ("__turbopack_sourcemap__/".to_string(), source_maps),
+            ("/_next/image".to_string(), img_source),
+            ("/__turbopack_sourcemap__/".to_string(), source_maps),
         ],
         fallback: router_source,
     }
@@ -422,7 +422,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     let dir = options
         .dir
         .as_ref()
-        .map(|dir| canonicalize(dir))
+        .map(canonicalize)
         .unwrap_or_else(current_dir)
         .context("project directory can't be found")?
         .to_str()

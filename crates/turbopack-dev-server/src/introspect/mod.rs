@@ -79,6 +79,7 @@ impl ContentSource for IntrospectionSource {
         path: &str,
         _data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
+        let path = path.strip_prefix('/').unwrap();
         let introspectable = if path.is_empty() {
             let roots = &self_vc.await?.roots;
             if roots.len() == 1 {
@@ -87,7 +88,7 @@ impl ContentSource for IntrospectionSource {
                 self_vc.as_introspectable()
             }
         } else {
-            parse_json_with_source_context(path)?
+            parse_json_with_source_context(&path[1..])?
         }
         .resolve()
         .await?;

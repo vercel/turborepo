@@ -217,7 +217,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 url: url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", source.pathname.await?),
+                path: source.pathname.await?.to_string(),
             }
             .cell(),
         );

@@ -46,7 +46,7 @@ impl ContentSource for TurboTasksSource {
             }
         });
         let html = match path {
-            "graph" => {
+            "/graph" => {
                 let mut stats = Stats::new();
                 let b = tt.backend();
                 b.with_all_cached_tasks(|task| {
@@ -60,7 +60,7 @@ impl ContentSource for TurboTasksSource {
                 );
                 viz::graph::wrap_html(&graph)
             }
-            "call-graph" => {
+            "/call-graph" => {
                 let mut stats = Stats::new();
                 let b = tt.backend();
                 b.with_all_cached_tasks(|task| {
@@ -71,7 +71,7 @@ impl ContentSource for TurboTasksSource {
                     viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 viz::graph::wrap_html(&graph)
             }
-            "table" => {
+            "/table" => {
                 if let Some(query) = &data.query {
                     let mut stats = Stats::new();
                     let b = tt.backend();
@@ -96,7 +96,7 @@ impl ContentSource for TurboTasksSource {
                     })));
                 }
             }
-            "reset" => {
+            "/reset" => {
                 let b = tt.backend();
                 b.with_all_cached_tasks(|task| {
                     b.with_task(task, |task| task.reset_stats());

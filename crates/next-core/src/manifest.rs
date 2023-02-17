@@ -43,13 +43,13 @@ impl DevManifestContentSourceVc {
         ) -> Result<Option<String>> {
             // TODO This shouldn't use casts but an public api instead
             if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
-                return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
+                return Ok(Some(api_source.get_pathname().await?.to_string()));
             }
 
             if let Some(page_source) =
                 NodeRenderContentSourceVc::resolve_from(content_source).await?
             {
-                return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
+                return Ok(Some(page_source.get_pathname().await?.to_string()));
             }
 
             Ok(None)
@@ -152,7 +152,7 @@ impl ContentSource for DevManifestContentSource {
         _data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let manifest_file = match path {
-            "_next/static/development/_devPagesManifest.json" => {
+            "/_next/static/development/_devPagesManifest.json" => {
                 let pages = &*self_vc.find_routes().await?;
 
                 File::from(serde_json::to_string(&serde_json::json!({
@@ -160,12 +160,12 @@ impl ContentSource for DevManifestContentSource {
                 }))?)
                 .with_content_type(APPLICATION_JSON)
             }
-            "_next/static/development/_buildManifest.js" => {
+            "/_next/static/development/_buildManifest.js" => {
                 let build_manifest = &*self_vc.create_build_manifest().await?;
 
                 File::from(build_manifest.as_str()).with_content_type(APPLICATION_JAVASCRIPT_UTF_8)
             }
-            "_next/static/development/_devMiddlewareManifest.json" => {
+            "/_next/static/development/_devMiddlewareManifest.json" => {
                 // empty middleware manifest
                 File::from("[]").with_content_type(APPLICATION_JSON)
             }
