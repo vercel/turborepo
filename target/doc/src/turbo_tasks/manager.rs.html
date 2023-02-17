@@ -1333,6 +1333,13 @@
 <span id="1333">1333</span>
 <span id="1334">1334</span>
 <span id="1335">1335</span>
+<span id="1336">1336</span>
+<span id="1337">1337</span>
+<span id="1338">1338</span>
+<span id="1339">1339</span>
+<span id="1340">1340</span>
+<span id="1341">1341</span>
+<span id="1342">1342</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1362,6 +1369,7 @@
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
+    primitives::RawVcSetVc,
     raw_vc::{CellId, RawVc},
     registry,
     task_input::{SharedReference, TaskInput},
@@ -1426,11 +1434,7 @@
         index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
-    <span class="kw">fn </span>try_read_task_collectibles(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt;;
+    <span class="kw">fn </span>read_task_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, trait_id: TraitTypeId) -&gt; RawVcSetVc;
 
     <span class="kw">fn </span>emit_collectible(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectible: RawVc);
     <span class="kw">fn </span>unemit_collectible(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectible: RawVc);
@@ -1461,20 +1465,48 @@
 }
 
 <span class="kw">pub trait </span>TaskIdProvider {
-    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId;
-    <span class="doccomment">/// # Safety
-    ///
-    /// It must be ensured that the id is no longer used
-    </span><span class="kw">unsafe fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: TaskId);
+    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt;;
+    <span class="kw">fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Unused&lt;TaskId&gt;);
 }
 
 <span class="kw">impl </span>TaskIdProvider <span class="kw">for </span>IdFactory&lt;TaskId&gt; {
-    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {
-        <span class="self">self</span>.get()
+    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
+        <span class="comment">// Safety: This is a fresh id from the factory
+        </span><span class="kw">unsafe </span>{ Unused::new_unchecked(<span class="self">self</span>.get()) }
     }
 
-    <span class="kw">unsafe fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: TaskId) {
-        <span class="kw">unsafe </span>{ <span class="self">self</span>.reuse(id) }
+    <span class="kw">fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Unused&lt;TaskId&gt;) {
+        <span class="kw">unsafe </span>{ <span class="self">self</span>.reuse(id.into()) }
+    }
+}
+
+<span class="doccomment">/// A wrapper around a value that is unused.
+</span><span class="kw">pub struct </span>Unused&lt;T&gt; {
+    inner: T,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Unused&lt;T&gt; {
+    <span class="doccomment">/// Creates a new unused value.
+    ///
+    /// # Safety
+    ///
+    /// The wrapped value must not be used.
+    </span><span class="kw">pub unsafe fn </span>new_unchecked(inner: T) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ inner }
+    }
+
+    <span class="doccomment">/// Get the inner value, without consuming the `Unused` wrapper.
+    ///
+    /// # Safety
+    ///
+    /// The user need to make sure that the value stays unused.
+    </span><span class="kw">pub unsafe fn </span>get_unchecked(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+    }
+
+    <span class="doccomment">/// Unwraps the value, consuming the `Unused` wrapper.
+    </span><span class="kw">pub fn </span>into(<span class="self">self</span>) -&gt; T {
+        <span class="self">self</span>.inner
     }
 }
 
@@ -1519,22 +1551,22 @@
 }
 
 <span class="kw">impl </span>TaskIdProvider <span class="kw">for </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi {
-    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {
+    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
         (<span class="kw-2">*</span><span class="self">self</span>).get_fresh_task_id()
     }
 
-    <span class="kw">unsafe fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: TaskId) {
-        <span class="kw">unsafe </span>{ (<span class="kw-2">*</span><span class="self">self</span>).reuse_task_id(id) }
+    <span class="kw">fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Unused&lt;TaskId&gt;) {
+        (<span class="kw-2">*</span><span class="self">self</span>).reuse_task_id(id)
     }
 }
 
 <span class="kw">impl </span>TaskIdProvider <span class="kw">for </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>TaskIdProvider {
-    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {
+    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
         (<span class="kw-2">*</span><span class="self">self</span>).get_fresh_task_id()
     }
 
-    <span class="kw">unsafe fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: TaskId) {
-        <span class="kw">unsafe </span>{ (<span class="kw-2">*</span><span class="self">self</span>).reuse_task_id(id) }
+    <span class="kw">fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Unused&lt;TaskId&gt;) {
+        (<span class="kw-2">*</span><span class="self">self</span>).reuse_task_id(id)
     }
 }
 
@@ -1735,18 +1767,16 @@
                     <span class="kw">if </span>this.stopped.load(Ordering::Acquire) {
                         <span class="kw">return </span><span class="bool-val">false</span>;
                     }
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(execution) = this.backend.try_start_task_execution(task_id, <span class="kw-2">&amp;*</span>this)
-                    {
-                        <span class="comment">// Setup thread locals
-                        </span><span class="kw">let </span>(result, duration, instant) = CELL_COUNTERS
-                            .scope(Default::default(), <span class="kw">async </span>{
-                                <span class="kw">let </span>(result, duration, instant) = TimedFuture::new(
-                                    AssertUnwindSafe(execution.future).catch_unwind(),
-                                )
-                                .<span class="kw">await</span>;
-                                (result, duration, instant)
-                            })
-                            .<span class="kw">await</span>;
+
+                    <span class="comment">// Setup thread locals
+                    </span><span class="kw">let </span>execution_future = CELL_COUNTERS.scope(Default::default(), <span class="kw">async </span>{
+                        <span class="kw">let </span>execution = this.backend.try_start_task_execution(task_id, <span class="kw-2">&amp;*</span>this)<span class="question-mark">?</span>;
+                        <span class="prelude-val">Some</span>(
+                            TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
+                                .<span class="kw">await</span>,
+                        )
+                    });
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((result, duration, instant)) = execution_future.<span class="kw">await </span>{
                         <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;log_function_stats&quot;</span>) &amp;&amp; duration.as_millis() &gt; <span class="number">1000 </span>{
                             <span class="macro">println!</span>(
                                 <span class="string">&quot;{} took {}&quot;</span>,
@@ -2146,12 +2176,8 @@
             .try_read_own_task_cell_untracked(current_task, index, <span class="self">self</span>)
     }
 
-    <span class="kw">fn </span>try_read_task_collectibles(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
-        <span class="self">self</span>.backend.try_read_task_collectibles(
+    <span class="kw">fn </span>read_task_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, trait_id: TraitTypeId) -&gt; RawVcSetVc {
+        <span class="self">self</span>.backend.read_task_collectibles(
             task,
             trait_id,
             current_task(<span class="string">&quot;reading collectibles&quot;</span>),
@@ -2310,12 +2336,13 @@
 }
 
 <span class="kw">impl</span>&lt;B: Backend&gt; TaskIdProvider <span class="kw">for </span>TurboTasks&lt;B&gt; {
-    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {
-        <span class="self">self</span>.task_id_factory.get()
+    <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
+        <span class="comment">// Safety: This is a fresh id from the factory
+        </span><span class="kw">unsafe </span>{ Unused::new_unchecked(<span class="self">self</span>.task_id_factory.get()) }
     }
 
-    <span class="kw">unsafe fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: TaskId) {
-        <span class="kw">unsafe </span>{ <span class="self">self</span>.task_id_factory.reuse(id) }
+    <span class="kw">fn </span>reuse_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>, id: Unused&lt;TaskId&gt;) {
+        <span class="kw">unsafe </span>{ <span class="self">self</span>.task_id_factory.reuse(id.into()) }
     }
 }
 
@@ -2564,19 +2591,6 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
     <span class="kw">loop </span>{
         <span class="kw">match </span>this.try_read_task_cell_untracked(id, index)<span class="question-mark">? </span>{
-            <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(result),
-            <span class="prelude-val">Err</span>(listener) =&gt; listener.<span class="kw">await</span>,
-        }
-    }
-}
-
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>read_task_collectibles(
-    this: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksApi,
-    id: TaskId,
-    trait_id: TraitTypeId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;&gt; {
-    <span class="kw">loop </span>{
-        <span class="kw">match </span>this.try_read_task_collectibles(id, trait_id)<span class="question-mark">? </span>{
             <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(result),
             <span class="prelude-val">Err</span>(listener) =&gt; listener.<span class="kw">await</span>,
         }

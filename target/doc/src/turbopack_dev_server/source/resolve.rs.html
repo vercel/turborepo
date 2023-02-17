@@ -244,7 +244,7 @@
                         <span class="kw">let </span>new_asset_path =
                             urlencoding::decode(<span class="kw-2">&amp;</span>new_uri.path()[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
 
-                        current_source = new_source;
+                        current_source = new_source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                         request_overwrites.uri = new_uri;
                         current_asset_path = new_asset_path;
                         data = ContentSourceData::default();

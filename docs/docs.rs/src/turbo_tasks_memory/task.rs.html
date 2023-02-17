@@ -2557,6 +2557,139 @@
 <span id="2557">2557</span>
 <span id="2558">2558</span>
 <span id="2559">2559</span>
+<span id="2560">2560</span>
+<span id="2561">2561</span>
+<span id="2562">2562</span>
+<span id="2563">2563</span>
+<span id="2564">2564</span>
+<span id="2565">2565</span>
+<span id="2566">2566</span>
+<span id="2567">2567</span>
+<span id="2568">2568</span>
+<span id="2569">2569</span>
+<span id="2570">2570</span>
+<span id="2571">2571</span>
+<span id="2572">2572</span>
+<span id="2573">2573</span>
+<span id="2574">2574</span>
+<span id="2575">2575</span>
+<span id="2576">2576</span>
+<span id="2577">2577</span>
+<span id="2578">2578</span>
+<span id="2579">2579</span>
+<span id="2580">2580</span>
+<span id="2581">2581</span>
+<span id="2582">2582</span>
+<span id="2583">2583</span>
+<span id="2584">2584</span>
+<span id="2585">2585</span>
+<span id="2586">2586</span>
+<span id="2587">2587</span>
+<span id="2588">2588</span>
+<span id="2589">2589</span>
+<span id="2590">2590</span>
+<span id="2591">2591</span>
+<span id="2592">2592</span>
+<span id="2593">2593</span>
+<span id="2594">2594</span>
+<span id="2595">2595</span>
+<span id="2596">2596</span>
+<span id="2597">2597</span>
+<span id="2598">2598</span>
+<span id="2599">2599</span>
+<span id="2600">2600</span>
+<span id="2601">2601</span>
+<span id="2602">2602</span>
+<span id="2603">2603</span>
+<span id="2604">2604</span>
+<span id="2605">2605</span>
+<span id="2606">2606</span>
+<span id="2607">2607</span>
+<span id="2608">2608</span>
+<span id="2609">2609</span>
+<span id="2610">2610</span>
+<span id="2611">2611</span>
+<span id="2612">2612</span>
+<span id="2613">2613</span>
+<span id="2614">2614</span>
+<span id="2615">2615</span>
+<span id="2616">2616</span>
+<span id="2617">2617</span>
+<span id="2618">2618</span>
+<span id="2619">2619</span>
+<span id="2620">2620</span>
+<span id="2621">2621</span>
+<span id="2622">2622</span>
+<span id="2623">2623</span>
+<span id="2624">2624</span>
+<span id="2625">2625</span>
+<span id="2626">2626</span>
+<span id="2627">2627</span>
+<span id="2628">2628</span>
+<span id="2629">2629</span>
+<span id="2630">2630</span>
+<span id="2631">2631</span>
+<span id="2632">2632</span>
+<span id="2633">2633</span>
+<span id="2634">2634</span>
+<span id="2635">2635</span>
+<span id="2636">2636</span>
+<span id="2637">2637</span>
+<span id="2638">2638</span>
+<span id="2639">2639</span>
+<span id="2640">2640</span>
+<span id="2641">2641</span>
+<span id="2642">2642</span>
+<span id="2643">2643</span>
+<span id="2644">2644</span>
+<span id="2645">2645</span>
+<span id="2646">2646</span>
+<span id="2647">2647</span>
+<span id="2648">2648</span>
+<span id="2649">2649</span>
+<span id="2650">2650</span>
+<span id="2651">2651</span>
+<span id="2652">2652</span>
+<span id="2653">2653</span>
+<span id="2654">2654</span>
+<span id="2655">2655</span>
+<span id="2656">2656</span>
+<span id="2657">2657</span>
+<span id="2658">2658</span>
+<span id="2659">2659</span>
+<span id="2660">2660</span>
+<span id="2661">2661</span>
+<span id="2662">2662</span>
+<span id="2663">2663</span>
+<span id="2664">2664</span>
+<span id="2665">2665</span>
+<span id="2666">2666</span>
+<span id="2667">2667</span>
+<span id="2668">2668</span>
+<span id="2669">2669</span>
+<span id="2670">2670</span>
+<span id="2671">2671</span>
+<span id="2672">2672</span>
+<span id="2673">2673</span>
+<span id="2674">2674</span>
+<span id="2675">2675</span>
+<span id="2676">2676</span>
+<span id="2677">2677</span>
+<span id="2678">2678</span>
+<span id="2679">2679</span>
+<span id="2680">2680</span>
+<span id="2681">2681</span>
+<span id="2682">2682</span>
+<span id="2683">2683</span>
+<span id="2684">2684</span>
+<span id="2685">2685</span>
+<span id="2686">2686</span>
+<span id="2687">2687</span>
+<span id="2688">2688</span>
+<span id="2689">2689</span>
+<span id="2690">2690</span>
+<span id="2691">2691</span>
+<span id="2692">2692</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -2583,7 +2716,9 @@
 <span class="kw">use </span>turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    get_invalidator,
+    primitives::{RawVcSet, RawVcSetVc},
+    registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId, TryJoinIterExt,
     TurboTasksBackendApi, ValueTypeId,
 };
 
@@ -2639,8 +2774,31 @@
     /// applied.
     </span>Once(OnceTaskFn),
 
+    <span class="doccomment">/// A task that reads all collectibles of a certain trait from a
+    /// [TaskScope]. It will do that by recursively calling ReadCollectibles on
+    /// child scopes, so that results by scope are cached.
+    </span>ReadCollectibles(TaskScopeId, TraitTypeId),
+
     <span class="doccomment">/// A normal persistent task
     </span>Persistent(Arc&lt;PersistentTaskType&gt;),
+}
+
+<span class="kw">enum </span>TaskTypeForDescription {
+    Root,
+    Once,
+    ReadCollectibles(TraitTypeId),
+    Persistent(Arc&lt;PersistentTaskType&gt;),
+}
+
+<span class="kw">impl </span>TaskTypeForDescription {
+    <span class="kw">fn </span>from(task_type: <span class="kw-2">&amp;</span>TaskType) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>task_type {
+            TaskType::Root(..) =&gt; <span class="self">Self</span>::Root,
+            TaskType::Once(..) =&gt; <span class="self">Self</span>::Once,
+            TaskType::ReadCollectibles(.., trait_id) =&gt; <span class="self">Self</span>::ReadCollectibles(<span class="kw-2">*</span>trait_id),
+            TaskType::Persistent(ty) =&gt; <span class="self">Self</span>::Persistent(ty.clone()),
+        }
+    }
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>TaskType {
@@ -2648,6 +2806,11 @@
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Root(..) =&gt; f.debug_tuple(<span class="string">&quot;Root&quot;</span>).finish(),
             <span class="self">Self</span>::Once(..) =&gt; f.debug_tuple(<span class="string">&quot;Once&quot;</span>).finish(),
+            <span class="self">Self</span>::ReadCollectibles(scope_id, trait_id) =&gt; f
+                .debug_tuple(<span class="string">&quot;ReadCollectibles&quot;</span>)
+                .field(scope_id)
+                .field(<span class="kw-2">&amp;</span>registry::get_trait(<span class="kw-2">*</span>trait_id).name)
+                .finish(),
             <span class="self">Self</span>::Persistent(ty) =&gt; Debug::fmt(ty, f),
         }
     }
@@ -2658,6 +2821,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Root(..) =&gt; f.debug_tuple(<span class="string">&quot;Root&quot;</span>).finish(),
             <span class="self">Self</span>::Once(..) =&gt; f.debug_tuple(<span class="string">&quot;Once&quot;</span>).finish(),
+            <span class="self">Self</span>::ReadCollectibles(..) =&gt; f.debug_tuple(<span class="string">&quot;ReadCollectibles&quot;</span>).finish(),
             <span class="self">Self</span>::Persistent(ty) =&gt; Display::fmt(ty, f),
         }
     }
@@ -2946,6 +3110,23 @@
     FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
 };
 
+<span class="doccomment">/// Heuristic when a task should switch to root scoped.
+///
+/// The `optimization_counter` is a number how often a scope has been added to
+/// this task (and therefore to all child tasks as well). We can assume that all
+/// scopes might eventually be removed again. We assume that more scopes per
+/// task have higher cost, so we want to avoid that. We assume that adding and
+/// removing scopes again and again is not great. But having too many root
+/// scopes is also not great as it hurts strongly consistent reads and read
+/// collectibles.
+///
+/// The current implementation uses a heuristic that says that the cost is
+/// linear to the number of added scoped and linear to the number of children.
+</span><span class="kw">fn </span>should_optimize_to_root_scoped(optimization_counter: usize, children_count: usize) -&gt; bool {
+    <span class="kw">const </span>SCOPE_OPTIMIZATION_THRESHOLD: usize = <span class="number">255</span>;
+    optimization_counter * children_count &gt; SCOPE_OPTIMIZATION_THRESHOLD
+}
+
 <span class="kw">impl </span>Task {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_persistent(
         id: TaskId,
@@ -3002,9 +3183,28 @@
         }
     }
 
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_read_collectibles(
+        id: TaskId,
+        target_scope: TaskScopeId,
+        trait_type_id: TraitTypeId,
+        stats_type: StatsType,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>ty = TaskType::ReadCollectibles(target_scope, trait_type_id);
+        <span class="kw">let </span>description = <span class="self">Self</span>::get_event_description_static(id, <span class="kw-2">&amp;</span>ty);
+        <span class="self">Self </span>{
+            id,
+            ty,
+            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new(
+                description,
+                stats_type,
+            ))),
+        }
+    }
+
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_pure(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Persistent(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            TaskType::ReadCollectibles(..) =&gt; <span class="bool-val">true</span>,
             TaskType::Root(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
             TaskType::Once(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
         }
@@ -3024,37 +3224,19 @@
     </span>}
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
-            TaskType::Root(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] root&quot;</span>, <span class="self">self</span>.id),
-            TaskType::Once(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] once&quot;</span>, <span class="self">self</span>.id),
-            TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
-                PersistentTaskType::Native(native_fn, <span class="kw">_</span>) =&gt; {
-                    <span class="macro">format!</span>(<span class="string">&quot;[{}] {}&quot;</span>, <span class="self">self</span>.id, registry::get_function(<span class="kw-2">*</span>native_fn).name)
-                }
-                PersistentTaskType::ResolveNative(native_fn, <span class="kw">_</span>) =&gt; {
-                    <span class="macro">format!</span>(
-                        <span class="string">&quot;[{}] [resolve] {}&quot;</span>,
-                        <span class="self">self</span>.id,
-                        registry::get_function(<span class="kw-2">*</span>native_fn).name
-                    )
-                }
-                PersistentTaskType::ResolveTrait(trait_type, fn_name, <span class="kw">_</span>) =&gt; {
-                    <span class="macro">format!</span>(
-                        <span class="string">&quot;[{}] [resolve trait] {} in trait {}&quot;</span>,
-                        <span class="self">self</span>.id,
-                        fn_name,
-                        registry::get_trait(<span class="kw-2">*</span>trait_type).name
-                    )
-                }
-            },
-        }
+        <span class="self">Self</span>::format_description(<span class="kw-2">&amp;</span>TaskTypeForDescription::from(<span class="kw-2">&amp;</span><span class="self">self</span>.ty), <span class="self">self</span>.id)
     }
 
-    <span class="kw">fn </span>format_description(ty: <span class="kw-2">&amp;</span>TaskType, id: TaskId) -&gt; String {
+    <span class="kw">fn </span>format_description(ty: <span class="kw-2">&amp;</span>TaskTypeForDescription, id: TaskId) -&gt; String {
         <span class="kw">match </span>ty {
-            TaskType::Root(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] root&quot;</span>, id),
-            TaskType::Once(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] once&quot;</span>, id),
-            TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+            TaskTypeForDescription::Root =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] root&quot;</span>, id),
+            TaskTypeForDescription::Once =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] once&quot;</span>, id),
+            TaskTypeForDescription::ReadCollectibles(trait_type_id) =&gt; <span class="macro">format!</span>(
+                <span class="string">&quot;[{}] read collectibles({})&quot;</span>,
+                id,
+                registry::get_trait(<span class="kw-2">*</span>trait_type_id).name
+            ),
+            TaskTypeForDescription::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
                 PersistentTaskType::Native(native_fn, <span class="kw">_</span>) =&gt; {
                     <span class="macro">format!</span>(<span class="string">&quot;[{}] {}&quot;</span>, id, registry::get_function(<span class="kw-2">*</span>native_fn).name)
                 }
@@ -3081,8 +3263,8 @@
         id: TaskId,
         ty: <span class="kw-2">&amp;</span>TaskType,
     ) -&gt; <span class="kw">impl </span>Fn() -&gt; String + Send + Sync {
-        <span class="kw">let </span>ty = <span class="self">Self</span>::format_description(ty, id);
-        <span class="kw">move </span>|| ty.clone()
+        <span class="kw">let </span>ty = TaskTypeForDescription::from(ty);
+        <span class="kw">move </span>|| <span class="self">Self</span>::format_description(<span class="kw-2">&amp;</span>ty, id)
     }
 
     <span class="kw">fn </span>get_event_description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Fn() -&gt; String + Send + Sync {
@@ -3176,7 +3358,7 @@
         <span class="kw">if </span>!<span class="self">self</span>.try_start_execution(<span class="kw-2">&amp;mut </span>state, turbo_tasks, backend) {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
-        <span class="kw">let </span>future = <span class="self">self</span>.make_execution_future(<span class="kw-2">&amp;mut </span>state, turbo_tasks);
+        <span class="kw">let </span>future = <span class="self">self</span>.make_execution_future(state, backend, turbo_tasks);
         <span class="prelude-val">Some</span>(TaskExecutionSpec { future })
     }
 
@@ -3231,24 +3413,44 @@
     <span class="doccomment">/// Prepares task execution and returns a future that will execute the task.
     </span><span class="kw">fn </span>make_execution_future(
         <span class="self">self</span>: <span class="kw-2">&amp;</span>Task,
-        <span class="kw-2">mut </span>state: <span class="kw-2">&amp;mut </span>TaskState,
+        <span class="kw-2">mut </span>state: FullTaskWriteGuard&lt;<span class="lifetime">&#39;_</span>&gt;,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
-            TaskType::Root(bound_fn) =&gt; bound_fn(),
-            TaskType::Once(mutex) =&gt; mutex.lock().take().expect(<span class="string">&quot;Task can only be executed once&quot;</span>),
+            TaskType::Root(bound_fn) =&gt; {
+                drop(state);
+                bound_fn()
+            }
+            TaskType::Once(mutex) =&gt; {
+                drop(state);
+                mutex.lock().take().expect(<span class="string">&quot;Task can only be executed once&quot;</span>)
+            }
+            <span class="kw-2">&amp;</span>TaskType::ReadCollectibles(scope_id, trait_type_id) =&gt; {
+                drop(state);
+                Task::make_read_collectibles_execution_future(
+                    <span class="self">self</span>.id,
+                    scope_id,
+                    trait_type_id,
+                    backend,
+                    turbo_tasks,
+                )
+            }
             TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
                 PersistentTaskType::Native(native_fn, inputs) =&gt; {
-                    <span class="kw">if let </span>PrepareTaskType::Native(bound_fn) = <span class="kw-2">&amp;</span>state.prepared_type {
+                    <span class="kw">let </span>future = <span class="kw">if let </span>PrepareTaskType::Native(bound_fn) = <span class="kw-2">&amp;</span>state.prepared_type {
                         bound_fn()
                     } <span class="kw">else </span>{
                         <span class="kw">let </span>bound_fn = registry::get_function(<span class="kw-2">*</span>native_fn).bind(inputs);
                         <span class="kw">let </span>future = bound_fn();
                         state.prepared_type = PrepareTaskType::Native(bound_fn);
                         future
-                    }
+                    };
+                    drop(state);
+                    future
                 }
                 PersistentTaskType::ResolveNative(<span class="kw-2">ref </span>native_fn, inputs) =&gt; {
+                    drop(state);
                     <span class="kw">let </span>native_fn = <span class="kw-2">*</span>native_fn;
                     <span class="kw">let </span>inputs = inputs.clone();
                     <span class="kw">let </span>turbo_tasks = turbo_tasks.pin();
@@ -3259,6 +3461,7 @@
                     ))
                 }
                 PersistentTaskType::ResolveTrait(trait_type, name, inputs) =&gt; {
+                    drop(state);
                     <span class="kw">let </span>trait_type = <span class="kw-2">*</span>trait_type;
                     <span class="kw">let </span>name = name.clone();
                     <span class="kw">let </span>inputs = inputs.clone();
@@ -3533,11 +3736,10 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>add_to_scope_internal_shallow(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: TaskScopeId,
-        is_optimization_scope: bool,
-        depth: usize,
+        merging_scopes: usize,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-        queue: <span class="kw-2">&amp;mut </span>VecDeque&lt;(TaskId, usize)&gt;,
+        queue: <span class="kw-2">&amp;mut </span>VecDeque&lt;TaskId&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.full_state_mut();
         <span class="kw">let </span>TaskState {
@@ -3578,31 +3780,27 @@
                     </span><span class="kw">return</span>;
                 }
 
-                <span class="kw">if </span>depth &lt; usize::BITS <span class="kw">as </span>usize {
-                    <span class="kw">if </span>is_optimization_scope {
-                        <span class="kw-2">*</span>optimization_counter =
-                            optimization_counter.saturating_sub(children.len() &gt;&gt; depth)
-                    } <span class="kw">else </span>{
-                        <span class="kw-2">*</span>optimization_counter += children.len() &gt;&gt; depth;
-                        <span class="kw">if </span><span class="kw-2">*</span>optimization_counter &gt;= <span class="number">0x10000 </span>{
-                            list.remove(id);
-                            drop(<span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks));
-                            <span class="kw">return </span><span class="self">self</span>.add_to_scope_internal_shallow(
-                                id,
-                                is_optimization_scope,
-                                depth,
-                                backend,
-                                turbo_tasks,
-                                queue,
-                            );
-                        }
+                <span class="kw-2">*</span>optimization_counter += <span class="number">1</span>;
+                <span class="kw">if </span>merging_scopes &gt; <span class="number">0 </span>{
+                    <span class="kw-2">*</span>optimization_counter = optimization_counter.saturating_sub(merging_scopes);
+                } <span class="kw">else </span>{
+                    <span class="kw">if </span>should_optimize_to_root_scoped(<span class="kw-2">*</span>optimization_counter, children.len()) {
+                        list.remove(id);
+                        drop(<span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks));
+                        <span class="kw">return </span><span class="self">self</span>.add_to_scope_internal_shallow(
+                            id,
+                            merging_scopes,
+                            backend,
+                            turbo_tasks,
+                            queue,
+                        );
                     }
                 }
 
                 <span class="kw">if </span>queue.capacity() == <span class="number">0 </span>{
                     queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * <span class="number">2</span>));
                 }
-                queue.extend(children.iter().copied().map(|child| (child, depth + <span class="number">1</span>)));
+                queue.extend(children.iter().copied());
 
                 <span class="comment">// add to dirty list of the scope (potentially schedule)
                 </span><span class="kw">let </span>schedule_self =
@@ -3619,22 +3817,15 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>add_to_scope_internal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: TaskScopeId,
-        is_optimization_scope: bool,
+        merging_scopes: usize,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
         <span class="comment">// VecDeque::new() would allocate with 7 items capacity. We don&#39;t want that.
         </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">0</span>);
-        <span class="self">self</span>.add_to_scope_internal_shallow(
-            id,
-            is_optimization_scope,
-            <span class="number">0</span>,
-            backend,
-            turbo_tasks,
-            <span class="kw-2">&amp;mut </span>queue,
-        );
+        <span class="self">self</span>.add_to_scope_internal_shallow(id, merging_scopes, backend, turbo_tasks, <span class="kw-2">&amp;mut </span>queue);
 
-        run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
+        run_add_to_scope_queue(queue, id, merging_scopes, backend, turbo_tasks);
     }
 
     <span class="kw">fn </span>add_self_to_new_scope(
@@ -3891,7 +4082,7 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>remove_root_or_initial_scope(
+    <span class="kw">fn </span>remove_root_or_initial_scope(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
@@ -3925,6 +4116,15 @@
                 }
             }
         }
+    }
+
+    <span class="kw">pub fn </span>make_root_scoped(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+    ) {
+        <span class="kw">let </span>state = <span class="self">self</span>.full_state_mut();
+        <span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks);
     }
 
     <span class="kw">fn </span>make_root_scoped_internal&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -4027,9 +4227,11 @@
             </span><span class="kw">let </span>schedule_self =
                 <span class="self">self</span>.add_self_to_new_scope(<span class="kw-2">&amp;mut </span>state, root_scope, backend, turbo_tasks);
 
+            <span class="kw">let </span><span class="kw-2">mut </span>merging_scopes = Vec::with_capacity(scopes.len());
             <span class="comment">// remove self from old scopes
             </span><span class="kw">for </span>(scope, count) <span class="kw">in </span>scopes.iter() {
                 <span class="kw">if </span><span class="kw-2">*</span>count &gt; <span class="number">0 </span>{
+                    merging_scopes.push(<span class="kw-2">*</span>scope);
                     <span class="self">self</span>.remove_self_from_scope_full(<span class="kw-2">&amp;mut </span>state, <span class="kw-2">*</span>scope, backend, turbo_tasks);
                 }
             }
@@ -4042,7 +4244,12 @@
                 <span class="comment">// Add children to new root scope
                 </span><span class="kw">for </span>child <span class="kw">in </span>children.iter() {
                     backend.with_task(<span class="kw-2">*</span>child, |child| {
-                        child.add_to_scope_internal(root_scope, <span class="bool-val">true</span>, backend, turbo_tasks);
+                        child.add_to_scope_internal(
+                            root_scope,
+                            merging_scopes.len(),
+                            backend,
+                            turbo_tasks,
+                        );
                     })
                 }
 
@@ -4054,9 +4261,20 @@
                 }
 
                 <span class="comment">// Remove children from old scopes
-                </span>turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                    Job::RemoveFromScopes(children, scopes.into_iter().map(|(id, <span class="kw">_</span>)| id).collect()),
-                ));
+                </span><span class="attr">#[cfg(feature = <span class="string">&quot;inline_remove_from_scope&quot;</span>)]
+                </span><span class="kw">for </span>task <span class="kw">in </span>children {
+                    backend.with_task(task, |task| {
+                        task.remove_from_scopes(
+                            merging_scopes.iter().copied(),
+                            backend,
+                            turbo_tasks,
+                        )
+                    });
+                }
+                <span class="attr">#[cfg(not(feature = <span class="string">&quot;inline_remove_from_scope&quot;</span>))]
+                </span>turbo_tasks.schedule_backend_foreground_job(
+                    backend.create_backend_job(Job::RemoveFromScopes(children, merging_scopes)),
+                );
                 <span class="prelude-val">None
             </span>} <span class="kw">else </span>{
                 <span class="prelude-val">Some</span>(state)
@@ -4225,6 +4443,9 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Root(<span class="kw">_</span>) =&gt; StatsTaskType::Root(<span class="self">self</span>.id),
             TaskType::Once(<span class="kw">_</span>) =&gt; StatsTaskType::Once(<span class="self">self</span>.id),
+            TaskType::ReadCollectibles(<span class="kw">_</span>, trait_type_id) =&gt; {
+                StatsTaskType::ReadCollectibles(<span class="kw-2">*</span>trait_type_id)
+            }
             TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
                 PersistentTaskType::Native(f, <span class="kw">_</span>) =&gt; StatsTaskType::Native(<span class="kw-2">*</span>f),
                 PersistentTaskType::ResolveNative(f, <span class="kw">_</span>) =&gt; StatsTaskType::ResolveNative(<span class="kw-2">*</span>f),
@@ -4311,6 +4532,13 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.full_state_mut();
         <span class="kw">if </span>state.children.insert(child_id) {
+            <span class="kw">if let </span>TaskScopes::Inner(<span class="kw">_</span>, optimization_counter) = <span class="kw-2">&amp;</span>state.scopes {
+                <span class="kw">if </span>should_optimize_to_root_scoped(<span class="kw-2">*</span>optimization_counter, state.children.len()) {
+                    state.children.remove(<span class="kw-2">&amp;</span>child_id);
+                    drop(<span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks));
+                    <span class="kw">return </span><span class="self">self</span>.connect_child(child_id, backend, turbo_tasks);
+                }
+            }
             <span class="kw">let </span>scopes = state.scopes.clone();
             drop(state);
 
@@ -4318,7 +4546,7 @@
                 <span class="kw">for </span>scope <span class="kw">in </span>scopes.iter() {
                     <span class="attr">#[cfg(not(feature = <span class="string">&quot;report_expensive&quot;</span>))]
                     </span>{
-                        child.add_to_scope_internal(scope, <span class="bool-val">false</span>, backend, turbo_tasks);
+                        child.add_to_scope_internal(scope, <span class="number">0</span>, backend, turbo_tasks);
                     }
                     <span class="attr">#[cfg(feature = <span class="string">&quot;report_expensive&quot;</span>)]
                     </span>{
@@ -4327,7 +4555,7 @@
                         <span class="kw">use </span>turbo_tasks::util::FormatDuration;
 
                         <span class="kw">let </span>start = Instant::now();
-                        child.add_to_scope_internal(scope, <span class="bool-val">false</span>, backend, turbo_tasks);
+                        child.add_to_scope_internal(scope, <span class="number">0</span>, backend, turbo_tasks);
                         <span class="kw">let </span>elapsed = start.elapsed();
                         <span class="kw">if </span>elapsed.as_millis() &gt;= <span class="number">10 </span>{
                             <span class="macro">println!</span>(
@@ -4439,29 +4667,62 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>try_read_task_collectibles(
+    <span class="kw">fn </span>make_read_collectibles_execution_future(
+        task_id: TaskId,
+        scope_id: TaskScopeId,
+        trait_type_id: TraitTypeId,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt; {
+        <span class="kw">let </span>(<span class="kw-2">mut </span>current, children) = backend.with_scope(scope_id, |scope| {
+            scope.read_collectibles_and_children(scope_id, trait_type_id, task_id)
+        });
+        <span class="macro">log_scope_update!</span>(<span class="string">&quot;reading collectibles from {scope_id}: {:?}&quot;</span>, current);
+        <span class="kw">let </span>children = children
+            .into_iter()
+            .map(|child| {
+                <span class="kw">let </span>task = backend.get_or_create_read_collectibles_task(
+                    child,
+                    trait_type_id,
+                    task_id,
+                    <span class="bool-val">false</span>,
+                    <span class="kw-2">&amp;*</span>turbo_tasks,
+                );
+                <span class="comment">// Safety: RawVcSet is a transparent value
+                </span><span class="kw">unsafe </span>{
+                    RawVc::TaskOutput(task).into_transparent_read::&lt;RawVcSet, AutoSet&lt;RawVc&gt;&gt;()
+                }
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        Box::pin(<span class="kw">async move </span>{
+            <span class="kw">let </span>children = children.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">for </span>child <span class="kw">in </span>children {
+                <span class="kw">for </span>v <span class="kw">in </span>child.iter() {
+                    current.add(<span class="kw-2">*</span>v);
+                }
+            }
+            <span class="prelude-val">Ok</span>(RawVcSetVc::cell(current.iter().copied().collect()).into())
+        })
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>read_task_collectibles(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         reader: TaskId,
         trait_id: TraitTypeId,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; RawVcSetVc {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.full_state_mut();
         state = <span class="self">self</span>.ensure_root_scoped(state, backend, turbo_tasks);
-        <span class="comment">// We need to wait for all foreground jobs to be finished as there could be
-        // ongoing add_to_scope jobs that need to be finished before reading
-        // from scopes
-        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(listener) = turbo_tasks.try_foreground_done() {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener));
-        }
         <span class="kw">if let </span>TaskScopes::Root(scope_id) = state.scopes {
-            backend.with_scope(scope_id, |scope| {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(l) = scope.has_unfinished_tasks() {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(l));
-                }
-                <span class="kw">let </span>set = scope.read_collectibles(scope_id, trait_id, reader, backend);
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(set))
-            })
+            <span class="kw">let </span>task = backend.get_or_create_read_collectibles_task(
+                scope_id,
+                trait_id,
+                reader,
+                <span class="bool-val">true</span>,
+                turbo_tasks,
+            );
+            RawVc::TaskOutput(task).into()
         } <span class="kw">else </span>{
             <span class="macro">panic!</span>(<span class="string">&quot;It&#39;s not possible to read collectibles from a non-root scope&quot;</span>)
         }
@@ -5031,27 +5292,31 @@
 
 <span class="doccomment">/// Adds a list of tasks and their children to a scope, recursively.
 </span><span class="kw">pub fn </span>run_add_to_scope_queue(
-    <span class="kw-2">mut </span>queue: VecDeque&lt;(TaskId, usize)&gt;,
+    <span class="kw-2">mut </span>queue: VecDeque&lt;TaskId&gt;,
     id: TaskScopeId,
-    is_optimization_scope: bool,
+    merging_scopes: usize,
     backend: <span class="kw-2">&amp;</span>MemoryBackend,
     turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
 ) {
-    <span class="kw">while let </span><span class="prelude-val">Some</span>((child, depth)) = queue.pop_front() {
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(child) = queue.pop_front() {
         backend.with_task(child, |child| {
             child.add_to_scope_internal_shallow(
                 id,
-                is_optimization_scope,
-                depth,
+                merging_scopes,
                 backend,
                 turbo_tasks,
                 <span class="kw-2">&amp;mut </span>queue,
             );
         });
-        <span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;inline_add_to_scope&quot;</span>))]
+        </span><span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
             <span class="kw">let </span>split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
             turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                Job::AddToScopeQueue(split_off_queue, id, is_optimization_scope),
+                Job::AddToScopeQueue {
+                    queue: split_off_queue,
+                    scope: id,
+                    merging_scopes,
+                },
             ));
         }
     }
@@ -5068,7 +5333,8 @@
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, <span class="kw-2">&amp;mut </span>queue);
         });
-        <span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;inline_remove_from_scope&quot;</span>))]
+        </span><span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
             <span class="kw">let </span>split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
 
             turbo_tasks.schedule_backend_foreground_job(

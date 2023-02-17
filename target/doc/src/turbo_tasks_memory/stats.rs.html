@@ -344,6 +344,13 @@
 <span id="344">344</span>
 <span id="345">345</span>
 <span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::{<span class="self">self</span>, max},
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -369,6 +376,7 @@
 </span><span class="kw">pub enum </span>StatsTaskType {
     Root(TaskId),
     Once(TaskId),
+    ReadCollectibles(TraitTypeId),
     Native(FunctionId),
     ResolveNative(FunctionId),
     ResolveTrait(TraitTypeId, String),
@@ -379,6 +387,9 @@
         <span class="kw">match </span><span class="self">self </span>{
             StatsTaskType::Root(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;root&quot;</span>),
             StatsTaskType::Once(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;once&quot;</span>),
+            StatsTaskType::ReadCollectibles(t) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;read collectibles {}&quot;</span>, registry::get_trait(<span class="kw-2">*</span>t).name)
+            }
             StatsTaskType::Native(nf) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, registry::get_function(<span class="kw-2">*</span>nf).name),
             StatsTaskType::ResolveNative(nf) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;resolve {}&quot;</span>, registry::get_function(<span class="kw-2">*</span>nf).name)
@@ -530,7 +541,10 @@
 
     <span class="kw">pub fn </span>merge_resolve(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.merge(|ty, _stats| <span class="kw">match </span>ty {
-            StatsTaskType::Root(<span class="kw">_</span>) | StatsTaskType::Once(<span class="kw">_</span>) | StatsTaskType::Native(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            StatsTaskType::Root(<span class="kw">_</span>)
+            | StatsTaskType::Once(<span class="kw">_</span>)
+            | StatsTaskType::Native(<span class="kw">_</span>)
+            | StatsTaskType::ReadCollectibles(..) =&gt; <span class="bool-val">false</span>,
             StatsTaskType::ResolveNative(<span class="kw">_</span>) | StatsTaskType::ResolveTrait(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
         })
     }

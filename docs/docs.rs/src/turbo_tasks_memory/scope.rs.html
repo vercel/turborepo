@@ -681,35 +681,7 @@
 <span id="681">681</span>
 <span id="682">682</span>
 <span id="683">683</span>
-<span id="684">684</span>
-<span id="685">685</span>
-<span id="686">686</span>
-<span id="687">687</span>
-<span id="688">688</span>
-<span id="689">689</span>
-<span id="690">690</span>
-<span id="691">691</span>
-<span id="692">692</span>
-<span id="693">693</span>
-<span id="694">694</span>
-<span id="695">695</span>
-<span id="696">696</span>
-<span id="697">697</span>
-<span id="698">698</span>
-<span id="699">699</span>
-<span id="700">700</span>
-<span id="701">701</span>
-<span id="702">702</span>
-<span id="703">703</span>
-<span id="704">704</span>
-<span id="705">705</span>
-<span id="706">706</span>
-<span id="707">707</span>
-<span id="708">708</span>
-<span id="709">709</span>
-<span id="710">710</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
     mem::take,
@@ -883,7 +855,7 @@
                 children: CountHashSet::new(),
                 collectibles: AutoMap::new(),
                 dependent_tasks: AutoSet::new(),
-                event: Event::new(|| {
+                event: Event::new(<span class="kw">move </span>|| {
                     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                     </span><span class="kw">return </span><span class="macro">format!</span>(<span class="string">&quot;TaskScope({id})::event&quot;</span>);
                     <span class="attr">#[cfg(not(feature = <span class="string">&quot;print_scope_updates&quot;</span>))]
@@ -910,7 +882,7 @@
                 children: CountHashSet::new(),
                 collectibles: AutoMap::new(),
                 dependent_tasks: AutoSet::new(),
-                event: Event::new(|| {
+                event: Event::new(<span class="kw">move </span>|| {
                     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                     </span><span class="kw">return </span><span class="macro">format!</span>(<span class="string">&quot;TaskScope({id})::event&quot;</span>);
                     <span class="attr">#[cfg(not(feature = <span class="string">&quot;print_scope_updates&quot;</span>))]
@@ -1035,38 +1007,18 @@
         </span>}
     }
 
-    <span class="kw">pub fn </span>read_collectibles(
+    <span class="kw">pub fn </span>read_collectibles_and_children(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         self_id: TaskScopeId,
         trait_id: TraitTypeId,
         reader: TaskId,
-        backend: <span class="kw-2">&amp;</span>MemoryBackend,
-    ) -&gt; AutoSet&lt;RawVc&gt; {
-        <span class="kw">let </span>collectibles = <span class="self">self</span>.read_collectibles_recursive(
-            self_id,
-            trait_id,
-            reader,
-            backend,
-            <span class="kw-2">&amp;mut </span>HashMap::with_hasher(BuildNoHashHasher::default()),
-        );
-        AutoSet::from_iter(collectibles.iter().copied())
-    }
-
-    <span class="kw">fn </span>read_collectibles_recursive(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        self_id: TaskScopeId,
-        trait_id: TraitTypeId,
-        reader: TaskId,
-        backend: <span class="kw-2">&amp;</span>MemoryBackend,
-        cache: <span class="kw-2">&amp;mut </span>HashMap&lt;TaskScopeId, CountHashSet&lt;RawVc&gt;, BuildNoHashHasher&lt;TaskScopeId&gt;&gt;,
-    ) -&gt; CountHashSet&lt;RawVc&gt; {
-        <span class="comment">// TODO add reverse edges from task to scopes and (scope, trait_id)
-        </span><span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock();
+    ) -&gt; (CountHashSet&lt;RawVc&gt;, Vec&lt;TaskScopeId&gt;) {
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock();
         <span class="kw">let </span>children = state.children.iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         state.dependent_tasks.insert(reader);
         Task::add_dependency_to_current(TaskDependency::ScopeChildren(self_id));
 
-        <span class="kw">let </span><span class="kw-2">mut </span>current = {
+        <span class="kw">let </span>current = {
             <span class="kw">let </span>(c, dependent_tasks) = state.collectibles.entry(trait_id).or_default();
             dependent_tasks.insert(reader);
             Task::add_dependency_to_current(TaskDependency::ScopeCollectibles(self_id, trait_id));
@@ -1074,22 +1026,7 @@
         };
         drop(state);
 
-        <span class="kw">for </span>id <span class="kw">in </span>children {
-            backend.with_scope(id, |scope| {
-                <span class="kw">let </span>child = <span class="kw">if let </span><span class="prelude-val">Some</span>(cached) = cache.get(<span class="kw-2">&amp;</span>id) {
-                    cached
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>child =
-                        scope.read_collectibles_recursive(id, trait_id, reader, backend, cache);
-                    cache.entry(id).or_insert(child)
-                };
-                <span class="kw">for </span>v <span class="kw">in </span>child.iter() {
-                    current.add(<span class="kw-2">*</span>v);
-                }
-            })
-        }
-
-        current
+        (current, children)
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>remove_dependent_task(<span class="kw-2">&amp;</span><span class="self">self</span>, reader: TaskId) {
@@ -1391,12 +1328,21 @@
         <span class="kw">match </span><span class="self">self</span>.collectibles.entry(trait_id) {
             Entry::Occupied(<span class="kw-2">mut </span>entry) =&gt; {
                 <span class="kw">let </span>(collectibles, dependent_tasks) = entry.get_mut();
-                <span class="kw">if </span>collectibles.remove_count(collectible, count) {
+                <span class="kw">let </span>old_value = collectibles.get(<span class="kw-2">&amp;</span>collectible);
+                <span class="kw">let </span>new_value = old_value - count <span class="kw">as </span>isize;
+                <span class="comment">// NOTE: The read_collectibles need to be invalidated when negative count
+                // changes. Each negative count will eliminate one child scope emitted
+                // collectible. So changing from -1 to -2 might affect the visible collectibles.
+                </span><span class="kw">if </span>collectibles.remove_count(collectible, count) || new_value &lt; <span class="number">0 </span>{
                     <span class="kw">let </span>notify = take(dependent_tasks);
                     <span class="kw">if </span>collectibles.is_unset() {
                         entry.remove();
                     }
-                    <span class="macro">log_scope_update!</span>(<span class="string">&quot;remove_collectible {} -&gt; {}&quot;</span>, <span class="kw-2">*</span><span class="self">self</span>.id, collectible);
+                    <span class="macro">log_scope_update!</span>(
+                        <span class="string">&quot;remove_collectible {} -&gt; {} ({old_value} -&gt; {new_value})&quot;</span>,
+                        <span class="kw-2">*</span><span class="self">self</span>.id,
+                        collectible
+                    );
                     <span class="prelude-val">Some</span>(ScopeCollectibleChangeEffect { notify })
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None

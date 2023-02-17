@@ -230,6 +230,10 @@
 <span id="230">230</span>
 <span id="231">231</span>
 <span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem;
 
 <span class="kw">use </span>anyhow::Result;
@@ -334,8 +338,12 @@
             // we&#39;ve skipped to exactly the source which requested data. Requery the source
             // with it&#39;s partially computed path and needed data.
             </span><span class="kw">let </span>result = <span class="kw">match </span>pending.take() {
-                <span class="prelude-val">Some</span>(pending) =&gt; pending.source.get(<span class="kw-2">&amp;</span>pending.path, mem::take(<span class="kw-2">&amp;mut </span>data)),
-                <span class="prelude-val">None </span>=&gt; source.get(path, Default::default()),
+                <span class="prelude-val">Some</span>(pending) =&gt; pending
+                    .source
+                    .resolve()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.get(<span class="kw-2">&amp;</span>pending.path, mem::take(<span class="kw-2">&amp;mut </span>data)),
+                <span class="prelude-val">None </span>=&gt; source.resolve().<span class="kw">await</span><span class="question-mark">?</span>.get(path, Default::default()),
             };
 
             <span class="kw">let </span>res = result.<span class="kw">await</span><span class="question-mark">?</span>;

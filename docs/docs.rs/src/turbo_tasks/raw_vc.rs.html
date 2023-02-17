@@ -524,20 +524,10 @@
 <span id="524">524</span>
 <span id="525">525</span>
 <span id="526">526</span>
-<span id="527">527</span>
-<span id="528">528</span>
-<span id="529">529</span>
-<span id="530">530</span>
-<span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
-<span id="536">536</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     fmt::{Debug, Display},
-    future::{Future, IntoFuture},
+    future::Future,
     hash::Hash,
     marker::PhantomData,
     pin::Pin,
@@ -871,15 +861,10 @@
     <span class="kw">fn </span>peek_collectibles&lt;T: ValueTraitVc&gt;(<span class="self">self</span>) -&gt; CollectiblesFuture&lt;T&gt; {
         <span class="kw">let </span>tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        <span class="kw">let </span>set: RawVcSetVc = tt
-            .native_call(
-                <span class="kw-2">*</span><span class="kw">crate</span>::collectibles::READ_COLLECTIBLES_FUNCTION_ID,
-                <span class="macro">vec!</span>[<span class="self">self</span>.into(), (<span class="kw-2">*</span>T::get_trait_type_id()).into()],
-            )
-            .into();
+        <span class="kw">let </span>set: RawVcSetVc = tt.read_task_collectibles(<span class="self">self</span>.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
-            inner: set.into_future(),
+            inner: set.strongly_consistent(),
             take: <span class="bool-val">false</span>,
             phantom: PhantomData,
         }
@@ -888,15 +873,10 @@
     <span class="kw">fn </span>take_collectibles&lt;T: ValueTraitVc&gt;(<span class="self">self</span>) -&gt; CollectiblesFuture&lt;T&gt; {
         <span class="kw">let </span>tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        <span class="kw">let </span>set: RawVcSetVc = tt
-            .native_call(
-                <span class="kw-2">*</span><span class="kw">crate</span>::collectibles::READ_COLLECTIBLES_FUNCTION_ID,
-                <span class="macro">vec!</span>[<span class="self">self</span>.into(), (<span class="kw-2">*</span>T::get_trait_type_id()).into()],
-            )
-            .into();
+        <span class="kw">let </span>set: RawVcSetVc = tt.read_task_collectibles(<span class="self">self</span>.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
-            inner: set.into_future(),
+            inner: set.strongly_consistent(),
             take: <span class="bool-val">true</span>,
             phantom: PhantomData,
         }

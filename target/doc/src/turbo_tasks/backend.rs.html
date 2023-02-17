@@ -400,7 +400,6 @@
 <span id="400">400</span>
 <span id="401">401</span>
 <span id="402">402</span>
-<span id="403">403</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -413,14 +412,13 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">pub use </span><span class="kw">crate</span>::id::BackendJobId;
 <span class="kw">use crate</span>::{
-    event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
-    task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider, TaskInput,
-    TraitTypeId,
+    event::EventListener, manager::TurboTasksBackendApi, primitives::RawVcSetVc, raw_vc::CellId,
+    registry, task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider,
+    TaskInput, TraitTypeId,
 };
 
 <span class="doccomment">/// Different Task types
@@ -679,13 +677,13 @@
         }
     }
 
-    <span class="kw">fn </span>try_read_task_collectibles(
+    <span class="kw">fn </span>read_task_collectibles(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt;;
+    ) -&gt; RawVcSetVc;
 
     <span class="kw">fn </span>emit_collectible(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

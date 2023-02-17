@@ -181,6 +181,11 @@
 <span id="181">181</span>
 <span id="182">182</span>
 <span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
@@ -288,6 +293,11 @@
     <span class="doccomment">/// Returns true when the value has become visible from outside
     </span><span class="kw">pub fn </span>add(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: T) -&gt; bool {
         <span class="self">self</span>.add_count(item, <span class="number">1</span>)
+    }
+
+    <span class="doccomment">/// Returns the current count of an item
+    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, item: <span class="kw-2">&amp;</span>T) -&gt; isize {
+        <span class="kw-2">*</span><span class="self">self</span>.inner.get(item).unwrap_or(<span class="kw-2">&amp;</span><span class="number">0</span>)
     }
 
     <span class="doccomment">/// Returns true when the value is no longer visible from outside

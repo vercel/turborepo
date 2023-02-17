@@ -77,6 +77,10 @@
 <span id="77">77</span>
 <span id="78">78</span>
 <span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
@@ -107,9 +111,13 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>RouterContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceResultVc {
+    </span><span class="kw">async fn </span>get(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span>str,
+        data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
         <span class="kw">let </span>(source, path) = <span class="self">self</span>.get_source(path);
-        source.get(path, data)
+        <span class="prelude-val">Ok</span>(source.resolve().<span class="kw">await</span><span class="question-mark">?</span>.get(path, data))
     }
 
     <span class="attr">#[turbo_tasks::function]

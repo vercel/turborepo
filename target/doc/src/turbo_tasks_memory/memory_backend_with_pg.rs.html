@@ -1843,6 +1843,13 @@
 <span id="1843">1843</span>
 <span id="1844">1844</span>
 <span id="1845">1845</span>
+<span id="1846">1846</span>
+<span id="1847">1847</span>
+<span id="1848">1848</span>
+<span id="1849">1849</span>
+<span id="1850">1850</span>
+<span id="1851">1851</span>
+<span id="1852">1852</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -1871,8 +1878,9 @@
         ActivateResult, DeactivateResult, PersistResult, PersistTaskState, PersistedGraph,
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
     },
+    primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec, SharedError},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
 <span class="kw">type </span>RootTaskFn =
@@ -3240,13 +3248,13 @@
         }
     }
 
-    <span class="kw">fn </span>try_read_task_collectibles(
+    <span class="kw">fn </span>read_task_collectibles(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _task: TaskId,
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; RawVcSetVc {
         <span class="macro">todo!</span>()
     }
 
@@ -3329,6 +3337,7 @@
         }
 
         <span class="kw">let </span>task = turbo_tasks.get_fresh_task_id();
+        <span class="kw">let </span>task = task.into();
         <span class="kw">let </span>new_task = Task {
             active_parents: AtomicU32::new(<span class="number">1</span>),
             task_state: Mutex::new(TaskState {
@@ -3350,6 +3359,7 @@
                 <span class="comment">// SAFETY: We are still the only owner of this task and id
                 </span><span class="kw">unsafe </span>{
                     <span class="self">self</span>.tasks.remove(<span class="kw-2">*</span>task);
+                    <span class="kw">let </span>task = Unused::new_unchecked(task);
                     turbo_tasks.reuse_task_id(task);
                 }
                 <span class="self">self</span>.connect(parent_task, existing_task, turbo_tasks);
@@ -3373,6 +3383,7 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; TaskId {
         <span class="kw">let </span>task = turbo_tasks.get_fresh_task_id();
+        <span class="kw">let </span>task = task.into();
         <span class="kw">let </span>new_task = Task {
             active_parents: AtomicU32::new(<span class="number">1</span>),
             task_state: Mutex::new(TaskState {
@@ -3412,6 +3423,7 @@
             task_type: TaskType::Persistent(task_type.clone()),
         };
         <span class="kw">let </span>task = <span class="self">self</span>.turbo_tasks.get_fresh_task_id();
+        <span class="kw">let </span>task = task.into();
         <span class="comment">// SAFETY: It&#39;s a fresh task id
         </span><span class="kw">unsafe </span>{
             <span class="self">self</span>.backend.tasks.insert(<span class="kw-2">*</span>task, new_task);
@@ -3419,7 +3431,9 @@
         <span class="kw">match </span>cache.entry(task_type) {
             Entry::Occupied(e) =&gt; {
                 <span class="kw">let </span>value = <span class="kw-2">*</span>e.into_ref();
-                <span class="kw">unsafe </span>{
+                <span class="comment">// Safety: We didn&#39;t store the task id in the cache, we it&#39;s still unused
+                </span><span class="kw">unsafe </span>{
+                    <span class="kw">let </span>task = Unused::new_unchecked(task);
                     <span class="self">self</span>.turbo_tasks.reuse_task_id(task);
                 }
                 value
