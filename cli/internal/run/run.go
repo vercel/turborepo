@@ -68,6 +68,7 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 
 func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	runPayload := args.Command.Run
+
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
 	scope.OptsFromArgs(&opts.scopeOpts, args)
@@ -76,6 +77,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
+	opts.runOpts.logPrefix = runPayload.LogPrefix
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force

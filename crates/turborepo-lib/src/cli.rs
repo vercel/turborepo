@@ -352,6 +352,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Can be: "none" or missing. Internally, the default is not named yet.
+    #[clap(long)]
+    pub log_prefix: Option<String>,
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
