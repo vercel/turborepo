@@ -41,6 +41,15 @@ export interface WorkspaceSchema extends BaseSchema {
 
 export interface RootSchema extends BaseSchema {
   /**
+   * A SemVer version which, if using global turbo, ensures the global turbo version matches.
+   *
+   * This does not accept ranges, it must specify a precise version.
+   *
+   * @default
+   */
+  turboVersion?: string;
+
+  /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing

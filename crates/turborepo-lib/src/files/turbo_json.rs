@@ -11,7 +11,6 @@ pub struct TurboJson {
 }
 
 impl TurboJson {
-    #[allow(dead_code)]
     pub fn check_version(&self, version: &str) -> Result<bool> {
         let version = Version::parse(version)?;
 
@@ -28,7 +27,6 @@ impl Default for TurboJson {
     }
 }
 
-#[allow(dead_code)]
 pub fn read(path: PathBuf) -> Result<TurboJson> {
     let turbo_json_string = fs::read_to_string(path)?;
     let turbo_json = serde_json::from_str(&turbo_json_string)?;
