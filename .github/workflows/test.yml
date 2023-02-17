@@ -1180,7 +1180,6 @@ jobs:
       - rust_build_release
       - rust_bench
       - rust_bench_pr
-      - next_js_integration
       - format_lint
     if: always()
     permissions:
@@ -1223,7 +1222,6 @@ jobs:
           subjob ${{needs.rust_build_release.result}} "Rust release build (non-blocking)"
           subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
           subjob ${{needs.rust_bench_pr.result}} "Turbopack Rust PR benchmarks (non-blocking)"
-          subjob ${{needs.next_js_integration.result}} "Next.js Integration tests (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
