@@ -154,10 +154,8 @@
 <span id="154">154</span>
 <span id="155">155</span>
 <span id="156">156</span>
-<span id="157">157</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
-
-<span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
     environment::ServerAddrVc,
@@ -305,7 +303,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>children = HashSet::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>children = IndexSet::new();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = IntrospectableVc::resolve_from(<span class="self">self</span>.inner).<span class="kw">await</span><span class="question-mark">? </span>{
             children.insert((StringVc::cell(<span class="string">&quot;inner&quot;</span>.to_string()), inner));
         }

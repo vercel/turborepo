@@ -277,11 +277,7 @@
 <span id="277">277</span>
 <span id="278">278</span>
 <span id="279">279</span>
-<span id="280">280</span>
-<span id="281">281</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
-
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -540,7 +536,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>set = HashSet::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>set = IndexSet::new();
         <span class="kw">for </span><span class="kw-2">&amp;</span>entry <span class="kw">in </span><span class="self">self</span>.entry.entries().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">let </span>entry = entry.<span class="kw">await</span><span class="question-mark">?</span>;
             set.insert((

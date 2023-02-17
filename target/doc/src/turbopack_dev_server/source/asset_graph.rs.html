@@ -186,12 +186,34 @@
 <span id="186">186</span>
 <span id="187">187</span>
 <span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>indexmap::indexset;
+<span class="kw">use </span>indexmap::{indexset, IndexSet};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, State, Value, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     introspect::{
@@ -262,62 +284,75 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>all_assets_map(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsMapVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
-        <span class="kw">let </span>root_path = this.root_path.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>assets_set = HashSet::new();
-        <span class="kw">let </span>root_assets = this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
-            <span class="kw">let </span>expanded = expanded.get();
-            <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
-                <span class="kw">let </span>expanded = expanded.contains(root_asset);
-                assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
-                assets_set.insert(<span class="kw-2">*</span>root_asset);
-                <span class="kw">if </span>expanded {
-                    queue.push_back(all_referenced_assets(<span class="kw-2">*</span>root_asset));
-                }
-            }
-        } <span class="kw">else </span>{
-            <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
-                assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
-                assets_set.insert(<span class="kw-2">*</span>root_asset);
+        <span class="prelude-val">Ok</span>(AssetsMapVc::cell(
+            expand(
+                <span class="kw-2">&amp;*</span>this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="kw-2">&amp;*</span>this.root_path.<span class="kw">await</span><span class="question-mark">?</span>,
+                this.expanded.as_ref(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>,
+        ))
+    }
+}
+
+<span class="kw">async fn </span>expand(
+    root_assets: <span class="kw-2">&amp;</span>IndexSet&lt;AssetVc&gt;,
+    root_path: <span class="kw-2">&amp;</span>FileSystemPath,
+    expanded: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>State&lt;HashSet&lt;AssetVc&gt;&gt;&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;HashMap&lt;String, AssetVc&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>assets_set = HashSet::new();
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>expanded {
+        <span class="kw">let </span>expanded = expanded.get();
+        <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
+            <span class="kw">let </span>expanded = expanded.contains(root_asset);
+            assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
+            assets_set.insert(<span class="kw-2">*</span>root_asset);
+            <span class="kw">if </span>expanded {
                 queue.push_back(all_referenced_assets(<span class="kw-2">*</span>root_asset));
             }
         }
-
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(references) = queue.pop_front() {
-            <span class="kw">for </span>asset <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="kw">if </span>assets_set.insert(<span class="kw-2">*</span>asset) {
-                    <span class="kw">let </span>expanded = <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
-                        expanded.get().contains(asset)
-                    } <span class="kw">else </span>{
-                        <span class="bool-val">true
-                    </span>};
-                    <span class="kw">if </span>expanded {
-                        queue.push_back(all_referenced_assets(<span class="kw-2">*</span>asset));
-                    }
-                    assets.push((asset.path(), <span class="kw-2">*</span>asset));
-                }
-            }
+    } <span class="kw">else </span>{
+        <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
+            assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
+            assets_set.insert(<span class="kw-2">*</span>root_asset);
+            queue.push_back(all_referenced_assets(<span class="kw-2">*</span>root_asset));
         }
-        <span class="kw">for </span>(p_vc, asset) <span class="kw">in </span>assets {
-            <span class="comment">// For clippy -- This explicit deref is necessary
-            </span><span class="kw">let </span>p = <span class="kw-2">&amp;*</span>p_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(sub_path) = root_path.get_path_to(p) {
-                map.insert(sub_path.to_string(), asset);
-                <span class="kw">if </span>sub_path == <span class="string">&quot;index.html&quot; </span>{
-                    map.insert(<span class="string">&quot;&quot;</span>.to_string(), asset);
-                } <span class="kw">else if let </span><span class="prelude-val">Some</span>(p) = sub_path.strip_suffix(<span class="string">&quot;/index.html&quot;</span>) {
-                    map.insert(p.to_string(), asset);
-                    map.insert(<span class="macro">format!</span>(<span class="string">&quot;{p}/&quot;</span>), asset);
-                } <span class="kw">else if let </span><span class="prelude-val">Some</span>(p) = sub_path.strip_suffix(<span class="string">&quot;.html&quot;</span>) {
-                    map.insert(p.to_string(), asset);
-                }
-            }
-        }
-        <span class="prelude-val">Ok</span>(AssetsMapVc::cell(map))
     }
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(references) = queue.pop_front() {
+        <span class="kw">for </span>asset <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">if </span>assets_set.insert(<span class="kw-2">*</span>asset) {
+                <span class="kw">let </span>expanded = <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>expanded {
+                    expanded.get().contains(asset)
+                } <span class="kw">else </span>{
+                    <span class="bool-val">true
+                </span>};
+                <span class="kw">if </span>expanded {
+                    queue.push_back(all_referenced_assets(<span class="kw-2">*</span>asset));
+                }
+                assets.push((asset.path(), <span class="kw-2">*</span>asset));
+            }
+        }
+    }
+    <span class="kw">for </span>(p_vc, asset) <span class="kw">in </span>assets {
+        <span class="comment">// For clippy -- This explicit deref is necessary
+        </span><span class="kw">let </span>p = <span class="kw-2">&amp;*</span>p_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(sub_path) = root_path.get_path_to(p) {
+            map.insert(sub_path.to_string(), asset);
+            <span class="kw">if </span>sub_path == <span class="string">&quot;index.html&quot; </span>{
+                map.insert(<span class="string">&quot;&quot;</span>.to_string(), asset);
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(p) = sub_path.strip_suffix(<span class="string">&quot;/index.html&quot;</span>) {
+                map.insert(p.to_string(), asset);
+                map.insert(<span class="macro">format!</span>(<span class="string">&quot;{p}/&quot;</span>), asset);
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(p) = sub_path.strip_suffix(<span class="string">&quot;.html&quot;</span>) {
+                map.insert(p.to_string(), asset);
+            }
+        }
+    }
+    <span class="prelude-val">Ok</span>(map)
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -365,12 +400,21 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
         <span class="kw">let </span>key = StringVc::cell(<span class="string">&quot;root&quot;</span>.to_string());
+        <span class="kw">let </span>expanded_key = StringVc::cell(<span class="string">&quot;expanded&quot;</span>.to_string());
+
+        <span class="kw">let </span>root_assets = <span class="self">self</span>.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>root_assets = root_assets
+            .iter()
+            .map(|<span class="kw-2">&amp;</span>asset| (key, IntrospectableAssetVc::new(asset)));
+
+        <span class="kw">let </span>expanded_assets =
+            expand(<span class="kw-2">&amp;*</span><span class="self">self</span>.root_assets.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;*</span><span class="self">self</span>.root_path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>expanded_assets = expanded_assets
+            .iter()
+            .map(|(_k, <span class="kw-2">&amp;</span>v)| (expanded_key, IntrospectableAssetVc::new(v)));
+
         <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(
-            <span class="self">self</span>.root_assets
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
-                .map(|<span class="kw-2">&amp;</span>asset| (key, IntrospectableAssetVc::new(asset)))
-                .collect(),
+            root_assets.chain(expanded_assets).collect(),
         ))
     }
 }

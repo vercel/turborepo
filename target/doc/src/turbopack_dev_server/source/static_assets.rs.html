@@ -93,11 +93,7 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
-<span id="96">96</span>
-<span id="97">97</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
-
-<span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
@@ -169,7 +165,7 @@
     </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
         <span class="kw">let </span>dir = <span class="self">self</span>.dir.read_dir().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>children = <span class="kw">match </span><span class="kw-2">&amp;*</span>dir {
-            DirectoryContent::NotFound =&gt; HashSet::new(),
+            DirectoryContent::NotFound =&gt; Default::default(),
             DirectoryContent::Entries(entries) =&gt; entries
                 .iter()
                 .map(|(name, entry)| {

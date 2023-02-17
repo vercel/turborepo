@@ -19,15 +19,13 @@
 <span id="19">19</span>
 <span id="20">20</span>
 <span id="21">21</span>
-<span id="22">22</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset;
 
-<span class="kw">use </span>std::collections::HashSet;
-
+<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>IntrospectableChildren(HashSet&lt;(StringVc, IntrospectableVc)&gt;);
+</span><span class="kw">pub struct </span>IntrospectableChildren(IndexSet&lt;(StringVc, IntrospectableVc)&gt;);
 
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>Introspectable {
@@ -39,7 +37,7 @@
         StringVc::empty()
     }
     <span class="kw">fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IntrospectableChildrenVc {
-        IntrospectableChildrenVc::cell(HashSet::new())
+        IntrospectableChildrenVc::cell(IndexSet::new())
     }
 }
 </code></pre></div>

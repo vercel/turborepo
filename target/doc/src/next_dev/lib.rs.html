@@ -1015,7 +1015,7 @@
     <span class="kw">let </span>dir = options
         .dir
         .as_ref()
-        .map(|dir| canonicalize(dir))
+        .map(canonicalize)
         .unwrap_or_else(current_dir)
         .context(<span class="string">&quot;project directory can&#39;t be found&quot;</span>)<span class="question-mark">?
         </span>.to_str()
