@@ -18,11 +18,11 @@ const meta: Rule.RuleMetaData = {
       default: {},
       additionalProperties: false,
       properties: {
-        turboConfigs: {
+        turboConfigPaths: {
           require: false,
           type: "array",
           items: {
-            type: "object",
+            type: "string",
           },
         },
         allowList: {
@@ -54,7 +54,7 @@ function normalizeCwd(cwd: string | undefined): string | undefined {
 }
 
 function create(context: Rule.RuleContext): Rule.RuleListener {
-  const { options } = context;
+  const { options, getPhysicalFilename } = context;
   const allowList: Array<string> = options?.[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
@@ -67,16 +67,31 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   });
 
   const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
-  const turboConfigs = options?.[0]?.turboConfigs;
-  const turboVars = getEnvVarDependencies({
-    turboConfigs,
-    cwd,
-  });
+  const filePath = getPhysicalFilename();
+  const turboConfigPaths = options?.[0]?.turboConfigPaths;
+  const allTurboVars =
+    getEnvVarDependencies({
+      turboConfigPaths,
+      cwd,
+    }) || {};
+
+  const globalTurboVars = allTurboVars["//"];
+
+  // find any workspace configs that match the current file path
+  // find workspace config (if any) that match the current file path
+  const workspaceKey = Object.keys(allTurboVars).find(
+    (workspacePath) => filePath !== "//" && filePath.startsWith(workspacePath)
+  );
+
+  let workspaceTurboVars: Set<string> | null = null;
+  if (workspaceKey) {
+    workspaceTurboVars = allTurboVars[workspaceKey];
+  }
 
   // if this returns null, something went wrong reading from the turbo config
   // (this is different from finding a config with no env vars present, which would
   // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!turboVars) {
+  if (!globalTurboVars) {
     // return of {} bails early from a rule check
     return {};
   }
@@ -84,15 +99,20 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   const checkKey = (node: Node, envKey?: string) => {
     if (
       envKey &&
-      !turboVars.has(envKey) &&
+      !globalTurboVars.has(envKey) &&
       !regexAllowList.some((regex) => regex.test(envKey))
     ) {
-      context.report({
-        node,
-        message:
-          "${{ envKey }} is not listed as a dependency in any turbo.json",
-        data: { envKey },
-      });
+      // if we have a workspace config, check that too
+      if (workspaceTurboVars && workspaceTurboVars.has(envKey)) {
+        return {};
+      } else {
+        context.report({
+          node,
+          message:
+            "${{ envKey }} is not listed as a dependency in any turbo.json",
+          data: { envKey },
+        });
+      }
     }
   };
 

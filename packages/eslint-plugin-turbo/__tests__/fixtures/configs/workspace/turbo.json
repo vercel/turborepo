@@ -1,0 +1,14 @@
+{
+  "extends": ["//"],
+  "pipeline":{
+    "build":{
+      "outputs":[
+        "dist/**/*",
+        ".next/**/*"
+      ],
+      "env":[
+        "WORKSPACE_ENV_KEY"
+      ]
+    }
+  }
+}

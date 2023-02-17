@@ -6,6 +6,15 @@ import globby from "globby";
 import { Schema } from "turbo-types";
 import JSON5 from "json5";
 
+const ROOT_GLOB = "turbo.json";
+
+export type TurboConfigs = Array<{
+  config: Schema;
+  turboConfigPath: string;
+  workspacePath: string;
+  isRootConfig: boolean;
+}>;
+
 // A quick and dirty workspace parser
 // TODO: after @turbo/workspace-convert is merged, we can leverage those utils here
 function getWorkspaceGlobs(root: string): Array<string> {
@@ -27,35 +36,54 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-function getTurboConfigs(cwd?: string): Record<string, Schema> {
-  const root = getTurboRoot(cwd);
-  const configs: Record<string, Schema> = {};
+export function readTurboConfigPaths({
+  configPaths,
+}: {
+  configPaths: Array<string>;
+}) {
+  const configs: TurboConfigs = [];
+  configPaths.forEach((configPath) => {
+    try {
+      const raw = fs.readFileSync(configPath, "utf8");
+      const turboJsonContent: Schema = JSON5.parse(raw);
+
+      configs.push({
+        config: turboJsonContent,
+        turboConfigPath: configPath,
+        workspacePath: path.dirname(configPath),
+        isRootConfig: !("extends" in turboJsonContent),
+      });
+    } catch (e) {
+      // if we can't parse the config, just ignore it
+      console.error(e);
+    }
+  });
+
+  return configs;
+}
+
+function getTurboConfigs(cwd?: string): TurboConfigs {
+  const turboRoot = getTurboRoot(cwd);
   // parse workspaces
-  if (root) {
-    const workspaceGlobs = getWorkspaceGlobs(root);
+  if (turboRoot) {
+    const workspaceGlobs = getWorkspaceGlobs(turboRoot);
     const workspaceConfigGlobs = workspaceGlobs.map(
       (glob) => `${glob}/turbo.json`
     );
-    const rootGlob = "turbo.json";
-    const configPaths = globby.sync([rootGlob, ...workspaceConfigGlobs], {
-      cwd: root,
-      onlyFiles: true,
-      followSymbolicLinks: false,
-      gitignore: true,
-    });
 
-    configPaths.forEach((configPath) => {
-      try {
-        const raw = fs.readFileSync(path.join(root, configPath), "utf8");
-        const turboJsonContent: Schema = JSON5.parse(raw);
-        configs[configPath] = turboJsonContent;
-      } catch (e) {
-        // if we can't parse the config, just ignore it
-        console.error(e);
-      }
-    });
+    const configPaths = globby
+      .sync([ROOT_GLOB, ...workspaceConfigGlobs], {
+        cwd: turboRoot,
+        onlyFiles: true,
+        followSymbolicLinks: false,
+        gitignore: true,
+      })
+      .map((configPath) => path.join(turboRoot, configPath));
+
+    return readTurboConfigPaths({ configPaths });
   }
-  return configs;
+
+  return [];
 }
 
 export default getTurboConfigs;

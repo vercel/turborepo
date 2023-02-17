@@ -1,90 +1,85 @@
 import { RULES } from "../../lib/constants";
 import rule from "../../lib/rules/no-undeclared-env-vars";
 import { RuleTester } from "eslint";
+import path from "path";
 
 const ruleTester = new RuleTester({
   parserOptions: { ecmaVersion: 2020 },
 });
 
-const getTestTurboConfig = () => {
-  return [
-    {
-      $schema: "./docs/public/schema.json",
-      globalEnv: ["NEW_STYLE_GLOBAL_ENV_KEY", "$NEW_STYLE_GLOBAL_ENV_KEY"],
-      globalDependencies: ["$GLOBAL_ENV_KEY"],
-      pipeline: {
-        test: {
-          outputs: ["coverage/**/*"],
-          dependsOn: ["^build"],
-        },
-        lint: {
-          outputs: [],
-        },
-        dev: {
-          cache: false,
-        },
-        build: {
-          outputs: ["dist/**/*", ".next/**/*"],
-          env: ["NEW_STYLE_ENV_KEY"],
-          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
-        },
-      },
-    },
-  ];
+const getTestTurboConfig = (includeWorkspace?: boolean) => {
+  const configs = [path.join(__dirname, "../fixtures/configs/test/turbo.json")];
+  if (includeWorkspace) {
+    configs.push(
+      path.join(__dirname, "../fixtures/configs/workspace/turbo.json")
+    );
+  }
+
+  return configs;
 };
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `
+        const { WORKSPACE_ENV_KEY } = process.env;
+      `,
+      options: [{ turboConfigPaths: getTestTurboConfig(true) }],
+      filename: path.join(
+        __dirname,
+        "../fixtures/configs/workspace/some/file/index.js"
+      ),
+    },
+    {
+      code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: `
         const { NEW_STYLE_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: `
         const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: `
         const val = process.env["$NEW_STYLE_GLOBAL_ENV_KEY"];
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: `
         const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: `
         const x = process.env.GLOBAL_ENV_KEY;
         const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = process.env;
       `,
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: "var x = process.env.GLOBAL_ENV_KEY;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: "let x = process.env.TASK_ENV_KEY;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: "const x = process.env.ANOTHER_KEY_VALUE;",
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
@@ -96,7 +91,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -108,7 +103,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"],
         },
       ],
@@ -120,7 +115,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -133,7 +128,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -146,7 +141,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -159,7 +154,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
@@ -172,36 +167,36 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ENV_VAR_[A-Z]+$"],
         },
       ],
     },
     {
       code: "const getEnv = (key) => process.env[key];",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: "function getEnv(key) { return process.env[key]; }",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
     {
       code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
     },
   ],
 
   invalid: [
     {
       code: "let { X } = process.env;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
       errors: [
         { message: "$X is not listed as a dependency in any turbo.json" },
       ],
     },
     {
       code: "const { X, Y, Z } = process.env;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
       errors: [
         { message: "$X is not listed as a dependency in any turbo.json" },
         { message: "$Y is not listed as a dependency in any turbo.json" },
@@ -210,7 +205,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     },
     {
       code: "const { X, Y: NewName, Z } = process.env;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
       errors: [
         { message: "$X is not listed as a dependency in any turbo.json" },
         { message: "$Y is not listed as a dependency in any turbo.json" },
@@ -219,7 +214,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     },
     {
       code: "var x = process.env.NOT_THERE;",
-      options: [{ turboConfigs: getTestTurboConfig() }],
+      options: [{ turboConfigPaths: getTestTurboConfig() }],
       errors: [
         {
           message: "$NOT_THERE is not listed as a dependency in any turbo.json",
@@ -230,7 +225,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: "var x = process.env.KEY;",
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
           allowList: ["^ANOTHER_KEY_[A-Z]+$"],
         },
       ],
@@ -245,7 +240,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
         },
       ],
       errors: [
@@ -275,7 +270,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
         },
       ],
       errors: [
@@ -301,7 +296,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
         },
       ],
       errors: [
@@ -327,7 +322,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
         },
       ],
       errors: [
@@ -353,7 +348,7 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       `,
       options: [
         {
-          turboConfigs: getTestTurboConfig(),
+          turboConfigPaths: getTestTurboConfig(),
         },
       ],
       errors: [

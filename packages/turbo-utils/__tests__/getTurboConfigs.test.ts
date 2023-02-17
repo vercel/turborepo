@@ -11,9 +11,9 @@ describe("getTurboConfigs", () => {
   it("single-package", async () => {
     const { root } = useFixture({ fixture: `single-package` });
     const configs = getTurboConfigs(root);
-    expect(Object.keys(configs)).toHaveLength(1);
-    expect(configs["turbo.json"]).toBeDefined();
-    expect(configs["turbo.json"]).toMatchInlineSnapshot(`
+    expect(configs).toHaveLength(1);
+    expect(configs[0].isRootConfig).toBe(true);
+    expect(configs[0].config).toMatchInlineSnapshot(`
       Object {
         "$schema": "https://turbo.build/schema.json",
         "globalEnv": Array [
@@ -57,10 +57,10 @@ describe("getTurboConfigs", () => {
   it("workspace-configs", async () => {
     const { root } = useFixture({ fixture: `workspace-configs` });
     const configs = getTurboConfigs(root);
-    expect(Object.keys(configs)).toHaveLength(3);
 
-    expect(configs["turbo.json"]).toBeDefined();
-    expect(configs["turbo.json"]).toMatchInlineSnapshot(`
+    expect(configs).toHaveLength(3);
+    expect(configs[0].isRootConfig).toBe(true);
+    expect(configs[0].config).toMatchInlineSnapshot(`
       Object {
         "$schema": "https://turbo.build/schema.json",
         "globalEnv": Array [
@@ -75,8 +75,8 @@ describe("getTurboConfigs", () => {
         },
       }
     `);
-    expect(configs["apps/web/turbo.json"]).toBeDefined();
-    expect(configs["apps/web/turbo.json"]).toMatchInlineSnapshot(`
+    expect(configs[1].isRootConfig).toBe(false);
+    expect(configs[1].config).toMatchInlineSnapshot(`
       Object {
         "$schema": "https://turbo.build/schema.json",
         "extends": Array [
@@ -92,8 +92,8 @@ describe("getTurboConfigs", () => {
       }
     `);
 
-    expect(configs["packages/ui/turbo.json"]).toBeDefined();
-    expect(configs["packages/ui/turbo.json"]).toMatchInlineSnapshot(`
+    expect(configs[2].isRootConfig).toBe(false);
+    expect(configs[2].config).toMatchInlineSnapshot(`
       Object {
         "$schema": "https://turbo.build/schema.json",
         "extends": Array [
