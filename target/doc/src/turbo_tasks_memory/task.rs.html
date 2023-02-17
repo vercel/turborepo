@@ -2881,7 +2881,7 @@
     </span>stateful: bool,
 
     <span class="doccomment">/// Children are only modified from execution
-    </span>children: AutoSet&lt;TaskId&gt;,
+    </span>children: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
 
     <span class="doccomment">/// Collectibles are only modified from execution
     </span>collectibles: MaybeCollectibles,
@@ -2891,7 +2891,7 @@
     </span>prepared_type: PrepareTaskType,
 
     output: Output,
-    cells: AutoMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
+    cells: AutoMap&lt;ValueTypeId, Vec&lt;Cell&gt;, BuildNoHashHasher&lt;ValueTypeId&gt;&gt;,
 
     <span class="comment">// GC state:
     </span>gc: GcTaskState,
@@ -3663,7 +3663,7 @@
             <span class="self">self</span>.state_mut()
         };
         <span class="kw">if let </span>TaskMetaStateWriteGuard::Full(<span class="kw-2">mut </span>state) = state {
-            <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = AutoSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = AutoSet::default();
 
             <span class="kw">match </span>state.state_type {
                 Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } =&gt; {
@@ -3855,7 +3855,7 @@
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(collectibles) = state.collectibles.as_ref() {
-                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::default();
                 {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope_state = scope.state.lock();
                     collectibles
@@ -3924,7 +3924,7 @@
             scope.decrement_tasks();
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(collectibles) = state.collectibles.as_ref() {
-                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::default();
                 {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope_state = scope.state.lock();
                     collectibles
@@ -4146,7 +4146,7 @@
                 <span class="self">self</span>.ty
             );
             <span class="kw">let </span><span class="kw-2">mut </span>active_counter = <span class="number">0isize</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::default();
             <span class="kw">let </span><span class="kw-2">mut </span>scopes_to_add_as_parent = Vec::new();
             <span class="kw">let </span><span class="kw-2">mut </span>scopes_to_remove_as_parent = Vec::new();
             <span class="kw">for </span>(scope_id, count) <span class="kw">in </span>scopes.iter() {
@@ -4747,7 +4747,7 @@
                     })
                 })
                 .flat_map(|e| e.notify)
-                .collect::&lt;AutoSet&lt;<span class="kw">_</span>&gt;&gt;();
+                .collect::&lt;AutoSet&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>tasks);
         }
@@ -4762,7 +4762,7 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.full_state_mut();
         <span class="kw">if </span>state.collectibles.unemit(trait_type, collectible) {
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::default();
             state
                 .scopes
                 .iter()
@@ -5244,7 +5244,7 @@
 ) {
     task_scopes.iter().for_each(|id| {
         backend.with_scope(id, |scope| {
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::default();
             {
                 <span class="kw">let </span><span class="kw-2">mut </span>state = scope.state.lock();
                 emitted
@@ -5267,7 +5267,7 @@
 }
 
 <span class="kw">fn </span>remove_from_scopes(
-    tasks: AutoSet&lt;TaskId&gt;,
+    tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     task_scopes: <span class="kw-2">&amp;</span>TaskScopes,
     backend: <span class="kw-2">&amp;</span>MemoryBackend,
     turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,

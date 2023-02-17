@@ -681,6 +681,13 @@
 <span id="681">681</span>
 <span id="682">682</span>
 <span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::{Debug, Display},
     hash::Hash,
@@ -821,7 +828,7 @@
     </span>active: isize,
     <span class="doccomment">/// When not active, this list contains all dirty tasks.
     /// When the scope becomes active, these need to be scheduled.
-    </span>dirty_tasks: AutoSet&lt;TaskId&gt;,
+    </span>dirty_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     <span class="doccomment">/// All child scopes, when the scope becomes active, child scopes need to
     /// become active too
     </span>children: CountHashSet&lt;TaskScopeId, BuildNoHashHasher&lt;TaskScopeId&gt;&gt;,
@@ -834,9 +841,16 @@
     </span><span class="kw">pub </span>parents: CountHashSet&lt;TaskScopeId, BuildNoHashHasher&lt;TaskScopeId&gt;&gt;,
     <span class="doccomment">/// Tasks that have read children
     /// When they change these tasks are invalidated
-    </span>dependent_tasks: AutoSet&lt;TaskId&gt;,
+    </span>dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     <span class="doccomment">/// Emitted collectibles with count and dependent_tasks by trait type
-    </span>collectibles: AutoMap&lt;TraitTypeId, (CountHashSet&lt;RawVc&gt;, AutoSet&lt;TaskId&gt;)&gt;,
+    </span>collectibles: AutoMap&lt;
+        TraitTypeId,
+        (
+            CountHashSet&lt;RawVc&gt;,
+            AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
+        ),
+        BuildNoHashHasher&lt;TraitTypeId&gt;,
+    &gt;,
 }
 
 <span class="kw">impl </span>TaskScope {
@@ -851,10 +865,10 @@
                 <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                 </span>id,
                 active: <span class="number">0</span>,
-                dirty_tasks: AutoSet::new(),
+                dirty_tasks: AutoSet::default(),
                 children: CountHashSet::new(),
-                collectibles: AutoMap::new(),
-                dependent_tasks: AutoSet::new(),
+                collectibles: AutoMap::default(),
+                dependent_tasks: AutoSet::default(),
                 event: Event::new(<span class="kw">move </span>|| {
                     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                     </span><span class="kw">return </span><span class="macro">format!</span>(<span class="string">&quot;TaskScope({id})::event&quot;</span>);
@@ -878,10 +892,10 @@
                 <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                 </span>id,
                 active: <span class="number">1</span>,
-                dirty_tasks: AutoSet::new(),
+                dirty_tasks: AutoSet::default(),
                 children: CountHashSet::new(),
-                collectibles: AutoMap::new(),
-                dependent_tasks: AutoSet::new(),
+                collectibles: AutoMap::default(),
+                dependent_tasks: AutoSet::default(),
                 event: Event::new(<span class="kw">move </span>|| {
                     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
                     </span><span class="kw">return </span><span class="macro">format!</span>(<span class="string">&quot;TaskScope({id})::event&quot;</span>);
@@ -1109,14 +1123,14 @@
 }
 
 <span class="kw">pub struct </span>ScopeChildChangeEffect {
-    <span class="kw">pub </span>notify: AutoSet&lt;TaskId&gt;,
+    <span class="kw">pub </span>notify: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     <span class="kw">pub </span>active: bool,
     <span class="doccomment">/// `true` when the child to parent relationship needs to be updated
     </span><span class="kw">pub </span>parent: bool,
 }
 
 <span class="kw">pub struct </span>ScopeCollectibleChangeEffect {
-    <span class="kw">pub </span>notify: AutoSet&lt;TaskId&gt;,
+    <span class="kw">pub </span>notify: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
 }
 
 <span class="kw">impl </span>TaskScopeState {
@@ -1130,7 +1144,7 @@
     </span><span class="kw">pub fn </span>increment_active(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;&gt; {
         <span class="self">self</span>.increment_active_by(<span class="number">1</span>, more_jobs)
     }
     <span class="doccomment">/// increments the active counter, returns list of tasks that need to be
@@ -1141,7 +1155,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         count: usize,
         more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;&gt; {
         <span class="kw">let </span>was_zero = <span class="self">self</span>.active &lt;= <span class="number">0</span>;
         <span class="self">self</span>.active += count <span class="kw">as </span>isize;
         <span class="kw">if </span><span class="self">self</span>.active &gt; <span class="number">0 </span>&amp;&amp; was_zero {
@@ -1236,7 +1250,7 @@
 
     <span class="doccomment">/// Takes all children or collectibles dependent tasks and returns them for
     /// notification.
-    </span><span class="kw">pub fn </span>take_all_dependent_tasks(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AutoSet&lt;TaskId&gt; {
+    </span><span class="kw">pub fn </span>take_all_dependent_tasks(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>set = <span class="self">self</span>.take_dependent_tasks();
         <span class="self">self</span>.collectibles = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.collectibles)
             .into_iter()
@@ -1297,7 +1311,7 @@
                 <span class="macro">debug_assert!</span>(result, <span class="string">&quot;this must be always a new entry&quot;</span>);
                 <span class="macro">log_scope_update!</span>(<span class="string">&quot;add_collectible {} -&gt; {}&quot;</span>, <span class="kw-2">*</span><span class="self">self</span>.id, collectible);
                 <span class="prelude-val">Some</span>(ScopeCollectibleChangeEffect {
-                    notify: AutoSet::new(),
+                    notify: AutoSet::default(),
                 })
             }
         }
@@ -1360,7 +1374,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>take_dependent_tasks(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AutoSet&lt;TaskId&gt; {
+    <span class="kw">pub fn </span>take_dependent_tasks(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt; {
         take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.dependent_tasks)
     }
 }

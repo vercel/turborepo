@@ -725,7 +725,7 @@
 
 <span class="kw">impl</span>&lt;K, V, H: BuildHasher&gt; AutoMap&lt;K, V, H&gt; {
     <span class="doccomment">/// see [HashMap::with_hasher](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.with_hasher)
-    </span><span class="kw">pub fn </span>with_hasher() -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub const fn </span>with_hasher() -&gt; <span class="self">Self </span>{
         AutoMap::List(Vec::new())
     }
 

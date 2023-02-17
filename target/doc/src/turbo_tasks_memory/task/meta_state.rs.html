@@ -274,9 +274,14 @@
 <span id="274">274</span>
 <span id="275">275</span>
 <span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::replace;
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 <span class="kw">use </span>turbo_tasks::{StatsType, TaskId};
@@ -513,7 +518,9 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>scopes_and_children(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;mut </span>TaskScopes, <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt;) {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>scopes_and_children(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+    ) -&gt; (<span class="kw-2">&amp;mut </span>TaskScopes, <span class="kw-2">&amp;</span>AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;) {
         <span class="kw">match </span><span class="self">self </span>{
             TaskMetaStateWriteGuard::Full(state) =&gt; {
                 <span class="kw">let </span>TaskState {
@@ -525,7 +532,8 @@
             }
             TaskMetaStateWriteGuard::Partial(state) =&gt; {
                 <span class="kw">let </span>PartialTaskState { <span class="kw-2">ref mut </span>scopes, .. } = <span class="kw-2">**</span>state;
-                <span class="kw">static </span>EMPTY: Lazy&lt;AutoSet&lt;TaskId&gt;&gt; = Lazy::new(AutoSet::new);
+                <span class="kw">static </span>EMPTY: Lazy&lt;AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;&gt; =
+                    Lazy::new(AutoSet::default);
                 (scopes, <span class="kw-2">&amp;*</span>EMPTY)
             }
             TaskMetaStateWriteGuard::Unloaded(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(

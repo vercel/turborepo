@@ -296,7 +296,7 @@
 
 <span class="kw">impl</span>&lt;K, H: BuildHasher&gt; AutoSet&lt;K, H&gt; {
     <span class="doccomment">/// see [HashSet::with_hasher](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.with_hasher)
-    </span><span class="kw">pub fn </span>with_hasher() -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub const fn </span>with_hasher() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             map: AutoMap::with_hasher(),
         }

@@ -332,6 +332,7 @@
 <span id="332">332</span>
 <span id="333">333</span>
 <span id="334">334</span>
+<span id="335">335</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -341,6 +342,7 @@
 };
 
 <span class="kw">use </span>auto_hash_map::{AutoMap, AutoSet};
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use crate</span>::{
@@ -442,7 +444,7 @@
     <span class="doccomment">/// A readable name of the type
     </span><span class="kw">pub </span>name: String,
     <span class="doccomment">/// List of traits available
-    </span><span class="kw">pub </span>traits: AutoSet&lt;TraitTypeId&gt;,
+    </span><span class="kw">pub </span>traits: AutoSet&lt;TraitTypeId, BuildNoHashHasher&lt;TraitTypeId&gt;&gt;,
     <span class="doccomment">/// List of trait methods available
     </span><span class="kw">pub </span>trait_methods: AutoMap&lt;(TraitTypeId, Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;), FunctionId&gt;,
 
@@ -504,7 +506,7 @@
     </span><span class="kw">pub fn </span>new&lt;T&gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: AutoSet::new(),
+            traits: AutoSet::default(),
             trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">None</span>,
             any_serialization: <span class="prelude-val">None</span>,
@@ -517,7 +519,7 @@
     &gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: AutoSet::new(),
+            traits: AutoSet::default(),
             trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">Some</span>((
                 &lt;<span class="kw">dyn </span>MagicAny&gt;::as_serialize::&lt;T&gt;,
@@ -533,7 +535,7 @@
     &gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: AutoSet::new(),
+            traits: AutoSet::default(),
             trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">None</span>,
             any_serialization: <span class="prelude-val">Some</span>((any_as_serialize::&lt;T&gt;, AnyDeserializeSeed::new::&lt;T&gt;())),

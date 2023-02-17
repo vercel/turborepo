@@ -310,12 +310,16 @@
 <span id="310">310</span>
 <span id="311">311</span>
 <span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     mem::{replace, take},
 };
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
@@ -334,18 +338,20 @@
     /// tracking is still active. Any update will invalidate dependent tasks.
     /// Assigning a value will transition to the Value state.
     /// Reading this cell will transition to the Recomputing state.
-    </span>TrackedValueless { dependent_tasks: AutoSet&lt;TaskId&gt; },
+    </span>TrackedValueless {
+        dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
+    },
     <span class="doccomment">/// Someone wanted to read the content and it was not available. The content
     /// is now being recomputed.
     /// Assigning a value will transition to the Value state.
     </span>Recomputing {
-        dependent_tasks: AutoSet&lt;TaskId&gt;,
+        dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
         event: Event,
     },
     <span class="doccomment">/// The content was set only once and is tracked.
     /// GC operation will transition to the TrackedValueless state.
     </span>Value {
-        dependent_tasks: AutoSet&lt;TaskId&gt;,
+        dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
         content: CellContent,
     },
 }
@@ -402,10 +408,10 @@
     }
 
     <span class="doccomment">/// Returns the list of dependent tasks.
-    </span><span class="kw">pub fn </span>dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt; {
+    </span><span class="kw">pub fn </span>dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {
-                <span class="kw">static </span>EMPTY: AutoSet&lt;TaskId&gt; = AutoSet::new();
+                <span class="kw">static </span>EMPTY: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt; = AutoSet::with_hasher();
                 <span class="kw-2">&amp;</span>EMPTY
             }
             Cell::Value {
@@ -423,7 +429,7 @@
     <span class="doccomment">/// Switch the cell to recomputing state.
     </span><span class="kw">fn </span>recompute(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        dependent_tasks: AutoSet&lt;TaskId&gt;,
+        dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
         description: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
         note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
     ) -&gt; EventListener {
@@ -471,7 +477,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent, RecomputingCell&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {
-                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(AutoSet::new(), description, note);
+                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(AutoSet::default(), description, note);
                 <span class="prelude-val">Err</span>(RecomputingCell {
                     listener,
                     schedule: <span class="bool-val">true</span>,
@@ -518,7 +524,7 @@
             Cell::Empty =&gt; {
                 <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
                     content,
-                    dependent_tasks: AutoSet::new(),
+                    dependent_tasks: AutoSet::default(),
                 };
             }
             <span class="kw-2">&amp;mut </span>Cell::Recomputing {
@@ -541,7 +547,7 @@
                 }
                 <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
                     content,
-                    dependent_tasks: AutoSet::new(),
+                    dependent_tasks: AutoSet::default(),
                 };
             }
             Cell::Value {

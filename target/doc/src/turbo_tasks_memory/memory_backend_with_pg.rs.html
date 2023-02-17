@@ -1850,6 +1850,7 @@
 <span id="1850">1850</span>
 <span id="1851">1851</span>
 <span id="1852">1852</span>
+<span id="1853">1853</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -1868,6 +1869,7 @@
 <span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>concurrent_queue::ConcurrentQueue;
 <span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap, DashSet};
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -1922,11 +1924,11 @@
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: HashMap&lt;CellId, (TaskCell, AutoSet&lt;TaskId&gt;)&gt;,
+    cells: HashMap&lt;CellId, (TaskCell, AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;)&gt;,
     output: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, SharedError&gt;&gt;,
-    output_dependent: AutoSet&lt;TaskId&gt;,
+    output_dependent: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     dependencies: AutoSet&lt;RawVc&gt;,
-    children: AutoSet&lt;TaskId&gt;,
+    children: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
     event: Event,
     event_cells: Event,
 }
@@ -1937,7 +1939,7 @@
             freshness,
             need_persist: Default::default(),
             has_changes: Default::default(),
-            cells: Default::default(),
+            cells: HashMap::default(),
             output: Default::default(),
             output_dependent: Default::default(),
             dependencies: Default::default(),
@@ -2124,10 +2126,10 @@
                     cells: data
                         .cells
                         .into_iter()
-                        .map(|(k, s)| (k, (s, AutoSet::new())))
+                        .map(|(k, s)| (k, (s, AutoSet::default())))
                         .collect(),
                     output: <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(data.output)),
-                    output_dependent: AutoSet::new(),
+                    output_dependent: AutoSet::default(),
                     dependencies: data.dependencies.into_iter().collect(),
                     children: data.children.into_iter().collect(),
                     need_persist: Default::default(),
@@ -2948,7 +2950,7 @@
             mem_state.output = <span class="prelude-val">Some</span>(result.map_err(SharedError::new));
             take(<span class="kw-2">&amp;mut </span>mem_state.output_dependent)
         } <span class="kw">else </span>{
-            AutoSet::new()
+            AutoSet::default()
         };
 
         drop(state);

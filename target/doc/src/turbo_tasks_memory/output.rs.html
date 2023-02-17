@@ -115,6 +115,7 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
+<span id="118">118</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Debug, Display},
@@ -123,13 +124,14 @@
 
 <span class="kw">use </span>anyhow::{anyhow, Error, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoSet;
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
 
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub struct </span>Output {
     <span class="kw">pub</span>(<span class="kw">crate</span>) content: OutputContent,
     updates: u32,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: AutoSet&lt;TaskId&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug)]
@@ -212,7 +214,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt; {
+    <span class="kw">pub fn </span>dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks
     }
 

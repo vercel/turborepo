@@ -776,6 +776,7 @@
 <span id="776">776</span>
 <span id="777">777</span>
 <span id="778">778</span>
+<span id="779">779</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::{Borrow, Cow},
     cell::RefCell,
@@ -794,6 +795,7 @@
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap};
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>rustc_hash::FxHasher;
 <span class="kw">use </span>tokio::task::futures::TaskLocalFuture;
 <span class="kw">use </span>turbo_tasks::{
@@ -1463,9 +1465,9 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Job {
-    RemoveFromScopes(AutoSet&lt;TaskId&gt;, Vec&lt;TaskScopeId&gt;),
-    RemoveFromScope(AutoSet&lt;TaskId&gt;, TaskScopeId),
-    ScheduleWhenDirtyFromScope(AutoSet&lt;TaskId&gt;),
+    RemoveFromScopes(AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;, Vec&lt;TaskScopeId&gt;),
+    RemoveFromScope(AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;, TaskScopeId),
+    ScheduleWhenDirtyFromScope(AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;),
     <span class="doccomment">/// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
     </span>AddToScopeQueue {

@@ -1528,7 +1528,7 @@
 
     <span class="doccomment">/// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt;);
+    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;);
 
     <span class="doccomment">/// Returns the stats reporting type.
     </span><span class="kw">fn </span>stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatsType;
@@ -2298,7 +2298,7 @@
 
     <span class="doccomment">/// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt;) {
+    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;) {
         <span class="kw">let </span>result = CURRENT_TASK_STATE.try_with(|cell| {
             <span class="kw">let </span>CurrentTaskState {
                 tasks_to_notify, ..
