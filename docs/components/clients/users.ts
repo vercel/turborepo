@@ -526,4 +526,13 @@ export const users: Array<TurboUser> = [
       width: 150,
     },
   },
+  {
+    caption: "Comparastore",
+    image: "/images/logos/comparastore.svg",
+    infoLink: "https://www.comparastore.com",
+    pinned: true,
+    style: {
+      width: 175
+    },
+  }
 ];
