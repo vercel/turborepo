@@ -54,9 +54,11 @@
 <span id="54">54</span>
 <span id="55">55</span>
 <span id="56">56</span>
+<span id="57">57</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>dunce::canonicalize;
 
 <span class="kw">use crate</span>::{DiskFileSystemVc, File, FileContentVc, FileSystem};
 
@@ -64,8 +66,8 @@
 </span><span class="kw">pub async fn </span>content_from_relative_path(package_path: <span class="kw-2">&amp;</span>str, path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;FileContentVc&gt; {
     <span class="kw">let </span>package_path = PathBuf::from(package_path);
     <span class="kw">let </span>resolved_path = package_path.join(path);
-    <span class="kw">let </span>resolved_path = std::fs::canonicalize(<span class="kw-2">&amp;</span>resolved_path)
-        .context(<span class="string">&quot;failed to canonicalize embedded file path&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>resolved_path =
+        canonicalize(<span class="kw-2">&amp;</span>resolved_path).context(<span class="string">&quot;failed to canonicalize embedded file path&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>root_path = resolved_path.parent().unwrap();
     <span class="kw">let </span>path = resolved_path.file_name().unwrap().to_str().unwrap();
 

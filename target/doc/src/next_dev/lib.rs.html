@@ -590,6 +590,7 @@
 <span id="590">590</span>
 <span id="591">591</span>
 <span id="592">592</span>
+<span id="593">593</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -609,6 +610,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>devserver_options::DevServerOptions;
+<span class="kw">use </span>dunce::canonicalize;
 <span class="kw">use </span>next_core::{
     create_app_source, create_page_source, create_web_entry_source, env::load_env,
     manifest::DevManifestContentSource, next_config::load_next_config,
@@ -1013,7 +1015,7 @@
     <span class="kw">let </span>dir = options
         .dir
         .as_ref()
-        .map(|dir| dir.canonicalize())
+        .map(|dir| canonicalize(dir))
         .unwrap_or_else(current_dir)
         .context(<span class="string">&quot;project directory can&#39;t be found&quot;</span>)<span class="question-mark">?
         </span>.to_str()
@@ -1021,7 +1023,7 @@
         </span>.to_string();
 
     <span class="kw">let </span>root_dir = <span class="kw">if let </span><span class="prelude-val">Some</span>(root) = options.root.as_ref() {
-        root.canonicalize()
+        canonicalize(root)
             .context(<span class="string">&quot;root directory can&#39;t be found&quot;</span>)<span class="question-mark">?
             </span>.to_str()
             .context(<span class="string">&quot;root directory contains invalid characters&quot;</span>)<span class="question-mark">?

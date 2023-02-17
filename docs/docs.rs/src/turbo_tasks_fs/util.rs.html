@@ -110,24 +110,7 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
-<span id="113">113</span>
-<span id="114">114</span>
-<span id="115">115</span>
-<span id="116">116</span>
-<span id="117">117</span>
-<span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
-<span id="121">121</span>
-<span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
-<span id="126">126</span>
-<span id="127">127</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
-<span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
-</span><span class="kw">use </span>std::path::Path;
 
 <span class="doccomment">/// Joins two /-separated paths into a normalized path.
 /// Paths are concatenated with /.
@@ -238,19 +221,6 @@
         }
     }
     seqments.join(<span class="string">&quot;/&quot;</span>)
-}
-
-<span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
-</span><span class="doccomment">/// Checks if the path has the `\\?\` prefix which &quot;tells the Windows APIs to
-/// disable all string parsing and to send the string that follows it straight
-/// to the file system.&quot;
-///
-/// See [Win32 File Namespaces](https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#win32-file-namespaces)
-</span><span class="kw">pub fn </span>is_windows_raw_path(path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; bool {
-    <span class="comment">// `Path::new(&quot;\\\\?\\D:\\workspace\\turbo-tooling&quot;).starts_with(&quot;\\\\?\\&quot;)` is
-    // `false`.
-    // So we use `String::starts_with` here
-    </span>path.as_ref().to_string_lossy().starts_with(<span class="string">&quot;\\\\?\\&quot;</span>)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_fs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

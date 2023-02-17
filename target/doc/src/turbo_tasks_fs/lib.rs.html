@@ -1680,13 +1680,6 @@
 <span id="1680">1680</span>
 <span id="1681">1681</span>
 <span id="1682">1682</span>
-<span id="1683">1683</span>
-<span id="1684">1684</span>
-<span id="1685">1685</span>
-<span id="1686">1686</span>
-<span id="1687">1687</span>
-<span id="1688">1688</span>
-<span id="1689">1689</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1726,6 +1719,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoMap;
 <span class="kw">use </span>bitflags::bitflags;
+<span class="kw">use </span>dunce::simplified;
 <span class="kw">use </span>glob::GlobVc;
 <span class="kw">use </span>invalidator_map::InvalidatorMap;
 <span class="kw">use </span>jsonc_parser::{parse_to_serde_value, ParseOptions};
@@ -1747,8 +1741,6 @@
 <span class="kw">use </span>util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
 <span class="kw">use </span><span class="self">self</span>::{json::UnparseableJson, mutex_map::MutexMap};
-<span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
-</span><span class="kw">use </span><span class="kw">crate</span>::util::is_windows_raw_path;
 <span class="kw">use crate</span>::{
     attach::AttachedFileSystemVc,
     retry::{retry_blocking, retry_future},
@@ -1959,7 +1951,8 @@
     }
 
     <span class="kw">pub async fn </span>to_sys_path(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf&gt; {
-        <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root);
+        <span class="comment">// just in case there&#39;s a windows unc path prefix we remove it with `dunce`
+        </span><span class="kw">let </span>path = simplified(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root));
         <span class="kw">let </span>fs_path = fs_path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">if </span>fs_path.path.is_empty() {
             path.to_path_buf()
@@ -2108,18 +2101,11 @@
         <span class="comment">// strip the root from the path, it serves two purpose
         // 1. ensure the linked path is under the root
         // 2. strip the root path if the linked path is absolute
-        </span><span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
-        </span><span class="kw">let </span>result = {
-            <span class="kw">let </span>root_path = Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root);
-            <span class="kw">if </span>is_windows_raw_path(root_path) &amp;&amp; !is_windows_raw_path(<span class="kw-2">&amp;</span>file) {
-                file.strip_prefix(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root[<span class="number">4</span>..]))
-            } <span class="kw">else </span>{
-                file.strip_prefix(root_path)
-            }
-        };
+        //
+        // we use `dunce::simplify` to strip a potential UNC prefix on windows, on any
+        // other OS this gets compiled away
+        </span><span class="kw">let </span>result = simplified(<span class="kw-2">&amp;</span>file).strip_prefix(simplified(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root)));
 
-        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;windows&quot;</span>))]
-        </span><span class="kw">let </span>result = file.strip_prefix(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root));
         <span class="kw">let </span>relative_to_root_path = <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(file) =&gt; PathBuf::from(sys_to_unix(<span class="kw-2">&amp;</span>file.to_string_lossy()).as_ref()),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(LinkContent::Invalid.cell()),
