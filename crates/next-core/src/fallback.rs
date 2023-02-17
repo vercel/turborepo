@@ -137,7 +137,7 @@ impl FallbackPageAsset for FallbackAsset {
                 <pre>{error}</pre>
                 {html_status}
             </div>
-        "#, assetPrefix = serde_json::to_string(&self.config.asset_prefix().await?)? };
+        "#, assetPrefix = serde_json::to_string(&self.config.base_path().await?)? };
 
         Ok(self.html_asset.with_body(body).into())
     }
