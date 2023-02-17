@@ -17,7 +17,8 @@ Turbopack can be customized to transform different files and change how modules 
 
 If you need loader support beyond what's built in, many webpack loaders already work with Turbopack. There are currently some limitations:
 
-- At the moment, only a core subset of the webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
+- Only a core subset of the webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
+- Only loaders that return JavaScript code are supported. Loaders that transform files like stylesheets or images are not currently supported.
 - Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
 
 As of Next 13.2, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbo.loaders` can be set as a mapping of file extensions to a list of package names or `{loader, options}` pairs:
