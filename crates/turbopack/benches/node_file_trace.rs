@@ -6,16 +6,19 @@ use turbo_tasks::{NothingVc, TurboTasks, Value};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, NullFileSystem, NullFileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    emit_with_completion, rebase::RebasedAssetVc, register,
+    emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc, register,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 use turbopack_core::{
+    compile_time_info::CompileTimeInfo,
     context::AssetContext,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    reference_type::ReferenceType,
     source_asset::SourceAssetVc,
 };
 
+// TODO this should move to the `node-file-trace` crate
 pub fn benchmark(c: &mut Criterion) {
     register();
 
@@ -64,7 +67,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
         .unwrap();
 
     b.to_async(rt).iter(move || {
-        let tt = TurboTasks::new(MemoryBackend::new());
+        let tt = TurboTasks::new(MemoryBackend::default());
         let tests_root = bench_input.tests_root.clone();
         let input = bench_input.input.clone();
         async move {
@@ -77,23 +80,30 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                 let output_dir = output_fs.root();
 
                 let source = SourceAssetVc::new(input);
-                let environment = EnvironmentVc::new(
-                    Value::new(ExecutionEnvironment::NodeJsLambda(
-                        NodeJsEnvironment::default().into(),
-                    )),
-                    Value::new(EnvironmentIntention::ServerRendering),
-                );
+                let compile_time_info = CompileTimeInfo {
+                    environment: EnvironmentVc::new(
+                        Value::new(ExecutionEnvironment::NodeJsLambda(
+                            NodeJsEnvironment::default().into(),
+                        )),
+                        Value::new(EnvironmentIntention::ServerRendering),
+                    ),
+                }
+                .cell();
                 let context = ModuleAssetContextVc::new(
                     TransitionsByNameVc::cell(HashMap::new()),
-                    environment,
-                    Default::default(),
+                    compile_time_info,
+                    ModuleOptionsContext {
+                        enable_types: true,
+                        ..Default::default()
+                    }
+                    .cell(),
                     ResolveOptionsContext {
-                        emulate_environment: Some(environment),
+                        emulate_environment: Some(compile_time_info.environment().resolve().await?),
                         ..Default::default()
                     }
                     .cell(),
                 );
-                let module = context.process(source.into());
+                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
                 let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
 
                 emit_with_completion(rebased.into(), output_dir).await?;

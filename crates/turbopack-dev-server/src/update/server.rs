@@ -5,29 +5,38 @@ use std::{
 
 use anyhow::{Context as _, Error, Result};
 use futures::{prelude::*, ready, stream::FusedStream, SinkExt};
-use hyper::upgrade::Upgraded;
+use hyper::{upgrade::Upgraded, HeaderMap, Uri};
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
-use turbo_tasks::{TransientInstance, TurboTasksApi, Value};
-use turbopack_core::version::Update;
+use turbo_tasks::{TransientInstance, TurboTasksApi};
+use turbo_tasks_fs::json::parse_json_with_source_context;
+use turbopack_core::{issue::IssueReporterVc, version::Update};
 
 use super::{
     protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
     stream::UpdateStream,
 };
-use crate::{update::stream::UpdateStreamItem, SourceProvider};
+use crate::{
+    source::{request::SourceRequest, resolve::resolve_source_request, Body},
+    update::stream::UpdateStreamItem,
+    SourceProvider,
+};
 
 /// A server that listens for updates and sends them to connected clients.
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
+    issue_reporter: IssueReporterVc,
 }
 
 impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
     /// Create a new update server with the given websocket and content source.
-    pub fn new(source_provider: P) -> Self {
-        Self { source_provider }
+    pub fn new(source_provider: P, issue_reporter: IssueReporterVc) -> Self {
+        Self {
+            source_provider,
+            issue_reporter,
+        }
     }
 
     /// Run the update server loop.
@@ -52,14 +61,22 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                         Some(ClientMessage::Subscribe { resource }) => {
                             let get_content = {
                                 let source_provider = self.source_provider.clone();
-                                let resource = resource.clone();
+                                let request = resource_to_request(&resource)?;
                                 move || {
+                                    let request = request.clone();
                                     let source = source_provider.get_source();
-                                    source.get(&resource.path, Value::new(Default::default()))
+                                    resolve_source_request(
+                                        source,
+                                        TransientInstance::new(request),
+                                        self.issue_reporter
+                                    )
                                 }
                             };
-                            let stream = UpdateStream::new(resource.clone(), TransientInstance::new(Box::new(get_content))).await?;
+                            let stream = UpdateStream::new(TransientInstance::new(Box::new(get_content))).await?;
                             streams.insert(resource, stream);
+                        }
+                        Some(ClientMessage::Unsubscribe { resource }) => {
+                            streams.remove(&resource);
                         }
                         None => {
                             // WebSocket was closed, stop sending updates
@@ -115,6 +132,26 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
     }
 }
 
+fn resource_to_request(resource: &ResourceIdentifier) -> Result<SourceRequest> {
+    let mut headers = HeaderMap::new();
+
+    if let Some(res_headers) = &resource.headers {
+        for (name, value) in res_headers {
+            headers.append(
+                hyper::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                hyper::header::HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+            );
+        }
+    }
+
+    Ok(SourceRequest {
+        uri: Uri::try_from(format!("/{}", resource.path))?,
+        headers,
+        method: "GET".to_string(),
+        body: Body::new(vec![]),
+    })
+}
+
 pin_project! {
     struct UpdateClient {
         #[pin]
@@ -148,12 +185,11 @@ impl Stream for UpdateClient {
             }
         };
 
-        match serde_json::from_str(&msg) {
+        match parse_json_with_source_context(&msg).context("deserializing websocket message") {
             Ok(msg) => Poll::Ready(Some(Ok(msg))),
             Err(err) => {
                 *this.ended = true;
 
-                let err = Error::new(err).context("deserializing websocket message");
                 Poll::Ready(Some(Err(err)))
             }
         }

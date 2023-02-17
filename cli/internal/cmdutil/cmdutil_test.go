@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"gotest.tools/v3/assert"
 )
 
@@ -20,8 +21,11 @@ func TestTokenEnvVar(t *testing.T) {
 			t.Cleanup(func() {
 				_ = os.Unsetenv(v)
 			})
+			args := turbostate.ParsedArgsFromRust{
+				CWD: "",
+			}
 			flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-			h := NewHelper("test-version")
+			h := NewHelper("test-version", args)
 			h.AddFlags(flags)
 			h.UserConfigPath = userConfigPath
 
@@ -31,7 +35,7 @@ func TestTokenEnvVar(t *testing.T) {
 				t.Fatalf("setenv %v", err)
 			}
 
-			base, err := h.GetCmdBase(flags)
+			base, err := h.GetCmdBase(args)
 			if err != nil {
 				t.Fatalf("failed to get command base %v", err)
 			}

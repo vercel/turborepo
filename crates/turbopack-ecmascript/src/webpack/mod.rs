@@ -1,11 +1,16 @@
 use anyhow::Result;
 use swc_core::ecma::ast::Lit;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, resolve, ResolveResult, ResolveResultVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        resolve, ResolveResult, ResolveResultVc,
+    },
     source_asset::SourceAssetVc,
 };
 
@@ -87,9 +92,8 @@ impl AssetReference for WebpackChunkAssetReference {
                 let filename = format!("./chunks/{}.js", chunk_id);
                 let source = SourceAssetVc::new(context_path.join(&filename)).into();
 
-                ResolveResult::Single(
+                ResolveResult::asset(
                     WebpackModuleAssetVc::new(source, self.runtime, self.transforms).into(),
-                    Vec::new(),
                 )
                 .into()
             }
@@ -122,9 +126,8 @@ pub struct WebpackEntryAssetReference {
 impl AssetReference for WebpackEntryAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(
+        ResolveResult::asset(
             WebpackModuleAssetVc::new(self.source, self.runtime, self.transforms).into(),
-            Vec::new(),
         )
         .into()
     }
@@ -150,7 +153,8 @@ pub struct WebpackRuntimeAssetReference {
 impl AssetReference for WebpackRuntimeAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let options = self.origin.resolve_options();
+        let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+        let options = self.origin.resolve_options(ty.clone());
 
         let options = apply_cjs_specific_options(options);
 
@@ -160,15 +164,16 @@ impl AssetReference for WebpackRuntimeAssetReference {
             options,
         );
 
-        if let ResolveResult::Single(source, ref refs) = *resolved.await? {
-            return Ok(ResolveResult::Single(
-                WebpackModuleAssetVc::new(source, self.runtime, self.transforms).into(),
-                refs.clone(),
+        Ok(resolved
+            .await?
+            .map(
+                |source| async move {
+                    Ok(WebpackModuleAssetVc::new(source, self.runtime, self.transforms).into())
+                },
+                |r| async move { Ok(r) },
             )
-            .into());
-        }
-
-        Ok(ResolveResult::unresolveable().into())
+            .await?
+            .cell())
     }
 }
 

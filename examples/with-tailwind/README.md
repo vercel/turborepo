@@ -49,6 +49,6 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/with-tailwind with-tailwind
 cd with-tailwind
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```

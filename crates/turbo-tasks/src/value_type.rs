@@ -1,11 +1,12 @@
 use std::{
     any::{type_name, Any},
-    collections::{HashMap, HashSet},
+    borrow::Cow,
     fmt::{self, Debug, Display, Formatter},
     hash::Hash,
     sync::Arc,
 };
 
+use auto_hash_map::{AutoMap, AutoSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -50,6 +51,41 @@ pub trait ValueTraitVc:
     fn get_trait_type_id() -> TraitTypeId;
 }
 
+pub trait IntoSuperTrait<T>: ValueTraitVc
+where
+    T: ValueTraitVc,
+{
+    fn into_super_trait(self) -> T;
+}
+
+pub trait FromSubTrait<T>: ValueTraitVc
+where
+    T: ValueTraitVc,
+{
+    fn from_sub_trait(t: T) -> Self;
+}
+
+impl<T, U> IntoSuperTrait<U> for T
+where
+    T: ValueTraitVc,
+    U: ValueTraitVc + FromSubTrait<T>,
+{
+    fn into_super_trait(self) -> U {
+        U::from_sub_trait(self)
+    }
+}
+
+impl<T> FromSubTrait<T> for T
+where
+    T: ValueTraitVc,
+{
+    /// Returns the argument unchanged.
+    #[inline(always)]
+    fn from_sub_trait(t: T) -> T {
+        t
+    }
+}
+
 /// Marker trait that a turbo_tasks::value is prepared for
 /// serialization as Value<...> input.
 /// Either use `#[turbo_tasks::value(serialization: auto_for_input)]`
@@ -72,9 +108,9 @@ pub struct ValueType {
     /// A readable name of the type
     pub name: String,
     /// List of traits available
-    pub traits: HashSet<TraitTypeId>,
+    pub traits: AutoSet<TraitTypeId>,
     /// List of trait methods available
-    pub trait_methods: HashMap<(TraitTypeId, String), FunctionId>,
+    pub trait_methods: AutoMap<(TraitTypeId, Cow<'static, str>), FunctionId>,
 
     /// Functors for serialization
     magic_serialization: Option<(MagicSerializationFn, MagicAnyDeserializeSeed)>,
@@ -134,8 +170,8 @@ impl ValueType {
     pub fn new<T>() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: None,
         }
@@ -147,8 +183,8 @@ impl ValueType {
     >() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: Some((
                 <dyn MagicAny>::as_serialize::<T>,
                 MagicAnyDeserializeSeed::new::<T>(),
@@ -163,8 +199,8 @@ impl ValueType {
     >() -> Self {
         Self {
             name: std::any::type_name::<T>().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: None,
             any_serialization: Some((any_as_serialize::<T>, AnyDeserializeSeed::new::<T>())),
         }
@@ -205,7 +241,7 @@ impl ValueType {
     pub fn register_trait_method(
         &mut self,
         trait_type: TraitTypeId,
-        name: String,
+        name: Cow<'static, str>,
         native_fn: FunctionId,
     ) {
         self.trait_methods.insert((trait_type, name), native_fn);
@@ -213,7 +249,7 @@ impl ValueType {
 
     pub fn get_trait_method(
         &self,
-        trait_method_key: &(TraitTypeId, String),
+        trait_method_key: &(TraitTypeId, Cow<'static, str>),
     ) -> Option<&FunctionId> {
         self.trait_methods.get(trait_method_key)
     }
@@ -239,7 +275,7 @@ impl ValueType {
 #[derive(Debug)]
 pub struct TraitType {
     pub name: String,
-    pub(crate) default_trait_methods: HashMap<String, FunctionId>,
+    pub(crate) default_trait_methods: AutoMap<Cow<'static, str>, FunctionId>,
 }
 
 impl Hash for TraitType {
@@ -278,11 +314,15 @@ impl TraitType {
     pub fn new(name: String) -> Self {
         Self {
             name,
-            default_trait_methods: HashMap::new(),
+            default_trait_methods: AutoMap::new(),
         }
     }
 
-    pub fn register_default_trait_method(&mut self, name: String, native_fn: FunctionId) {
+    pub fn register_default_trait_method(
+        &mut self,
+        name: Cow<'static, str>,
+        native_fn: FunctionId,
+    ) {
         self.default_trait_methods.insert(name, native_fn);
     }
 

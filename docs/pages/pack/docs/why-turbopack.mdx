@@ -5,7 +5,7 @@ description: Learn why we think Turbopack is the future of bundling for the web.
 
 # Why Turbopack?
 
-When we set out to create Turbopack, we wanted to solve a problem. We had been working on speed improvements for Next.js. We migrated away from several JS-based tools. Babel, gone. Terser, gone. Our next target was another JS-based tool, Webpack.
+When we set out to create Turbopack, we wanted to solve a problem. We had been working on speed improvements for Next.js. We migrated away from several JS-based tools. Babel, gone. Terser, gone. Our next target was another JS-based tool, webpack.
 
 Replacing it became our goal. But with what?
 
@@ -17,7 +17,7 @@ Frameworks like Vite use a technique where they don’t bundle application sourc
 
 However, Vite can hit scaling issues with large applications made up of many modules. A flood of cascading network requests in the browser can lead to a relatively slow startup time. For the browser, it’s faster if it can receive the code it needs in as few network requests as possible - even on a local server.
 
-That’s why we decided that, like Webpack, we wanted Turbopack to bundle the code in the development server. Turbopack can do it much faster, especially for larger applications, because it is written in Rust and skips optimization work that is only necessary for production.
+That’s why we decided that, like webpack, we wanted Turbopack to bundle the code in the development server. Turbopack can do it much faster, especially for larger applications, because it is written in Rust and skips optimization work that is only necessary for production.
 
 ## Incremental Computation
 
@@ -47,7 +47,7 @@ This more ‘lazy’ approach (only bundling assets when absolutely necessary) i
 
 esbuild doesn’t have a concept of ‘lazy’ bundling - it’s all-or-nothing, unless you specifically target only certain entry points.
 
-Turbopack’s development mode builds a minimal graph of your app’s imports and exports based on received requests and only bundles the minimal code necessary. Learn more in the [core concepts docs](/repo/docs/core-concepts/caching).
+Turbopack’s development mode builds a minimal graph of your app’s imports and exports based on received requests and only bundles the minimal code necessary. Learn more in the [core concepts docs](/pack/docs/core-concepts#compiling-by-request).
 
 This strategy makes Turbopack extremely fast when first starting up the dev server. We compute only the code necessary to render the page, then ship it to the browser in a single chunk. At large scale, this ends up being significantly faster than Native ESM.
 

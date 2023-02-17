@@ -47,14 +47,17 @@ func AbsoluteSystemPathFromUpstream(s string) turbopath.AbsoluteSystemPath {
 }
 
 // GetCwd returns the calculated working directory after traversing symlinks.
-func GetCwd() (turbopath.AbsoluteSystemPath, error) {
-	cwdRaw, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("invalid working directory: %w", err)
+func GetCwd(cwdRaw string) (turbopath.AbsoluteSystemPath, error) {
+	if cwdRaw == "" {
+		var err error
+		cwdRaw, err = os.Getwd()
+		if err != nil {
+			return "", err
+		}
 	}
 	// We evaluate symlinks here because the package managers
 	// we support do the same.
-	cwdRaw, err = filepath.EvalSymlinks(cwdRaw)
+	cwdRaw, err := filepath.EvalSymlinks(cwdRaw)
 	if err != nil {
 		return "", fmt.Errorf("evaluating symlinks in cwd: %w", err)
 	}
@@ -100,13 +103,6 @@ func IofsRelativePath(fsysRoot string, absolutePath string) (string, error) {
 // under the system's default temp directory location
 func TempDir(subDir string) turbopath.AbsoluteSystemPath {
 	return turbopath.AbsoluteSystemPath(os.TempDir()).UntypedJoin(subDir)
-}
-
-// GetTurboDataDir returns a directory outside of the repo
-// where turbo can store data files related to turbo.
-func GetTurboDataDir() turbopath.AbsoluteSystemPath {
-	dataHome := AbsoluteSystemPathFromUpstream(xdg.DataHome)
-	return dataHome.UntypedJoin("turborepo")
 }
 
 // GetUserConfigDir returns the platform-specific common location

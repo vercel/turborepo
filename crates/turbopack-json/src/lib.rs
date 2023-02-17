@@ -7,12 +7,11 @@
 
 #![feature(min_specialization)]
 
-pub mod issue;
+use std::fmt::Write;
 
-use anyhow::Result;
-use issue::{JsonIssue, JsonIssueVc};
+use anyhow::{bail, Error, Result};
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
@@ -21,6 +20,7 @@ use turbopack_core::{
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
     EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
+    EcmascriptExports, EcmascriptExportsVc,
 };
 
 #[turbo_tasks::value]
@@ -47,11 +47,6 @@ impl Asset for JsonModuleAsset {
     fn content(&self) -> AssetContentVc {
         self.source.content()
     }
-
-    #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        AssetReferencesVc::empty()
-    }
 }
 
 #[turbo_tasks::value_impl]
@@ -74,6 +69,11 @@ impl EcmascriptChunkPlaceable for JsonModuleAsset {
             context,
         })
         .into()
+    }
+
+    #[turbo_tasks::function]
+    fn get_exports(&self) -> EcmascriptExportsVc {
+        EcmascriptExports::Value.cell()
     }
 }
 
@@ -110,34 +110,46 @@ impl EcmascriptChunkItem for JsonChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.module.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         // We parse to JSON and then stringify again to ensure that the
         // JSON is valid.
-        let inner_code = match self.module.path().read_json().to_string().await {
-            Ok(content) => {
-                let js_str_content = serde_json::to_string(content.as_str())?;
-                format!("__turbopack_export_value__(JSON.parse({js_str_content}));",)
-            }
-            Err(error) => {
-                let error_message = format!("{:?}", error.to_string());
-                let js_error_message = serde_json::to_string(&format!(
-                    "An error occurred while importing a JSON module: {}",
-                    &error_message
-                ))?;
-                let issue: JsonIssueVc = JsonIssue {
-                    path: self.module.path(),
-                    error_message: StringVc::cell(error_message),
+        let content = self.module.path().read();
+        let data = content.parse_json().await?;
+        match &*data {
+            FileJsonContent::Content(data) => {
+                let js_str_content = serde_json::to_string(&data.to_string())?;
+                let inner_code =
+                    format!("__turbopack_export_value__(JSON.parse({js_str_content}));");
+
+                Ok(EcmascriptChunkItemContent {
+                    inner_code: inner_code.into(),
+                    ..Default::default()
                 }
-                .into();
-                issue.as_issue().emit();
-                format!("throw new Error({error})", error = &js_error_message,)
+                .into())
             }
-        };
-        Ok(EcmascriptChunkItemContent {
-            inner_code: inner_code.into(),
-            ..Default::default()
+            FileJsonContent::Unparseable(e) => {
+                let mut message = "Unable to make a module from invalid JSON: ".to_string();
+                if let FileContent::Content(content) = &*content.await? {
+                    let text = content.content().to_str()?;
+                    e.write_with_content(&mut message, text.as_ref())?;
+                } else {
+                    write!(message, "{}", e)?;
+                }
+
+                Err(Error::msg(message))
+            }
+            FileJsonContent::NotFound => {
+                bail!(
+                    "JSON file not found: {}",
+                    self.module.path().to_string().await?
+                );
+            }
         }
-        .into())
     }
 }
 

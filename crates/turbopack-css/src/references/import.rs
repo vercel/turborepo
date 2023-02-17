@@ -3,17 +3,29 @@ use swc_core::{
     common::DUMMY_SP,
     css::{
         ast::*,
-        codegen::{writer::basic::BasicCssWriter, CodeGenerator, Emit},
+        codegen::{
+            writer::basic::{BasicCssWriter, BasicCssWriterConfig},
+            CodeGenerator, Emit,
+        },
     },
 };
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    reference_type::CssReferenceSubType,
+    resolve::{
+        origin::ResolveOriginVc,
+        parse::{Request, RequestVc},
+        ResolveResultVc,
+    },
 };
 
-use crate::references::{css_resolve, AstPathVc};
+use crate::{
+    chunk::CssImport,
+    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    references::{css_resolve, AstPathVc},
+};
 
 #[turbo_tasks::value(into = "new")]
 pub struct ImportAttributes {
@@ -28,32 +40,58 @@ pub struct ImportAttributes {
 impl ImportAttributes {
     pub fn new_from_prelude(prelude: &ImportPrelude) -> Self {
         let layer_name = prelude.layer_name.as_ref().map(|l| match l {
-            box ImportPreludeLayerName::Ident(_) => LayerName {
+            box ImportLayerName::Ident(_) => LayerName {
                 span: DUMMY_SP,
                 name: vec![],
             },
-            box ImportPreludeLayerName::Function(f) => {
+            box ImportLayerName::Function(f) => {
                 assert_eq!(f.value.len(), 1);
                 assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
                 if let ComponentValue::LayerName(layer_name) = &f.value[0] {
-                    layer_name.clone()
+                    *layer_name.clone()
                 } else {
                     unreachable!()
                 }
             }
         });
 
-        let supports = prelude.supports.as_ref().map(|s| match s {
-            box ImportPreludeSupportsType::SupportsCondition(s) => s.clone(),
-            box ImportPreludeSupportsType::Declaration(d) => SupportsCondition {
-                span: DUMMY_SP,
-                conditions: vec![SupportsConditionType::SupportsInParens(
-                    SupportsInParens::Feature(SupportsFeature::Declaration(d.clone())),
-                )],
-            },
-        });
+        let (supports, media) = prelude
+            .import_conditions
+            .as_ref()
+            .map(|c| {
+                let supports = if let Some(supports) = &c.supports {
+                    let v = supports.value.iter().find(|v| {
+                        matches!(
+                            v,
+                            ComponentValue::SupportsCondition(..) | ComponentValue::Declaration(..)
+                        )
+                    });
 
-        let media = prelude.media.as_ref().map(|m| m.queries.clone());
+                    if let Some(supports) = v {
+                        match &supports {
+                            ComponentValue::SupportsCondition(s) => Some(*s.clone()),
+                            ComponentValue::Declaration(d) => Some(SupportsCondition {
+                                span: DUMMY_SP,
+                                conditions: vec![SupportsConditionType::SupportsInParens(
+                                    SupportsInParens::Feature(SupportsFeature::Declaration(
+                                        d.clone(),
+                                    )),
+                                )],
+                            }),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let media = c.media.as_ref().map(|m| m.queries.clone());
+
+                (supports, media)
+            })
+            .unwrap_or_else(|| (None, None));
 
         Self {
             layer_name,
@@ -62,7 +100,7 @@ impl ImportAttributes {
         }
     }
 
-    pub fn print_block(&self) -> Result<(String, usize, String)> {
+    pub fn print_block(&self) -> Result<(String, String)> {
         fn token(token: Token) -> TokenAndSpan {
             TokenAndSpan {
                 span: DUMMY_SP,
@@ -73,12 +111,13 @@ impl ImportAttributes {
         // something random that's never gonna be in real css
         let mut rule = Rule::ListOfComponentValues(box ListOfComponentValues {
             span: DUMMY_SP,
-            children: vec![ComponentValue::PreservedToken(token(Token::String {
-                value: Default::default(),
-                raw: r#""""__turbopack_placeholder__""""#.into(),
-            }))],
+            children: vec![ComponentValue::PreservedToken(Box::new(token(
+                Token::String {
+                    value: Default::default(),
+                    raw: r#""""__turbopack_placeholder__""""#.into(),
+                },
+            )))],
         });
-        let mut indent = 0;
 
         fn at_rule(name: &str, prelude: AtRulePrelude, inner_rule: Rule) -> Rule {
             Rule::AtRule(box AtRule {
@@ -92,7 +131,7 @@ impl ImportAttributes {
                 block: Some(SimpleBlock {
                     span: DUMMY_SP,
                     name: token(Token::LBrace),
-                    value: vec![ComponentValue::Rule(inner_rule)],
+                    value: vec![ComponentValue::from(inner_rule)],
                 }),
             })
         }
@@ -106,7 +145,6 @@ impl ImportAttributes {
                 }),
                 rule,
             );
-            indent += 2;
         }
         if let Some(supports) = &self.supports {
             rule = at_rule(
@@ -114,7 +152,6 @@ impl ImportAttributes {
                 AtRulePrelude::SupportsPrelude(supports.clone()),
                 rule,
             );
-            indent += 2;
         }
         if let Some(layer_name) = &self.layer_name {
             rule = at_rule(
@@ -122,12 +159,18 @@ impl ImportAttributes {
                 AtRulePrelude::LayerPrelude(LayerPrelude::Name(layer_name.clone())),
                 rule,
             );
-            indent += 2;
         }
 
         let mut output = String::new();
         let mut code_gen = CodeGenerator::new(
-            BasicCssWriter::new(&mut output, None, Default::default()),
+            BasicCssWriter::new(
+                &mut output,
+                None,
+                BasicCssWriterConfig {
+                    indent_width: 0,
+                    ..Default::default()
+                },
+            ),
             Default::default(),
         );
         code_gen.emit(&rule)?;
@@ -136,7 +179,7 @@ impl ImportAttributes {
             .split_once(r#""""__turbopack_placeholder__""""#)
             .unwrap();
 
-        Ok((open.trim().into(), indent, close.trim().into()))
+        Ok((open.trim().into(), close.trim().into()))
     }
 }
 
@@ -171,7 +214,11 @@ impl ImportAssetReferenceVc {
 impl AssetReference for ImportAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        css_resolve(self.origin, self.request)
+        css_resolve(
+            self.origin,
+            self.request,
+            Value::new(CssReferenceSubType::AtImport),
+        )
     }
 }
 
@@ -183,6 +230,34 @@ impl ValueToString for ImportAssetReference {
             "import(url) {}",
             self.request.to_string().await?,
         )))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for ImportAssetReference {
+    #[turbo_tasks::function]
+    async fn code_generation(
+        self_vc: ImportAssetReferenceVc,
+        _context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
+        let this = &*self_vc.await?;
+        let mut imports = vec![];
+        if let Request::Uri {
+            protocol,
+            remainder,
+        } = &*this.request.await?
+        {
+            imports.push(CssImport::External(StringVc::cell(format!(
+                "{}{}",
+                protocol, remainder
+            ))))
+        }
+
+        Ok(CodeGeneration {
+            visitors: vec![],
+            imports,
+        }
+        .into())
     }
 }
 

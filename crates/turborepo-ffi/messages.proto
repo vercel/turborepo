@@ -1,0 +1,24 @@
+syntax = "proto3";
+option go_package = "ffi/proto";
+
+message TurboDataDirResp {
+    string dir = 1;
+}
+
+message GlobReq {
+	string base_path = 1;
+	repeated string include_patterns = 2;
+  repeated string exclude_patterns = 3;
+  bool files_only = 4; // note that the default for a bool is false
+}
+
+message GlobResp {
+  oneof response {
+    GlobRespList files = 1;
+    string error = 2;
+  }
+}
+
+message GlobRespList {
+  repeated string files = 1;
+}

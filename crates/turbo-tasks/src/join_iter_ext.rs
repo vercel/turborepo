@@ -29,6 +29,16 @@ where
     }
 }
 
+pub trait JoinIterExt<T, F>: Iterator
+where
+    T: Unpin,
+    F: Future<Output = T>,
+{
+    /// Returns a future that resolves to a vector of the outputs of the futures
+    /// in the iterator.
+    fn join(self) -> Join<F>;
+}
+
 /// Future for the [TryJoinIterExt::try_join] method.
 pub struct TryJoin<F>
 where
@@ -55,16 +65,6 @@ where
             std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
-}
-
-pub trait JoinIterExt<T, F>: Iterator
-where
-    T: Unpin,
-    F: Future<Output = T>,
-{
-    /// Returns a future that resolves to a vector of the outputs of the futures
-    /// in the iterator.
-    fn join(self) -> Join<F>;
 }
 
 pub trait TryJoinIterExt<T, F>: Iterator

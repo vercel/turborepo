@@ -1,7 +1,9 @@
 package lockfile
 
 import (
+	"bytes"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -9,11 +11,11 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-func getNpmLockfile(t *testing.T) *NpmLockfile {
-	content, err := getFixture(t, "npm-lock.json")
-	assert.NilError(t, err, "reading npm-lock.json")
+func getNpmLockfile(t *testing.T, file string) *NpmLockfile {
+	content, err := getFixture(t, file)
+	assert.NilError(t, err, "reading {}", file)
 	lockfile, err := DecodeNpmLockfile(content)
-	assert.NilError(t, err, "parsing npm-lock.json")
+	assert.NilError(t, err, "parsing {}", file)
 	return lockfile
 }
 
@@ -44,6 +46,11 @@ func Test_NpmPathParent(t *testing.T) {
 	for _, tc := range testCases {
 		assert.Equal(t, npmPathParent(tc.key), tc.parent, tc.key)
 	}
+}
+
+func Test_NpmResolvesAlternateWorkspaceFormat(t *testing.T) {
+	lockfile := getNpmLockfile(t, "npm-lock-workspace-variation.json")
+	assert.Equal(t, lockfile.Name, "npm-prune-workspace-variation")
 }
 
 func Test_PossibleNpmDeps(t *testing.T) {
@@ -143,7 +150,7 @@ func Test_NpmResolvePackage(t *testing.T) {
 		},
 	}
 
-	lockfile := getNpmLockfile(t)
+	lockfile := getNpmLockfile(t, "npm-lock.json")
 	for _, tc := range testCases {
 		workspace := turbopath.AnchoredUnixPath(tc.workspace)
 		pkg, err := lockfile.ResolvePackage(workspace, tc.name, "")
@@ -188,7 +195,7 @@ func Test_NpmAllDependencies(t *testing.T) {
 		},
 	}
 
-	lockfile := getNpmLockfile(t)
+	lockfile := getNpmLockfile(t, "npm-lock.json")
 	for _, tc := range testCases {
 		deps, ok := lockfile.AllDependencies(tc.key)
 		assert.Assert(t, ok, tc.name)
@@ -202,4 +209,44 @@ func Test_NpmAllDependencies(t *testing.T) {
 		assert.DeepEqual(t, depKeys, tc.expected)
 	}
 
+}
+
+func Test_NpmPeerDependenciesMeta(t *testing.T) {
+	var buf bytes.Buffer
+
+	lockfile := getNpmLockfile(t, "npm-lock.json")
+	if err := lockfile.Encode(&buf); err != nil {
+		t.Error(err)
+	}
+	s := buf.String()
+
+	expected := `"node_modules/eslint-config-next": {
+      "version": "12.3.1",
+      "resolved": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-12.3.1.tgz",
+      "integrity": "sha512-EN/xwKPU6jz1G0Qi6Bd/BqMnHLyRAL0VsaQaWA7F3KkjAgZHi4f1uL1JKGWNxdQpHTW/sdGONBd0bzxUka/DJg==",
+      "dependencies": {
+        "@next/eslint-plugin-next": "12.3.1",
+        "@rushstack/eslint-patch": "^1.1.3",
+        "@typescript-eslint/parser": "^5.21.0",
+        "eslint-import-resolver-node": "^0.3.6",
+        "eslint-import-resolver-typescript": "^2.7.1",
+        "eslint-plugin-import": "^2.26.0",
+        "eslint-plugin-jsx-a11y": "^6.5.1",
+        "eslint-plugin-react": "^7.31.7",
+        "eslint-plugin-react-hooks": "^4.5.0"
+      },
+      "peerDependencies": {
+        "eslint": "^7.23.0 || ^8.0.0",
+        "typescript": ">=3.3.1"
+      },
+      "peerDependenciesMeta": {
+        "typescript": {
+          "optional": true
+        }
+      }
+    },`
+
+	if !strings.Contains(s, expected) {
+		t.Error("failed to persist \"peerDependenciesMeta\" in npm lockfile")
+	}
 }

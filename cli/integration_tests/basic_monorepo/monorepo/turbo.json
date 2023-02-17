@@ -3,6 +3,10 @@
   "pipeline": {
     "build": {
       "outputs": []
+    },
+    // this comment verifies that turbo can read .json files with comments
+    "my-app#build": {
+      "outputs": ["banana.txt", "apple.json"]
     }
   }
 }

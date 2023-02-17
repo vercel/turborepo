@@ -19,7 +19,7 @@ use crate::{
     registry, turbo_tasks,
     value::{TransientInstance, TransientValue, Value},
     value_type::TypedForInput,
-    RawVc, TaskId, TraitType, Typed, ValueTypeId,
+    CellId, RawVc, TaskId, TraitType, Typed, ValueTypeId,
 };
 
 #[derive(Clone)]
@@ -325,11 +325,13 @@ impl<'de> Deserialize<'de> for SharedValue {
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TaskInput {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
     List(Vec<TaskInput>),
     String(String),
     Bool(bool),
     Usize(usize),
+    I16(i16),
+    U16(u16),
     I32(i32),
     U32(u32),
     U64(u64),
@@ -401,7 +403,7 @@ impl TaskInput {
             TaskInput::SharedValue(SharedValue(ty, _))
             | TaskInput::SharedReference(SharedReference(ty, _)) => {
                 if let Some(ty) = *ty {
-                    let key = (trait_type, name.into_owned());
+                    let key = (trait_type, name);
                     if let Some(func) = registry::get_value_type(ty).get_trait_method(&key) {
                         Ok(*func)
                     } else if let Some(func) = registry::get_trait(trait_type)
@@ -410,7 +412,7 @@ impl TaskInput {
                     {
                         Ok(*func)
                     } else {
-                        Err(Cow::Owned(key.1))
+                        Err(key.1)
                     }
                 } else {
                     Err(name)
@@ -513,6 +515,8 @@ impl Display for TaskInput {
             TaskInput::String(s) => write!(f, "string {:?}", s),
             TaskInput::Bool(b) => write!(f, "bool {:?}", b),
             TaskInput::Usize(v) => write!(f, "usize {}", v),
+            TaskInput::I16(v) => write!(f, "i16 {}", v),
+            TaskInput::U16(v) => write!(f, "u16 {}", v),
             TaskInput::I32(v) => write!(f, "i32 {}", v),
             TaskInput::U32(v) => write!(f, "u32 {}", v),
             TaskInput::U64(v) => write!(f, "u64 {}", v),
@@ -541,6 +545,18 @@ impl From<&str> for TaskInput {
 impl From<bool> for TaskInput {
     fn from(b: bool) -> Self {
         TaskInput::Bool(b)
+    }
+}
+
+impl From<i16> for TaskInput {
+    fn from(v: i16) -> Self {
+        TaskInput::I16(v)
+    }
+}
+
+impl From<u16> for TaskInput {
+    fn from(v: u16) -> Self {
+        TaskInput::U16(v)
     }
 }
 
@@ -674,6 +690,28 @@ impl<'a, T: FromTaskInput<'a, Error = anyhow::Error>> FromTaskInput<'a> for Vec<
                 .map(|i| FromTaskInput::try_from(i))
                 .collect::<Result<Vec<_>, _>>()?),
             _ => Err(anyhow!("invalid task input type, expected list")),
+        }
+    }
+}
+
+impl FromTaskInput<'_> for u16 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &TaskInput) -> Result<Self, Self::Error> {
+        match value {
+            TaskInput::U16(value) => Ok(*value),
+            _ => Err(anyhow!("invalid task input type, expected u16")),
+        }
+    }
+}
+
+impl FromTaskInput<'_> for i16 {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &TaskInput) -> Result<Self, Self::Error> {
+        match value {
+            TaskInput::I16(value) => Ok(*value),
+            _ => Err(anyhow!("invalid task input type, expected i16")),
         }
     }
 }
@@ -822,3 +860,49 @@ impl TryFrom<&TaskInput> for RawVc {
         }
     }
 }
+
+macro_rules! tuple_impls {
+    ( $( $name:ident )+ ) => {
+        impl<$($name: Into<TaskInput>),+> From<($($name,)+)> for TaskInput {
+            #[allow(non_snake_case)]
+            fn from(s: ($($name,)+)) -> Self {
+                let ($($name,)+) = s;
+                let ($($name,)+) = ($($name.into(),)+);
+                TaskInput::List(vec![ $($name,)+ ])
+            }
+        }
+
+        impl<'a, $($name: FromTaskInput<'a, Error = anyhow::Error>,)+> FromTaskInput<'a> for ($($name,)+) {
+            type Error = anyhow::Error;
+
+            #[allow(non_snake_case)]
+            fn try_from(value: &'a TaskInput) -> Result<Self, Self::Error> {
+                match value {
+                    TaskInput::List(value) => {
+                        let mut iter = value.iter();
+                        $(
+                            let $name = iter.next().ok_or_else(|| anyhow!("missing tuple element"))?;
+                            let $name = FromTaskInput::try_from($name)?;
+                        )+
+                        Ok(($($name,)+))
+                    },
+                    _ => Err(anyhow!("invalid task input type, expected list")),
+                }
+            }
+        }
+    };
+
+}
+
+tuple_impls! { A }
+tuple_impls! { A B }
+tuple_impls! { A B C }
+tuple_impls! { A B C D }
+tuple_impls! { A B C D E }
+tuple_impls! { A B C D E F }
+tuple_impls! { A B C D E F G }
+tuple_impls! { A B C D E F G H }
+tuple_impls! { A B C D E F G H I }
+tuple_impls! { A B C D E F G H I J }
+tuple_impls! { A B C D E F G H I J K }
+tuple_impls! { A B C D E F G H I J K L }

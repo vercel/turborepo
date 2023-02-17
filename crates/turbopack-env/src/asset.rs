@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -15,7 +15,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_str,
+    utils::stringify_js,
 };
 
 /// The `process.env` asset, responsible for initializing the env (shared by all
@@ -114,20 +114,27 @@ impl EcmascriptChunkItem for ProcessEnvChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.inner.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let asset = self.inner.await?;
         let env = asset.env.read_all().await?;
 
-        // TODO this is not completely correct as env vars need to ignore casing
-        // So `process.env.path === process.env.PATH === process.env.PaTh`
-        let mut code = "const env = process.env;\n\n".to_string();
+        // TODO: In SSR, we use the native process.env, which can only contain string
+        // values. We need to inject literal values (to emulate webpack's
+        // DefinePlugin), so create a new regular object out of the old env.
+        let mut code = "const env = process.env = {...process.env};\n\n".to_string();
+
         for (name, val) in &*env {
-            writeln!(
-                code,
-                "env[{}] = {};",
-                stringify_str(name),
-                stringify_str(val),
-            )?;
+            // It's assumed the env has passed through an EmbeddableProcessEnv, so the value
+            // is ready to be directly embedded. Values _after_ an embeddable
+            // env can be used to inject live code into the output.
+            // TODO this is not completely correct as env vars need to ignore casing
+            // So `process.env.path === process.env.PATH === process.env.PaTh`
+            writeln!(code, "env[{}] = {};", stringify_js(name), val)?;
         }
 
         Ok(EcmascriptChunkItemContent {

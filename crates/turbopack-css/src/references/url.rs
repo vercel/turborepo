@@ -3,19 +3,25 @@ use swc_core::{
     common::DUMMY_SP,
     css::ast::{Str, UrlValue},
 };
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
-    asset::AssetVc,
-    chunk::ChunkingContextVc,
+    asset::{Asset, AssetVc},
+    chunk::{ChunkingContext, ChunkingContextVc},
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    reference_type::UrlReferenceSubType,
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        PrimaryResolveResult, ResolveResultVc,
+    },
 };
+use turbopack_ecmascript::resolve::url_resolve;
 
 use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
-    embed::CssEmbeddableVc,
-    references::{css_resolve, AstPathVc},
+    embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
+    references::AstPathVc,
 };
 
 #[turbo_tasks::value(into = "new")]
@@ -45,13 +51,14 @@ impl UrlAssetReferenceVc {
 
     #[turbo_tasks::function]
     async fn get_referenced_asset(self, context: ChunkingContextVc) -> Result<ReferencedAssetVc> {
-        let assets = self.resolve_reference().primary_assets();
-        for asset in assets.await?.iter() {
-            if let Some(embeddable) = CssEmbeddableVc::resolve_from(asset).await? {
-                return Ok(ReferencedAsset::Some(
-                    embeddable.as_css_embed(context).embeddable_asset(),
-                )
-                .into());
+        for result in self.resolve_reference().await?.primary.iter() {
+            if let PrimaryResolveResult::Asset(asset) = result {
+                if let Some(embeddable) = CssEmbeddableVc::resolve_from(asset).await? {
+                    return Ok(ReferencedAsset::Some(
+                        embeddable.as_css_embed(context).embeddable_asset(),
+                    )
+                    .into());
+                }
             }
         }
         Ok(ReferencedAssetVc::cell(ReferencedAsset::None))
@@ -62,7 +69,11 @@ impl UrlAssetReferenceVc {
 impl AssetReference for UrlAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        css_resolve(self.origin, self.request)
+        url_resolve(
+            self.origin,
+            self.request,
+            Value::new(UrlReferenceSubType::CssUrl),
+        )
     }
 }
 
@@ -107,6 +118,10 @@ impl CodeGenerateable for UrlAssetReference {
             );
         }
 
-        Ok(CodeGeneration { visitors }.into())
+        Ok(CodeGeneration {
+            visitors,
+            imports: vec![],
+        }
+        .into())
     }
 }

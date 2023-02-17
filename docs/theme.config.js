@@ -4,6 +4,7 @@ import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
+import ExtraContent from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
@@ -12,14 +13,11 @@ const SITE_ROOT = "https://turbo.build";
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
 const theme = {
-  project: {
-    icon: Github,
-  },
-  chat: {
-    icon: Discord,
+  sidebar: {
+    defaultMenuCollapseLevel: Number.POSITIVE_INFINITY,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
-  getNextSeoProps: function SEO() {
+  useNextSeoProps: function SEO() {
     const router = useRouter();
     const { frontMatter } = useConfig();
 
@@ -45,13 +43,18 @@ const theme = {
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
-      setDateString(
-        timestamp.toLocaleDateString(navigator.language, {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
-      );
+      try {
+        setDateString(
+          timestamp.toLocaleDateString(navigator.language, {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        );
+      } catch (e) {
+        // Ignore errors here; they get the ISO string.
+        // At least one person out there has manually misconfigured navigator.language.
+      }
     }, [timestamp]);
 
     return <>Last updated on {dateString}</>;
@@ -60,6 +63,7 @@ const theme = {
   unstable_staticImage: true,
   toc: {
     float: true,
+    extraContent: ExtraContent,
   },
   font: false,
   feedback: {
@@ -140,13 +144,27 @@ const theme = {
         <link rel="prefetch" href="/repo/docs" as="document" />
         <link rel="prefetch" href="/pack" as="document" />
         <link rel="prefetch" href="/pack/docs" as="document" />
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="Turbo Blog"
+          href="https://turbo.build/feed.xml"
+        />
       </>
     );
   },
   editLink: {
     text: "Edit this page on GitHub",
   },
-  navbar: Navigation,
+  navbar: {
+    component: Navigation,
+    extraContent: (
+      <>
+        <Github />
+        <Discord />
+      </>
+    ),
+  },
   search: {
     placeholder: "Search documentation…",
   },

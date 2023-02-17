@@ -2,8 +2,15 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
+    context::AssetContext,
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc},
+    reference_type::{ReferenceType, TypeScriptReferenceSubType},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        pattern::QueryMapVc,
+        ResolveResult, ResolveResultVc,
+    },
     source_asset::SourceAssetVc,
 };
 
@@ -28,10 +35,9 @@ impl TsConfigReferenceVc {
 impl AssetReference for TsConfigReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(
+        ResolveResult::asset(
             TsConfigModuleAssetVc::new(self.origin, SourceAssetVc::new(self.tsconfig).into())
                 .into(),
-            Vec::new(),
         )
         .into()
     }
@@ -75,12 +81,12 @@ impl AssetReference for TsReferencePathAssetReference {
                 .try_join(&self.path)
                 .await?
             {
-                ResolveResult::Single(
-                    self.origin
-                        .context()
-                        .process(SourceAssetVc::new(*path).into()),
-                    Vec::new(),
-                )
+                ResolveResult::asset(self.origin.context().process(
+                    SourceAssetVc::new(*path).into(),
+                    Value::new(ReferenceType::TypeScript(
+                        TypeScriptReferenceSubType::Undefined,
+                    )),
+                ))
                 .into()
             } else {
                 ResolveResult::unresolveable().into()
@@ -121,7 +127,11 @@ impl AssetReference for TsReferenceTypeAssetReference {
     fn resolve_reference(&self) -> ResolveResultVc {
         type_resolve(
             self.origin,
-            RequestVc::module(self.module.clone(), Value::new("".to_string().into())),
+            RequestVc::module(
+                self.module.clone(),
+                Value::new("".to_string().into()),
+                QueryMapVc::none(),
+            ),
         )
     }
 }

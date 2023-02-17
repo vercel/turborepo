@@ -116,6 +116,19 @@ impl DeterministicHash for String {
     }
 }
 
+impl DeterministicHash for &str {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_usize(self.len());
+        state.write_bytes(self.as_bytes());
+    }
+}
+
+impl DeterministicHash for bool {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_u8(*self as u8);
+    }
+}
+
 impl<T: DeterministicHash> DeterministicHash for Option<T> {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         match self {

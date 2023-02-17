@@ -20,6 +20,12 @@ impl<T: Typed> Value<T> {
     }
 }
 
+impl<T: Typed> From<T> for Value<T> {
+    fn from(value: T) -> Self {
+        Value::new(value)
+    }
+}
+
 impl<T: Typed> Deref for Value<T> {
     type Target = T;
 
@@ -29,6 +35,12 @@ impl<T: Typed> Deref for Value<T> {
 }
 
 impl<T: Typed + Copy> Copy for Value<T> {}
+
+impl<T: Typed + Default> Default for Value<T> {
+    fn default() -> Self {
+        Value::new(Default::default())
+    }
+}
 
 /// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
 ///

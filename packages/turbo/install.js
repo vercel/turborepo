@@ -17,10 +17,13 @@ const {
 const TURBO_VERSION = require("./package.json").version;
 
 const toPath = path.join(__dirname, "bin", "turbo");
+const goToPath = path.join(__dirname, "bin", "go-turbo");
 let isToPathJS = true;
 
 function validateBinaryVersion(...command) {
   command.push("--version");
+  // Make sure that we get the version of the binary that was just installed
+  command.push("--skip-infer");
   const stdout = child_process
     .execFileSync(command.shift(), command, {
       // Without this, this install script strangely crashes with the error
@@ -193,30 +196,35 @@ function maybeOptimizePackage(binPath) {
   // This optimization also doesn't apply when npm's "--ignore-scripts" flag is
   // used since in that case this install script will not be run.
   if (os.platform() !== "win32" && !isYarn()) {
-    const tempPath = path.join(__dirname, "bin-turbo");
-    try {
-      // First link the binary with a temporary file. If this fails and throws an
-      // error, then we'll just end up doing nothing. This uses a hard link to
-      // avoid taking up additional space on the file system.
-      fs.linkSync(binPath, tempPath);
+    const optimizeBin = (from, to, temp) => {
+      const tempPath = path.join(__dirname, temp);
+      try {
+        // First link the binary with a temporary file. If this fails and throws an
+        // error, then we'll just end up doing nothing. This uses a hard link to
+        // avoid taking up additional space on the file system.
+        fs.linkSync(from, tempPath);
 
-      // Then use rename to atomically replace the target file with the temporary
-      // file. If this fails and throws an error, then we'll just end up leaving
-      // the temporary file there, which is harmless.
-      fs.renameSync(tempPath, toPath);
+        // Then use rename to atomically replace the target file with the temporary
+        // file. If this fails and throws an error, then we'll just end up leaving
+        // the temporary file there, which is harmless.
+        fs.renameSync(tempPath, to);
 
-      // If we get here, then we know that the target location is now a binary
-      // executable instead of a JavaScript file.
-      isToPathJS = false;
+        // If we get here, then we know that the target location is now a binary
+        // executable instead of a JavaScript file.
+        isToPathJS = false;
 
-      // If this install script is being re-run, then "renameSync" will fail
-      // since the underlying inode is the same (it just returns without doing
-      // anything, and without throwing an error). In that case we should remove
-      // the file manually.
-      fs.unlinkSync(tempPath);
-    } catch {
-      // Ignore errors here since this optimization is optional
-    }
+        // If this install script is being re-run, then "renameSync" will fail
+        // since the underlying inode is the same (it just returns without doing
+        // anything, and without throwing an error). In that case we should remove
+        // the file manually.
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Ignore errors here since this optimization is optional
+      }
+    };
+    const goBinPath = path.join(path.dirname(binPath), "go-turbo");
+    optimizeBin(goBinPath, goToPath, "bin-go-turbo");
+    optimizeBin(binPath, toPath, "bin-turbo");
   }
 }
 
@@ -300,11 +308,24 @@ this. If that fails, you need to remove the "--no-optional" flag to use turbo.
 }
 
 checkAndPreparePackage().then(() => {
-  if (isToPathJS) {
-    // We need "node" before this command since it's a JavaScript file
-    validateBinaryVersion("node", toPath);
-  } else {
-    // This is no longer a JavaScript file so don't run it using "node"
-    validateBinaryVersion(toPath);
+  try {
+    if (isToPathJS) {
+      // We need "node" before this command since it's a JavaScript file
+      validateBinaryVersion("node", toPath);
+    } else {
+      // This is no longer a JavaScript file so don't run it using "node"
+      validateBinaryVersion(toPath);
+    }
+  } catch (err) {
+    if (
+      process.platform === "linux" &&
+      err.message &&
+      err.message.includes("ENOENT")
+    ) {
+      console.error(
+        `Error: Failed to run turbo binary, you may need to install glibc compat\nSee https://turbo.build/repo/docs/getting-started/existing-monorepo#install-turbo`
+      );
+    }
+    throw err;
   }
 });

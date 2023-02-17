@@ -4,10 +4,11 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, FileSystemVc,
+    DirectoryContent, DirectoryEntry, FileSystem, FileSystemEntryType, FileSystemPathVc,
+    FileSystemVc,
 };
 use turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
@@ -34,7 +35,7 @@ impl PackageJsonReferenceVc {
 impl AssetReference for PackageJsonReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(SourceAssetVc::new(self.package_json).into(), Vec::new()).into()
+        ResolveResult::asset(SourceAssetVc::new(self.package_json).into()).into()
     }
 }
 
@@ -71,7 +72,7 @@ impl AssetReference for DirAssetReference {
         let context_path = self.source.path().await?;
         // ignore path.join in `node-gyp`, it will includes too many files
         if context_path.path.contains("node_modules/node-gyp") {
-            return Ok(ResolveResult::Alternatives(Vec::new(), vec![]).into());
+            return Ok(ResolveResult::unresolveable().into());
         }
         let context = self.source.path().parent();
         let pat = self.path.await?;
@@ -92,7 +93,7 @@ impl AssetReference for DirAssetReference {
             }
             _ => {}
         }
-        Ok(ResolveResult::Alternatives(result.into_iter().collect(), vec![]).into())
+        Ok(ResolveResult::assets_with_references(result.into_iter().collect(), vec![]).into())
     }
 }
 

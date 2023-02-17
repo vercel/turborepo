@@ -1,5 +1,5 @@
 import cn from "classnames";
-import Image from "next/future/image";
+import Image from "next/image";
 import Link from "next/link";
 import gradients from "../home-shared/gradients.module.css";
 import { HeroText, SectionSubtext } from "../home-shared/Headings";

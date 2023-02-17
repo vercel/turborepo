@@ -332,18 +332,6 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
             #cell_update_op
             #ref_ident { node: cell.into() }
         }
-
-        /// Places a value in a cell of the current task.
-        ///
-        /// Cell is selected by the provided `key`. `key` must not be used twice during the current task.
-        #cell_prefix fn keyed_cell<
-            K: std::fmt::Debug + std::cmp::Eq + std::cmp::Ord + std::hash::Hash + turbo_tasks::Typed + turbo_tasks::TypedForInput + Send + Sync + 'static,
-        >(key: K, content: #cell_arg_type) -> #ref_ident {
-            let cell = turbo_tasks::macro_helpers::find_cell_by_key(*#value_type_id_ident, key);
-            #cell_convert_content
-            #cell_update_op
-            #ref_ident { node: cell.into() }
-        }
     };
 
     let cell_struct = quote! {
@@ -353,16 +341,6 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
         #cell_prefix fn cell(self) -> #ref_ident {
             let content = self;
             #ref_ident::cell(#cell_access_content)
-        }
-
-        /// Places a value in a cell of the current task.
-        ///
-        /// Cell is selected by the provided `key`. `key` must not be used twice during the current task.
-        #cell_prefix fn keyed_cell<
-            K: std::fmt::Debug + std::cmp::Eq + std::cmp::Ord + std::hash::Hash + turbo_tasks::Typed + turbo_tasks::TypedForInput + Send + Sync + 'static,
-        >(self, key: K) -> #ref_ident {
-            let content = self;
-            #ref_ident::keyed_cell(key, #cell_access_content)
         }
     };
 
@@ -512,7 +490,13 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
                 #[turbo_tasks::function]
                 async fn dbg(&self) -> anyhow::Result<turbo_tasks::debug::ValueDebugStringVc> {
                     use turbo_tasks::debug::ValueDebugFormat;
-                    (&self.0).value_debug_format().try_to_value_debug_string().await
+                    (&self.0).value_debug_format(usize::MAX).try_to_value_debug_string().await
+                }
+
+                #[turbo_tasks::function]
+                async fn dbg_depth(&self, depth: usize) -> anyhow::Result<turbo_tasks::debug::ValueDebugStringVc> {
+                    use turbo_tasks::debug::ValueDebugFormat;
+                    (&self.0).value_debug_format(depth).try_to_value_debug_string().await
                 }
             }
         }
@@ -536,10 +520,10 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let value_debug_format_impl = quote! {
         impl turbo_tasks::debug::ValueDebugFormat for #ref_ident {
-            fn value_debug_format(&self) -> turbo_tasks::debug::ValueDebugFormatString {
+            fn value_debug_format(&self, depth: usize) -> turbo_tasks::debug::ValueDebugFormatString {
                 turbo_tasks::debug::ValueDebugFormatString::Async(Box::pin(async move {
                     Ok(if let Some(value_debug) = turbo_tasks::debug::ValueDebugVc::resolve_from(self).await? {
-                        value_debug.dbg().await?.to_string()
+                        turbo_tasks::debug::ValueDebug::dbg_depth(&value_debug, depth).await?.to_string()
                     } else {
                         // This case means `SelfVc` does not implement `ValueDebugVc`, which is not possible
                         // if this implementation exists.
@@ -637,13 +621,6 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
             /// see [turbo_tasks::RawVc::cell_local]
             pub async fn cell_local(self) -> turbo_tasks::Result<Self> {
                 Ok(Self { node: self.node.cell_local().await? })
-            }
-
-            /// see [turbo_tasks::RawVc::keyed_cell_local]
-            pub async fn keyed_cell_local<
-                K: std::fmt::Debug + std::cmp::Eq + std::cmp::Ord + std::hash::Hash + turbo_tasks::Typed + turbo_tasks::TypedForInput + Send + Sync + 'static,
-            >(self, key: K) -> turbo_tasks::Result<Self> {
-                Ok(Self { node: self.node.keyed_cell_local(key).await? })
             }
 
             pub async fn resolve_from(super_trait_vc: impl std::convert::Into<turbo_tasks::RawVc>) -> Result<Option<Self>, turbo_tasks::ResolveTypeError> {

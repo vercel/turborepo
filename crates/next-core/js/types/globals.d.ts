@@ -11,6 +11,24 @@ declare global {
     | [isBootStrap: 0]
     | [isNotBootstrap: 1, responsePartial: string]
   )[];
+  var next: {
+    version: string;
+    appDir: boolean;
+  };
+
+  function __turbopack_load_page_chunks__(
+    page: string,
+    paths: string[]
+  ): unknown;
+
+  var AsyncLocalStorage = class AsyncLocalStorage<T> {
+    getStore(): T | undefined;
+    run<R, TArgs extends any[]>(
+      store: T,
+      callback: (...args: TArgs) => R,
+      ...args: TArgs
+    ): R;
+  };
 }
 
 export {};

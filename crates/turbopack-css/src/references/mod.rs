@@ -5,7 +5,7 @@ use swc_core::{
         Globals, GLOBALS,
     },
     css::{
-        ast::{ImportPrelude, ImportPreludeHref, Url, UrlValue},
+        ast::{ImportHref, ImportPrelude, Url, UrlValue},
         visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithPath},
     },
 };
@@ -13,6 +13,7 @@ use turbo_tasks::Value;
 use turbopack_core::{
     asset::AssetVc,
     reference::{AssetReferenceVc, AssetReferencesVc},
+    reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{handle_resolve_error, origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -26,6 +27,7 @@ use crate::{
     CssInputTransformsVc, CssModuleAssetType,
 };
 
+pub(crate) mod compose;
 pub(crate) mod import;
 pub(crate) mod url;
 
@@ -105,9 +107,9 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
         ast_path: &mut AstNodePath<'r>,
     ) {
         let src = match &i.href {
-            box ImportPreludeHref::Str(s) => s.value.as_ref(),
+            box ImportHref::Str(s) => s.value.as_ref(),
             // covered by `visit_url` below
-            box ImportPreludeHref::Url(ref u) => url_string(u),
+            box ImportHref::Url(ref u) => url_string(u),
         };
 
         self.references.push(
@@ -146,11 +148,16 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 }
 
 #[turbo_tasks::function]
-pub async fn css_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<ResolveResultVc> {
-    let options = origin.resolve_options();
-    let result = origin.resolve_asset(request, options);
+pub async fn css_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+    ty: Value<CssReferenceSubType>,
+) -> Result<ResolveResultVc> {
+    let ty = Value::new(ReferenceType::Css(ty.into_value()));
+    let options = origin.resolve_options(ty.clone());
+    let result = origin.resolve_asset(request, options, ty.clone());
 
-    handle_resolve_error(result, "css request", origin, request, options).await
+    handle_resolve_error(result, ty, origin, request, options).await
 }
 
 // TODO enable serialization

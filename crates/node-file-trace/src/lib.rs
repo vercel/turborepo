@@ -1,6 +1,7 @@
 #![feature(min_specialization)]
 
 mod nft_json;
+
 use std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
@@ -22,26 +23,27 @@ use turbo_tasks::{
     backend::Backend,
     primitives::{OptionStringVc, StringsVc},
     util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, Value,
+    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemVc, ReadGlobResultVc,
 };
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz, MemoryBackend,
 };
 use turbopack::{
-    emit_asset, emit_with_completion, rebase::RebasedAssetVc,
+    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
-use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    context::AssetContextVc,
+    compile_time_info::CompileTimeInfo,
+    context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueSeverity, IssueVc},
+    issue::{IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -125,6 +127,17 @@ pub struct CommonArgs {
     #[cfg_attr(feature = "cli", clap(short, long))]
     #[cfg_attr(feature = "node-api", serde(default))]
     exact: bool,
+
+    /// Whether to enable mdx parsing while tracing dependencies
+    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "node-api", serde(default))]
+    enable_mdx: bool,
+
+    /// Enable experimental garbage collection with the provided memory limit in
+    /// MB.
+    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "serializable", serde(default))]
+    pub memory_limit: Option<usize>,
 }
 
 #[cfg_attr(feature = "cli", derive(Parser))]
@@ -204,7 +217,10 @@ async fn add_glob_results(
     for entry in result.results.values() {
         if let DirectoryEntry::File(path) = entry {
             let source = SourceAssetVc::new(*path).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         }
     }
     for result in result.inner.values() {
@@ -227,6 +243,7 @@ async fn input_to_modules<'a>(
     input: Vec<String>,
     process_cwd: Option<String>,
     exact: bool,
+    enable_mdx: bool,
 ) -> Result<AssetsVc> {
     let root = fs.root();
     let env = EnvironmentVc::new(
@@ -239,6 +256,7 @@ async fn input_to_modules<'a>(
         )),
         Value::new(EnvironmentIntention::Api),
     );
+    let compile_time_info = CompileTimeInfo { environment: env }.cell();
     let glob_mappings = vec![
         (
             root,
@@ -253,8 +271,13 @@ async fn input_to_modules<'a>(
     ];
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
-        env,
-        Default::default(),
+        compile_time_info,
+        ModuleOptionsContext {
+            enable_types: true,
+            enable_mdx,
+            ..Default::default()
+        }
+        .cell(),
         ResolveOptionsContext {
             emulate_environment: Some(env),
             resolved_map: Some(
@@ -272,7 +295,10 @@ async fn input_to_modules<'a>(
     for input in input.iter() {
         if exact {
             let source = SourceAssetVc::new(root.join(input)).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         } else {
             let glob = GlobVc::new(input);
             add_glob_results(context, root.read_glob(glob, false), &mut list).await?;
@@ -320,10 +346,14 @@ fn process_input(dir: &Path, context: &str, input: &[String]) -> Result<Vec<Stri
         .collect()
 }
 
-pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
+pub async fn start(
+    args: Arc<Args>,
+    turbo_tasks: Option<&Arc<TurboTasks<MemoryBackend>>>,
+) -> Result<Vec<String>> {
     register();
     let &CommonArgs {
         visualize_graph,
+        memory_limit,
         #[cfg(feature = "persistent_cache")]
             cache: CacheArgs {
             ref cache,
@@ -382,7 +412,11 @@ pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::new()),
+        || {
+            turbo_tasks.cloned().unwrap_or_else(|| {
+                TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
+            })
+        },
         |tt, root_task, _| async move {
             if visualize_graph {
                 let mut stats = Stats::new();
@@ -393,7 +427,8 @@ pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
                 stats.add_id(b, root_task);
                 // stats.merge_resolve();
                 let tree = stats.treeify(ReferenceType::Child);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                let graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 fs::write("graph.html", viz::graph::wrap_html(&graph)).unwrap();
                 println!("graph.html written");
             }
@@ -454,24 +489,28 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     let (sender, mut receiver) = channel(1);
     let dir = current_dir().unwrap();
     let tt = create_tt();
-    let console_ui = Arc::new(ConsoleUi::new(LogOptions {
-        current_dir: dir.clone(),
-        show_all,
-        log_detail,
-        log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
-    }));
     let task = tt.spawn_root_task(move || {
         let dir = dir.clone();
         let args = args.clone();
-        let console_ui = console_ui.clone();
         let sender = sender.clone();
         Box::pin(async move {
             let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
 
-            let console_ui = (*console_ui).clone().cell();
-            console_ui
-                .group_and_display_issues(TransientValue::new(output.into()))
+            let source = TransientValue::new(output.into());
+            let issues = IssueVc::peek_issues_with_path(output)
+                .await?
+                .strongly_consistent()
                 .await?;
+
+            let console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
+                current_dir: dir.clone(),
+                show_all,
+                log_detail,
+                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
+            }));
+            console_ui
+                .as_issue_reporter()
+                .report_issues(TransientInstance::new(issues), source);
 
             if has_return_value {
                 let output_read_ref = output.await?;
@@ -502,6 +541,7 @@ async fn main_operation(
         ref input,
         watch,
         exact,
+        enable_mdx,
         ref context_directory,
         ref process_cwd,
         ..
@@ -515,7 +555,7 @@ async fn main_operation(
             let input = process_input(&dir, &context, input).unwrap();
             let mut result = BTreeSet::new();
             let fs = create_fs("context directory", &context, watch).await?;
-            let modules = input_to_modules(fs, input, process_cwd, exact).await?;
+            let modules = input_to_modules(fs, input, process_cwd, exact, enable_mdx).await?;
             for module in modules.iter() {
                 let set = all_assets(*module);
                 IssueVc::attach_context(module.path(), "gathering list of assets".to_string(), set)
@@ -533,7 +573,7 @@ async fn main_operation(
             let fs = create_fs("context directory", &context, watch).await?;
             let mut output_nft_assets = Vec::new();
             let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact)
+            for module in input_to_modules(fs, input, process_cwd, exact, enable_mdx)
                 .await?
                 .iter()
             {
@@ -559,7 +599,7 @@ async fn main_operation(
             let input_dir = fs.root();
             let output_dir = out_fs.root();
             let mut emits = Vec::new();
-            for module in input_to_modules(fs, input, process_cwd, exact)
+            for module in input_to_modules(fs, input, process_cwd, exact, enable_mdx)
                 .await?
                 .iter()
             {

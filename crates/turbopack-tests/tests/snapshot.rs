@@ -11,15 +11,17 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use similar::TextDiff;
 use test_generator::test_resources;
-use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value};
+use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
 use turbo_tasks_env::DotenvProcessEnvVc;
 use turbo_tasks_fs::{
-    util::sys_to_unix, DirectoryContent, DirectoryEntry, DiskFileSystemVc, File, FileContent,
-    FileSystem, FileSystemEntryType, FileSystemPathVc, FileSystemVc,
+    json::parse_json_with_source_context, util::sys_to_unix, DirectoryContent, DirectoryEntry,
+    DiskFileSystemVc, File, FileContent, FileSystem, FileSystemEntryType, FileSystemPathVc,
+    FileSystemVc,
 };
 use turbo_tasks_hash::encode_hex;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
+    condition::ContextCondition,
     ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc},
     module_options::ModuleOptionsContext,
     resolve_options_context::ResolveOptionsContext,
@@ -27,12 +29,14 @@ use turbopack::{
     ModuleAssetContextVc,
 };
 use turbopack_core::{
-    asset::{AssetContent, AssetContentVc, AssetVc},
-    chunk::{dev::DevChunkingContextVc, ChunkableAssetVc},
-    context::AssetContextVc,
+    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
+    chunk::{dev::DevChunkingContextVc, ChunkableAsset, ChunkableAssetVc},
+    compile_time_info::CompileTimeInfo,
+    context::{AssetContext, AssetContextVc},
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
     issue::IssueVc,
     reference::all_referenced_assets,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
@@ -96,10 +100,12 @@ fn test(resource: &'static str) {
 async fn run(resource: &'static str) -> Result<()> {
     register();
 
-    let tt = TurboTasks::new(MemoryBackend::new());
+    let tt = TurboTasks::new(MemoryBackend::default());
     let task = tt.spawn_once_task(async move {
         let out = run_test(resource.to_string());
-        handle_issues(out).await?;
+        handle_issues(out)
+            .await
+            .context("Unable to handle issues")?;
         Ok(NothingVc::new().into())
     });
     tt.wait_task_completion(task, true).await?;
@@ -124,7 +130,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     let options_file = fs::read_to_string(test_path.join("options.json"));
     let options = match options_file {
         Err(_) => SnapshotOptions::default(),
-        Ok(options_str) => serde_json::from_str(&options_str).unwrap(),
+        Ok(options_str) => parse_json_with_source_context(&options_str).unwrap(),
     };
     let root_fs = DiskFileSystemVc::new("workspace".to_string(), WORKSPACE_ROOT.clone());
     let project_fs = DiskFileSystemVc::new("project".to_string(), WORKSPACE_ROOT.clone());
@@ -153,14 +159,23 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         )),
         Value::new(EnvironmentIntention::Client),
     );
+    let compile_time_info = CompileTimeInfo { environment: env }.cell();
 
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
-        env,
+        compile_time_info,
         ModuleOptionsContext {
+            enable_jsx: true,
             enable_emotion: true,
             enable_styled_components: true,
             preset_env_versions: Some(env),
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                ModuleOptionsContext {
+                    ..Default::default()
+                }
+                .cell(),
+            )],
             ..Default::default()
         }
         .into(),
@@ -169,6 +184,15 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
             enable_react: true,
             enable_node_modules: true,
             custom_conditions: vec!["development".to_string()],
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                ResolveOptionsContext {
+                    enable_node_modules: true,
+                    custom_conditions: vec!["development".to_string()],
+                    ..Default::default()
+                }
+                .cell(),
+            )],
             ..Default::default()
         }
         .cell(),
@@ -178,7 +202,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
     let chunking_context =
-        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path)
+        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path, env)
             .build();
 
     let expected_paths = expected(chunk_root_path)
@@ -187,10 +211,12 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         .copied()
         .collect();
 
-    let modules = entry_paths
-        .into_iter()
-        .map(SourceAssetVc::new)
-        .map(|p| context.process(p.into()));
+    let modules = entry_paths.into_iter().map(SourceAssetVc::new).map(|p| {
+        context.process(
+            p.into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        )
+    });
 
     let chunks = modules
         .map(|module| async move {
@@ -211,16 +237,23 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         .await?;
 
     let mut seen = HashSet::new();
-    let mut queue = VecDeque::new();
+    let mut queue = VecDeque::with_capacity(32);
     for chunk in chunks {
         queue.push_back(chunk.as_asset());
     }
 
     while let Some(asset) = queue.pop_front() {
-        walk_asset(asset, &mut seen, &mut queue).await?;
+        walk_asset(asset, &mut seen, &mut queue)
+            .await
+            .context(format!(
+                "Failed to walk asset {}",
+                asset.path().to_string().await.context("to_string failed")?
+            ))?;
     }
 
-    matches_expected(expected_paths, seen).await?;
+    matches_expected(expected_paths, seen)
+        .await
+        .context("Actual assets doesn't match with expected assets")?;
 
     Ok(path)
 }
@@ -252,28 +285,38 @@ async fn walk_asset(
     Ok(())
 }
 
-async fn get_contents(file: AssetContentVc) -> Result<Option<String>> {
-    Ok(match &*file.await? {
-        AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => None,
-            FileContent::Content(expected) => Some(expected.content().to_str()?.trim().to_string()),
+async fn get_contents(file: AssetContentVc, path: FileSystemPathVc) -> Result<Option<String>> {
+    Ok(
+        match &*file.await.context(format!(
+            "Unable to read AssetContent of {}",
+            path.to_string().await?
+        ))? {
+            AssetContent::File(file) => match &*file.await.context(format!(
+                "Unable to read FileContent of {}",
+                path.to_string().await?
+            ))? {
+                FileContent::NotFound => None,
+                FileContent::Content(expected) => {
+                    Some(expected.content().to_str()?.trim().to_string())
+                }
+            },
+            AssetContent::Redirect { target, link_type } => Some(format!(
+                "Redirect {{ target: {target}, link_type: {:?} }}",
+                link_type
+            )),
         },
-        AssetContent::Redirect { target, link_type } => Some(format!(
-            "Redirect {{ target: {target}, link_type: {:?} }}",
-            link_type
-        )),
-    })
+    )
 }
 
 async fn diff(path: FileSystemPathVc, actual: AssetContentVc) -> Result<()> {
     let path_str = &path.await?.path;
     let expected = path.read().into();
 
-    let actual = match get_contents(actual).await? {
+    let actual = match get_contents(actual, path).await? {
         Some(s) => s,
         None => bail!("could not generate {} contents", path_str),
     };
-    let expected = get_contents(expected).await?;
+    let expected = get_contents(expected, path).await?;
 
     if Some(&actual) != expected.as_ref() {
         if *UPDATE {
@@ -391,7 +434,12 @@ async fn handle_issues(source: FileSystemPathVc) -> Result<()> {
         let plain_issue = issue.into_plain();
         let hash = encode_hex(*plain_issue.internal_hash().await?);
 
-        let path = issues_path.join(&format!("{}-{}.txt", plain_issue.await?.title, &hash[0..6]));
+        // We replace "*" because it's not allowed for filename on Windows.
+        let path = issues_path.join(&format!(
+            "{}-{}.txt",
+            plain_issue.await?.title.replace('*', "__star__"),
+            &hash[0..6]
+        ));
         seen.insert(path);
 
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->

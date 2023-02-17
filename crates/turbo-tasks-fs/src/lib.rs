@@ -4,17 +4,23 @@
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
 #![feature(main_separator_str)]
+#![feature(box_syntax)]
+#![feature(round_char_boundary)]
 
 pub mod attach;
 pub mod embed;
 pub mod glob;
 mod invalidator_map;
+pub mod json;
+mod mutex_map;
 mod read_glob;
 mod retry;
 pub mod rope;
+pub mod source_context;
 pub mod util;
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{self, Debug, Display, Formatter},
     fs::FileType,
@@ -29,7 +35,9 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
+use auto_hash_map::AutoMap;
 use bitflags::bitflags;
+use dunce::simplified;
 use glob::GlobVc;
 use invalidator_map::InvalidatorMap;
 use jsonc_parser::{parse_to_serde_value, ParseOptions};
@@ -41,6 +49,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{fs, io::AsyncReadExt};
 use turbo_tasks::{
+    mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
@@ -49,9 +58,9 @@ use turbo_tasks::{
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
-#[cfg(target_family = "windows")]
-use crate::util::is_windows_raw_path;
+use self::{json::UnparseableJson, mutex_map::MutexMap};
 use crate::{
+    attach::AttachedFileSystemVc,
     retry::{retry_blocking, retry_future},
     rope::{Rope, RopeReadRef, RopeReader},
 };
@@ -74,6 +83,9 @@ pub trait FileSystem: ValueToString {
 pub struct DiskFileSystem {
     pub name: String,
     pub root: String,
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    mutex_map: MutexMap<PathBuf>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
@@ -257,8 +269,14 @@ impl DiskFileSystem {
     }
 
     pub async fn to_sys_path(&self, fs_path: FileSystemPathVc) -> Result<PathBuf> {
-        let path = Path::new(&self.root).join(&*unix_to_sys(&fs_path.await?.path));
-        Ok(path)
+        // just in case there's a windows unc path prefix we remove it with `dunce`
+        let path = simplified(Path::new(&self.root));
+        let fs_path = fs_path.await?;
+        Ok(if fs_path.path.is_empty() {
+            path.to_path_buf()
+        } else {
+            path.join(&*unix_to_sys(&fs_path.path))
+        })
     }
 }
 
@@ -270,12 +288,14 @@ pub fn path_to_key(path: impl AsRef<Path>) -> String {
 impl DiskFileSystemVc {
     #[turbo_tasks::function]
     pub async fn new(name: String, root: String) -> Result<Self> {
+        mark_stateful();
         // create the directory for the filesystem on disk, if it doesn't exist
         fs::create_dir_all(&root).await?;
 
         let instance = DiskFileSystem {
             name,
             root,
+            mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Mutex::new(None),
@@ -298,6 +318,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let content = match retry_future(|| File::from_path(full_path.clone())).await {
             Ok(file) => FileContent::new(file),
             Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
@@ -368,6 +389,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let link_path = match retry_future(|| fs::read_link(&full_path)).await {
             Ok(res) => res,
             Err(_) => return Ok(LinkContent::NotFound.cell()),
@@ -397,18 +419,11 @@ impl FileSystem for DiskFileSystem {
         // strip the root from the path, it serves two purpose
         // 1. ensure the linked path is under the root
         // 2. strip the root path if the linked path is absolute
-        #[cfg(target_family = "windows")]
-        let result = {
-            let root_path = Path::new(&self.root);
-            if is_windows_raw_path(root_path) && !is_windows_raw_path(&file) {
-                file.strip_prefix(Path::new(&self.root[4..]))
-            } else {
-                file.strip_prefix(root_path)
-            }
-        };
+        //
+        // we use `dunce::simplify` to strip a potential UNC prefix on windows, on any
+        // other OS this gets compiled away
+        let result = simplified(&file).strip_prefix(simplified(Path::new(&self.root)));
 
-        #[cfg(not(target_family = "windows"))]
-        let result = file.strip_prefix(Path::new(&self.root));
         let relative_to_root_path = match result {
             Ok(file) => PathBuf::from(sys_to_unix(&file.to_string_lossy()).as_ref()),
             Err(_) => return Ok(LinkContent::Invalid.cell()),
@@ -465,8 +480,9 @@ impl FileSystem for DiskFileSystem {
             .with_context(|| format!("reading old content of {}", full_path.display()))?;
 
         if *content == *old_content {
-            return Ok(CompletionVc::new());
+            return Ok(CompletionVc::unchanged());
         }
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
 
         let create_directory = *old_content == FileContent::NotFound;
         match &*content {
@@ -484,7 +500,6 @@ impl FileSystem for DiskFileSystem {
                             })?;
                     }
                 }
-                // println!("write {} bytes to {}", buffer.len(), full_path.display());
                 let full_path_to_write = full_path.clone();
                 retry_future(move || {
                     let full_path = full_path_to_write.clone();
@@ -500,7 +515,6 @@ impl FileSystem for DiskFileSystem {
                 .with_context(|| format!("failed to write to {}", full_path.display()))?;
             }
             FileContent::NotFound => {
-                // println!("remove {}", full_path.display());
                 retry_future(|| fs::remove_file(full_path.clone()))
                     .await
                     .or_else(|err| {
@@ -530,7 +544,7 @@ impl FileSystem for DiskFileSystem {
             .with_context(|| format!("reading old symlink target of {}", full_path.display()))?;
         let target_link = target.await?;
         if target_link == old_content {
-            return Ok(CompletionVc::new());
+            return Ok(CompletionVc::unchanged());
         }
         let file_type = &*fs_path.get_type().await?;
         let create_directory = file_type == &FileSystemEntryType::NotFound;
@@ -547,6 +561,7 @@ impl FileSystem for DiskFileSystem {
                     })?;
             }
         }
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         match &*target_link {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
@@ -598,6 +613,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
             .await
             .with_context(|| format!("reading metadata for {}", full_path.display()))?;
@@ -791,8 +807,9 @@ impl FileSystemPathVc {
             )
         }
         if let Some((path, ext)) = this.path.rsplit_once('.') {
-            // check if `ext` is a real extension, and not a "." in a directory name
-            if !ext.contains('/') {
+            // check if `ext` is a real extension, and not a "." in a directory name or a
+            // .dotfile
+            if !(ext.contains('/') || (path.ends_with('/') && !path.is_empty())) {
                 return Ok(Self::new_normalized(
                     this.fs,
                     format!("{}{}.{}", path, appending, ext),
@@ -811,9 +828,9 @@ impl FileSystemPathVc {
     pub async fn try_join(self, path: &str) -> Result<FileSystemPathOptionVc> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, path) {
-            Ok(FileSystemPathOptionVc::cell(Some(Self::new_normalized(
-                this.fs, path,
-            ))))
+            Ok(FileSystemPathOptionVc::cell(Some(
+                Self::new_normalized(this.fs, path).resolve().await?,
+            )))
         } else {
             Ok(FileSystemPathOptionVc::cell(None))
         }
@@ -826,9 +843,9 @@ impl FileSystemPathVc {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, path) {
             if path.starts_with(&this.path) {
-                return Ok(FileSystemPathOptionVc::cell(Some(Self::new_normalized(
-                    this.fs, path,
-                ))));
+                return Ok(FileSystemPathOptionVc::cell(Some(
+                    Self::new_normalized(this.fs, path).resolve().await?,
+                )));
             }
         }
         Ok(FileSystemPathOptionVc::cell(None))
@@ -1013,19 +1030,21 @@ impl FileSystemPathVc {
             .into());
         }
         let segments = this.path.split('/');
-        let mut current = self.root();
+        let mut current = self.root().resolve().await?;
         let mut symlinks = Vec::new();
         for segment in segments {
-            current = current.join(segment);
+            current = current.join(segment).resolve().await?;
             while let FileSystemEntryType::Symlink = &*current.get_type().await? {
                 if let LinkContent::Link { target, link_type } = &*current.read_link().await? {
                     symlinks.push(current.resolve().await?);
                     current = if link_type.contains(LinkType::ABSOLUTE) {
-                        current.root()
+                        current.root().resolve().await?
                     } else {
-                        current.parent()
+                        current.parent().resolve().await?
                     }
-                    .join(target);
+                    .join(target)
+                    .resolve()
+                    .await?;
                 } else {
                     break;
                 }
@@ -1216,15 +1235,16 @@ impl File {
         }
     }
 
+    /// Returns the content type associated with this file.
     pub fn content_type(&self) -> Option<&Mime> {
         self.meta.content_type.as_ref()
     }
 
+    /// Sets the content type associated with this file.
     pub fn with_content_type(mut self, content_type: Mime) -> Self {
         self.meta.content_type = Some(content_type);
         self
     }
-
     /// Returns a Read/AsyncRead/Stream/Iterator to access the File's contents.
     pub fn read(&self) -> RopeReader {
         self.content.read()
@@ -1378,12 +1398,24 @@ impl FileContent {
         matches!(self, FileContent::Content(_))
     }
 
+    pub fn as_content(&self) -> Option<&File> {
+        match self {
+            FileContent::Content(file) => Some(file),
+            FileContent::NotFound => None,
+        }
+    }
+
     pub fn parse_json(&self) -> FileJsonContent {
         match self {
-            FileContent::Content(file) => match serde_json::from_reader(file.read()) {
-                Ok(data) => FileJsonContent::Content(data),
-                Err(_) => FileJsonContent::Unparseable,
-            },
+            FileContent::Content(file) => {
+                let de = &mut serde_json::Deserializer::from_reader(file.read());
+                match serde_path_to_error::deserialize(de) {
+                    Ok(data) => FileJsonContent::Content(data),
+                    Err(e) => FileJsonContent::Unparseable(
+                        box UnparseableJson::from_serde_path_to_error(e),
+                    ),
+                }
+            }
             FileContent::NotFound => FileJsonContent::NotFound,
         }
     }
@@ -1401,11 +1433,16 @@ impl FileContent {
                 ) {
                     Ok(data) => match data {
                         Some(value) => FileJsonContent::Content(value),
-                        None => FileJsonContent::Unparseable,
+                        None => FileJsonContent::unparseable(
+                            "text content doesn't contain any json data",
+                        ),
                     },
-                    Err(_) => FileJsonContent::Unparseable,
+                    Err(e) => FileJsonContent::Unparseable(box UnparseableJson::from_jsonc_error(
+                        e,
+                        string.as_ref(),
+                    )),
                 },
-                Err(_) => FileJsonContent::Unparseable,
+                Err(_) => FileJsonContent::unparseable("binary is not valid utf-8 text"),
             },
             FileContent::NotFound => FileJsonContent::NotFound,
         }
@@ -1460,7 +1497,7 @@ impl FileContentVc {
 #[turbo_tasks::value(shared, serialization = "none")]
 pub enum FileJsonContent {
     Content(Value),
-    Unparseable,
+    Unparseable(Box<UnparseableJson>),
     NotFound,
 }
 
@@ -1474,9 +1511,29 @@ impl ValueToString for FileJsonContent {
     async fn to_string(&self) -> Result<StringVc> {
         match self {
             FileJsonContent::Content(json) => Ok(StringVc::cell(json.to_string())),
-            FileJsonContent::Unparseable => Err(anyhow!("File is not valid JSON")),
+            FileJsonContent::Unparseable(e) => Err(anyhow!("File is not valid JSON: {}", e)),
             FileJsonContent::NotFound => Err(anyhow!("File not found")),
         }
+    }
+}
+
+impl FileJsonContent {
+    pub fn unparseable(message: &'static str) -> Self {
+        FileJsonContent::Unparseable(Box::new(UnparseableJson {
+            message: Cow::Borrowed(message),
+            path: None,
+            start_location: None,
+            end_location: None,
+        }))
+    }
+
+    pub fn unparseable_with_message(message: Cow<'static, str>) -> Self {
+        FileJsonContent::Unparseable(Box::new(UnparseableJson {
+            message,
+            path: None,
+            start_location: None,
+            end_location: None,
+        }))
     }
 }
 
@@ -1545,12 +1602,12 @@ impl From<&DirectoryEntry> for FileSystemEntryType {
 #[turbo_tasks::value]
 #[derive(Debug)]
 pub enum DirectoryContent {
-    Entries(HashMap<String, DirectoryEntry>),
+    Entries(AutoMap<String, DirectoryEntry>),
     NotFound,
 }
 
 impl DirectoryContentVc {
-    pub fn new(entries: HashMap<String, DirectoryEntry>) -> Self {
+    pub fn new(entries: AutoMap<String, DirectoryEntry>) -> Self {
         Self::cell(DirectoryContent::Entries(entries))
     }
 
@@ -1583,6 +1640,16 @@ impl FileSystem for NullFileSystem {
     fn write(&self, _fs_path: FileSystemPathVc, _content: FileContentVc) -> CompletionVc {
         CompletionVc::new()
     }
+
+    #[turbo_tasks::function]
+    fn write_link(&self, _fs_path: FileSystemPathVc, _target: LinkContentVc) -> CompletionVc {
+        CompletionVc::new()
+    }
+
+    #[turbo_tasks::function]
+    fn metadata(&self, _fs_path: FileSystemPathVc) -> FileMetaVc {
+        FileMeta::default().cell()
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -1593,12 +1660,20 @@ impl ValueToString for NullFileSystem {
     }
 }
 
-pub async fn to_sys_path(path: FileSystemPathVc) -> Result<Option<PathBuf>> {
-    if let Some(fs) = DiskFileSystemVc::resolve_from(path.fs()).await? {
-        let sys_path = fs.await?.to_sys_path(path).await?;
-        return Ok(Some(sys_path));
+pub async fn to_sys_path(mut path: FileSystemPathVc) -> Result<Option<PathBuf>> {
+    loop {
+        if let Some(fs) = AttachedFileSystemVc::resolve_from(path.fs()).await? {
+            path = fs.get_inner_fs_path(path);
+            continue;
+        }
+
+        if let Some(fs) = DiskFileSystemVc::resolve_from(path.fs()).await? {
+            let sys_path = fs.await?.to_sys_path(path).await?;
+            return Ok(Some(sys_path));
+        }
+
+        return Ok(None);
     }
-    Ok(None)
 }
 
 pub fn register() {

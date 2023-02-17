@@ -42,7 +42,7 @@ impl Ord for SpecificityElement {
 /// The specificity of a URL. Implements Ord to allow to compare two
 /// specificities. A match with higher specificity should be preferred.
 #[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Specificity {
     #[turbo_tasks(trace_ignore)]
     elements: Vec<SpecificityElement>,
@@ -76,9 +76,7 @@ impl Ord for Specificity {
 impl Specificity {
     /// Create a new specificity.
     pub fn new() -> Self {
-        Self {
-            elements: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Add a new element to the specificity.
@@ -97,6 +95,16 @@ impl Specificity {
     /// specificity and any loop could early exit.
     pub fn is_exact(&self) -> bool {
         self.elements.is_empty()
+    }
+
+    /// The lowest possible specificity. Used when no match is found.
+    pub fn not_found() -> Self {
+        Specificity {
+            elements: vec![SpecificityElement {
+                position: 0,
+                ty: SpecificityElementType::NotFound,
+            }],
+        }
     }
 }
 
@@ -128,13 +136,7 @@ impl SpecificityVc {
     /// The lowest possible specificity. Used when no match is found.
     #[turbo_tasks::function]
     pub fn not_found() -> Self {
-        Specificity {
-            elements: vec![SpecificityElement {
-                position: 0,
-                ty: SpecificityElementType::NotFound,
-            }],
-        }
-        .cell()
+        Specificity::not_found().cell()
     }
 
     /// The highest possible specificity. Used for exact matches.

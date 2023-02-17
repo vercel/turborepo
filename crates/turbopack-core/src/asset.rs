@@ -42,7 +42,9 @@ pub trait Asset {
     fn content(&self) -> AssetContentVc;
 
     /// Other things (most likely [Asset]s) referenced from this [Asset].
-    fn references(&self) -> AssetReferencesVc;
+    fn references(&self) -> AssetReferencesVc {
+        AssetReferencesVc::empty()
+    }
 
     /// The content of the [Asset] alongside its version.
     async fn versioned_content(&self) -> Result<VersionedContentVc> {
@@ -89,7 +91,18 @@ impl AssetContentVc {
         let this = self.await?;
         match &*this {
             AssetContent::File(content) => Ok(content.parse_json()),
-            AssetContent::Redirect { .. } => Ok(FileJsonContent::Unparseable.cell()),
+            AssetContent::Redirect { .. } => {
+                Ok(FileJsonContent::unparseable("a redirect can't be parsed as json").cell())
+            }
+        }
+    }
+
+    #[turbo_tasks::function]
+    pub async fn file_content(self) -> Result<FileContentVc> {
+        let this = self.await?;
+        match &*this {
+            AssetContent::File(content) => Ok(*content),
+            AssetContent::Redirect { .. } => Ok(FileContent::NotFound.cell()),
         }
     }
 
@@ -107,7 +120,9 @@ impl AssetContentVc {
         let this = self.await?;
         match &*this {
             AssetContent::File(content) => Ok(content.parse_json_with_comments()),
-            AssetContent::Redirect { .. } => Ok(FileJsonContent::Unparseable.cell()),
+            AssetContent::Redirect { .. } => {
+                Ok(FileJsonContent::unparseable("a redirect can't be parsed as json").cell())
+            }
         }
     }
 

@@ -6,7 +6,7 @@ import {
   useAnimation,
   AnimationPlaybackControls,
 } from "framer-motion";
-import Image from "next/future/image";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import benchmarkData from "./benchmark-data/data.json";
 import { Gradient } from "../home-shared/Gradient";
@@ -57,7 +57,9 @@ export function BenchmarksGraph({
             <GraphBar
               key={bar.key}
               turbo={bar.turbo}
-              Label={<GraphLabel label={bar.label} turbo={bar.turbo} />}
+              Label={
+                <GraphLabel label={bar.label} turbo={bar.turbo} swc={bar.swc} />
+              }
               duration={data[bar.key] * 1000}
               longestTime={longestTimeWithPadding}
               inView={graphInView}
@@ -226,7 +228,7 @@ const GraphTimer = ({
   return (
     <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
       {turbo && (
-        <div className="relative flex w-8 h-8 ">
+        <div className="relative flex w-6 h-6">
           <Image
             alt="Turbopack"
             src="/images/docs/pack/turbo-benchmark-icon-light.svg"
@@ -291,11 +293,13 @@ const Time = ({
 function GraphLabel({
   label,
   turbo,
+  swc,
   mobileOnly,
   esbuild,
 }: {
   label: string;
   turbo?: boolean;
+  swc?: boolean;
   mobileOnly?: boolean;
   esbuild?: boolean;
 }) {
@@ -314,6 +318,11 @@ function GraphLabel({
           )}
         >
           turbo
+        </p>
+      )}
+      {swc && (
+        <p className="font-space-grotesk m-0 font-light text-[#666666]">
+          with SWC
         </p>
       )}
       {esbuild && (

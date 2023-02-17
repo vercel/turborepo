@@ -7,7 +7,11 @@ use turbopack::{
     transition::{Transition, TransitionVc},
     ModuleAssetContextVc,
 };
-use turbopack_core::{asset::AssetVc, environment::EnvironmentVc, virtual_asset::VirtualAssetVc};
+use turbopack_core::{
+    asset::{Asset, AssetVc},
+    compile_time_info::CompileTimeInfoVc,
+    virtual_asset::VirtualAssetVc,
+};
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceableVc;
 
 use crate::{
@@ -16,7 +20,7 @@ use crate::{
 
 #[turbo_tasks::value(shared)]
 pub struct NextLayoutEntryTransition {
-    pub rsc_environment: EnvironmentVc,
+    pub rsc_compile_time_info: CompileTimeInfoVc,
     pub rsc_module_options_context: ModuleOptionsContextVc,
     pub rsc_resolve_options_context: ResolveOptionsContextVc,
     pub server_root: FileSystemPathVc,
@@ -34,8 +38,11 @@ impl Transition for NextLayoutEntryTransition {
     }
 
     #[turbo_tasks::function]
-    fn process_environment(&self, _environment: EnvironmentVc) -> EnvironmentVc {
-        self.rsc_environment
+    fn process_compile_time_info(
+        &self,
+        _compile_time_info: CompileTimeInfoVc,
+    ) -> CompileTimeInfoVc {
+        self.rsc_compile_time_info
     }
 
     #[turbo_tasks::function]

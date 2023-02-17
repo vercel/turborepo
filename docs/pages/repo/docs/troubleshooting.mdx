@@ -11,7 +11,7 @@ This guide aims to help you debug issues with your Turborepo builds and configur
 
 - Are you properly bundling and transpiling the dependency before building the application?
   - For example, libraries like `tsc`, `tsup`, `esbuild`, `babel`, and `swc` will convert newer JavaScript features back to “pure” JavaScript.
-  - If you are using Next.js, you might be using `next-transpile-modules`. Ensure you add the name of the dependency inside `next.config.js` ([example](https://github.com/vercel/turbo/blob/main/examples/basic/apps/docs/next.config.js#L1)).
+  - If you are using Next.js, you might be using `transpilePackages`. Ensure you add the name of the dependency inside `next.config.js` ([example](https://github.com/vercel/turbo/blob/main/examples/basic/apps/docs/next.config.js#L1)).
 - Have you listed `files` in the dependency's `package.json` to point to the correct files?
 
 ## My types are not being found

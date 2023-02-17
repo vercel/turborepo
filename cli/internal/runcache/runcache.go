@@ -12,7 +12,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -36,59 +35,18 @@ type Opts struct {
 	OutputWatcher          OutputWatcher
 }
 
-// AddFlags adds the flags relevant to the runcache package to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
-	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
-
-	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
-	if err != nil {
-		panic(err)
-	}
-
-	flags.AddFlag(&pflag.Flag{
-		Name: "output-logs",
-		Usage: `Set type of process output logging. Use "full" to show
-all output. Use "hash-only" to show only turbo-computed
-task hashes. Use "new-only" to show only new output with
-only hashes for cached tasks. Use "none" to hide process
-output.`,
-		DefValue: defaultTaskOutputMode,
-		Value:    &taskOutputModeValue{opts: opts},
-	})
-	_ = flags.Bool("stream", true, "Unused")
-	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
-		// fail fast if we've misconfigured our flags
-		panic(err)
-	}
-}
-
-type taskOutputModeValue struct {
-	opts *Opts
-}
-
-func (l *taskOutputModeValue) String() string {
-	var outputMode util.TaskOutputMode
-	if l.opts.TaskOutputModeOverride != nil {
-		outputMode = *l.opts.TaskOutputModeOverride
-	}
-	taskOutputMode, err := util.ToTaskOutputModeString(outputMode)
-	if err != nil {
-		panic(err)
-	}
-	return taskOutputMode
-}
-
-func (l *taskOutputModeValue) Set(value string) error {
+// SetTaskOutputMode parses the task output mode from string and then sets it in opts
+func (opts *Opts) SetTaskOutputMode(value string) error {
 	outputMode, err := util.FromTaskOutputModeString(value)
 	if err != nil {
-		return fmt.Errorf("must be one of \"%v\"", l.Type())
+		return fmt.Errorf("must be one of \"%v\"", TaskOutputModes())
 	}
-	l.opts.TaskOutputModeOverride = &outputMode
+	opts.TaskOutputModeOverride = &outputMode
 	return nil
 }
 
-func (l *taskOutputModeValue) Type() string {
+// TaskOutputModes creates the description string for task outputs
+func TaskOutputModes() string {
 	var builder strings.Builder
 
 	first := true
@@ -101,8 +59,6 @@ func (l *taskOutputModeValue) Type() string {
 	}
 	return builder.String()
 }
-
-var _ pflag.Value = &taskOutputModeValue{}
 
 // RunCache represents the interface to the cache for a single `turbo run`
 type RunCache struct {
@@ -154,7 +110,7 @@ type TaskCache struct {
 // Returns true if successful.
 func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
-		if tc.taskOutputMode != util.NoTaskOutput {
+		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
 		return false, nil
@@ -175,7 +131,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 		if err != nil {
 			return false, err
 		} else if !hit {
-			if tc.taskOutputMode != util.NoTaskOutput {
+			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			return false, nil
@@ -198,15 +154,29 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		if tc.LogFileName.FileExists() {
-
-			tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
-		}
+		tc.ReplayLogFile(prefixedUI, progressLogger)
+	case util.ErrorTaskOutput:
+		// The task succeeded, so we don't output anything in this case
 	default:
 		// NoLogs, do not output anything
 	}
 
 	return true, nil
+}
+
+// ReplayLogFile writes out the stored logfile to the terminal
+func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
+	if tc.LogFileName.FileExists() {
+		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
+	}
+}
+
+// OnError replays the logfile if --output-mode=errors-only.
+// This is called if the task exited with an non-zero error code.
+func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
+	if tc.taskOutputMode == util.ErrorTaskOutput {
+		tc.ReplayLogFile(terminal, logger)
+	}
 }
 
 // nopWriteCloser is modeled after io.NopCloser, which is for Readers
@@ -253,7 +223,7 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 		file:  output,
 		bufio: bufWriter,
 	}
-	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput {
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput || tc.taskOutputMode == util.ErrorTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
@@ -306,7 +276,7 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
-	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeLogFile())
+	logFileName := rc.repoRoot.UntypedJoin(pt.LogFile)
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := fs.TaskOutputs{
 		Inclusions: make([]string, len(hashableOutputs.Inclusions)),

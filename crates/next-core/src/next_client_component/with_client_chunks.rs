@@ -8,20 +8,20 @@ use turbopack::ecmascript::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_module_id,
+    utils::stringify_js,
 };
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetReference,
-        ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc,
+        ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
+        ChunkingType, ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
 
-use crate::next_client_component::in_chunking_context_asset::InChunkingContextAsset;
+use crate::next_client_chunks::in_chunking_context_asset::InChunkingContextAsset;
 
 #[turbo_tasks::value(shared)]
 pub struct WithClientChunksAsset {
@@ -106,6 +106,11 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.inner.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let inner = self.inner.await?;
         let group = ChunkGroupVc::from_asset(inner.asset.into(), self.context);
@@ -125,7 +130,7 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
                 }
             }
         }
-        let module_id = stringify_module_id(&*inner.asset.as_chunk_item(self.context).id().await?);
+        let module_id = stringify_js(&*inner.asset.as_chunk_item(self.context).id().await?);
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_esm__({{
@@ -184,7 +189,7 @@ impl ValueToString for WithClientChunksAssetReference {
 impl AssetReference for WithClientChunksAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(self.asset, Vec::new()).cell()
+        ResolveResult::asset(self.asset).cell()
     }
 }
 

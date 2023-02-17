@@ -1,0 +1,15 @@
+{
+  "extends": ["//"],
+
+  "pipeline": {
+    "override-values-task": {
+      "inputs": ["src/bar.txt"],
+      "outputs": ["lib/**"],
+      "env": ["OTHER_VAR"],
+      "outputMode": "full"
+    },
+    "override-values-task-with-deps": {
+      "dependsOn": []
+    }
+  }
+}

@@ -1,0 +1,132 @@
+# Reusable workflow to setup next.js integration test environment.
+name: Setup Next.js
+
+on:
+  workflow_call:
+    inputs:
+      # Allow to specify Next.js version to run integration test against.
+      # If not specified, will use latest release version including canary.
+      version:
+        type: string
+
+jobs:
+  # Build next-dev binary to use in integration test.
+  build_next_dev:
+    name: Building next-dev for next.js integration test
+    runs-on: ubuntu-latest-16-core-oss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: x86_64-unknown-linux-musl
+          cache-key: dev-x86_64-unknown-linux-musl
+          save-cache: true
+
+      - name: Install musl tools
+        run: |
+          wget https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4011.2.1/x86_64-linux-musl-native.tgz -O musl.tgz
+          tar -xvzf musl.tgz
+          sudo mv x86_64-linux-musl-native /usr/x86_64-linux-musl
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
+
+      - name: Build next-dev (rustls-tls)
+        run: |
+          cargo build --release -p next-dev --target x86_64-unknown-linux-musl --no-default-features --features cli,custom_allocator,rustls-tls
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: release-next-dev-linux-musl
+          path: |
+            target/x86_64-unknown-linux-musl/release/next-dev
+
+  build_nextjs:
+    name: Build Next.js for the turbopack integration test
+    runs-on: ubuntu-latest
+    needs: [build_next_dev]
+    env:
+      # pnpm version should match to what upstream next.js uses
+      PNPM_VERSION: 7.24.3
+    steps:
+      - name: Find Next.js latest release version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Grab the latest release version from next.js repo, including prelease. `/releases/latest` will only return latest stable release.
+          echo NEXJS_LATEST_VERSION=$(gh release --repo vercel/next.js --limit 1 list | sed -n 1p | awk '{print $1}') >> $GITHUB_ENV
+      - name: Set Next.js release version
+        run: |
+          echo "NEXTJS_VERSION=${{ inputs.version != '' && inputs.version || env.NEXJS_LATEST_VERSION }}" >> $GITHUB_ENV
+          echo "Checking out Next.js ${{ env.NEXTJS_VERSION }}"
+
+      # https://github.com/actions/virtual-environments/issues/1187
+      - name: tune linux network
+        run: sudo ethtool -K eth0 tx off rx off
+
+      - name: Checkout Next.js
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/next.js
+          ref: ${{ env.NEXTJS_VERSION }}
+
+      - name: Checkout failed test lists
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/turbo
+          ref: nextjs-integration-test-data
+          path: integration-test-data
+
+      - uses: actions/cache@v3
+        id: restore-build
+        with:
+          path: ./*
+          key: ${{ github.sha }}-${{ github.run_number }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
+
+      - name: Download binary
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Validate next-dev binary
+        run: |
+          ls -r ${{ github.workspace }}/artifacts
+          chmod +x ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev
+          cp ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev .
+          ./next-dev --display-version
+
+      - name: Install dependencies
+        run: |
+          corepack disable
+          pnpm install
+          pnpm run build
+
+      - name: Check Next.js build version
+        run: |
+          ./next-dev --version
+          # This is being used in github action to collect test results. Do not change it, or should update ./.github/actions/next-integration-test to match.
+          echo "RUNNING NEXTJS VERSION: $(packages/next/dist/bin/next --version)"
+
+      # Once build completes, creates a cache of the build output
+      # so subsequent job to actually execute tests can reuse it.
+      # Note that we do not use upload / download artifacts for this -
+      # it is too heavyweight for the purpose since we do not need to persist
+      # the cache across multiple runs.
+      - name: Store next.js build cache with next-dev binary
+        uses: actions/cache@v3
+        timeout-minutes: 2
+        id: cache-build
+        with:
+          path: ./*
+          key: ${{ github.sha }}-${{ github.run_number }}

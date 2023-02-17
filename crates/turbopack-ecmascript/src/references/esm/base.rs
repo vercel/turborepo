@@ -13,14 +13,12 @@ use turbopack_core::{
         ChunkingTypeOptionVc, ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{
-        origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc, SpecialType,
-    },
+    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
 };
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::EcmascriptChunkPlaceableVc,
+    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -37,18 +35,57 @@ pub enum ReferencedAsset {
 impl ReferencedAsset {
     pub async fn get_ident(&self) -> Result<Option<String>> {
         Ok(match self {
-            ReferencedAsset::Some(asset) => {
-                let path = asset.path().to_string().await?;
-                Some(magic_identifier::encode(&format!(
-                    "imported module {}",
-                    path
-                )))
-            }
+            ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
                 Some(magic_identifier::encode(&format!("external {}", request)))
             }
             ReferencedAsset::None => None,
         })
+    }
+
+    pub(crate) async fn get_ident_from_placeable(
+        asset: &EcmascriptChunkPlaceableVc,
+    ) -> Result<String> {
+        let path = asset.path().to_string().await?;
+        Ok(magic_identifier::encode(&format!(
+            "imported module {}",
+            path
+        )))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ReferencedAssetVc {
+    #[turbo_tasks::function]
+    pub async fn from_resolve_result(
+        resolve_result: ResolveResultVc,
+        request: RequestVc,
+    ) -> Result<Self> {
+        for result in resolve_result.await?.primary.iter() {
+            match result {
+                PrimaryResolveResult::OriginalReferenceExternal => {
+                    if let Some(request) = request.await?.request() {
+                        return Ok(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
+                    } else {
+                        return Ok(ReferencedAssetVc::cell(ReferencedAsset::None));
+                    }
+                }
+                PrimaryResolveResult::OriginalReferenceTypeExternal(request) => {
+                    return Ok(
+                        ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell(),
+                    );
+                }
+                PrimaryResolveResult::Asset(asset) => {
+                    if let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).await?
+                    {
+                        return Ok(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
+                    }
+                }
+                // TODO ignore should probably be handled differently
+                _ => {}
+            }
+        }
+        Ok(ReferencedAssetVc::cell(ReferencedAsset::None))
     }
 }
 
@@ -75,27 +112,10 @@ impl EsmAssetReferenceVc {
     #[turbo_tasks::function]
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
-        let resolve_result = esm_resolve(this.get_origin(), this.request);
-        match &*resolve_result.await? {
-            ResolveResult::Special(SpecialType::OriginalReferenceExternal, _) => {
-                if let Some(request) = this.request.await?.request() {
-                    return Ok(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
-                } else {
-                    return Ok(ReferencedAssetVc::cell(ReferencedAsset::None));
-                }
-            }
-            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(request), _) => {
-                return Ok(ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell());
-            }
-            _ => {}
-        }
-        let assets = resolve_result.primary_assets();
-        for asset in assets.await?.iter() {
-            if let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).await? {
-                return Ok(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
-            }
-        }
-        Ok(ReferencedAssetVc::cell(ReferencedAsset::None))
+        Ok(ReferencedAssetVc::from_resolve_result(
+            esm_resolve(this.get_origin(), this.request),
+            this.request,
+        ))
     }
 
     #[turbo_tasks::function]
@@ -136,17 +156,18 @@ impl ValueToString for EsmAssetReference {
 impl ChunkableAssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
-        Ok(
+        Ok(ChunkingTypeOptionVc::cell(
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
-                    "separate" => ChunkingTypeOptionVc::cell(Some(ChunkingType::Separate)),
-                    "parallel" => ChunkingTypeOptionVc::cell(Some(ChunkingType::Parallel)),
+                    "separate" => Some(ChunkingType::Separate),
+                    "parallel" => Some(ChunkingType::Parallel),
+                    "none" => None,
                     _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
                 }
             } else {
-                ChunkingTypeOptionVc::cell(Some(ChunkingType::default()))
+                Some(ChunkingType::default())
             },
-        )
+        ))
     }
 }
 
@@ -203,7 +224,7 @@ impl CodeGenerateable for EsmAssetReference {
                         visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                             // TODO Technically this should insert a ESM external, but we don't support that yet
                             let stmt = quote!(
-                                "var $name = __turbopack_external_require__($id);" as Stmt,
+                                "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                 name = Ident::new(ident.clone().into(), DUMMY_SP),
                                 id: Expr = Expr::Lit(request.clone().into())
                             );

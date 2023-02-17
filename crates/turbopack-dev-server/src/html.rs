@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
 use turbo_tasks::{debug::ValueDebug, primitives::StringVc};
 use turbo_tasks_fs::{File, FileSystemPathVc};
@@ -34,10 +34,9 @@ impl Asset for DevHtmlAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: DevHtmlAssetVc) -> Result<AssetReferencesVc> {
-        let this = self_vc.await?;
+    async fn references(&self) -> Result<AssetReferencesVc> {
         let mut references = Vec::new();
-        for chunk_group in &this.chunk_groups {
+        for chunk_group in &self.chunk_groups {
             let chunks = chunk_group.chunks().await?;
             for chunk in chunks.iter() {
                 references.push(ChunkReferenceVc::new(*chunk).into());
@@ -188,7 +187,7 @@ impl VersionedContent for DevHtmlAssetContent {
     async fn update(self_vc: DevHtmlAssetContentVc, from_version: VersionVc) -> Result<UpdateVc> {
         let from_version = DevHtmlAssetVersionVc::resolve_from(from_version)
             .await?
-            .expect("version must be an `DevHtmlAssetVersionVc`");
+            .context("version must be an `DevHtmlAssetVersionVc`")?;
         let to_version = self_vc.version();
 
         let to = to_version.await?;

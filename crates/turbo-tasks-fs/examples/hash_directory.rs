@@ -13,8 +13,8 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 use turbo_tasks::{primitives::StringVc, util::FormatDuration, NothingVc, TurboTasks};
 use turbo_tasks_fs::{
-    register, DirectoryContent, DirectoryEntry, DiskFileSystemVc, FileContent, FileSystemPathVc,
-    FileSystemVc,
+    register, DirectoryContent, DirectoryEntry, DiskFileSystemVc, FileContent, FileSystem,
+    FileSystemPathVc, FileSystemVc,
 };
 use turbo_tasks_memory::MemoryBackend;
 
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
         "/register_example_hash_directory.rs"
     ));
 
-    let tt = TurboTasks::new(MemoryBackend::new());
+    let tt = TurboTasks::new(MemoryBackend::default());
     let start = Instant::now();
 
     let task = tt.spawn_root_task(|| {

@@ -6,18 +6,19 @@ pub mod unsupported_module;
 
 use std::{
     cmp::Ordering,
-    collections::HashSet,
     fmt::{Display, Formatter},
     future::IntoFuture,
     sync::Arc,
 };
 
 use anyhow::Result;
+use auto_hash_map::AutoSet;
 use futures::FutureExt;
 use turbo_tasks::{
     emit,
     primitives::{BoolVc, StringVc, U64Vc},
-    CollectiblesSource, ReadRef, TryJoinIterExt, ValueToString, ValueToStringVc,
+    CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
+    ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
     FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
@@ -26,7 +27,7 @@ use turbo_tasks_fs::{
 use turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher};
 
 use crate::{
-    asset::{AssetContent, AssetVc},
+    asset::{Asset, AssetContent, AssetVc},
     source_pos::SourcePos,
 };
 
@@ -63,7 +64,7 @@ impl IssueSeverity {
             IssueSeverity::Bug => "bug in implementation",
             IssueSeverity::Fatal => "unrecoverable problem",
             IssueSeverity::Error => "problem that cause a broken result",
-            IssueSeverity::Warning => "problem should be adressed in short term",
+            IssueSeverity::Warning => "problem should be addressed in short term",
             IssueSeverity::Hint => "idea for improvement",
             IssueSeverity::Note => "detail that is worth mentioning",
             IssueSeverity::Suggestion => "change proposal for improvement",
@@ -180,7 +181,7 @@ impl IssueProcessingPath for RootIssueProcessingPath {
 #[turbo_tasks::value]
 struct ItemIssueProcessingPath(
     Option<IssueProcessingPathItemVc>,
-    HashSet<IssueProcessingPathVc>,
+    AutoSet<IssueProcessingPathVc>,
 );
 
 #[turbo_tasks::value_impl]
@@ -335,9 +336,24 @@ pub struct Issues(Vec<IssueVc>);
 #[derive(Debug)]
 #[turbo_tasks::value]
 pub struct CapturedIssues {
-    issues: HashSet<IssueVc>,
+    issues: AutoSet<IssueVc>,
     #[cfg(feature = "issue_path")]
     processing_path: ItemIssueProcessingPathVc,
+}
+
+impl CapturedIssues {
+    pub async fn has_fatal(&self) -> Result<bool> {
+        let mut has_fatal = false;
+
+        for issue in self.issues.iter() {
+            let severity = *issue.severity().await?;
+            if severity == IssueSeverity::Fatal {
+                has_fatal = true;
+                break;
+            }
+        }
+        Ok(has_fatal)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -567,4 +583,13 @@ impl PlainAssetVc {
         }
         .cell())
     }
+}
+
+#[turbo_tasks::value_trait]
+pub trait IssueReporter {
+    fn report_issues(
+        &self,
+        issues: TransientInstance<ReadRef<CapturedIssues>>,
+        source: TransientValue<RawVc>,
+    );
 }

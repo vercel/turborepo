@@ -27,15 +27,17 @@ use turbo_tasks::{backend::Backend, TurboTasks, Value, ValueToString};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    emit_with_completion, rebase::RebasedAssetVc, register,
+    emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc, register,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 #[cfg(not(feature = "bench_against_node_nft"))]
 use turbopack_core::asset::Asset;
 use turbopack_core::{
+    compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    reference_type::ReferenceType,
     source_asset::SourceAssetVc,
 };
 
@@ -109,6 +111,11 @@ static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
 #[case::mailgun("integration/mailgun.js")]
 #[case::mariadb("integration/mariadb.js")]
 #[case::memcached("integration/memcached.js")]
+#[cfg_attr(
+    not(feature = "bench_against_node_nft"),
+    should_panic(expected = "Error [ERR_MODULE_NOT_FOUND]: Cannot find module"),
+    case::mdx("integration/mdx/index.cjs")
+)]
 #[case::mongoose("integration/mongoose.js")]
 #[case::mysql("integration/mysql.js")]
 #[case::npm("integration/npm.js")]
@@ -160,6 +167,7 @@ static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
 #[case::underscore("integration/underscore.js")]
 #[case::vm2("integration/vm2.js")]
 #[case::vue("integration/vue.js")]
+#[case::webpack_target_node("integration/webpack-target-node/index.js")]
 #[case::whatwg_url("integration/whatwg-url.js")]
 #[case::when("integration/when.js")]
 // These two tests print a deprecation warning about using folders in exports field to stderr.
@@ -246,7 +254,7 @@ fn node_file_trace_memory(#[case] input: CaseInput) {
         false,
         1,
         120,
-        |_| TurboTasks::new(MemoryBackend::new()),
+        |_| TurboTasks::new(MemoryBackend::default()),
         |tt| {
             let b = tt.backend();
             b.with_all_cached_tasks(|task| {
@@ -301,7 +309,7 @@ fn bench_against_node_nft_inner(input: CaseInput, multi_threaded: bool) {
         multi_threaded,
         1,
         120,
-        |_| TurboTasks::new(MemoryBackend::new()),
+        |_| TurboTasks::new(MemoryBackend::default()),
         |tt| {
             let b = tt.backend();
             b.with_all_cached_tasks(|task| {
@@ -356,7 +364,7 @@ fn node_file_trace<B: Backend + 'static>(
         tests_output_root.push("tests_output");
         let package_root = package_root.to_string_lossy().to_string();
         let input = format!("node-file-trace/{input_path}");
-        let directory_path = tests_output_root.join(&format!("{mode}_{input}"));
+        let directory_path = tests_output_root.join(format!("{mode}_{input}"));
         let directory = directory_path.to_string_lossy().to_string();
 
         remove_dir_all(&directory)
@@ -396,13 +404,20 @@ fn node_file_trace<B: Backend + 'static>(
                 let source = SourceAssetVc::new(input);
                 let context = ModuleAssetContextVc::new(
                     TransitionsByNameVc::cell(HashMap::new()),
-                    EnvironmentVc::new(
+                    // TODO It's easy to make a mistake here as this should match the config in the
+                    // binary. TODO These test cases should move into the
+                    // `node-file-trace` crate and use the same config.
+                    CompileTimeInfoVc::new(EnvironmentVc::new(
                         Value::new(ExecutionEnvironment::NodeJsLambda(
                             NodeJsEnvironment::default().into(),
                         )),
                         Value::new(EnvironmentIntention::ServerRendering),
-                    ),
-                    Default::default(),
+                    )),
+                    ModuleOptionsContext {
+                        enable_types: true,
+                        ..Default::default()
+                    }
+                    .cell(),
                     ResolveOptionsContext {
                         enable_node_native_modules: true,
                         enable_node_modules: true,
@@ -411,7 +426,7 @@ fn node_file_trace<B: Backend + 'static>(
                     }
                     .cell(),
                 );
-                let module = context.process(source.into());
+                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
                 let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
@@ -547,6 +562,11 @@ async fn exec_node(directory: String, path: FileSystemPathVc) -> Result<CommandO
     let dir = f.parent().unwrap();
     println!("[CWD]: {}", dir.display());
     let label = path.to_string().await?;
+
+    if p.path.contains("mdx") {
+        cmd.arg("--experimental-loader=@mdx-js/node-loader")
+            .arg("--no-warnings");
+    }
 
     #[cfg(not(feature = "bench_against_node_nft"))]
     if p.path.ends_with(".ts") {

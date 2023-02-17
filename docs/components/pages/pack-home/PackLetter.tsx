@@ -1,5 +1,5 @@
 import { HeroText } from "../home-shared/Headings";
-import Image from "next/future/image";
+import Image from "next/image";
 import cn from "classnames";
 import gradients from "../home-shared/gradients.module.css";
 import { FadeIn } from "../home-shared/FadeIn";
@@ -64,7 +64,7 @@ export function PackLetter() {
           <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Tobias Koopers"
-              src="/images/people/tobias.jpg"
+              src="/images/people/tobiaskoppers.jpg"
               width={64}
               height={64}
               className="rounded-full"

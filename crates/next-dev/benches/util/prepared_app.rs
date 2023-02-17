@@ -58,11 +58,15 @@ async fn copy_dir(from: PathBuf, to: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+enum PreparedDir {
+    TempDir(tempfile::TempDir),
+    Path(PathBuf),
+}
+
 pub struct PreparedApp<'a> {
     bundler: &'a dyn Bundler,
     server: Option<(Child, String)>,
-    test_dir: tempfile::TempDir,
-    counter: usize,
+    test_dir: PreparedDir,
 }
 
 impl<'a> PreparedApp<'a> {
@@ -75,20 +79,25 @@ impl<'a> PreparedApp<'a> {
         Ok(Self {
             bundler,
             server: None,
-            test_dir,
-            counter: 0,
+            test_dir: PreparedDir::TempDir(test_dir),
         })
     }
 
-    pub fn counter(&mut self) -> usize {
-        self.counter += 1;
-        self.counter
+    pub async fn new_without_copy(
+        bundler: &'a dyn Bundler,
+        template_dir: PathBuf,
+    ) -> Result<PreparedApp<'a>> {
+        Ok(Self {
+            bundler,
+            server: None,
+            test_dir: PreparedDir::Path(template_dir),
+        })
     }
 
     pub fn start_server(&mut self) -> Result<()> {
         assert!(self.server.is_none(), "Server already started");
 
-        self.server = Some(self.bundler.start_server(self.test_dir.path())?);
+        self.server = Some(self.bundler.start_server(self.path())?);
 
         Ok(())
     }
@@ -155,7 +164,10 @@ impl<'a> PreparedApp<'a> {
     }
 
     pub fn path(&self) -> &Path {
-        self.test_dir.path()
+        match self.test_dir {
+            PreparedDir::TempDir(ref dir) => dir.path(),
+            PreparedDir::Path(ref path) => path,
+        }
     }
 }
 

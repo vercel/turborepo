@@ -4,6 +4,7 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
 use turbopack_core::{
+    asset::Asset,
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
@@ -11,7 +12,8 @@ use turbopack_core::{
 };
 
 use super::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
+    ContentSourceVc,
 };
 
 #[turbo_tasks::value(shared)]
@@ -50,7 +52,7 @@ impl ContentSource for StaticAssetsContentSource {
                 ) {
                     let content = SourceAssetVc::new(path).as_asset().content();
                     return Ok(ContentSourceResultVc::exact(
-                        ContentSourceContent::Static(content.into()).cell(),
+                        ContentSourceContentVc::static_content(content.into()).into(),
                     ));
                 }
             }

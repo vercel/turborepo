@@ -4,6 +4,7 @@
 #![feature(iter_intersperse)]
 #![feature(str_split_as_str)]
 #![feature(int_roundings)]
+#![feature(slice_group_by)]
 #![recursion_limit = "256"]
 
 pub mod analyzer;
@@ -12,7 +13,7 @@ pub mod chunk_group_files_asset;
 pub mod code_gen;
 mod errors;
 pub mod magic_identifier;
-pub(crate) mod parse;
+pub mod parse;
 mod path_visitor;
 pub(crate) mod references;
 pub mod resolve;
@@ -22,12 +23,15 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
 };
 use code_gen::CodeGenerateableVc;
-use parse::{parse, ParseResult, ParseResultSourceMap};
+use parse::{parse, ParseResult};
+pub use parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 use path_visitor::ApplyVisitors;
 use references::AnalyzeEcmascriptModuleResult;
 use swc_core::{
@@ -37,37 +41,53 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-pub use transform::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+pub use transform::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
+};
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
-    environment::EnvironmentVc,
     reference::AssetReferencesVc,
-    resolve::origin::{ResolveOrigin, ResolveOriginVc},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+    },
 };
 
+pub use self::references::AnalyzeEcmascriptModuleResultVc;
 use self::{
     chunk::{
         EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
         EcmascriptExportsVc,
     },
-    references::AnalyzeEcmascriptModuleResultVc,
+    parse::ParseResultVc,
 };
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    code_gen::CodeGenerateable,
     references::analyze_ecmascript_module,
+    transform::remove_shebang,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub enum EcmascriptModuleAssetType {
+    /// Module with EcmaScript code
     Ecmascript,
+    /// Module with TypeScript code without types
     Typescript,
+    /// Module with TypeScript code with references to imported types
+    TypescriptWithTypes,
+    /// Module with TypeScript declaration code
     TypescriptDeclaration,
 }
+
+#[turbo_tasks::value(transparent)]
+pub struct InnerAssets(HashMap<String, AssetVc>);
 
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
@@ -76,8 +96,13 @@ pub struct EcmascriptModuleAsset {
     pub context: AssetContextVc,
     pub ty: EcmascriptModuleAssetType,
     pub transforms: EcmascriptInputTransformsVc,
-    pub environment: EnvironmentVc,
+    pub compile_time_info: CompileTimeInfoVc,
+    pub inner_assets: Option<InnerAssetsVc>,
 }
+
+/// An optional [EcmascriptModuleAsset]
+#[turbo_tasks::value(transparent)]
+pub struct OptionEcmascriptModuleAsset(Option<EcmascriptModuleAssetVc>);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptModuleAssetVc {
@@ -87,14 +112,34 @@ impl EcmascriptModuleAssetVc {
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
         transforms: EcmascriptInputTransformsVc,
-        environment: EnvironmentVc,
+        compile_time_info: CompileTimeInfoVc,
     ) -> Self {
         Self::cell(EcmascriptModuleAsset {
             source,
             context,
             ty: ty.into_value(),
             transforms,
-            environment,
+            compile_time_info,
+            inner_assets: None,
+        })
+    }
+
+    #[turbo_tasks::function]
+    pub fn new_with_inner_assets(
+        source: AssetVc,
+        context: AssetContextVc,
+        ty: Value<EcmascriptModuleAssetType>,
+        transforms: EcmascriptInputTransformsVc,
+        compile_time_info: CompileTimeInfoVc,
+        inner_assets: InnerAssetsVc,
+    ) -> Self {
+        Self::cell(EcmascriptModuleAsset {
+            source,
+            context,
+            ty: ty.into_value(),
+            transforms,
+            compile_time_info,
+            inner_assets: Some(inner_assets),
         })
     }
 
@@ -115,8 +160,14 @@ impl EcmascriptModuleAssetVc {
             self.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
-            this.environment,
+            this.compile_time_info,
         ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn parse(self) -> Result<ParseResultVc> {
+        let this = self.await?;
+        Ok(parse(this.source, Value::new(this.ty), this.transforms))
     }
 }
 
@@ -177,6 +228,21 @@ impl ResolveOrigin for EcmascriptModuleAsset {
     fn context(&self) -> AssetContextVc {
         self.context
     }
+
+    #[turbo_tasks::function]
+    async fn get_inner_asset(&self, request: RequestVc) -> Result<AssetOptionVc> {
+        Ok(AssetOptionVc::cell(
+            if let Some(inner_assets) = &self.inner_assets {
+                if let Some(request) = request.await?.request() {
+                    inner_assets.await?.get(&request).copied()
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+        ))
+    }
 }
 
 #[turbo_tasks::value]
@@ -189,6 +255,7 @@ struct ModuleChunkItem {
 impl ValueToString for ModuleChunkItem {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
+        // TODO include inner_assets in this name
         Ok(StringVc::cell(format!(
             "{} (ecmascript)",
             self.module.await?.source.path().to_string().await?
@@ -212,6 +279,11 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.module.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let AnalyzeEcmascriptModuleResult {
             references,
@@ -226,6 +298,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             }
         }
         for c in code_generation.await?.iter() {
+            let c = c.resolve().await?;
             code_gens.push(c.code_generation(context));
         }
         // need to keep that around to allow references into that
@@ -267,7 +340,12 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                 for visitor in root_visitors {
                     program.visit_mut_with(&mut visitor.create());
                 }
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
                 program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
+
+                // we need to remove any shebang before bundling as it's only valid as the first
+                // line in a js file (not in a chunk item wrapped in the runtime)
+                remove_shebang(&mut program);
             });
 
             let mut bytes: Vec<u8> = vec![];

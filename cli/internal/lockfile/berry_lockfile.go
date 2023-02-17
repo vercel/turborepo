@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -80,7 +81,8 @@ type BerryLockfile struct {
 
 // BerryDependencyMetaEntry Structure for holding if a package is optional or not
 type BerryDependencyMetaEntry struct {
-	Optional bool `yaml:"optional,omitempty"`
+	Optional  bool `yaml:"optional,omitempty"`
+	Unplugged bool `yaml:"unplugged,omitempty"`
 }
 
 var _ Lockfile = (*BerryLockfile)(nil)
@@ -116,9 +118,6 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	}
 
 	for name, version := range entry.Dependencies {
-		deps[name] = version
-	}
-	for name, version := range entry.PeerDependencies {
 		deps[name] = version
 	}
 
@@ -402,6 +401,17 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 	return &lockfile, nil
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func (l *BerryLockfile) GlobalChange(other Lockfile) bool {
+	otherBerry, ok := other.(*BerryLockfile)
+	return !ok ||
+		l.cacheKey != otherBerry.cacheKey ||
+		l.version != otherBerry.version ||
+		// This is probably overly cautious, but getting it correct will be hard
+		!reflect.DeepEqual(l.patches, otherBerry.patches)
+}
+
 // Fields shared between _Locator and _Descriptor
 type _Ident struct {
 	// Scope of package without leading @
@@ -681,14 +691,17 @@ func _stringifyDepsMeta(meta map[string]BerryDependencyMetaEntry) string {
 	sort.Strings(keys)
 
 	lines := make([]string, 0, len(meta))
-	addLine := func(name string) {
-		lines = append(lines, fmt.Sprintf("    %s:\n      optional: true", _wrapString(name)))
+	addLine := func(name string, key string) {
+		lines = append(lines, fmt.Sprintf("    %s:\n      %s: true", _wrapString(name), key))
 	}
 
 	for _, name := range keys {
 		optional := meta[name]
 		if optional.Optional {
-			addLine(name)
+			addLine(name, "optional")
+		}
+		if optional.Unplugged {
+			addLine(name, "unplugged")
 		}
 	}
 

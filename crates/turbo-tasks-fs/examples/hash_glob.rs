@@ -13,8 +13,8 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 use turbo_tasks::{primitives::StringVc, util::FormatDuration, NothingVc, TurboTasks};
 use turbo_tasks_fs::{
-    glob::GlobVc, register, DirectoryEntry, DiskFileSystemVc, FileContent, FileSystemPathVc,
-    FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, register, DirectoryEntry, DiskFileSystemVc, FileContent, FileSystem,
+    FileSystemPathVc, FileSystemVc, ReadGlobResultVc,
 };
 use turbo_tasks_memory::MemoryBackend;
 
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     register();
     include!(concat!(env!("OUT_DIR"), "/register_example_hash_glob.rs"));
 
-    let tt = TurboTasks::new(MemoryBackend::new());
+    let tt = TurboTasks::new(MemoryBackend::default());
     let start = Instant::now();
 
     let task = tt.spawn_root_task(|| {
@@ -74,7 +74,7 @@ async fn hash_glob_result(result: ReadGlobResultVc) -> Result<StringVc> {
     for (name, result) in result.inner.iter() {
         let hash = hash_glob_result(*result).await?;
         if !hash.is_empty() {
-            hashes.insert(name, hash.clone());
+            hashes.insert(name, hash.clone_value());
         }
     }
     if hashes.is_empty() {

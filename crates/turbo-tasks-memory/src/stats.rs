@@ -9,12 +9,18 @@ use std::{
 use turbo_tasks::{registry, FunctionId, TaskId, TraitTypeId};
 
 use crate::{
+    scope::TaskScopeId,
     task::{Task, TaskStatsInfo},
     MemoryBackend,
 };
 
+pub struct StatsReferences {
+    pub tasks: Vec<(ReferenceType, TaskId)>,
+    pub scopes: Vec<(ReferenceType, TaskScopeId)>,
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum TaskType {
+pub enum StatsTaskType {
     Root(TaskId),
     Once(TaskId),
     Native(FunctionId),
@@ -22,16 +28,16 @@ pub enum TaskType {
     ResolveTrait(TraitTypeId, String),
 }
 
-impl Display for TaskType {
+impl Display for StatsTaskType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TaskType::Root(_) => write!(f, "root"),
-            TaskType::Once(_) => write!(f, "once"),
-            TaskType::Native(nf) => write!(f, "{}", registry::get_function(*nf).name),
-            TaskType::ResolveNative(nf) => {
+            StatsTaskType::Root(_) => write!(f, "root"),
+            StatsTaskType::Once(_) => write!(f, "once"),
+            StatsTaskType::Native(nf) => write!(f, "{}", registry::get_function(*nf).name),
+            StatsTaskType::ResolveNative(nf) => {
                 write!(f, "resolve {}", registry::get_function(*nf).name)
             }
-            TaskType::ResolveTrait(t, n) => {
+            StatsTaskType::ResolveTrait(t, n) => {
                 write!(f, "resolve trait {}::{}", registry::get_trait(*t).name, n)
             }
         }
@@ -51,28 +57,30 @@ pub enum ReferenceType {
 }
 
 #[derive(Clone, Debug)]
-pub struct TaskStats {
+pub struct ExportedTaskStats {
     pub count: usize,
     pub active_count: usize,
-    pub executions: usize,
+    pub unloaded_count: usize,
+    pub executions: Option<u32>,
     pub roots: usize,
     pub scopes: usize,
-    pub total_duration: Duration,
+    pub total_duration: Option<Duration>,
     pub total_current_duration: Duration,
     pub total_update_duration: Duration,
     pub max_duration: Duration,
-    pub references: HashMap<(ReferenceType, TaskType), ReferenceStats>,
+    pub references: HashMap<(ReferenceType, StatsTaskType), ReferenceStats>,
 }
 
-impl Default for TaskStats {
+impl Default for ExportedTaskStats {
     fn default() -> Self {
         Self {
             count: 0,
             active_count: 0,
-            executions: 0,
+            unloaded_count: 0,
+            executions: None,
             roots: 0,
             scopes: 0,
-            total_duration: Duration::ZERO,
+            total_duration: None,
             total_current_duration: Duration::ZERO,
             total_update_duration: Duration::ZERO,
             max_duration: Duration::ZERO,
@@ -82,7 +90,7 @@ impl Default for TaskStats {
 }
 
 pub struct Stats {
-    tasks: HashMap<TaskType, TaskStats>,
+    tasks: HashMap<StatsTaskType, ExportedTaskStats>,
 }
 
 impl Default for Stats {
@@ -99,14 +107,14 @@ impl Stats {
     }
 
     pub fn add(&mut self, backend: &MemoryBackend, task: &Task) {
-        self.add_conditional(backend, task, |_, info| info.executions > 0)
+        self.add_conditional(backend, task, |_, _| true)
     }
 
     pub fn add_conditional(
         &mut self,
         backend: &MemoryBackend,
         task: &Task,
-        condition: impl FnOnce(&TaskType, &TaskStatsInfo) -> bool,
+        condition: impl FnOnce(&StatsTaskType, &TaskStatsInfo) -> bool,
     ) {
         let info = task.get_stats_info(backend);
         let ty = task.get_stats_type();
@@ -120,26 +128,34 @@ impl Stats {
             root_scoped,
             child_scopes,
             active,
+            unloaded,
         } = info;
         let stats = self.tasks.entry(ty).or_default();
         stats.count += 1;
         if active {
             stats.active_count += 1
         }
-        stats.total_duration += total_duration;
+        if let Some(total_duration) = total_duration {
+            *stats.total_duration.get_or_insert(Duration::ZERO) += total_duration;
+        }
+        if unloaded {
+            stats.unloaded_count += 1
+        }
         stats.total_current_duration += last_duration;
-        if executions > 1 {
+        if executions.map(|executions| executions > 1).unwrap_or(true) {
             stats.total_update_duration += last_duration;
         }
         stats.max_duration = max(stats.max_duration, last_duration);
-        stats.executions += executions as usize;
+        if let Some(executions) = executions {
+            *stats.executions.get_or_insert(0) += executions;
+        }
         if root_scoped {
             stats.roots += 1;
         }
         stats.scopes += child_scopes;
 
-        let (references, _) = task.get_stats_references();
-        let set: HashSet<_> = references.into_iter().collect();
+        let StatsReferences { tasks, .. } = task.get_stats_references();
+        let set: HashSet<_> = tasks.into_iter().collect();
         for (ref_type, task) in set {
             backend.with_task(task, |task| {
                 let ty = task.get_stats_type();
@@ -159,7 +175,7 @@ impl Stats {
         &mut self,
         backend: &MemoryBackend,
         id: TaskId,
-        condition: impl FnOnce(&TaskType, &TaskStatsInfo) -> bool,
+        condition: impl FnOnce(&StatsTaskType, &TaskStatsInfo) -> bool,
     ) {
         backend.with_task(id, |task| {
             self.add_conditional(backend, task, condition);
@@ -168,12 +184,12 @@ impl Stats {
 
     pub fn merge_resolve(&mut self) {
         self.merge(|ty, _stats| match ty {
-            TaskType::Root(_) | TaskType::Once(_) | TaskType::Native(_) => false,
-            TaskType::ResolveNative(_) | TaskType::ResolveTrait(_, _) => true,
+            StatsTaskType::Root(_) | StatsTaskType::Once(_) | StatsTaskType::Native(_) => false,
+            StatsTaskType::ResolveNative(_) | StatsTaskType::ResolveTrait(_, _) => true,
         })
     }
 
-    pub fn merge(&mut self, mut select: impl FnMut(&TaskType, &TaskStats) -> bool) {
+    pub fn merge(&mut self, mut select: impl FnMut(&StatsTaskType, &ExportedTaskStats) -> bool) {
         let merged: HashMap<_, _> = self
             .tasks
             .drain_filter(|ty, stats| select(ty, stats))
@@ -181,9 +197,9 @@ impl Stats {
 
         for stats in self.tasks.values_mut() {
             fn merge_refs(
-                refs: HashMap<(ReferenceType, TaskType), ReferenceStats>,
-                merged: &HashMap<TaskType, TaskStats>,
-            ) -> HashMap<(ReferenceType, TaskType), ReferenceStats> {
+                refs: HashMap<(ReferenceType, StatsTaskType), ReferenceStats>,
+                merged: &HashMap<StatsTaskType, ExportedTaskStats>,
+            ) -> HashMap<(ReferenceType, StatsTaskType), ReferenceStats> {
                 refs.into_iter()
                     .flat_map(|((ref_ty, ty), stats)| {
                         if let Some(merged_stats) = merged.get(&ty) {
@@ -221,11 +237,11 @@ impl Stats {
         let mut root_queue = incoming_references_count.into_iter().collect::<Vec<_>>();
         root_queue.sort_by_key(|(_, c)| *c);
 
-        let mut task_placement: HashMap<&TaskType, Option<&TaskType>> = HashMap::new();
+        let mut task_placement: HashMap<&StatsTaskType, Option<&StatsTaskType>> = HashMap::new();
         fn get_path<'a>(
-            ty: Option<&'a TaskType>,
-            task_placement: &HashMap<&'a TaskType, Option<&'a TaskType>>,
-        ) -> Vec<&'a TaskType> {
+            ty: Option<&'a StatsTaskType>,
+            task_placement: &HashMap<&'a StatsTaskType, Option<&'a StatsTaskType>>,
+        ) -> Vec<&'a StatsTaskType> {
             if let Some(mut ty) = ty {
                 let mut path = vec![ty];
                 while let Some(parent) = task_placement[ty] {
@@ -238,7 +254,10 @@ impl Stats {
                 Vec::new()
             }
         }
-        fn find_common<'a>(p1: Vec<&'a TaskType>, p2: Vec<&'a TaskType>) -> Option<&'a TaskType> {
+        fn find_common<'a>(
+            p1: Vec<&'a StatsTaskType>,
+            p2: Vec<&'a StatsTaskType>,
+        ) -> Option<&'a StatsTaskType> {
             let mut i = cmp::min(p1.len(), p2.len());
             loop {
                 if i == 0 {
@@ -254,7 +273,7 @@ impl Stats {
             if task_placement.contains_key(root) {
                 continue;
             }
-            let mut queue: VecDeque<(&TaskType, Option<&TaskType>)> =
+            let mut queue: VecDeque<(&StatsTaskType, Option<&StatsTaskType>)> =
                 [(root, None)].into_iter().collect();
 
             while let Some((ty, placement)) = queue.pop_front() {
@@ -284,15 +303,15 @@ impl Stats {
             }
         }
 
-        let mut children: HashMap<Option<&TaskType>, Vec<&TaskType>> = HashMap::new();
+        let mut children: HashMap<Option<&StatsTaskType>, Vec<&StatsTaskType>> = HashMap::new();
         for (child, parent) in task_placement {
             children.entry(parent).or_default().push(child);
         }
 
         fn into_group<'a>(
-            tasks: &HashMap<TaskType, TaskStats>,
-            children: &HashMap<Option<&'a TaskType>, Vec<&'a TaskType>>,
-            ty: Option<&'a TaskType>,
+            tasks: &HashMap<StatsTaskType, ExportedTaskStats>,
+            children: &HashMap<Option<&'a StatsTaskType>, Vec<&'a StatsTaskType>>,
+            ty: Option<&'a StatsTaskType>,
         ) -> GroupTree {
             let inner = &children[&ty];
             let inner_with_children = inner.iter().filter(|c| children.contains_key(&Some(*c)));
@@ -321,7 +340,7 @@ impl Stats {
 
 #[derive(Debug)]
 pub struct GroupTree {
-    pub primary: Option<(TaskType, TaskStats)>,
+    pub primary: Option<(StatsTaskType, ExportedTaskStats)>,
     pub children: Vec<GroupTree>,
-    pub task_types: Vec<(TaskType, TaskStats)>,
+    pub task_types: Vec<(StatsTaskType, ExportedTaskStats)>,
 }

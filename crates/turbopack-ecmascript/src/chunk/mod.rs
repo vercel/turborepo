@@ -6,6 +6,7 @@ use std::{fmt::Write, io::Write as _, slice::Iter};
 
 use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
+use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringReadRef, StringVc, StringsVc, UsizeVc},
@@ -15,23 +16,26 @@ use turbo_tasks::{
 use turbo_tasks_fs::{
     embed_file, rope::Rope, File, FileContent, FileSystemPathOptionVc, FileSystemPathVc,
 };
-use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, Xxh3Hash64Hasher};
+use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHasher, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         chunk_content, chunk_content_split,
+        chunk_in_group::ChunkInGroupVc,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
-        FromChunkableAsset, ModuleId, ModuleIdReadRef, ModuleIdVc, ModuleIdsVc,
+        ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc, FromChunkableAsset, ModuleId, ModuleIdReadRef, ModuleIdVc, ModuleIdsVc,
     },
     code_builder::{Code, CodeBuilder, CodeReadRef, CodeVc},
+    environment::{ChunkLoading, EnvironmentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     reference::{AssetReferenceVc, AssetReferencesVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
     version::{
         PartialUpdate, TotalUpdate, Update, UpdateVc, Version, VersionVc, VersionedContent,
         VersionedContentVc,
@@ -46,7 +50,7 @@ use self::{
 use crate::{
     parse::ParseResultSourceMapVc,
     references::esm::EsmExportsVc,
-    utils::{stringify_module_id, stringify_str, FormatIter},
+    utils::{stringify_js, FormatIter},
 };
 
 #[turbo_tasks::value]
@@ -124,6 +128,7 @@ impl EcmascriptChunkVc {
             .resolve()
             .await?;
         for path in paths {
+            let path = path.resolve().await?;
             while !*path.is_inside_or_equal(current).await? {
                 let parent = current.parent().resolve().await?;
                 if parent == current {
@@ -209,11 +214,15 @@ impl EcmascriptChunkEvaluateVc {
         let mut chunks_server_paths = Vec::new();
         let output_root = context.output_root().await?;
         for chunk in evaluate_chunks.iter() {
-            if let Some(ecma_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
-                if ecma_chunk != origin_chunk {
-                    let chunk_path = &*chunk.path().await?;
-                    if let Some(chunk_server_path) = output_root.get_path_to(chunk_path) {
-                        chunks_server_paths.push(chunk_server_path.to_string());
+            if let Some(chunk_in_group) = ChunkInGroupVc::resolve_from(chunk).await? {
+                if let Some(ecma_chunk) =
+                    EcmascriptChunkVc::resolve_from(chunk_in_group.inner()).await?
+                {
+                    if ecma_chunk != origin_chunk {
+                        let chunk_path = &*chunk.path().await?;
+                        if let Some(chunk_server_path) = output_root.get_path_to(chunk_path) {
+                            chunks_server_paths.push(chunk_server_path.to_string());
+                        }
                     }
                 }
             }
@@ -343,6 +352,7 @@ pub struct EcmascriptChunkContent {
     chunk_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
     evaluate: Option<EcmascriptChunkContentEvaluateVc>,
+    environment: EnvironmentVc,
 }
 
 #[turbo_tasks::value(transparent)]
@@ -452,6 +462,7 @@ impl EcmascriptChunkContentVc {
             chunk_path,
             output_root,
             evaluate,
+            environment: context.environment(),
         }
         .cell())
     }
@@ -485,7 +496,32 @@ impl EcmascriptChunkContentEntryVc {
     #[turbo_tasks::function]
     async fn new(chunk_item: EcmascriptChunkItemVc) -> Result<Self> {
         let content = chunk_item.content();
-        let factory = module_factory(content);
+        let factory = match module_factory(content).resolve().await {
+            Ok(factory) => factory,
+            Err(error) => {
+                let id = chunk_item.id().to_string().await;
+                let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
+                let mut error_message =
+                    format!("An error occurred while generating the chunk item {}", id);
+                for err in error.chain() {
+                    write!(error_message, "\n  at {}", err)?;
+                }
+                let js_error_message = serde_json::to_string(&error_message)?;
+                let issue = CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: chunk_item.related_path(),
+                    title: StringVc::cell("Code generation for chunk item errored".to_string()),
+                    message: StringVc::cell(error_message),
+                }
+                .cell();
+                issue.as_issue().emit();
+                let mut code = CodeBuilder::default();
+                code += "(() => {{\n\n";
+                writeln!(code, "throw new Error({error});", error = &js_error_message)?;
+                code += "\n}})";
+                code.build().cell()
+            }
+        };
         let id = chunk_item.id().await?;
         let code = factory.await?;
         let hash = hash_xxh3_hash64(code.source_code());
@@ -511,7 +547,9 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
         "v: __turbopack_export_value__",
         "c: __turbopack_cache__",
         "l: __turbopack_load__",
+        "j: __turbopack_cjs__",
         "p: process",
+        "g: global",
         // HACK
         "__dirname",
     ];
@@ -580,9 +618,9 @@ impl EcmascriptChunkContentVc {
         let mut code = CodeBuilder::default();
         code += "(self.TURBOPACK = self.TURBOPACK || []).push([";
 
-        writeln!(code, "{}, {{", stringify_str(chunk_server_path))?;
+        writeln!(code, "{}, {{", stringify_js(chunk_server_path))?;
         for entry in &this.module_factories {
-            write!(code, "\n{}: ", &stringify_module_id(entry.id()))?;
+            write!(code, "\n{}: ", &stringify_js(entry.id()))?;
             code.push_code(entry.code());
             code += ",";
         }
@@ -594,7 +632,7 @@ impl EcmascriptChunkContentVc {
                 .chunks_server_paths
                 .await?
                 .iter()
-                .map(|path| format!(" && loadedChunks.has({})", stringify_str(path)))
+                .map(|path| format!(" && loadedChunks.has({})", stringify_js(path)))
                 .collect::<Vec<_>>()
                 .join("");
             let entries_ids = &*evaluate.entry_modules_ids.await?;
@@ -602,7 +640,7 @@ impl EcmascriptChunkContentVc {
                 .iter()
                 .map(|id| async move {
                     let id = id.await?;
-                    let id = stringify_module_id(&id);
+                    let id = stringify_js(&id);
                     Ok(format!(r#"instantiateRuntimeModule({id});"#)) as Result<_>
                 })
                 .try_join()
@@ -624,11 +662,41 @@ impl EcmascriptChunkContentVc {
         }
         code += "]);\n";
         if this.evaluate.is_some() {
-            let runtime_code = embed_file!("js/src/runtime.js").await?;
-            match &*runtime_code {
-                FileContent::NotFound => return Err(anyhow!("runtime code is not found")),
+            // When a chunk is executed, it will either register itself with the current
+            // instance of the runtime, or it will push itself onto the list of pending
+            // chunks (`self.TURBOPACK`).
+            //
+            // When the runtime executes, it will pick up and register all pending chunks,
+            // and replace the list of pending chunks with itself so later chunks can
+            // register directly with it.
+            code += indoc! { r#"
+                (() => {
+                if (!Array.isArray(globalThis.TURBOPACK)) {
+                    return;
+                }
+            "# };
+
+            let specific_runtime_code = match *this.environment.chunk_loading().await? {
+                ChunkLoading::None => embed_file!("js/src/runtime.none.js").await?,
+                ChunkLoading::NodeJs => embed_file!("js/src/runtime.nodejs.js").await?,
+                ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
+            };
+
+            match &*specific_runtime_code {
+                FileContent::NotFound => return Err(anyhow!("specific runtime code is not found")),
                 FileContent::Content(file) => code.push_source(file.content(), None),
             };
+
+            let shared_runtime_code = embed_file!("js/src/runtime.js").await?;
+
+            match &*shared_runtime_code {
+                FileContent::NotFound => return Err(anyhow!("shared runtime code is not found")),
+                FileContent::Content(file) => code.push_source(file.content(), None),
+            };
+
+            code += indoc! { r#"
+                })();
+            "# };
         }
 
         if code.has_source_map() {
@@ -738,22 +806,46 @@ impl GenerateSourceMap for EcmascriptChunkContent {
     fn generate_source_map(self_vc: EcmascriptChunkContentVc) -> SourceMapVc {
         self_vc.code().generate_source_map()
     }
+
+    #[turbo_tasks::function]
+    async fn by_section(&self, section: &str) -> Result<OptionSourceMapVc> {
+        // Weirdly, the ContentSource will have already URL decoded the ModuleId, and we
+        // can't reparse that via serde.
+        if let Ok(id) = ModuleId::parse(section) {
+            for entry in self.module_factories.iter() {
+                if id == *entry.id() {
+                    let sm = entry.code_vc.generate_source_map();
+                    return Ok(OptionSourceMapVc::cell(Some(sm)));
+                }
+            }
+        }
+
+        Ok(OptionSourceMapVc::cell(None))
+    }
 }
 
 #[derive(serde::Serialize)]
 struct HmrUpdateEntry<'a> {
     code: &'a Rope,
+    url: String,
     map: Option<String>,
 }
 
 impl<'a> HmrUpdateEntry<'a> {
     fn new(entry: &'a EcmascriptChunkContentEntry, chunk_path: &str) -> Self {
+        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
+        #[derive(Serialize)]
+        struct Id<'a> {
+            id: &'a ModuleId,
+        }
+        let id = serde_qs::to_string(&Id { id: &entry.id }).unwrap();
         HmrUpdateEntry {
             code: entry.source_code(),
+            url: format!("/{}?{}", chunk_path, &id),
             map: entry
                 .code
                 .has_source_map()
-                .then(|| format!("{}.{}.map", chunk_path, entry.id.to_truncated_hash())),
+                .then(|| format!("/__turbopack_sourcemap__/{}.map?{}", chunk_path, &id)),
         }
     }
 }
@@ -908,11 +1000,15 @@ impl Asset for EcmascriptChunk {
         // evalute only contributes to the hashed info
         if let Some(evaluate) = this.evaluate {
             let evaluate = evaluate.content(this.context, self_vc).await?;
-            for path in evaluate.chunks_server_paths.await?.iter() {
+            let chunks_server_paths = evaluate.chunks_server_paths.await?;
+            hasher.write_usize(chunks_server_paths.len());
+            for path in chunks_server_paths.iter() {
                 hasher.write_ref(path);
                 need_hash = true;
             }
-            for id in evaluate.entry_modules_ids.await?.iter() {
+            let entry_modules_ids = evaluate.entry_modules_ids.await?;
+            hasher.write_usize(entry_modules_ids.len());
+            for id in entry_modules_ids.iter() {
                 hasher.write_value(id.await?);
                 need_hash = true;
             }
@@ -925,6 +1021,7 @@ impl Asset for EcmascriptChunk {
             let main_entry = main_entries.iter().next().unwrap();
             main_entry.path()
         } else {
+            hasher.write_usize(main_entries.len());
             for entry in &main_entries {
                 let path = entry.path().to_string().await?;
                 hasher.write_value(path);
@@ -940,6 +1037,15 @@ impl Asset for EcmascriptChunk {
                 main_entry.path()
             }
         };
+        if let Some(omit_entries) = this.omit_entries {
+            let omit_entries = omit_entries.await?;
+            hasher.write_usize(omit_entries.len());
+            for omit_entry in &omit_entries {
+                let path = omit_entry.path().to_string().await?;
+                hasher.write_value(path);
+            }
+            need_hash = true;
+        }
 
         if need_hash {
             let hash = hasher.finish();
@@ -971,14 +1077,7 @@ impl Asset for EcmascriptChunk {
         for chunk_group in content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(*chunk_group).into());
         }
-
-        references.push(
-            EcmascriptChunkSourceMapAssetReferenceVc::new(
-                self_vc,
-                *this.context.is_hot_module_replacement_enabled().await?,
-            )
-            .into(),
-        );
+        references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
 
         Ok(AssetReferencesVc::cell(references))
     }
@@ -1128,6 +1227,7 @@ pub struct EcmascriptChunkItemOptions {
 
 #[turbo_tasks::value_trait]
 pub trait EcmascriptChunkItem: ChunkItem + ValueToString {
+    fn related_path(&self) -> FileSystemPathVc;
     fn content(&self) -> EcmascriptChunkItemContentVc;
     fn chunking_context(&self) -> ChunkingContextVc;
     fn id(&self) -> ModuleIdVc {

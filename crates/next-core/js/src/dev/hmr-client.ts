@@ -1,22 +1,26 @@
 import type {
   ClientMessage,
-  EcmascriptChunkUpdate,
+  HmrUpdateEntry,
   Issue,
   ResourceIdentifier,
   ServerMessage,
 } from "@vercel/turbopack-runtime/types/protocol";
 import type {
   ChunkPath,
+  ModuleId,
   UpdateCallback,
   TurbopackGlobals,
 } from "@vercel/turbopack-runtime/types";
 
 import stripAnsi from "@vercel/turbopack-next/compiled/strip-ansi";
 
-import { onBuildOk, onRefresh, onTurbopackError } from "../overlay/client";
+import {
+  onBeforeRefresh,
+  onBuildOk,
+  onRefresh,
+  onTurbopackIssues,
+} from "../overlay/client";
 import { addEventListener, sendMessage } from "./websocket";
-import { ModuleId } from "@vercel/turbopack-runtime/types";
-import { HmrUpdateEntry } from "@vercel/turbopack-runtime/types/protocol";
 
 declare var globalThis: TurbopackGlobals;
 
@@ -43,26 +47,32 @@ export function connect({ assetPrefix }: ClientOptions) {
   }
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS = {
     push: ([chunkPath, callback]: [ChunkPath, UpdateCallback]) => {
-      onChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, callback);
     },
   };
 
   if (Array.isArray(queued)) {
     for (const [chunkPath, callback] of queued) {
-      onChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, callback);
     }
   }
 
   subscribeToInitialCssChunksUpdates(assetPrefix);
 }
 
-const updateCallbacks: Map<ResourceKey, Set<UpdateCallback>> = new Map();
+type UpdateCallbackSet = {
+  callbacks: Set<UpdateCallback>;
+  unsubscribe: () => void;
+};
+
+const updateCallbackSets: Map<ResourceKey, UpdateCallbackSet> = new Map();
 
 function sendJSON(message: ClientMessage) {
   sendMessage(JSON.stringify(message));
 }
 
 type ResourceKey = string;
+
 function resourceKey(resource: ResourceIdentifier): ResourceKey {
   return JSON.stringify({
     path: resource.path,
@@ -70,15 +80,22 @@ function resourceKey(resource: ResourceIdentifier): ResourceKey {
   });
 }
 
-function subscribeToUpdates(resource: ResourceIdentifier) {
+function subscribeToUpdates(resource: ResourceIdentifier): () => void {
   sendJSON({
     type: "subscribe",
     ...resource,
   });
+
+  return () => {
+    sendJSON({
+      type: "unsubscribe",
+      ...resource,
+    });
+  };
 }
 
 function handleSocketConnected() {
-  for (const key of updateCallbacks.keys()) {
+  for (const key of updateCallbackSets.keys()) {
     subscribeToUpdates(JSON.parse(key));
   }
 }
@@ -90,18 +107,27 @@ type AggregatedUpdates = {
 };
 
 // we aggregate all updates until the issues are resolved
-const chunksWithErrors: Map<ChunkPath, AggregatedUpdates> = new Map();
+const chunksWithUpdates: Map<ResourceKey, AggregatedUpdates> = new Map();
 
 function aggregateUpdates(
   msg: ServerMessage,
-  hasErrors: boolean
+  hasCriticalIssues: boolean
 ): ServerMessage {
   const key = resourceKey(msg.resource);
-  const aggregated = chunksWithErrors.get(key);
+  const aggregated = chunksWithUpdates.get(key);
+
+  if (msg.type === "issues" && aggregated == null && hasCriticalIssues) {
+    // add an empty record to make sure we don't call `onBuildOk`
+    chunksWithUpdates.set(key, {
+      added: {},
+      modified: {},
+      deleted: new Set(),
+    });
+  }
 
   if (msg.type === "issues" && aggregated != null) {
-    if (!hasErrors) {
-      chunksWithErrors.delete(key);
+    if (!hasCriticalIssues) {
+      chunksWithUpdates.delete(key);
     }
 
     return {
@@ -119,8 +145,8 @@ function aggregateUpdates(
   if (msg.type !== "partial") return msg;
 
   if (aggregated == null) {
-    if (hasErrors) {
-      chunksWithErrors.set(key, {
+    if (hasCriticalIssues) {
+      chunksWithUpdates.set(key, {
         added: msg.instruction.added,
         modified: msg.instruction.modified,
         deleted: new Set(msg.instruction.deleted),
@@ -167,10 +193,10 @@ function aggregateUpdates(
     aggregated.deleted.add(moduleId);
   }
 
-  if (!hasErrors) {
-    chunksWithErrors.delete(key);
+  if (!hasCriticalIssues) {
+    chunksWithUpdates.delete(key);
   } else {
-    chunksWithErrors.set(key, aggregated);
+    chunksWithUpdates.set(key, aggregated);
   }
 
   return {
@@ -192,22 +218,46 @@ function compareByList(list: any[], a: any, b: any) {
   return aI - bI;
 }
 
-function handleIssues(msg: ServerMessage): boolean {
-  let issueToReport = null;
+const chunksWithIssues: Map<ResourceKey, Issue[]> = new Map();
 
-  for (const issue of msg.issues) {
-    if (CRITICAL.includes(issue.severity)) {
-      issueToReport = issue;
-      break;
+function emitIssues() {
+  const issues = [];
+  const deduplicationSet = new Set();
+
+  for (const [_, chunkIssues] of chunksWithIssues) {
+    for (const chunkIssue of chunkIssues) {
+      if (deduplicationSet.has(chunkIssue.formatted)) continue;
+
+      issues.push(chunkIssue);
+      deduplicationSet.add(chunkIssue.formatted);
     }
   }
 
-  if (issueToReport) {
-    console.error(stripAnsi(issueToReport.formatted));
-    onTurbopackError(issueToReport);
+  sortIssues(issues);
+
+  onTurbopackIssues(issues);
+}
+
+function handleIssues(msg: ServerMessage): boolean {
+  const key = resourceKey(msg.resource);
+  let hasCriticalIssues = false;
+
+  for (const issue of msg.issues) {
+    if (CRITICAL.includes(issue.severity)) {
+      console.error(stripAnsi(issue.formatted));
+      hasCriticalIssues = true;
+    }
   }
 
-  return issueToReport != null;
+  if (msg.issues.length > 0) {
+    chunksWithIssues.set(key, msg.issues);
+  } else if (chunksWithIssues.has(key)) {
+    chunksWithIssues.delete(key);
+  }
+
+  emitIssues();
+
+  return hasCriticalIssues;
 }
 
 const SEVERITY_ORDER = ["bug", "fatal", "error", "warning", "info", "log"];
@@ -220,32 +270,44 @@ const CATEGORY_ORDER = [
   "other",
 ];
 
-function handleSocketMessage(msg: ServerMessage) {
-  msg.issues.sort((a, b) => {
+function sortIssues(issues: Issue[]) {
+  issues.sort((a, b) => {
     const first = compareByList(SEVERITY_ORDER, a.severity, b.severity);
     if (first !== 0) return first;
     return compareByList(CATEGORY_ORDER, a.category, b.category);
   });
+}
 
-  const hasErrors = handleIssues(msg);
-  const aggregatedMsg = aggregateUpdates(msg, hasErrors);
+function handleSocketMessage(msg: ServerMessage) {
+  sortIssues(msg.issues);
 
-  if (hasErrors) return;
+  const hasCriticalIssues = handleIssues(msg);
+  const aggregatedMsg = aggregateUpdates(msg, hasCriticalIssues);
 
-  if (chunksWithErrors.size === 0) {
-    onBuildOk();
-  }
+  const runHooks = chunksWithUpdates.size === 0;
 
   if (aggregatedMsg.type !== "issues") {
+    if (runHooks) onBeforeRefresh();
     triggerUpdate(aggregatedMsg);
-    if (chunksWithErrors.size === 0) {
-      onRefresh();
-    }
+    if (runHooks) onRefresh();
+  }
+
+  if (runHooks) onBuildOk();
+
+  // This is used by the Next.js integration test suite to notify it when HMR
+  // updates have been completed.
+  // TODO: Only run this in test environments (gate by `process.env.__NEXT_TEST_MODE`)
+  if (globalThis.__NEXT_HMR_CB) {
+    globalThis.__NEXT_HMR_CB();
+    globalThis.__NEXT_HMR_CB = null;
   }
 }
 
-export function onChunkUpdate(chunkPath: ChunkPath, callback: UpdateCallback) {
-  onUpdate(
+export function subscribeToChunkUpdate(
+  chunkPath: ChunkPath,
+  callback: UpdateCallback
+): () => void {
+  return subscribeToUpdate(
     {
       path: chunkPath,
     },
@@ -253,33 +315,43 @@ export function onChunkUpdate(chunkPath: ChunkPath, callback: UpdateCallback) {
   );
 }
 
-export function onUpdate(
+export function subscribeToUpdate(
   resource: ResourceIdentifier,
   callback: UpdateCallback
 ) {
   const key = resourceKey(resource);
-  let callbacks = updateCallbacks.get(key);
-  if (!callbacks) {
-    subscribeToUpdates(resource);
-    updateCallbacks.set(key, (callbacks = new Set([callback])));
+  let callbackSet: UpdateCallbackSet;
+  const existingCallbackSet = updateCallbackSets.get(key);
+  if (!existingCallbackSet) {
+    callbackSet = {
+      callbacks: new Set([callback]),
+      unsubscribe: subscribeToUpdates(resource),
+    };
+    updateCallbackSets.set(key, callbackSet);
   } else {
-    callbacks.add(callback);
+    existingCallbackSet.callbacks.add(callback);
+    callbackSet = existingCallbackSet;
   }
 
   return () => {
-    callbacks!.delete(callback);
+    callbackSet.callbacks.delete(callback);
+
+    if (callbackSet.callbacks.size === 0) {
+      callbackSet.unsubscribe();
+      updateCallbackSets.delete(key);
+    }
   };
 }
 
 function triggerUpdate(msg: ServerMessage) {
   const key = resourceKey(msg.resource);
-  const callbacks = updateCallbacks.get(key);
-  if (!callbacks) {
+  const callbackSet = updateCallbackSets.get(key);
+  if (!callbackSet) {
     return;
   }
 
   try {
-    for (const callback of callbacks) {
+    for (const callback of callbackSet.callbacks) {
       callback(msg);
     }
   } catch (err) {
@@ -295,31 +367,41 @@ function triggerUpdate(msg: ServerMessage) {
 // They must be reloaded here instead.
 function subscribeToInitialCssChunksUpdates(assetPrefix: string) {
   const initialCssChunkLinks: NodeListOf<HTMLLinkElement> =
-    document.head.querySelectorAll("link");
-  const cssChunkPrefix = `${assetPrefix}/`;
-  initialCssChunkLinks.forEach((link) => {
-    const href = link.href;
-    if (href == null) {
-      return;
-    }
-    const { pathname, origin } = new URL(href);
-    if (origin !== location.origin || !pathname.startsWith(cssChunkPrefix)) {
-      return;
-    }
+    document.head.querySelectorAll(`link[rel="stylesheet"]`);
 
-    const chunkPath = pathname.slice(cssChunkPrefix.length);
-    onChunkUpdate(chunkPath, (update) => {
-      switch (update.type) {
-        case "restart": {
-          console.info(`Reloading CSS chunk \`${chunkPath}\``);
-          link.replaceWith(link);
-          break;
-        }
-        case "partial":
-          throw new Error(`partial CSS chunk updates are not supported`);
-        default:
-          throw new Error(`unknown update type \`${update}\``);
+  initialCssChunkLinks.forEach((link) => {
+    subscribeToCssChunkUpdates(assetPrefix, link);
+  });
+}
+
+export function subscribeToCssChunkUpdates(
+  assetPrefix: string,
+  link: HTMLLinkElement
+) {
+  const cssChunkPrefix = `${assetPrefix}/`;
+
+  const href = link.href;
+  if (href == null) {
+    return;
+  }
+
+  const { pathname, origin } = new URL(href);
+  if (origin !== location.origin || !pathname.startsWith(cssChunkPrefix)) {
+    return;
+  }
+
+  const chunkPath = pathname.slice(cssChunkPrefix.length);
+  subscribeToChunkUpdate(chunkPath, (update) => {
+    switch (update.type) {
+      case "restart": {
+        console.info(`Reloading CSS chunk \`${chunkPath}\``);
+        link.replaceWith(link);
+        break;
       }
-    });
+      case "partial":
+        throw new Error(`partial CSS chunk updates are not supported`);
+      default:
+        throw new Error(`unknown update type \`${update}\``);
+    }
   });
 }

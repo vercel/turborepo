@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -32,19 +33,19 @@ type Tracker struct {
 	rootNode            string
 	globalHash          string
 	pipeline            fs.Pipeline
-	packageInfos        map[interface{}]*fs.PackageJSON
+	workspaceInfos      graph.WorkspaceInfos
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
 	packageTaskHashes   map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, packageInfos map[interface{}]*fs.PackageJSON) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
 		pipeline:          pipeline,
-		packageInfos:      packageInfos,
+		workspaceInfos:    workspaceInfos,
 		packageTaskHashes: make(map[string]string),
 	}
 }
@@ -91,6 +92,7 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.Absolut
 		}
 		hashObject = manualHashObject
 	}
+
 	hashOfFiles, otherErr := fs.HashObject(hashObject)
 	if otherErr != nil {
 		return "", otherErr
@@ -157,7 +159,12 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
+func (th *Tracker) CalculateFileHashes(
+	allTasks []dag.Vertex,
+	workerCount int,
+	repoRoot turbopath.AbsoluteSystemPath,
+	completeGraph *graph.CompleteGraph,
+) error {
 	hashTasks := make(util.Set)
 
 	for _, v := range allTasks {
@@ -173,7 +180,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 			continue
 		}
 
-		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
+		taskDefinition, ok := completeGraph.TaskDefinitions[taskID]
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
@@ -193,7 +200,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
 			for packageFileSpec := range hashQueue {
-				pkg, ok := th.packageInfos[packageFileSpec.pkg]
+				pkg, ok := th.workspaceInfos.PackageJSONs[packageFileSpec.pkg]
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
@@ -222,6 +229,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 }
 
 type taskHashInputs struct {
+	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
@@ -290,6 +298,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
 	hash, err := fs.HashObject(&taskHashInputs{
+		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,

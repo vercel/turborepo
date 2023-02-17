@@ -1,0 +1,20 @@
+name: "turbopack-bump"
+description: "Releases Turbopack nightly"
+runs:
+  using: "node16"
+  main: "dist/index.js"
+inputs:
+  github_token:
+    description: "GitHub Access Token with read/write privileges"
+    required: true
+  commit_sha:
+    description: "SHA which will be tagged"
+    required: false
+  prefix:
+    description: "Prefix to use when tagging"
+    required: false
+outputs:
+  new_tag:
+    description: "The newly generated tag's name"
+  changelog:
+    description: "A changelog of commits since the last tag"

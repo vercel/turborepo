@@ -1,0 +1,11 @@
+{
+  "name": "override-values",
+  "scripts": {
+    "override-values-task": "echo \"running override-values-task\" > lib/bar.min.txt",
+    "override-values-task-with-deps": "echo \"running override-values-task-with-deps\" > out/foo.min.txt",
+    "override-values-underlying-task": "echo \"running override-values-underlying-task\""
+  },
+  "dependencies": {
+    "blank-pkg": "*"
+  }
+}

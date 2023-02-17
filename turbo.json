@@ -1,19 +1,22 @@
 {
   "$schema": "./docs/public/schema.json",
   "pipeline": {
+    "eslint-plugin-turbo#test": {
+      "dependsOn": ["build"]
+    },
     "test": {
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "//#lint": {
-      "outputs": []
-    },
+    "//#lint": {},
     "check-types": {
-      "outputs": [],
       "dependsOn": ["//#build:ts", "^build"]
     },
     "dev": {
       "cache": false
+    },
+    "docs#dev": {
+      "dependsOn": ["schema"]
     },
     "//#build:ts": {
       "outputs": ["packages/**/dist"],
@@ -43,8 +46,7 @@
       "outputs": ["public/feed.xml"]
     },
     "create-turbo#test": {
-      "dependsOn": ["create-turbo#build"],
-      "outputs": []
+      "dependsOn": ["create-turbo#build"]
     },
     "docs#build": {
       "env": [
@@ -63,14 +65,21 @@
         "cli/**/*.go",
         "cli/go.mod",
         "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts"
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
       ]
     },
-    "cli#integration-tests": {
-      "outputs": []
+    "cli#e2e-prebuilt": {
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
     },
+    "cli#integration-tests": {},
     "//#run-example": {
-      "outputs": [],
       "inputs": [
         "examples/**/*.ts",
         "examples/**/*.tsx",

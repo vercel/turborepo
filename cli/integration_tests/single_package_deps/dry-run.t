@@ -7,32 +7,38 @@ Check
   
   Tasks to Run
   build
-    Task            = build                  
-    Hash            = 08d0a37ad9eee1e5       
-    Cached (Local)  = false                  
-    Cached (Remote) = false                  
-    Command         = echo 'building' > foo  
-    Outputs         = foo                    
-    Log File        = .turbo/turbo-build.log 
-    Dependencies    =                        
-    Dependendents   = test                   
+    Task                   = build                                                                                                       
+    Hash                   = 8fc80cfff3b64237                                                                                            
+    Cached (Local)         = false                                                                                                       
+    Cached (Remote)        = false                                                                                                       
+    Command                = echo 'building' > foo                                                                                       
+    Outputs                = foo                                                                                                         
+    Log File               = .turbo/turbo-build.log                                                                                      
+    Dependencies           =                                                                                                             
+    Dependendents          = test                                                                                                        
+    ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
   test
-    Task            = test                                         
-    Hash            = cb5a64e4f86a6543                             
-    Cached (Local)  = false                                        
-    Cached (Remote) = false                                        
-    Command         = [[ ( -f foo ) && $(cat foo) == 'building' ]] 
-    Outputs         =                                              
-    Log File        = .turbo/turbo-test.log                        
-    Dependencies    = build                                        
-    Dependendents   =                                              
+    Task                   = test                                                                                                          
+    Hash                   = c71366ccd6a86465                                                                                              
+    Cached (Local)         = false                                                                                                         
+    Cached (Remote)        = false                                                                                                         
+    Command                = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                  
+    Outputs                =                                                                                                               
+    Log File               = .turbo/turbo-test.log                                                                                         
+    Dependencies           = build                                                                                                         
+    Dependendents          =                                                                                                               
+    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
   $ ${TURBO} run test --dry=json --single-package
   {
     "tasks": [
       {
         "task": "build",
-        "hash": "08d0a37ad9eee1e5",
+        "hash": "8fc80cfff3b64237",
+        "cacheState": {
+          "local": false,
+          "remote": false
+        },
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
@@ -42,11 +48,26 @@ Check
         "dependencies": [],
         "dependents": [
           "test"
-        ]
+        ],
+        "resolvedTaskDefinition": {
+          "outputs": [
+            "foo"
+          ],
+          "cache": true,
+          "dependsOn": [],
+          "inputs": [],
+          "outputMode": "full",
+          "env": [],
+          "persistent": false
+        }
       },
       {
         "task": "test",
-        "hash": "cb5a64e4f86a6543",
+        "hash": "c71366ccd6a86465",
+        "cacheState": {
+          "local": false,
+          "remote": false
+        },
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
         "outputs": null,
         "excludedOutputs": null,
@@ -54,7 +75,18 @@ Check
         "dependencies": [
           "build"
         ],
-        "dependents": []
+        "dependents": [],
+        "resolvedTaskDefinition": {
+          "outputs": [],
+          "cache": true,
+          "dependsOn": [
+            "build"
+          ],
+          "inputs": [],
+          "outputMode": "full",
+          "env": [],
+          "persistent": false
+        }
       }
     ]
   }

@@ -1,14 +1,25 @@
-import type { Ipc } from "@vercel/turbopack-next/internal/ipc";
-
 // Provided by the rust generate code
+type FileType =
+  | "layout"
+  | "template"
+  | "error"
+  | "loading"
+  | "not-found"
+  | "head";
 declare global {
   // an array of all layouts and the page
-  const LAYOUT_INFO: { segment: string; module: any; chunks: string[] }[];
+  const LAYOUT_INFO: ({
+    segment: string;
+    page?: { module: any; chunks: string[] };
+  } & {
+    [componentKey in FileType]?: { module: any; chunks: string[] };
+  })[];
   // array of chunks for the bootstrap script
   const BOOTSTRAP: string[];
   const IPC: Ipc<unknown, unknown>;
 }
 
+import type { Ipc } from "@vercel/turbopack-next/ipc/index";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type {
   FlightCSSManifest,
@@ -18,11 +29,12 @@ import type { RenderData } from "types/turbopack";
 
 import "next/dist/server/node-polyfill-fetch";
 import "next/dist/server/node-polyfill-web-streams";
+import "@vercel/turbopack-next/polyfill/async-local-storage";
 import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
-import { structuredError } from "@vercel/turbopack-next/internal/error";
-import { ParsedUrlQuery } from "node:querystring";
+import { headersFromEntries } from "@vercel/turbopack-next/internal/headers";
+import { parse, ParsedUrlQuery } from "node:querystring";
 
 globalThis.__next_require__ = (data) => {
   const [, , ssr_id] = JSON.parse(data);
@@ -40,9 +52,13 @@ type IpcIncomingMessage = {
 };
 
 type IpcOutgoingMessage = {
-  type: "result";
-  result: string | { body: string; contentType?: string };
+  type: "response";
+  statusCode: number;
+  headers: Array<[string, string]>;
+  body: string;
 };
+
+const MIME_TEXT_HTML_UTF8 = "text/html; charset=utf-8";
 
 (async () => {
   while (true) {
@@ -60,15 +76,16 @@ type IpcOutgoingMessage = {
       }
     }
 
-    const html = await runOperation(renderData);
+    const result = await runOperation(renderData);
 
-    if (html == null) {
+    if (result == null) {
       throw new Error("no html returned");
     }
 
     ipc.send({
-      type: "result",
-      result: html,
+      type: "response",
+      statusCode: 200,
+      ...result,
     });
   }
 })().catch((err) => {
@@ -77,16 +94,11 @@ type IpcOutgoingMessage = {
 
 // TODO expose these types in next.js
 type ComponentModule = () => any;
+type ModuleReference = [componentModule: ComponentModule, filePath: string];
 export type ComponentsType = {
-  readonly [componentKey in
-    | "layout"
-    | "template"
-    | "error"
-    | "loading"
-    | "not-found"]?: ComponentModule;
+  [componentKey in FileType]?: ModuleReference;
 } & {
-  readonly layoutOrPagePath?: string;
-  readonly page?: ComponentModule;
+  page?: ModuleReference;
 };
 type LoaderTree = [
   segment: string,
@@ -102,31 +114,27 @@ type ServerComponentsManifestModule = {
 };
 
 async function runOperation(renderData: RenderData) {
+  const layoutInfoChunks: Record<string, string[]> = {};
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
-  const pageModule = pageItem.module;
-  const Page = pageModule.default;
+  const pageModule = pageItem.page!.module;
   let tree: LoaderTree = [
     "",
     {},
-    { page: () => Page, layoutOrPagePath: "page.js" },
+    { page: [() => pageModule.module, "page.js"] },
   ];
+  layoutInfoChunks["page"] = pageItem.page!.chunks;
   for (let i = LAYOUT_INFO.length - 2; i >= 0; i--) {
     const info = LAYOUT_INFO[i];
-    const mod = info.module;
-    if (mod) {
-      const Layout = mod.default;
-      tree = [
-        info.segment,
-        { children: tree },
-        { layout: () => Layout, layoutOrPagePath: `layout${i}.js` },
-      ];
-    } else {
-      tree = [
-        info.segment,
-        { children: tree },
-        { layoutOrPagePath: `layout${i}.js` },
-      ];
+    const components: ComponentsType = {};
+    for (const key of Object.keys(info)) {
+      if (key === "segment") {
+        continue;
+      }
+      const k = key as FileType;
+      components[k] = [() => info[k]!.module.module, `${k}${i}.js`];
+      layoutInfoChunks[`${k}${i}`] = info[k]!.chunks;
     }
+    tree = [info.segment, { children: tree }, components];
   }
 
   const proxyMethodsForModule = (
@@ -147,8 +155,8 @@ async function runOperation(renderData: RenderData) {
         if (name === "__ssr_module_mapping__") {
           return manifest;
         }
-        if (name === "__client_css_manifest__") {
-          return {};
+        if (name === "__entry_css_files__") {
+          return __entry_css_files__;
         }
         return new Proxy({}, proxyMethodsForModule(name as string, css));
       },
@@ -156,26 +164,25 @@ async function runOperation(renderData: RenderData) {
   };
   const manifest: FlightManifest = new Proxy({} as any, proxyMethods(false));
   const serverCSSManifest: FlightCSSManifest = {};
-  serverCSSManifest.__entry_css__ = {};
-  for (let i = 0; i < LAYOUT_INFO.length - 1; i++) {
-    const { chunks } = LAYOUT_INFO[i];
-    const cssChunks = (chunks || []).filter((path) => path.endsWith(".css"));
-    serverCSSManifest[`layout${i}.js`] = cssChunks.map((chunk) =>
+  const __entry_css_files__: FlightManifest["__entry_css_files__"] = {};
+  for (const [key, chunks] of Object.entries(layoutInfoChunks)) {
+    const cssChunks = chunks.filter((path) => path.endsWith(".css"));
+    serverCSSManifest[`${key}.js`] = cssChunks.map((chunk) =>
       JSON.stringify([chunk, [chunk]])
     );
+    __entry_css_files__[key] = cssChunks;
   }
-  serverCSSManifest.__entry_css__ = {
-    page: pageItem.chunks
-      .filter((path) => path.endsWith(".css"))
-      .map((chunk) => JSON.stringify([chunk, [chunk]])),
+  serverCSSManifest.__entry_css_mods__ = {
+    page: serverCSSManifest["page.js"],
   };
-  serverCSSManifest["page.js"] = serverCSSManifest.__entry_css__.page;
   const req: IncomingMessage = {
     url: renderData.url,
     method: renderData.method,
-    headers: renderData.headers,
+    headers: headersFromEntries(renderData.rawHeaders),
   } as any;
   const res: ServerResponse = new ServerResponseShim(req) as any;
+  const parsedQuery = parse(renderData.rawQuery);
+  const query = { ...parsedQuery, ...renderData.params };
   const renderOpt: Omit<
     RenderOpts,
     "App" | "Document" | "Component" | "pathname"
@@ -185,9 +192,10 @@ async function runOperation(renderData: RenderData) {
     dev: true,
     buildManifest: {
       polyfillFiles: [],
-      rootMainFiles: LAYOUT_INFO.flatMap(({ chunks }) => chunks || [])
+      rootMainFiles: Object.values(layoutInfoChunks)
+        .flat()
         .concat(BOOTSTRAP)
-        .filter((path) => !path.endsWith(".css")),
+        .filter((path) => path.endsWith(".js")),
       devFiles: [],
       ampDevFiles: [],
       lowPriorityFiles: [],
@@ -214,10 +222,7 @@ async function runOperation(renderData: RenderData) {
     req,
     res,
     renderData.path,
-    {
-      ...renderData.query,
-      ...renderData.params,
-    },
+    query,
     renderOpt as any as RenderOpts
   );
 
@@ -237,7 +242,9 @@ async function runOperation(renderData: RenderData) {
     body = result.toUnchunkedString();
   }
   return {
-    contentType: result.contentType(),
+    headers: [
+      ["Content-Type", result.contentType() ?? MIME_TEXT_HTML_UTF8],
+    ] as [string, string][],
     body,
   };
 }

@@ -6,9 +6,10 @@ import fse from "fs-extra";
 import inquirer from "inquirer";
 import ora from "ora";
 import meow from "meow";
-import { satisfies } from "semver";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
+import satisfies from "semver/functions/satisfies";
+import semverPrerelease from "semver/functions/prerelease";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
@@ -57,7 +58,7 @@ run()
   });
 
 async function run() {
-  let { input, flags, showHelp, showVersion } = meow(help, {
+  let { input, flags } = meow(help, {
     booleanDefault: undefined,
     flags: {
       help: { type: "boolean", default: false, alias: "h" },
@@ -69,10 +70,6 @@ async function run() {
     },
   });
 
-  if (flags.help) showHelp();
-  if (flags.version) showVersion();
-
-  // let anim = chalkAnimation.pulse(`\n>>> TURBOREPO\n`);
   console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   await new Promise((resolve) => setTimeout(resolve, 500));
   console.log(
@@ -197,6 +194,12 @@ async function run() {
 
   sharedPkg.packageManager = `${packageManager.command}@${packageManagerVersion}`;
   sharedPkg.name = projectName;
+
+  // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
+  const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
+  if (shouldUsePreRelease && sharedPkg?.devDependencies?.turbo) {
+    sharedPkg.devDependencies.turbo = "canary";
+  }
 
   // write package.json
   fse.writeFileSync(

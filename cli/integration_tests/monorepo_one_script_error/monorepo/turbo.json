@@ -2,7 +2,11 @@
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "error": {
+      "dependsOn": ["okay"],
       "outputs": ["foo"]
+    },
+    "okay": {
+      "outputs": []
     }
   }
 }

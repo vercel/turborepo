@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack_core::resolve::{
     find_context_file,
     options::{
@@ -10,9 +10,8 @@ use turbopack_core::resolve::{
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
-use turbopack_ecmascript::{
-    resolve::apply_cjs_specific_options,
-    typescript::resolve::{apply_tsconfig_resolve_options, tsconfig_resolve_options},
+use turbopack_ecmascript::typescript::resolve::{
+    apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options,
 };
 
 use crate::resolve_options_context::ResolveOptionsContextVc;
@@ -78,7 +77,7 @@ async fn base_resolve_options(
 ) -> Result<ResolveOptionsVc> {
     let parent = context.parent().resolve().await?;
     if parent != context {
-        return Ok(resolve_options(parent, options_context));
+        return Ok(base_resolve_options(parent, options_context));
     }
     let context_value = context.await?;
     let opt = options_context.await?;
@@ -103,7 +102,7 @@ async fn base_resolve_options(
         }
     }
 
-    let mut import_map = ImportMap::new(direct_mappings, Default::default());
+    let mut import_map = ImportMap::new(direct_mappings);
     if let Some(additional_import_map) = opt.import_map {
         let additional_import_map = additional_import_map.await?;
         import_map.extend(&additional_import_map);
@@ -175,7 +174,7 @@ async fn base_resolve_options(
                     for condition in opt.custom_conditions.iter() {
                         conditions.insert(condition.to_string(), ConditionValue::Set);
                     }
-                    // Infer some well known conditions
+                    // Infer some well-known conditions
                     let dev = conditions.get("development").cloned();
                     let prod = conditions.get("production").cloned();
                     if prod.is_none() {
@@ -221,6 +220,7 @@ async fn base_resolve_options(
         },
         import_map: Some(import_map),
         resolved_map: opt.resolved_map,
+        plugins: opt.plugins.clone(),
         ..Default::default()
     }
     .into())
@@ -231,17 +231,24 @@ pub async fn resolve_options(
     context: FileSystemPathVc,
     options_context: ResolveOptionsContextVc,
 ) -> Result<ResolveOptionsVc> {
+    let options_context_value = options_context.await?;
+    if !options_context_value.rules.is_empty() {
+        let context_value = &*context.await?;
+        for (condition, new_options_context) in options_context_value.rules.iter() {
+            if condition.matches(context_value) {
+                return Ok(resolve_options(context, *new_options_context));
+            }
+        }
+    }
+
     let resolve_options = base_resolve_options(context, options_context);
 
-    let options_context = options_context.await?;
-    let resolve_options = if options_context.enable_typescript {
-        let tsconfig = find_context_file(context, "tsconfig.json").await?;
-        let cjs_resolve_options = apply_cjs_specific_options(resolve_options);
+    let resolve_options = if options_context_value.enable_typescript {
+        let tsconfig = find_context_file(context, tsconfig()).await?;
         match *tsconfig {
-            FindContextFileResult::Found(path, _) => apply_tsconfig_resolve_options(
-                resolve_options,
-                tsconfig_resolve_options(path, cjs_resolve_options),
-            ),
+            FindContextFileResult::Found(path, _) => {
+                apply_tsconfig_resolve_options(resolve_options, tsconfig_resolve_options(path))
+            }
             FindContextFileResult::NotFound(_) => resolve_options,
         }
     } else {
@@ -250,12 +257,12 @@ pub async fn resolve_options(
 
     // Make sure to always apply `options_context.import_map` last, so it properly
     // overwrites any other mappings.
-    let resolve_options = options_context
+    let resolve_options = options_context_value
         .import_map
         .map(|import_map| resolve_options.with_extended_import_map(import_map))
         .unwrap_or(resolve_options);
     // And the same for the fallback_import_map
-    let resolve_options = options_context
+    let resolve_options = options_context_value
         .fallback_import_map
         .map(|fallback_import_map| {
             resolve_options.with_extended_fallback_import_map(fallback_import_map)

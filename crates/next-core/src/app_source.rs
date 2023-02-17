@@ -1,6 +1,9 @@
-use std::{collections::HashMap, io::Write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::Write,
+};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use turbo_tasks::{
     primitives::{StringVc, StringsVc},
     TryJoinIterExt, Value, ValueToString,
@@ -17,7 +20,9 @@ use turbopack::{
 };
 use turbopack_core::{
     chunk::dev::DevChunkingContextVc,
-    context::AssetContextVc,
+    compile_time_info::CompileTimeInfoVc,
+    context::{AssetContext, AssetContextVc},
+    environment::ServerAddrVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -30,80 +35,71 @@ use turbopack_dev_server::{
     },
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_str,
+    chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_js,
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
+use turbopack_node::{
+    execution_context::ExecutionContextVc, render::rendered_source::create_node_rendered_source,
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
+};
 
 use crate::{
     app_render::{
         next_layout_entry_transition::NextLayoutEntryTransition, LayoutSegment, LayoutSegmentsVc,
     },
     embed_js::{next_js_file, wrap_with_next_js_fs},
+    env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
         context::{
-            get_client_chunking_context, get_client_environment, get_client_module_options_context,
-            get_client_resolve_options_context, get_client_runtime_entries, ContextType,
+            get_client_chunking_context, get_client_compile_time_info,
+            get_client_module_options_context, get_client_resolve_options_context,
+            get_client_runtime_entries, ClientContextType,
         },
-        NextClientTransition,
+        transition::NextClientTransition,
     },
+    next_client_chunks::client_chunks_transition::NextClientChunksTransitionVc,
     next_client_component::{
-        client_chunks_transition::NextClientChunksTransition,
         server_to_client_transition::NextServerToClientTransition,
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
-    next_server::{
-        get_server_environment, get_server_module_options_context,
+    next_config::NextConfigVc,
+    next_route_matcher::NextParamsMatcherVc,
+    next_server::context::{
+        get_server_compile_time_info, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    nodejs::{
-        create_node_rendered_source,
-        node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-        NodeEntry, NodeEntryVc,
-    },
-    util::regular_expression_for_path,
+    util::pathname_for_path,
 };
 
 #[turbo_tasks::function]
-fn next_client_chunks_transition(
-    project_root: FileSystemPathVc,
-    app_dir: FileSystemPathVc,
-    server_root: FileSystemPathVc,
-    browserslist_query: &str,
-) -> TransitionVc {
-    let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
-    let client_environment = get_client_environment(browserslist_query);
-
-    let client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
-    NextClientChunksTransition {
-        client_chunking_context,
-        client_module_options_context,
-        client_resolve_options_context: get_client_resolve_options_context(project_root, ty),
-        client_environment,
-        server_root,
-    }
-    .cell()
-    .into()
-}
-
-#[turbo_tasks::function]
 async fn next_client_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: &str,
+    client_compile_time_info: CompileTimeInfoVc,
+    next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
-    let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
-    let client_environment = get_client_environment(browserslist_query);
-    let client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
-    let client_runtime_entries = get_client_runtime_entries(project_root, env, ty);
-    let client_resolve_options_context = get_client_resolve_options_context(project_root, ty);
+    let ty = Value::new(ClientContextType::App { app_dir });
+    let client_chunking_context = get_client_chunking_context(
+        project_path,
+        server_root,
+        client_compile_time_info.environment(),
+        ty,
+    );
+    let client_module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        client_compile_time_info.environment(),
+        ty,
+        next_config,
+    );
+    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
+    let client_resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config);
 
     Ok(NextClientTransition {
         is_app: true,
@@ -111,7 +107,7 @@ async fn next_client_transition(
         client_chunking_context,
         client_module_options_context,
         client_resolve_options_context,
-        client_environment,
+        client_compile_time_info,
         runtime_entries: client_runtime_entries,
     }
     .cell()
@@ -120,20 +116,27 @@ async fn next_client_transition(
 
 #[turbo_tasks::function]
 fn next_ssr_client_module_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
-        ssr_module_options_context: get_server_module_options_context(ty),
-        ssr_resolve_options_context: get_server_resolve_options_context(
-            project_root,
+        ssr_module_options_context: get_server_module_options_context(
+            project_path,
+            execution_context,
             ty,
-            externals,
+            next_config,
         ),
-        ssr_environment: get_server_environment(ty, process_env),
+        ssr_resolve_options_context: get_server_resolve_options_context(
+            project_path,
+            ty,
+            next_config,
+        ),
+        ssr_environment: get_server_compile_time_info(ty, process_env, server_addr),
     }
     .cell()
     .into()
@@ -141,20 +144,23 @@ fn next_ssr_client_module_transition(
 
 #[turbo_tasks::function]
 fn next_layout_entry_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppRSC { app_dir });
-    let rsc_environment = get_server_environment(ty, process_env);
+    let rsc_compile_time_info = get_server_compile_time_info(ty, process_env, server_addr);
     let rsc_resolve_options_context =
-        get_server_resolve_options_context(project_root, ty, externals);
-    let rsc_module_options_context = get_server_module_options_context(ty);
+        get_server_resolve_options_context(project_path, ty, next_config);
+    let rsc_module_options_context =
+        get_server_module_options_context(project_path, execution_context, ty, next_config);
 
     NextLayoutEntryTransition {
-        rsc_environment,
+        rsc_compile_time_info,
         rsc_module_options_context,
         rsc_resolve_options_context,
         server_root,
@@ -163,22 +169,33 @@ fn next_layout_entry_transition(
     .into()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 fn app_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
-    browserslist_query: &str,
+    client_compile_time_info: CompileTimeInfoVc,
     ssr: bool,
-    externals: StringsVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> AssetContextVc {
     let next_server_to_client_transition = NextServerToClientTransition { ssr }.cell().into();
 
     let mut transitions = HashMap::new();
     transitions.insert(
         "next-layout-entry".to_string(),
-        next_layout_entry_transition(project_root, app_dir, server_root, env, externals),
+        next_layout_entry_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            server_root,
+            env,
+            next_config,
+            server_addr,
+        ),
     );
     transitions.insert(
         "server-to-client".to_string(),
@@ -186,23 +203,47 @@ fn app_context(
     );
     transitions.insert(
         "next-client".to_string(),
-        next_client_transition(project_root, server_root, app_dir, env, browserslist_query),
+        next_client_transition(
+            project_path,
+            execution_context,
+            server_root,
+            app_dir,
+            env,
+            client_compile_time_info,
+            next_config,
+        ),
     );
+    let client_ty = Value::new(ClientContextType::App { app_dir });
     transitions.insert(
         "next-client-chunks".to_string(),
-        next_client_chunks_transition(project_root, app_dir, server_root, browserslist_query),
+        NextClientChunksTransitionVc::new(
+            project_path,
+            execution_context,
+            client_ty,
+            server_root,
+            client_compile_time_info,
+            next_config,
+        )
+        .into(),
     );
     transitions.insert(
         "next-ssr-client-module".to_string(),
-        next_ssr_client_module_transition(project_root, app_dir, env, externals),
+        next_ssr_client_module_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            env,
+            next_config,
+            server_addr,
+        ),
     );
 
     let ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(ssr_ty, env),
-        get_server_module_options_context(ssr_ty),
-        get_server_resolve_options_context(project_root, ssr_ty, externals),
+        get_server_compile_time_info(ssr_ty, env, server_addr),
+        get_server_module_options_context(project_path, execution_context, ssr_ty, next_config),
+        get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
     .into()
 }
@@ -211,59 +252,84 @@ fn app_context(
 /// Next.js app folder.
 #[turbo_tasks::function]
 pub async fn create_app_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
-    externals: StringsVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
-    let project_root = wrap_with_next_js_fs(project_root);
+    let project_path = wrap_with_next_js_fs(project_path);
 
-    let app = project_root.join("app");
-    let src_app = project_root.join("src/app");
+    if !*next_config.app_dir().await? {
+        return Ok(NoContentSourceVc::new().into());
+    }
+
+    let app = project_path.join("app");
+    let src_app = project_path.join("src/app");
     let app_dir = if *app.get_type().await? == FileSystemEntryType::Directory {
         app
     } else if *src_app.get_type().await? == FileSystemEntryType::Directory {
         src_app
     } else {
         return Ok(NoContentSourceVc::new().into());
-    };
+    }
+    .resolve()
+    .await?;
+    let client_compile_time_info = get_client_compile_time_info(browserslist_query);
 
     let context_ssr = app_context(
-        project_root,
+        project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_compile_time_info,
         true,
-        externals,
+        next_config,
+        server_addr,
     );
     let context = app_context(
-        project_root,
+        project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
-        browserslist_query,
+        client_compile_time_info,
         false,
-        externals,
+        next_config,
+        server_addr,
     );
 
     let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_root, env).as_ecmascript_chunk_placeable()];
+        vec![
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
-    let fallback_page = get_fallback_page(project_root, server_root, browserslist_query);
+    let fallback_page = get_fallback_page(
+        project_path,
+        execution_context,
+        server_root,
+        env,
+        client_compile_time_info,
+        next_config,
+    );
 
     Ok(create_app_source_for_directory(
         context_ssr,
         context,
-        project_root,
+        project_path,
         SpecificityVc::exact(),
         0,
         app_dir,
+        next_config.page_extensions(),
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
+        server_root,
         server_root,
         LayoutSegmentsVc::cell(Vec::new()),
         output_path,
@@ -271,155 +337,174 @@ pub async fn create_app_source(
     .into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 async fn create_app_source_for_directory(
     context_ssr: AssetContextVc,
     context: AssetContextVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
+    page_extensions: StringsVc,
     server_root: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
     target: FileSystemPathVc,
+    url: FileSystemPathVc,
     layouts: LayoutSegmentsVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<CombinedContentSourceVc> {
     let mut layouts = layouts;
     let mut sources = Vec::new();
     let mut page = None;
-    let mut layout = None;
-    if let DirectoryContent::Entries(entries) = &*input_dir.read_dir().await? {
-        for (name, entry) in entries.iter() {
-            if let DirectoryEntry::File(file) = entry {
-                if let Some((name, _)) = name.rsplit_once('.') {
-                    match name {
-                        "page" => {
-                            page = Some(file);
-                        }
-                        "layout" => {
-                            layout = Some(file);
-                        }
-                        "error" => { /* TODO */ }
-                        "loading" => { /* TODO */ }
-                        _ => {
-                            // Any other file is ignored
-                        }
+    let mut files = HashMap::new();
+
+    let DirectoryContent::Entries(entries) = &*input_dir.read_dir().await? else {
+        return Ok(CombinedContentSource { sources }.cell());
+    };
+
+    let allowed_extensions = &*page_extensions.await?;
+
+    for (name, entry) in entries.iter() {
+        if let &DirectoryEntry::File(file) = entry {
+            if let Some((name, ext)) = name.rsplit_once('.') {
+                if !allowed_extensions.iter().any(|allowed| allowed == ext) {
+                    continue;
+                }
+
+                match name {
+                    "page" => {
+                        page = Some(file);
+                    }
+                    "layout" | "error" | "loading" | "template" | "not-found" | "head" => {
+                        files.insert(name.to_string(), file);
+                    }
+                    _ => {
+                        // Any other file is ignored
                     }
                 }
             }
         }
+    }
 
-        let layout_js = input_dir.join("layout.js");
-        let layout_tsx = input_dir.join("layout.tsx");
+    let layout = files.get("layout");
 
-        // TODO: Use let Some(page_file) = page in expression below when
-        // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
-        if page.is_some() && layout.is_none() && target == server_root {
-            // If a page exists but no layout exists, create a basic root layout
-            // in `app/layout.js` or `app/layout.tsx`.
-            let page_file = page.context("page must not be none")?;
-            // Use the extension to determine if the page file is TypeScript.
-            // TODO: Use the presence of a tsconfig.json instead, like Next.js
-            // stable does.
-            let is_tsx = *page_file.extension().await? == "tsx";
+    // If a page exists but no layout exists, create a basic root layout
+    // in `app/layout.js` or `app/layout.tsx`.
+    //
+    // TODO: Use let Some(page_file) = page in expression below when
+    // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
+    if let (Some(page_file), None, true) = (page, layout, target == server_root) {
+        // Use the extension to determine if the page file is TypeScript.
+        // TODO: Use the presence of a tsconfig.json instead, like Next.js
+        // stable does.
+        let is_tsx = *page_file.extension().await? == "tsx";
 
-            if is_tsx {
-                layout.replace(&layout_tsx);
-            } else {
-                layout.replace(&layout_js);
-            }
-            let content = if is_tsx {
-                include_str!("assets/layout.tsx")
-            } else {
-                include_str!("assets/layout.js")
-            };
+        let layout = if is_tsx {
+            input_dir.join("layout.tsx")
+        } else {
+            input_dir.join("layout.js")
+        };
+        files.insert("layout".to_string(), layout);
+        let content = if is_tsx {
+            include_str!("assets/layout.tsx")
+        } else {
+            include_str!("assets/layout.js")
+        };
 
-            let layout = layout.context("required")?;
-            layout.write(FileContentVc::from(File::from(content)));
+        layout.write(FileContentVc::from(File::from(content)));
 
-            AppSourceIssue {
-                severity: IssueSeverity::Warning.into(),
-                path: *page_file,
-                message: StringVc::cell(format!(
-                    "Your page {} did not have a root layout, we created {} for you.",
-                    page_file.await?.path,
-                    layout.await?.path,
-                )),
+        AppSourceIssue {
+            severity: IssueSeverity::Warning.into(),
+            path: page_file,
+            message: StringVc::cell(format!(
+                "Your page {} did not have a root layout, we created {} for you.",
+                page_file.await?.path,
+                layout.await?.path,
+            )),
+        }
+        .cell()
+        .as_issue()
+        .emit();
+    }
+
+    let mut list = layouts.await?.clone_value();
+    list.push(LayoutSegment { files, target }.cell());
+    layouts = LayoutSegmentsVc::cell(list);
+
+    if let Some(page_path) = page {
+        let pathname = pathname_for_path(server_root, url, false);
+        let params_matcher = NextParamsMatcherVc::new(pathname);
+
+        sources.push(create_node_rendered_source(
+            project_path,
+            specificity,
+            server_root,
+            params_matcher.into(),
+            pathname,
+            AppRenderer {
+                context_ssr,
+                context,
+                server_root,
+                layout_path: layouts,
+                page_path,
+                target,
+                project_path,
+                intermediate_output_path,
             }
             .cell()
-            .as_issue()
-            .emit();
-        }
+            .into(),
+            runtime_entries,
+            fallback_page,
+        ));
+    }
 
-        let mut list = layouts.await?.clone_value();
-        list.push(
-            LayoutSegment {
-                file: layout.copied(),
-                target,
-            }
-            .cell(),
-        );
-        layouts = LayoutSegmentsVc::cell(list);
-        if let Some(page_path) = page.copied() {
-            sources.push(create_node_rendered_source(
+    for (name, entry) in entries.iter() {
+        let DirectoryEntry::Directory(dir) = entry else {
+            continue;
+        };
+
+        let intermediate_output_path = intermediate_output_path.join(name);
+
+        let specificity = if name.starts_with("[[") || name.starts_with("[...") {
+            specificity.with_catch_all(position)
+        } else if name.starts_with('[') {
+            specificity.with_dynamic_segment(position)
+        } else {
+            specificity
+        };
+
+        let new_target = target.join(name);
+        let (new_url, position) = if name.starts_with('(') && name.ends_with(')') {
+            // This doesn't affect the url
+            (url, position)
+        } else {
+            // This adds to the url
+            (url.join(name), position + 1)
+        };
+
+        sources.push(
+            create_app_source_for_directory(
+                context_ssr,
+                context,
+                project_path,
                 specificity,
+                position,
+                *dir,
+                page_extensions,
                 server_root,
-                regular_expression_for_path(server_root, target, false),
-                AppRenderer {
-                    context_ssr,
-                    context,
-                    server_root,
-                    layout_path: layouts,
-                    page_path,
-                    target,
-                    project_root,
-                    intermediate_output_path,
-                }
-                .cell()
-                .into(),
                 runtime_entries,
                 fallback_page,
-            ));
-        }
-        for (name, entry) in entries.iter() {
-            if let DirectoryEntry::Directory(dir) = entry {
-                let intermediate_output_path = intermediate_output_path.join(name);
-                let specificity = if name.starts_with("[[") || name.starts_with("[...") {
-                    specificity.with_catch_all(position)
-                } else if name.starts_with('[') {
-                    specificity.with_dynamic_segment(position)
-                } else {
-                    specificity
-                };
-                let (new_target, position) = if name.starts_with('(') && name.ends_with(')') {
-                    // This doesn't affect the url
-                    (target, position)
-                } else {
-                    // This adds to the url
-                    (target.join(name), position + 1)
-                };
-                sources.push(
-                    create_app_source_for_directory(
-                        context_ssr,
-                        context,
-                        project_root,
-                        specificity,
-                        position,
-                        *dir,
-                        server_root,
-                        runtime_entries,
-                        fallback_page,
-                        new_target,
-                        layouts,
-                        intermediate_output_path,
-                    )
-                    .into(),
-                );
-            }
-        }
+                new_target,
+                new_url,
+                layouts,
+                intermediate_output_path,
+            )
+            .into(),
+        );
     }
+
     Ok(CombinedContentSource { sources }.cell())
 }
 
@@ -431,46 +516,45 @@ struct AppRenderer {
     layout_path: LayoutSegmentsVc,
     page_path: FileSystemPathVc,
     target: FileSystemPathVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
-impl NodeEntry for AppRenderer {
+impl AppRendererVc {
     #[turbo_tasks::function]
-    async fn entry(&self, data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
-        let is_rsc = if let Some(headers) = data.into_value().headers {
-            headers.contains_key("__rsc__")
-        } else {
-            false
-        };
-        let layout_path = self.layout_path.await?;
-        let page = self.page_path;
+    async fn entry(self, is_rsc: bool) -> Result<NodeRenderingEntryVc> {
+        let this = self.await?;
+        let layout_path = this.layout_path.await?;
+        let page = this.page_path;
         let path = page.parent();
         let path_value = &*path.await?;
+
         let layout_and_page = layout_path
             .iter()
             .copied()
             .chain(std::iter::once(
                 LayoutSegment {
-                    file: Some(page),
-                    target: self.target,
+                    files: HashMap::from([("page".to_string(), page)]),
+                    target: this.target,
                 }
                 .cell(),
             ))
             .try_join()
             .await?;
-        let segments: Vec<(String, Option<(String, String, String)>)> = layout_and_page
+
+        let segments: Vec<_> = layout_and_page
             .into_iter()
             .fold(
-                (self.server_root, Vec::new()),
+                (this.server_root, Vec::new()),
                 |(last_path, mut futures), segment| {
                     (segment.target, {
                         futures.push(async move {
                             let target = &*segment.target.await?;
                             let segment_path =
                                 last_path.await?.get_path_to(target).unwrap_or_default();
-                            if let Some(file) = segment.file {
+                            let mut imports = BTreeMap::new();
+                            for (key, file) in segment.files.iter() {
                                 let file_str = file.to_string().await?;
                                 let identifier = magic_identifier::encode(&format!(
                                     "imported namespace {}",
@@ -481,25 +565,21 @@ impl NodeEntry for AppRenderer {
                                     file_str
                                 ));
                                 if let Some(p) = path_value.get_relative_path_to(&*file.await?) {
-                                    Ok((
-                                        stringify_str(segment_path),
-                                        Some((p, identifier, chunks_identifier)),
-                                    ))
+                                    imports.insert(
+                                        key.to_string(),
+                                        (p, identifier, chunks_identifier),
+                                    );
                                 } else {
-                                    Err(anyhow!(
+                                    return Err(anyhow!(
                                         "Unable to generate import as there
                                 is no relative path to the layout module {} from context
                                 path {}",
                                         file_str,
                                         path.to_string().await?
-                                    ))
+                                    ));
                                 }
-                            } else {
-                                Ok::<(String, Option<(String, String, String)>), _>((
-                                    stringify_str(segment_path),
-                                    None,
-                                ))
                             }
+                            Ok((stringify_js(segment_path), imports))
                         });
                         futures
                     })
@@ -509,12 +589,14 @@ impl NodeEntry for AppRenderer {
             .into_iter()
             .try_join()
             .await?;
-        let mut result = RopeBuilder::from(
-            "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n",
-        );
 
-        for (_, import) in segments.iter() {
-            if let Some((p, identifier, chunks_identifier)) = import {
+        // IPC need to be the first import to allow it to catch errors happening during
+        // the other imports
+        let mut result =
+            RopeBuilder::from("import { IPC } from \"@vercel/turbopack-next/ipc/index\";\n");
+
+        for (_, imports) in segments.iter() {
+            for (p, identifier, chunks_identifier) in imports.values() {
                 result += r#"("TURBOPACK { transition: next-layout-entry; chunking-type: parallel }");
 "#;
                 writeln!(
@@ -522,7 +604,7 @@ impl NodeEntry for AppRenderer {
                     "import {}, {{ chunks as {} }} from {};\n",
                     identifier,
                     chunks_identifier,
-                    stringify_str(p)
+                    stringify_js(p)
                 )?
             }
         }
@@ -532,21 +614,21 @@ impl NodeEntry for AppRenderer {
                 r#"("TURBOPACK {{ transition: next-client }}");
 import BOOTSTRAP from {};
 "#,
-                stringify_str(&page)
+                stringify_js(&page)
             )?;
         }
 
         result += "const LAYOUT_INFO = [";
-        for (segment_str_lit, import) in segments.iter() {
-            if let Some((_, identifier, chunks_identifier)) = import {
+        for (segment_str_lit, imports) in segments.iter() {
+            writeln!(result, "  {{\n    segment: {segment_str_lit},")?;
+            for (key, (_, identifier, chunks_identifier)) in imports {
                 writeln!(
                     result,
-                    "  {{ segment: {segment_str_lit}, module: {identifier}, chunks: \
-                     {chunks_identifier} }},",
-                )?
-            } else {
-                writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
+                    "    {key}: {{ module: {identifier}, chunks: {chunks_identifier} }},",
+                    key = stringify_js(key),
+                )?;
             }
+            result += "  },";
         }
         result += "];\n\n";
 
@@ -558,19 +640,20 @@ import BOOTSTRAP from {};
         let file = File::from(result.build());
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
-            (self.context, self.intermediate_output_path.join("__rsc__"))
+            (this.context, this.intermediate_output_path.join("rsc"))
         } else {
-            (self.context_ssr, self.intermediate_output_path)
+            (this.context_ssr, this.intermediate_output_path)
         };
 
         let chunking_context = DevChunkingContextVc::builder(
-            self.project_root,
+            this.project_path,
             intermediate_output_path,
             intermediate_output_path.join("chunks"),
-            self.server_root.join("_next/static/assets"),
+            this.server_root.join("_next/static/assets"),
+            context.compile_time_info().environment(),
         )
         .layer("ssr")
-        .css_chunk_root_path(self.server_root.join("_next/static/chunks"))
+        .css_chunk_root_path(this.server_root.join("_next/static/chunks"))
         .build();
 
         Ok(NodeRenderingEntry {
@@ -582,12 +665,28 @@ import BOOTSTRAP from {};
                     EcmascriptInputTransform::React { refresh: false },
                     EcmascriptInputTransform::TypeScript,
                 ]),
-                context.environment(),
+                context.compile_time_info(),
             ),
             chunking_context,
             intermediate_output_path,
+            output_root: intermediate_output_path.root(),
         }
         .cell())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl NodeEntry for AppRenderer {
+    #[turbo_tasks::function]
+    fn entry(self_vc: AppRendererVc, data: Value<ContentSourceData>) -> NodeRenderingEntryVc {
+        let data = data.into_value();
+        let is_rsc = if let Some(headers) = data.headers {
+            headers.contains_key("rsc")
+        } else {
+            false
+        };
+        // Call with only is_rsc as key
+        self_vc.entry(is_rsc)
     }
 }
 

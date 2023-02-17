@@ -1,25 +1,31 @@
+pub mod chunk_in_group;
 pub mod dev;
 pub mod optimize;
 
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::VecDeque,
+    fmt::{Debug, Display},
+};
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat,
+    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
-    ValueToString, ValueToStringVc,
+    TryJoinIterExt, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
-use turbo_tasks_hash::{encode_hex, DeterministicHash, Xxh3Hash64Hasher};
+use turbo_tasks_hash::DeterministicHash;
 
-use self::optimize::optimize;
+use self::{chunk_in_group::ChunkInGroupVc, optimize::optimize};
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
+    environment::EnvironmentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
 
 /// A module id, which can be a number or string
@@ -31,14 +37,29 @@ pub enum ModuleId {
     String(String),
 }
 
+impl Display for ModuleId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleId::Number(i) => write!(f, "{}", i),
+            ModuleId::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for ModuleId {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> StringVc {
+        StringVc::cell(self.to_string())
+    }
+}
+
 impl ModuleId {
-    /// Returns a truncated hash of the module id.
-    pub fn to_truncated_hash(&self) -> String {
-        let mut hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(self);
-        let mut hash = encode_hex(hasher.finish());
-        hash.truncate(6);
-        hash
+    pub fn parse(id: &str) -> Result<ModuleId> {
+        Ok(match id.parse::<u32>() {
+            Ok(i) => ModuleId::Number(i),
+            Err(_) => ModuleId::String(id.to_string()),
+        })
     }
 }
 
@@ -50,6 +71,10 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
     fn output_root(&self) -> FileSystemPathVc;
+
+    // TODO remove this, a chunking context should not be bound to a specific
+    // environment since this can change due to transitions in the module graph
+    fn environment(&self) -> EnvironmentVc;
 
     fn chunk_path(&self, path: FileSystemPathVc, extension: &str) -> FileSystemPathVc;
 
@@ -101,32 +126,64 @@ impl ChunkGroupVc {
     /// All chunks should be loaded in parallel.
     #[turbo_tasks::function]
     pub async fn chunks(self) -> Result<ChunksVc> {
-        let mut chunks = IndexSet::new();
+        let chunks: Vec<_> = GraphTraversal::<ReverseTopological<_>>::visit(
+            [self.await?.entry],
+            SkipDuplicates::new(get_chunk_children),
+        )
+        .await?
+        .into_iter()
+        .collect();
 
-        let mut queue = vec![self.await?.entry];
-        while let Some(chunk) = queue.pop() {
-            let chunk = chunk.resolve().await?;
-            if chunks.insert(chunk) {
-                for r in chunk.references().await?.iter() {
-                    if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
-                        if *pc.is_loaded_in_parallel().await? {
-                            let result = r.resolve_reference();
-                            for a in result.primary_assets().await?.iter() {
-                                if let Some(chunk) = ChunkVc::resolve_from(a).await? {
-                                    queue.push(chunk);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let chunks = ChunksVc::cell(chunks.into_iter().collect());
+        let chunks = ChunksVc::cell(chunks);
         let chunks = optimize(chunks, self);
+        let chunks = ChunksVc::cell(
+            chunks
+                .await?
+                .iter()
+                .map(|&chunk| ChunkInGroupVc::new(chunk).as_chunk())
+                .collect(),
+        );
 
         Ok(chunks)
     }
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+    Ok(parent
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .map(reference_to_chunks)
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten())
+}
+
+/// Get all parallel chunks from a parallel chunk reference.
+async fn reference_to_chunks(r: AssetReferenceVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+    let mut result = Vec::new();
+    if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
+        if *pc.is_loaded_in_parallel().await? {
+            result = r
+                .resolve_reference()
+                .await?
+                .primary
+                .iter()
+                .map(|r| async move {
+                    Ok(if let PrimaryResolveResult::Asset(a) = r {
+                        ChunkVc::resolve_from(a).await?
+                    } else {
+                        None
+                    })
+                })
+                .try_join()
+                .await?;
+        }
+    }
+    Ok(result.into_iter().flatten())
 }
 
 #[turbo_tasks::value_impl]
@@ -158,12 +215,15 @@ pub trait ParallelChunkReference: AssetReference + ValueToString {
 
 /// Specifies how a chunk interacts with other chunks when building a chunk
 /// group
-#[derive(Copy, Clone, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat)]
+#[derive(
+    Copy, Default, Clone, Hash, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
+)]
 pub enum ChunkingType {
     /// Asset is always placed into the referencing chunk and loaded with it.
     Placed,
     /// A heuristic determines if the asset is placed into the referencing chunk
     /// or in a separate chunk that is loaded in parallel.
+    #[default]
     PlacedOrParallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     Parallel,
@@ -172,15 +232,9 @@ pub enum ChunkingType {
     /// Note: Separate chunks need to be loaded by something external to current
     /// reference.
     Separate,
-    /// A async loader is placed into the referencing chunk and loads the
+    /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
     SeparateAsync,
-}
-
-impl Default for ChunkingType {
-    fn default() -> Self {
-        ChunkingType::PlacedOrParallel
-    }
 }
 
 #[turbo_tasks::value(transparent)]
@@ -229,7 +283,7 @@ impl ChunkReferenceVc {
 impl AssetReference for ChunkReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(self.chunk.into(), Vec::new()).into()
+        ResolveResult::asset(self.chunk.into()).into()
     }
 }
 
@@ -277,7 +331,7 @@ impl AssetReference for ChunkGroupReference {
             .iter()
             .map(|c| c.as_asset())
             .collect();
-        Ok(ResolveResult::Alternatives(set, Vec::new()).into())
+        Ok(ResolveResult::assets(set).into())
     }
 }
 
@@ -328,8 +382,8 @@ pub async fn chunk_content<I: FromChunkableAsset>(
 
 enum ChunkContentWorkItem {
     AssetReferences(AssetReferencesVc),
-    Assets {
-        assets: AssetsVc,
+    ResolveResult {
+        result: ResolveResultVc,
         reference: AssetReferenceVc,
         chunking_type: ChunkingType,
     },
@@ -346,14 +400,14 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
     let mut chunks = Vec::new();
     let mut async_chunk_groups = Vec::new();
     let mut external_asset_references = Vec::new();
-    let mut queue = VecDeque::new();
+    let mut queue = VecDeque::with_capacity(32);
 
     let chunk_item = I::from_asset(context, entry).await?.unwrap();
     queue.push_back(ChunkContentWorkItem::AssetReferences(
         chunk_item.references(),
     ));
     chunk_items.push(chunk_item);
-    processed_assets.insert(entry);
+    processed_assets.insert((ChunkingType::Placed, entry));
 
     if let Some(additional_entries) = additional_entries {
         for entry in &*additional_entries.await? {
@@ -362,7 +416,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 chunk_item.references(),
             ));
             chunk_items.push(chunk_item);
-            processed_assets.insert(*entry);
+            processed_assets.insert((ChunkingType::Placed, *entry));
         }
     }
 
@@ -372,8 +426,8 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 for r in item.await?.iter() {
                     if let Some(pc) = ChunkableAssetReferenceVc::resolve_from(r).await? {
                         if let Some(chunking_type) = *pc.chunking_type(context).await? {
-                            queue.push_back(ChunkContentWorkItem::Assets {
-                                assets: r.resolve_reference().primary_assets(),
+                            queue.push_back(ChunkContentWorkItem::ResolveResult {
+                                result: r.resolve_reference(),
                                 reference: *r,
                                 chunking_type,
                             });
@@ -383,8 +437,8 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                     external_asset_references.push(*r);
                 }
             }
-            ChunkContentWorkItem::Assets {
-                assets,
+            ChunkContentWorkItem::ResolveResult {
+                result,
                 reference,
                 chunking_type,
             } => {
@@ -403,13 +457,16 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 // not loaded in parallel
                 let mut inner_chunk_groups = Vec::new();
 
-                for asset in assets
-                    .await?
-                    .iter()
-                    .filter(|asset| processed_assets.insert(**asset))
-                {
-                    let asset: &AssetVc = asset;
-
+                let result = result.await?;
+                let assets = result.primary.iter().filter_map(|result| {
+                    if let PrimaryResolveResult::Asset(asset) = *result {
+                        if processed_assets.insert((chunking_type, asset)) {
+                            return Some(asset);
+                        }
+                    }
+                    None
+                });
+                for asset in assets {
                     let chunkable_asset = match ChunkableAssetVc::resolve_from(asset).await? {
                         Some(chunkable_asset) => chunkable_asset,
                         _ => {
@@ -420,7 +477,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
 
                     match chunking_type {
                         ChunkingType::Placed => {
-                            if let Some(chunk_item) = I::from_asset(context, *asset).await? {
+                            if let Some(chunk_item) = I::from_asset(context, asset).await? {
                                 inner_chunk_items.push(chunk_item);
                             } else {
                                 return Err(anyhow!(
@@ -436,9 +493,9 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                         }
                         ChunkingType::PlacedOrParallel => {
                             // heuristic for being in the same chunk
-                            if !split && *context.can_be_in_same_chunk(entry, *asset).await? {
+                            if !split && *context.can_be_in_same_chunk(entry, asset).await? {
                                 // chunk item, chunk or other asset?
-                                if let Some(chunk_item) = I::from_asset(context, *asset).await? {
+                                if let Some(chunk_item) = I::from_asset(context, asset).await? {
                                     inner_chunk_items.push(chunk_item);
                                     continue;
                                 }
@@ -458,8 +515,6 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                                 inner_chunk_items.push(manifest_loader_item);
                                 inner_chunk_groups
                                     .push(ChunkGroupVc::from_asset(manifest_chunk, context));
-                                inner_chunk_groups
-                                    .push(ChunkGroupVc::from_asset(chunkable_asset, context));
                             } else {
                                 external_asset_references.push(reference);
                                 continue 'outer;

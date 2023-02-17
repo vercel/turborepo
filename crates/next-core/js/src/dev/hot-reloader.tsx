@@ -3,18 +3,23 @@
 import type React from "react";
 import { useRouter, usePathname } from "next/dist/client/components/navigation";
 import { useEffect } from "react";
-import { onUpdate } from "./hmr-client";
+import { subscribeToUpdate } from "./hmr-client";
 import { ReactDevOverlay } from "./client";
 
-export default function HotReload({ assetPrefix, children }): any {
+type HotReloadProps = React.PropsWithChildren<{
+  assetPrefix?: string;
+}>;
+
+export default function HotReload({ assetPrefix, children }: HotReloadProps) {
   const router = useRouter();
-  const path = usePathname().slice(1);
+  const path = usePathname()!.slice(1);
+
   useEffect(() => {
-    const unsubscribe = onUpdate(
+    const unsubscribe = subscribeToUpdate(
       {
         path,
         headers: {
-          __rsc__: "1",
+          rsc: "1",
         },
       },
       (update) => {
@@ -25,5 +30,6 @@ export default function HotReload({ assetPrefix, children }): any {
     );
     return unsubscribe;
   }, [router, path]);
+
   return <ReactDevOverlay globalOverlay={true}>{children}</ReactDevOverlay>;
 }

@@ -1,26 +1,34 @@
+//! Traits and functions to optimize a list of chunks.
+//!
+//! Usually chunks are optimized by limiting their total count, restricting
+//! their size and eliminating duplicates between them.
+
 use std::{cell::RefCell, mem::take, rc::Rc};
 
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
 use super::{ChunkGroupVc, ChunkVc, ChunksVc};
+use crate::{
+    asset::{Asset, AssetVc},
+    chunk::Chunk,
+};
 
+/// A functor to optimize a set of chunks.
 #[turbo_tasks::value_trait]
 pub trait ChunkOptimizer {
     fn optimize(&self, chunks: ChunksVc, chunk_group: ChunkGroupVc) -> ChunksVc;
 }
 
+/// Trait to mark a chunk as optimizable.
 #[turbo_tasks::value_trait]
-pub trait OptimizableChunk {
+pub trait OptimizableChunk: Chunk + Asset + ValueToString {
     fn get_optimizer(&self) -> ChunkOptimizerVc;
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-struct OptimizerKey(Option<ChunkOptimizerVc>);
-
+/// Optimize all chunks that implement [OptimizableChunk].
 #[turbo_tasks::function]
 pub async fn optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -> Result<ChunksVc> {
     let chunks = chunks.await?;
@@ -46,7 +54,8 @@ pub async fn optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -> Result<Chu
     let optimized_chunks = by_optimizer
         .into_iter()
         .map(|(optimizer, chunks)| async move {
-            let chunks = ChunksVc::keyed_cell(OptimizerKey(optimizer), chunks);
+            // TODO keyed cell: this would benefit from keying the cell by optimizer
+            let chunks = ChunksVc::cell(chunks);
             Ok(if let Some(optimizer) = optimizer {
                 optimizer.optimize(chunks, chunk_group).await?
             } else {
@@ -69,13 +78,10 @@ pub struct ContainmentTree {
     pub children: Vec<ContainmentTree>,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-struct ChunksKey(FileSystemPathVc);
-
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-struct OrphanChunkKey(ChunkVc);
+#[turbo_tasks::function]
+fn orphan_chunk(chunk: ChunkVc) -> ChunksVc {
+    ChunksVc::cell(vec![chunk])
+}
 
 impl ContainmentTree {
     async fn build(
@@ -95,6 +101,20 @@ impl ContainmentTree {
                 })
                 .try_join()
                 .await
+        }
+
+        async fn expand_common_parents(
+            common_parents: &mut IndexSet<FileSystemPathVc>,
+        ) -> Result<()> {
+            // This is mutated while iterating, so we need to loop with index
+            let mut i = 0;
+            while i < common_parents.len() {
+                let current = common_parents[i];
+                let parent = current.parent().resolve().await?;
+                common_parents.insert(parent);
+                i += 1;
+            }
+            Ok(())
         }
 
         async fn compute_relationships(
@@ -131,22 +151,33 @@ impl ContainmentTree {
             children: Vec<Rc<RefCell<Node>>>,
         }
 
-        async fn build_node_tree(
-            chunks: Vec<(Option<FileSystemPathVc>, ChunkVc)>,
-        ) -> Result<(IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>, Vec<ChunkVc>)> {
-            let mut orphan_chunks = Vec::new();
+        fn create_node_tree(
+            common_parents: IndexSet<FileSystemPathVc>,
+        ) -> IndexMap<FileSystemPathVc, Rc<RefCell<Node>>> {
             let mut trees = IndexMap::<FileSystemPathVc, Rc<RefCell<Node>>>::new();
+            for common_parent in common_parents {
+                trees.insert(
+                    common_parent,
+                    Rc::new(RefCell::new(Node {
+                        path: common_parent,
+                        chunks: Vec::new(),
+                        children: Vec::new(),
+                    })),
+                );
+            }
+            trees
+        }
+
+        fn add_chunks_to_tree(
+            trees: &mut IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>,
+            chunks: Vec<(Option<FileSystemPathVc>, ChunkVc)>,
+        ) -> Vec<ChunkVc> {
+            let mut orphan_chunks = Vec::new();
             for (common_parent, chunk) in chunks {
                 if let Some(common_parent) = common_parent {
                     trees
-                        .entry(common_parent)
-                        .or_insert_with(|| {
-                            Rc::new(RefCell::new(Node {
-                                path: common_parent,
-                                chunks: Vec::new(),
-                                children: Vec::new(),
-                            }))
-                        })
+                        .get_mut(&common_parent)
+                        .unwrap()
                         .borrow_mut()
                         .chunks
                         .push(chunk);
@@ -154,7 +185,7 @@ impl ContainmentTree {
                     orphan_chunks.push(chunk);
                 }
             }
-            Ok((trees, orphan_chunks))
+            orphan_chunks
         }
 
         fn treeify(
@@ -175,6 +206,19 @@ impl ContainmentTree {
                 .collect::<Vec<_>>()
         }
 
+        fn skip_unnessary_nodes(trees: &mut IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>) {
+            for tree in trees.values_mut() {
+                let mut tree = tree.borrow_mut();
+                if tree.chunks.is_empty() && tree.children.len() == 1 {
+                    let child = tree.children.pop().unwrap();
+                    let mut child = child.borrow_mut();
+                    tree.path = child.path;
+                    tree.chunks.append(&mut child.chunks);
+                    tree.children.append(&mut child.children);
+                }
+            }
+        }
+
         // Convert function to the real data structure
         fn node_to_common_parent_tree(node: Rc<RefCell<Node>>) -> ContainmentTree {
             let mut node = node.borrow_mut();
@@ -182,10 +226,8 @@ impl ContainmentTree {
                 .into_iter()
                 .map(node_to_common_parent_tree)
                 .collect();
-            let chunks = Some(ChunksVc::keyed_cell(
-                ChunksKey(node.path),
-                take(&mut node.chunks),
-            ));
+            // TODO keyed cell: this would benefit from keying the cell by node.path
+            let chunks = Some(ChunksVc::cell(take(&mut node.chunks)));
             ContainmentTree {
                 path: Some(node.path),
                 chunks,
@@ -202,7 +244,7 @@ impl ContainmentTree {
                 .map(node_to_common_parent_tree)
                 .chain(orphan_chunks.into_iter().map(|chunk| ContainmentTree {
                     path: None,
-                    chunks: Some(ChunksVc::keyed_cell(OrphanChunkKey(chunk), vec![chunk])),
+                    chunks: Some(orphan_chunk(chunk)),
                     children: Vec::new(),
                 }))
                 .collect::<Vec<_>>()
@@ -211,18 +253,26 @@ impl ContainmentTree {
         // resolve all paths
         let chunks = resolve(chunks).await?;
         // compute all unique common_parents
-        let common_parents = chunks
+        let mut common_parents = chunks
             .iter()
             .filter_map(|&(path, _)| path)
             .collect::<IndexSet<_>>();
+        // expand all common parents to include all their parents
+        expand_common_parents(&mut common_parents).await?;
         // compute parent -> child relationships between common_parents
         let relationships = compute_relationships(&common_parents).await?;
 
-        // all the tree by common_parent
-        let (mut trees, orphan_chunks) = build_node_tree(chunks).await?;
+        // create the tree nodes
+        let mut trees = create_node_tree(common_parents);
+
+        // add chunks to nodes
+        let orphan_chunks = add_chunks_to_tree(&mut trees, chunks);
 
         // nest each tree by relationship, compute the roots
         let roots = treeify(relationships, &mut trees);
+
+        // optimize tree by removing unnecessary nodes
+        skip_unnessary_nodes(&mut trees);
 
         // do conversion
         let roots = convert_into_common_parent_tree(roots, orphan_chunks);
@@ -240,32 +290,10 @@ impl ContainmentTree {
     }
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-struct ChunksFlattenKey(Option<FileSystemPathVc>);
-
-#[turbo_tasks::value(transparent)]
-struct ListsOfChunks(Vec<ChunksVc>);
-
-#[turbo_tasks::function]
-async fn flatten_chunks(chunks: ListsOfChunksVc) -> Result<ChunksVc> {
-    Ok(ChunksVc::cell(
-        chunks
-            .await?
-            .iter()
-            .copied()
-            .try_join()
-            .await?
-            .iter()
-            .flat_map(|c| c.iter().copied())
-            .collect(),
-    ))
-}
-
 pub async fn optimize_by_common_parent(
     chunks: ChunksVc,
     get_common_parent: impl Fn(ChunkVc) -> FileSystemPathOptionVc,
-    optimize: impl Fn(Option<ChunksVc>, Option<ChunksVc>) -> ChunksVc,
+    optimize: impl Fn(Option<ChunksVc>, Vec<ChunksVc>) -> ChunksVc,
 ) -> Result<ChunksVc> {
     let tree = ContainmentTree::build(
         chunks
@@ -277,19 +305,13 @@ pub async fn optimize_by_common_parent(
 
     fn optimize_tree(
         tree: ContainmentTree,
-        optimize: &impl Fn(Option<ChunksVc>, Option<ChunksVc>) -> ChunksVc,
+        optimize: &impl Fn(Option<ChunksVc>, Vec<ChunksVc>) -> ChunksVc,
     ) -> ChunksVc {
         let children = tree
             .children
             .into_iter()
             .map(|tree| optimize_tree(tree, optimize))
             .collect::<Vec<_>>();
-        let children = if !children.is_empty() {
-            let lists = ListsOfChunksVc::keyed_cell(ChunksFlattenKey(tree.path), children);
-            Some(flatten_chunks(lists))
-        } else {
-            None
-        };
         optimize(tree.chunks, children)
     }
 

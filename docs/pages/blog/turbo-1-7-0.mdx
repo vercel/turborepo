@@ -1,0 +1,150 @@
+---
+title: Turborepo 1.7
+date: 2023/01/11
+description: Turborepo 1.7 focuses on improving developer experience by bringing more clarity to your tasks.
+tag: "web development"
+ogImage: /images/blog/turbo-1-7-0/twitter-card.png
+---
+
+import { Tabs, Tab } from '../../components/Tabs'
+
+# Turborepo 1.7
+
+import { Authors } from '../../components/Authors'
+import Badge from '../../components/Badge'
+import Date from "../../components/blog/Date";
+
+<Date>
+  Wednesday, January 11th, 2023
+</Date>
+
+<Authors authors={[
+  'gregsoltis',
+  'nathanhammond',
+  'tomknickman',
+  'anthonyshew',
+  'jaredpalmer',
+  'mehulkar',
+  'chrisolszewski',
+  'nicholasyang'
+]} />
+
+Turborepo 1.7 focuses on improving developer experience by bringing more clarity to your tasks:
+
+- [**Improved support for long running tasks**](#schedule-your-long-running-tasks-with-confidence): Use `persistent: true` to mark non-terminating tasks so that `turbo` can alert you if you have dependencies on them.
+- [**Better clarity for outputs**](#declare-your-outputs-for-improved-clarity): You'll now always need to declare your task outputs, improving transparency to what your tasks will cache.
+- [**Globally installable**](#global-turbo): Install once, use everywhere. Turborepo can now be installed globally, and ran from any directory, not just from your repo root.
+- [**“Error only” output mode**](#errors-only-output-mode-for-quieter-logs): Quiet your output logs to only show when a task fails.
+
+Update today by running `npm install turbo@latest`, or by [installing globally](#global-turbo) <Badge>NEW</Badge> and running the [`set-default-outputs`](/repo/docs/reference/codemods#set-default-outputs) codemod.
+
+## Schedule your long-running tasks with confidence
+
+To avoid misconfigurations that could result in tasks that never run, you can now tell Turborepo about tasks that won't exit on their own (like `dev` scripts) with a `persistent: true` [configuration option](/repo/docs/reference/configuration#persistent). When this config is set on a task, Turborepo will ensure no other task can depend on this task. This is useful for `dev` tasks or test runners with `--watch` flags.
+
+```diff
+{
+	"pipeline": {
+		"dev": {
++			"persistent": true
+		}
+	}
+}
+```
+
+Previously, if `Task B` depended on a persistent `Task A`, `Task B` would never execute, because `Task A` never exited. By declaring `Task A` as `persistent`, Turborepo will prevent this error scenario from happening.
+
+Before this release, we had been recommending the use of `turbo run <task> --parallel` for persistent tasks. With `--parallel`, `turbo` would ignore your dependency graph and execute all your tasks at once.
+
+While `--parallel` did provide a helpful escape hatch, it meant that users had to tell Turborepo **_how_** to run their tasks rather than declaring **_what_** a task is.
+
+Rather than throwing away your entire topological dependency graph, it's much more precise for Turborepo to keep your dependency graph while guaranteeing that you don't depend on a process that won't exit with `persistent: true`.
+
+## Global `turbo`
+
+You can now run your Turborepo tasks from anywhere in your project once you've installed `turbo` globally. To do so, use:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --global
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn global add turbo
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --global
+    ```
+  </Tab>
+</Tabs>
+
+`turbo` will now work in any project. To find your local `turbo` version, `turbo` will walk through a few steps, always looking upward from your current directory:
+
+1. Find the nearest turbo.json.
+2. If one is not found, find the first `package.json` with a `workspaces` property.
+3. If one is not found, find the first `package.json`.
+
+Your globally installed version of `turbo` will only be used when a locally installed version of `turbo` does not exist or cannot be found.
+
+![turbo-inference](/images/blog/turbo-1-7-0/turbo-inference.png)
+
+`turbo --version` and `turbo bin` will show you the version and binary location, respectively, of the copy of `turbo` that will execute your tasks.
+Additionally, running with `-vv` or `--verbosity=2` will always show if your local, or global `turbo` is being used.
+
+```bash
+turbo --version --verbosity=2
+2023-01-11T10:49:04.042-0500 [DEBUG] turborepo_lib::shim: No local turbo binary found at: /Users/knickman/Developer/vercel/my-awesome-monorepo/node_modules/.bin/turbo
+2023-01-11T10:49:04.042-0500 [DEBUG] turborepo_lib::shim: Running command as global turbo
+1.7.0
+```
+
+## Declare your `outputs` for improved clarity
+
+Previously, if you did not specify an `outputs` key for a task, Turborepo would automatically attempt to cache all files in the `dist/` and `build/` directories.
+
+This worked well for `build` tasks of specific frameworks, but this implicit behavior did not scale well as it applied to _all_ tasks. We've found that, across the many developers, teams, projects, and codebases using Turborepo, the assumption to automatically cache `dist/` and `build/` directories was causing problems for users.
+
+In version 1.7, this behavior is removed and you will now need to explicitly tell turborepo what to cache.
+
+```diff
+{
+  "pipeline": {
+    "build": {
++     "outputs": ["dist/**", "build/**"]
+    }
+  }
+}
+```
+
+If you were relying on the default cache output in Turborepo versions below 1.7, you can get the same behavior by running the [`@turbo/codemod set-default-outputs`](/repo/docs/reference/codemods#set-default-outputs) codemod:
+
+```bash
+npx @turbo/codemod set-default-outputs
+```
+
+Also note that you will no longer need to specify `outputs: []` because not caching anything is now the default behavior. The codemod will also remove this configuration from your tasks.
+
+## “Errors only” output mode for quieter logs
+
+To bring visibility to errors, community member [@dobesv](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=errors-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
+This can be used as a [configuration option](/repo/docs/reference/configuration#outputmode) or as a [CLI flag](/repo/docs/reference/command-line-reference#--output-logs)
+
+```bash
+turbo build --output-logs=errors-only
+```
+
+## Community
+
+Since releasing [Turborepo v1.6](/blog/turbo-1-6-0) and merging with [Turbopack](https://turbo.build/pack), we've seen incredible adoption and community growth:
+
+- [18.7k+ GitHub Stars](https://github.com/vercel/turbo)
+- [750k weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 30 years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of our contributors including our core team.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.

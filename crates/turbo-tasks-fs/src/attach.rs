@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{bail, Result};
+use auto_hash_map::AutoMap;
 use turbo_tasks::{primitives::StringVc, CompletionVc, ValueToString, ValueToStringVc};
 
 use crate::{
@@ -54,9 +53,13 @@ impl AttachedFileSystemVc {
             // already on this filesystem
             fs if fs == self_fs => Ok(contained_path_vc),
             // in the root filesystem, just need to rebase on this filesystem
-            fs if fs == this.root_fs => Ok(self.root().join(&contained_path.path)),
+            fs if fs == this.root_fs => Ok(self.root().resolve().await?.join(&contained_path.path)),
             // in the child filesystem, so we expand to the full path by appending to child_path
-            fs if fs == this.child_fs => Ok(self.child_path().join(&contained_path.path)),
+            fs if fs == this.child_fs => Ok(self
+                .child_path()
+                .resolve()
+                .await?
+                .join(&contained_path.path)),
             _ => bail!(
                 "path {} not part of self, the root fs or the child fs",
                 contained_path_vc.to_string().await?
@@ -68,7 +71,7 @@ impl AttachedFileSystemVc {
     /// [AttachedFileSystem]
     #[turbo_tasks::function]
     async fn child_path(self) -> Result<FileSystemPathVc> {
-        Ok(self.root().join(&self.await?.child_path))
+        Ok(self.root().resolve().await?.join(&self.await?.child_path))
     }
 
     /// Resolves the local path of the root or child filesystem from a path
@@ -89,9 +92,9 @@ impl AttachedFileSystemVc {
 
         let child_path = self.child_path().await?;
         Ok(if let Some(inner_path) = child_path.get_path_to(&path) {
-            this.child_fs.root().join(inner_path)
+            this.child_fs.root().resolve().await?.join(inner_path)
         } else {
-            this.root_fs.root().join(&path.path)
+            this.root_fs.root().resolve().await?.join(&path.path)
         })
     }
 }
@@ -119,7 +122,7 @@ impl FileSystem for AttachedFileSystem {
             DirectoryContent::NotFound => return Ok(DirectoryContentVc::not_found()),
         };
 
-        let mut converted_entries = HashMap::with_capacity(entries.len());
+        let mut converted_entries = AutoMap::with_capacity(entries.len());
         for (name, entry) in entries {
             use DirectoryEntry::*;
 

@@ -7,7 +7,10 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 
 use super::{ChunkingContext, ChunkingContextVc};
-use crate::asset::AssetVc;
+use crate::{
+    asset::{Asset, AssetVc},
+    environment::EnvironmentVc,
+};
 
 pub struct DevChunkingContextBuilder {
     context: DevChunkingContext,
@@ -56,6 +59,8 @@ pub struct DevChunkingContext {
     layer: Option<String>,
     /// Enable HMR for this chunking
     enable_hot_module_replacement: bool,
+    /// The environment chunks will be evaluated in.
+    environment: EnvironmentVc,
 }
 
 impl DevChunkingContextVc {
@@ -64,6 +69,7 @@ impl DevChunkingContextVc {
         output_root_path: FileSystemPathVc,
         chunk_root_path: FileSystemPathVc,
         asset_root_path: FileSystemPathVc,
+        environment: EnvironmentVc,
     ) -> DevChunkingContextBuilder {
         DevChunkingContextBuilder {
             context: DevChunkingContext {
@@ -74,6 +80,7 @@ impl DevChunkingContextVc {
                 asset_root_path,
                 layer: None,
                 enable_hot_module_replacement: false,
+                environment,
             },
         }
     }
@@ -95,6 +102,11 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
+    fn environment(&self) -> EnvironmentVc {
+        self.environment
+    }
+
+    #[turbo_tasks::function]
     async fn chunk_path(
         &self,
         path_vc: FileSystemPathVc,
@@ -111,7 +123,8 @@ impl ChunkingContext for DevChunkingContext {
         } else {
             clean(&path_vc.to_string().await?)
         };
-        if name.ends_with(extension) {
+        let removed_extension = name.ends_with(extension);
+        if removed_extension {
             name.truncate(name.len() - extension.len());
         }
 
@@ -136,9 +149,13 @@ impl ChunkingContext for DevChunkingContext {
             let truncated_hash = &hash[..5];
             name = format!("{}_{}", truncated_hash, &name[i..]);
         }
-        if !name.ends_with(extension) {
-            name += extension;
+        // We need to make sure that `.json` and `.json.js` doesn't end up with the same
+        // name. So when we add an extra extension when want to mark that with a "._"
+        // suffix.
+        if !removed_extension {
+            name += "._";
         }
+        name += extension;
         let mut root_path = self.chunk_root_path;
         #[allow(clippy::single_match, reason = "future extensions")]
         match extension {

@@ -174,7 +174,7 @@ Multiple filters can be combined to select distinct sets of targets. Additionall
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
 be in the final entrypoint selection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering)
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering).
 
 ```sh
 turbo run build --filter=my-pkg
@@ -196,6 +196,7 @@ turbo run build test lint --graph=my-json-graph.json
 turbo run build test lint --graph=my-graph.pdf
 turbo run build test lint --graph=my-graph.png
 turbo run build test lint --graph=my-graph.html
+turbo run build test lint --graph=my-graph.mermaid
 ```
 
 <Callout type="info">
@@ -274,7 +275,7 @@ Default `false`. Do not cache results of the task. This is useful for watch comm
 
 ```shell
 turbo run build --no-cache
-turbo run dev --parallel --no-cache
+turbo run dev --no-cache
 ```
 
 #### `--no-daemon`
@@ -296,6 +297,8 @@ Set type of output logging. Defaults to "outputMode" for the task in `turbo.json
 ```shell
 turbo run build --output-logs=full
 turbo run build --output-logs=new-only
+turbo run build --output-logs=errors-only
+turbo run build --output-logs=none
 ```
 
 #### `--only`
@@ -326,7 +329,13 @@ Will execute _only_ the `test` tasks in each workspace. It will not `build`.
 
 #### `--parallel`
 
-Default `false`. Run commands in parallel across workspaces and ignore the dependency graph. This is useful for developing with live reloading.
+Default `false`. Run commands in parallel across workspaces and ignore the task dependency graph.
+
+<Callout type="info">
+  The `--parallel` flag is typically used for "dev" or `--watch` mode tasks that don't exit.
+  Starting in `turbo@1.7`, we recommend configuring these tasks using the
+  [`persistent`](/repo/docs/reference/configuration#persistent) config instead.
+</Callout>
 
 ```sh
 turbo run lint --parallel --no-cache
@@ -356,7 +365,7 @@ Specify/filter workspaces to act as entry points for execution. Globs against `p
 
 ```sh
 turbo run lint --scope="@example/**"
-turbo run dev --parallel --scope="@example/a" --scope="@example/b" --no-cache --no-deps
+turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
 ```
 
 #### `--serial`
@@ -466,21 +475,23 @@ To view CPU profile, outputs the profile to the given file, drop the file into [
 turbo run build --cpuprofile="<cpu-profile-file-name>"
 ```
 
-#### `-v`, `-vv`, `-vvv`
+#### `--verbosity`
 
-To specify log level, use `-v` for `Info`, `-vv` for `Debug` and `-vvv` for `Trace` flags.
+To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
+
+- `Info `: `--verbosity=1`, or `-v`
+- `Debug`: `--verbosity=2`, or `-vv`
+- `Trace`: `--verbosity=3`, or `-vvv`
 
 ```sh
 turbo run build -v
-turbo run build -vv
+turbo run build --verbosity=2
 turbo run build -vvv
 ```
 
 ## `turbo prune --scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target workspace.
-
-<Callout>This command is not yet implemented for `npm`.</Callout>
 
 This command will generate folder called `out` with the following inside of it:
 

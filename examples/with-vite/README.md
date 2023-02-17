@@ -32,6 +32,6 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/with-vite with-vite
 cd with-vite
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```

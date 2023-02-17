@@ -1,0 +1,66 @@
+---
+title: Turbopack vs. webpack
+description: Compare Turbopack vs. webpack
+---
+
+import { DocsBenchmarksGraph } from '../../../../components/pages/pack-home/DocsBenchmarksGraph';
+import { DocsBenchmarkStat } from '../../../../components/pages/pack-home/DocsBenchmarkStat';
+import BenchmarksCallout from './BenchmarksCallout';
+
+# Comparing Turbopack and webpack
+
+webpack has been downloaded over 3 billion times, making it today's most common JavaScript bundler. However, we found that we'd hit the limits of what it could do with its JavaScript-based architecture.
+
+We've built Turbopack as the successor of webpack: much **faster**, but just as **flexible and extensible**.
+
+<BenchmarksCallout />
+
+## Speed
+
+Turbopack's incremental architecture outstrips webpack's speed on several key metrics.
+
+### Dev server startup time
+
+The main problem we found with webpack was development server startup time. If you end up importing a lot of modules in a certain page and open that page in your browser, the initial compile will take a few seconds. If you change routes in your development environment, you have to wait for a similar compile again for your new page.
+
+We designed Turbopack to be as lazy as possible, only doing work when it's requested. In a dev server, this means on incoming requests we do **exactly the work the user asked for**. No more unnecessary bundling of on demand loaded code before the user needs it. You can learn more in our [core concepts docs](/pack/docs/core-concepts#compiling-by-request).
+
+This means that Turbopack's dev server starts up much faster than webpack. Next.js 12, which uses webpack under the hood, can start up a build server on a 1,000 module application in <DocsBenchmarkStat stat="next12-cold-1000" />. Turbopack starts up in <DocsBenchmarkStat stat="turbopack-cold-1000" /> - **<DocsBenchmarkStat stat="turbopack-cold-vs-next12" /> faster**.
+
+<DocsBenchmarksGraph category="cold" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'webpack',
+    key: 'next12',
+  }
+]} />
+
+### Code updates
+
+As we continued to optimize webpack, we found a performance ceiling on how much faster we could make Fast Refresh. With around 2,000 components, the best number we could produce was 500ms. This mark was a tremendous feat in Next.js 12. Previously, that process would have taken around 10 seconds.
+
+With Turbopack, we achieved the goal we were aiming for: Fast Refresh performance that stays near-constant, no matter your application size. Instead of scaling with your application size, it scales based on the size of the _changes made_.
+
+In a 1,000 module application, Turbopack can react to file changes **<DocsBenchmarkStat stat="turbopack-update-vs-next12" /> faster** than webpack. In a 30,000 module application, this is **<DocsBenchmarkStat stat="turbopack-update-vs-next12-30000" /> faster**.
+
+<DocsBenchmarksGraph category="file_change" bars={[
+  {
+    label: 'Turbopack',
+    turbo: true,
+    key: 'next13'
+  },
+  {
+    label: 'webpack',
+    key: 'next12',
+  }
+]} />
+
+## Extensibility
+
+webpack has an extraordinary collection of [plugins](https://webpack.js.org/plugins/) to customize its behavior. Composing plugins lets you create custom toolchains which can support a huge variety of bundler features.
+
+In its alpha state, Turbopack cannot currently be configured with plugins. In the future, we plan to make Turbopack just as extensible as webpack - though likely with an altered API.

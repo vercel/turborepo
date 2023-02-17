@@ -1,8 +1,8 @@
 use std::{collections::HashSet, fmt::Display};
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
-use turbo_tasks_fs::{File, FileContent};
+use turbo_tasks::{primitives::StringVc, registry, CellId, RawVc, TryJoinIterExt};
+use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::AssetContent,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
@@ -10,7 +10,8 @@ use turbopack_core::{
 use turbopack_ecmascript::utils::FormatIter;
 
 use crate::source::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
+    ContentSourceVc,
 };
 
 #[turbo_tasks::value(shared)]
@@ -86,7 +87,16 @@ impl ContentSource for IntrospectionSource {
                 self_vc.as_introspectable()
             }
         } else {
-            serde_json::from_str(path)?
+            parse_json_with_source_context(path)?
+        }
+        .resolve()
+        .await?;
+        let raw_vc: RawVc = introspectable.into();
+        let internal_ty = if let RawVc::TaskCell(_, CellId { type_id, index }) = raw_vc {
+            let value_ty = registry::get_value_type(type_id);
+            format!("{}#{}", value_ty.name, index)
+        } else {
+            unreachable!()
         };
         let ty = introspectable.ty().await?;
         let title = introspectable.title().await?;
@@ -129,6 +139,7 @@ impl ContentSource for IntrospectionSource {
             "<!DOCTYPE html>
 <html><head><title>{title}</title></head>
 <body>
+  <h3>{internal_ty}</h3>
   <h2>{ty}</h2>
   <h1>{title}</h1>
   {details}
@@ -140,7 +151,7 @@ impl ContentSource for IntrospectionSource {
             children = FormatIter(|| children.iter())
         );
         Ok(ContentSourceResultVc::exact(
-            ContentSourceContent::Static(
+            ContentSourceContentVc::static_content(
                 AssetContent::File(
                     FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
                         .cell(),
@@ -148,7 +159,7 @@ impl ContentSource for IntrospectionSource {
                 .cell()
                 .into(),
             )
-            .cell(),
+            .into(),
         ))
     }
 }

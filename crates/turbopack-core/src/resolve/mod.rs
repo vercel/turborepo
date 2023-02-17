@@ -2,16 +2,13 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     future::Future,
-    mem::take,
     pin::Pin,
 };
 
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc},
-    trace::TraceRawVcs,
+    primitives::{BoolVc, StringVc, StringsVc},
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
@@ -20,195 +17,198 @@ use turbo_tasks_fs::{
 };
 
 use self::{
-    exports::{ExportsField, ExportsValue},
+    exports::ExportsField,
     options::{
         resolve_modules_options, ImportMapResult, ResolveInPackage, ResolveIntoPackage,
         ResolveModules, ResolveModulesOptionsVc, ResolveOptionsVc,
     },
     origin::ResolveOriginVc,
     parse::{Request, RequestVc},
+    pattern::QueryMapVc,
 };
 use crate::{
-    asset::{AssetVc, AssetsVc},
+    asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
     issue::{
         package_json::{PackageJsonIssue, PackageJsonIssueVc},
         resolve::{ResolvingIssue, ResolvingIssueVc},
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
+        origin::ResolveOrigin,
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
+        plugin::ResolvePlugin,
     },
     source_asset::SourceAssetVc,
 };
 
 mod alias_map;
-mod exports;
+pub(crate) mod exports;
+pub mod node;
 pub mod options;
 pub mod origin;
 pub mod parse;
 pub mod pattern;
+pub mod plugin;
 
 pub use alias_map::{
     AliasMap, AliasMapIntoIter, AliasMapLookupIterator, AliasMatch, AliasPattern, AliasTemplate,
 };
+pub use exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
 
-#[derive(PartialEq, Eq, Clone, Debug, TraceRawVcs, Serialize, Deserialize)]
-pub enum SpecialType {
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+pub enum PrimaryResolveResult {
+    Asset(AssetVc),
     OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
     Ignore,
     Empty,
     Custom(u8),
+    Unresolveable,
 }
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
-pub enum ResolveResult {
-    Single(AssetVc, Vec<AssetReferenceVc>),
-    Keyed(HashMap<String, AssetVc>, Vec<AssetReferenceVc>),
-    Alternatives(Vec<AssetVc>, Vec<AssetReferenceVc>),
-    Special(SpecialType, Vec<AssetReferenceVc>),
-    Unresolveable(Vec<AssetReferenceVc>),
+pub struct ResolveResult {
+    pub primary: Vec<PrimaryResolveResult>,
+    pub references: Vec<AssetReferenceVc>,
 }
 
 impl Default for ResolveResult {
     fn default() -> Self {
-        ResolveResult::Unresolveable(Vec::new())
+        ResolveResult::unresolveable()
     }
 }
 
 impl ResolveResult {
     pub fn unresolveable() -> Self {
-        ResolveResult::Unresolveable(Vec::new())
+        ResolveResult {
+            primary: Vec::new(),
+            references: Vec::new(),
+        }
+    }
+
+    pub fn unresolveable_with_references(references: Vec<AssetReferenceVc>) -> ResolveResult {
+        ResolveResult {
+            primary: Vec::new(),
+            references,
+        }
+    }
+
+    pub fn primary(result: PrimaryResolveResult) -> ResolveResult {
+        ResolveResult {
+            primary: vec![result],
+            references: Vec::new(),
+        }
+    }
+
+    pub fn primary_with_references(
+        result: PrimaryResolveResult,
+        references: Vec<AssetReferenceVc>,
+    ) -> ResolveResult {
+        ResolveResult {
+            primary: vec![result],
+            references,
+        }
+    }
+
+    pub fn asset(asset: AssetVc) -> ResolveResult {
+        ResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(asset)],
+            references: Vec::new(),
+        }
+    }
+
+    pub fn asset_with_references(
+        asset: AssetVc,
+        references: Vec<AssetReferenceVc>,
+    ) -> ResolveResult {
+        ResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(asset)],
+            references,
+        }
+    }
+
+    pub fn assets(assets: Vec<AssetVc>) -> ResolveResult {
+        ResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references: Vec::new(),
+        }
+    }
+
+    pub fn assets_with_references(
+        assets: Vec<AssetVc>,
+        references: Vec<AssetReferenceVc>,
+    ) -> ResolveResult {
+        ResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references,
+        }
     }
 
     pub fn add_reference(&mut self, reference: AssetReferenceVc) {
-        match self {
-            ResolveResult::Single(_, list)
-            | ResolveResult::Keyed(_, list)
-            | ResolveResult::Alternatives(_, list)
-            | ResolveResult::Special(_, list)
-            | ResolveResult::Unresolveable(list) => list.push(reference),
-        }
+        self.references.push(reference);
     }
 
-    fn get_references(&self) -> &Vec<AssetReferenceVc> {
-        match self {
-            ResolveResult::Single(_, list)
-            | ResolveResult::Keyed(_, list)
-            | ResolveResult::Alternatives(_, list)
-            | ResolveResult::Special(_, list)
-            | ResolveResult::Unresolveable(list) => list,
-        }
+    pub fn get_references(&self) -> &Vec<AssetReferenceVc> {
+        &self.references
     }
 
     fn clone_with_references(&self, references: Vec<AssetReferenceVc>) -> ResolveResult {
-        match self {
-            ResolveResult::Single(asset, _) => ResolveResult::Single(*asset, references),
-            ResolveResult::Keyed(map, _) => ResolveResult::Keyed(map.clone(), references),
-            ResolveResult::Alternatives(alternatives, _) => {
-                ResolveResult::Alternatives(alternatives.clone(), references)
-            }
-            ResolveResult::Special(special_type, _) => {
-                ResolveResult::Special(special_type.clone(), references)
-            }
-            ResolveResult::Unresolveable(_) => ResolveResult::Unresolveable(references),
+        ResolveResult {
+            primary: self.primary.clone(),
+            references,
         }
     }
 
     pub fn merge_alternatives(&mut self, other: &ResolveResult) {
-        match self {
-            ResolveResult::Single(asset, list) => {
-                *self = ResolveResult::Alternatives(vec![*asset], take(list))
-            }
-            ResolveResult::Keyed(_, list) | ResolveResult::Special(_, list) => {
-                *self = ResolveResult::Unresolveable(take(list));
-            }
-            ResolveResult::Alternatives(_, _) | ResolveResult::Unresolveable(_) => {
-                // already is appropriate type
-            }
-        }
-        match self {
-            ResolveResult::Single(_, _)
-            | ResolveResult::Keyed(_, _)
-            | ResolveResult::Special(_, _) => {
-                unreachable!()
-            }
-            ResolveResult::Alternatives(assets, list) => match other {
-                ResolveResult::Single(asset, list2) => {
-                    assets.push(*asset);
-                    list.extend(list2.iter().cloned());
-                }
-                ResolveResult::Alternatives(assets2, list2) => {
-                    assets.extend(assets2.iter().cloned());
-                    list.extend(list2.iter().cloned());
-                }
-                ResolveResult::Keyed(_, _)
-                | ResolveResult::Special(_, _)
-                | ResolveResult::Unresolveable(_) => {
-                    list.extend(other.get_references().iter().cloned());
-                }
-            },
-            ResolveResult::Unresolveable(list) => match other {
-                ResolveResult::Single(asset, list2) => {
-                    list.extend(list2.iter().cloned());
-                    *self = ResolveResult::Alternatives(vec![*asset], take(list));
-                }
-                ResolveResult::Alternatives(assets, list2) => {
-                    list.extend(list2.iter().cloned());
-                    *self = ResolveResult::Alternatives(assets.clone(), take(list));
-                }
-                ResolveResult::Keyed(_, _)
-                | ResolveResult::Special(_, _)
-                | ResolveResult::Unresolveable(_) => {
-                    list.extend(other.get_references().iter().cloned());
-                }
-            },
-        }
+        self.primary.extend(other.primary.iter().cloned());
+        self.references.extend(other.references.iter().copied());
     }
 
     pub fn is_unresolveable(&self) -> bool {
-        matches!(self, ResolveResult::Unresolveable(_))
+        self.primary.is_empty()
     }
 
-    pub async fn map<A, AF, R, RF>(&self, mut asset_fn: A, mut reference_fn: R) -> Result<Self>
+    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, reference_fn: R) -> Result<Self>
     where
-        A: FnMut(AssetVc) -> AF,
+        A: Fn(AssetVc) -> AF,
         AF: Future<Output = Result<AssetVc>>,
-        R: FnMut(AssetReferenceVc) -> RF,
+        R: Fn(AssetReferenceVc) -> RF,
         RF: Future<Output = Result<AssetReferenceVc>>,
     {
-        Ok(match self {
-            ResolveResult::Single(asset, refs) => {
-                let asset = asset_fn(*asset).await?;
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Single(asset, refs)
-            }
-            ResolveResult::Keyed(map, refs) => {
-                let mut new_map = HashMap::new();
-                for (key, value) in map.iter() {
-                    new_map.insert(key.clone(), asset_fn(*value).await?);
-                }
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Keyed(new_map, refs)
-            }
-            ResolveResult::Alternatives(assets, refs) => {
-                let mut new_assets = Vec::new();
-                for asset in assets.iter() {
-                    new_assets.push(asset_fn(*asset).await?);
-                }
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Alternatives(new_assets, refs)
-            }
-            ResolveResult::Special(ty, refs) => {
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Special(ty.clone(), refs)
-            }
-            ResolveResult::Unresolveable(refs) => {
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Unresolveable(refs)
-            }
+        Ok(Self {
+            primary: self
+                .primary
+                .iter()
+                .cloned()
+                .map(|result| {
+                    let asset_fn = &asset_fn;
+                    async move {
+                        if let PrimaryResolveResult::Asset(asset) = result {
+                            Ok(PrimaryResolveResult::Asset(asset_fn(asset).await?))
+                        } else {
+                            Ok(result)
+                        }
+                    }
+                })
+                .try_join()
+                .await?,
+            references: self
+                .references
+                .iter()
+                .copied()
+                .map(reference_fn)
+                .try_join()
+                .await?,
         })
     }
 }
@@ -246,7 +246,7 @@ impl ResolveResultVc {
                 return Ok(result_ref.clone_with_references(references).cell());
             }
         }
-        Ok(ResolveResult::Unresolveable(references).into())
+        Ok(ResolveResult::unresolveable_with_references(references).into())
     }
 
     #[turbo_tasks::function]
@@ -254,17 +254,17 @@ impl ResolveResultVc {
         if results.len() == 1 {
             return Ok(results.into_iter().next().unwrap());
         }
-        let mut iter = results.into_iter();
+        let mut iter = results.into_iter().try_join().await?.into_iter();
         if let Some(current) = iter.next() {
-            let mut current = current.await?.clone_value();
+            let mut current = current.clone_value();
             for result in iter {
                 // For clippy -- This explicit deref is necessary
-                let other = &*result.await?;
+                let other = &*result;
                 current.merge_alternatives(other);
             }
             Ok(Self::cell(current))
         } else {
-            Ok(Self::cell(ResolveResult::Unresolveable(Vec::new())))
+            Ok(Self::cell(ResolveResult::unresolveable()))
         }
     }
 
@@ -283,20 +283,20 @@ impl ResolveResultVc {
                 .unwrap()
                 .add_references(references));
         }
-        let mut iter = results.into_iter();
+        let mut iter = results.into_iter().try_join().await?.into_iter();
         if let Some(current) = iter.next() {
-            let mut current = current.await?.clone_value();
-            for reference in references {
-                current.add_reference(reference)
-            }
-            for result_vc in iter {
+            let mut current = current.clone_value();
+            for result in iter {
                 // For clippy -- This explicit deref is necessary
-                let result = &*result_vc.await?;
-                current.merge_alternatives(result);
+                let other = &*result;
+                current.merge_alternatives(other);
             }
+            current.references.extend(references);
             Ok(Self::cell(current))
         } else {
-            Ok(Self::cell(ResolveResult::Unresolveable(references)))
+            Ok(Self::cell(ResolveResult::unresolveable_with_references(
+                references,
+            )))
         }
     }
 
@@ -307,14 +307,48 @@ impl ResolveResultVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn first_asset(self) -> Result<AssetOptionVc> {
+        let this = self.await?;
+        Ok(AssetOptionVc::cell(this.primary.iter().find_map(|item| {
+            if let PrimaryResolveResult::Asset(a) = item {
+                Some(*a)
+            } else {
+                None
+            }
+        })))
+    }
+
+    #[turbo_tasks::function]
     pub async fn primary_assets(self) -> Result<AssetsVc> {
         let this = self.await?;
-        Ok(AssetsVc::cell(match &*this {
-            ResolveResult::Single(asset, _) => vec![*asset],
-            ResolveResult::Keyed(map, _) => map.values().copied().collect(),
-            ResolveResult::Alternatives(assets, _) => assets.clone(),
-            ResolveResult::Special(_, _) | ResolveResult::Unresolveable(_) => Vec::new(),
-        }))
+        Ok(AssetsVc::cell(
+            this.primary
+                .iter()
+                .filter_map(|item| {
+                    if let PrimaryResolveResult::Asset(a) = item {
+                        Some(*a)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        ))
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct ResolveResultOption(Option<ResolveResultVc>);
+
+#[turbo_tasks::value_impl]
+impl ResolveResultOptionVc {
+    #[turbo_tasks::function]
+    pub fn some(result: ResolveResultVc) -> Self {
+        ResolveResultOption(Some(result)).cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn none() -> Self {
+        ResolveResultOption(None).cell()
     }
 }
 
@@ -337,7 +371,7 @@ async fn type_exists(
     ty: FileSystemEntryType,
     refs: &mut Vec<AssetReferenceVc>,
 ) -> Result<Option<FileSystemPathVc>> {
-    let result = fs_path.realpath_with_links().await?;
+    let result = fs_path.resolve().await?.realpath_with_links().await?;
     for path in result.symlinks.iter() {
         refs.push(AffectingResolvingAssetReferenceVc::new(*path).into());
     }
@@ -384,6 +418,11 @@ async fn exports_field(
     }
 }
 
+#[turbo_tasks::function]
+pub fn package_json() -> StringsVc {
+    StringsVc::cell(vec!["package.json".to_string()])
+}
+
 #[turbo_tasks::value(shared)]
 pub enum FindContextFileResult {
     Found(FileSystemPathVc, Vec<AssetReferenceVc>),
@@ -393,22 +432,24 @@ pub enum FindContextFileResult {
 #[turbo_tasks::function]
 pub async fn find_context_file(
     context: FileSystemPathVc,
-    name: &str,
+    names: StringsVc,
 ) -> Result<FindContextFileResultVc> {
     let mut refs = Vec::new();
     let context_value = context.await?;
-    let fs_path = context.join(name);
-    if let Some(fs_path) = exists(fs_path, &mut refs).await? {
-        return Ok(FindContextFileResult::Found(fs_path, refs).into());
+    for name in &*names.await? {
+        let fs_path = context.join(name);
+        if let Some(fs_path) = exists(fs_path, &mut refs).await? {
+            return Ok(FindContextFileResult::Found(fs_path, refs).into());
+        }
     }
     if context_value.is_root() {
         return Ok(FindContextFileResult::NotFound(refs).into());
     }
     if refs.is_empty() {
         // Tailcall
-        Ok(find_context_file(context.parent(), name))
+        Ok(find_context_file(context.parent(), names))
     } else {
-        let parent_result = find_context_file(context.parent(), name).await?;
+        let parent_result = find_context_file(context.parent(), names).await?;
         Ok(match &*parent_result {
             FindContextFileResult::Found(p, r) => {
                 refs.extend(r.iter().copied());
@@ -455,7 +496,7 @@ async fn find_package(
                             }
                         }
                     }
-                    context = context.parent();
+                    context = context.parent().resolve().await?;
                     let new_context_value = context.await?;
                     if *new_context_value == *context_value {
                         break;
@@ -494,7 +535,7 @@ fn merge_results_with_references(
         return merge_results(results);
     }
     match results.len() {
-        0 => ResolveResult::Unresolveable(references).into(),
+        0 => ResolveResult::unresolveable_with_references(references).into(),
         1 => results
             .into_iter()
             .next()
@@ -512,7 +553,7 @@ pub async fn resolve_raw(
 ) -> Result<ResolveResultVc> {
     async fn to_result(path: FileSystemPathVc) -> Result<ResolveResultVc> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
-        Ok(ResolveResult::Single(
+        Ok(ResolveResult::asset_with_references(
             SourceAssetVc::new(*path).into(),
             symlinks
                 .iter()
@@ -568,6 +609,78 @@ pub async fn resolve(
     request: RequestVc,
     options: ResolveOptionsVc,
 ) -> Result<ResolveResultVc> {
+    let raw_result = resolve_internal(context, request, options);
+    let result = handle_resolve_plugins(context, request, options, raw_result);
+    Ok(result)
+}
+
+#[turbo_tasks::function]
+async fn handle_resolve_plugins(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    options: ResolveOptionsVc,
+    result: ResolveResultVc,
+) -> Result<ResolveResultVc> {
+    async fn apply_plugins_to_path(
+        path: FileSystemPathVc,
+        context: FileSystemPathVc,
+        request: RequestVc,
+        options: ResolveOptionsVc,
+    ) -> Result<Option<ResolveResultVc>> {
+        for plugin in &options.await?.plugins {
+            if *plugin.after_resolve_condition().matches(path).await? {
+                if let Some(result) = *plugin.after_resolve(path, context, request).await? {
+                    return Ok(Some(result));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    let mut changed = false;
+    let result_value = result.await?;
+
+    let mut new_primary = Vec::new();
+    let mut new_references = Vec::new();
+
+    for primary in result_value.primary.iter() {
+        if let PrimaryResolveResult::Asset(asset) = primary {
+            if let Some(new_result) =
+                apply_plugins_to_path(asset.path().resolve().await?, context, request, options)
+                    .await?
+            {
+                let new_result = new_result.await?;
+                changed = true;
+                new_primary.extend(new_result.primary.iter().cloned());
+                new_references.extend(new_result.references.iter().copied());
+            } else {
+                new_primary.push(primary.clone());
+            }
+        } else {
+            new_primary.push(primary.clone());
+        }
+    }
+
+    if !changed {
+        return Ok(result);
+    }
+
+    let mut references = result_value.references.clone();
+    references.append(&mut new_references);
+
+    Ok(ResolveResult {
+        primary: new_primary,
+        references,
+    }
+    .cell())
+}
+
+#[turbo_tasks::function]
+async fn resolve_internal(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    options: ResolveOptionsVc,
+) -> Result<ResolveResultVc> {
     // This explicit deref of `options` is necessary
     #[allow(clippy::explicit_auto_deref)]
     let options_value: &ResolveOptions = &*options.await?;
@@ -597,7 +710,7 @@ pub async fn resolve(
         Request::Alternatives { requests } => {
             let results = requests
                 .iter()
-                .map(|req| resolve(context, *req, options))
+                .map(|req| resolve_internal(context, *req, options))
                 .collect();
             merge_results(results)
         }
@@ -643,15 +756,17 @@ pub async fn resolve(
             }
             let new_pat = Pattern::alternatives(patterns);
 
-            resolve(
+            resolve_internal(
                 context,
                 RequestVc::raw(Value::new(new_pat), *force_in_context),
                 options,
             )
         }
-        Request::Module { module, path } => {
-            resolve_module_request(context, options, options_value, module, path).await?
-        }
+        Request::Module {
+            module,
+            path,
+            query,
+        } => resolve_module_request(context, options, options_value, module, path, query).await?,
         Request::ServerRelative { path } => {
             let mut new_pat = path.clone();
             new_pat.push_front(".".to_string().into());
@@ -662,12 +777,16 @@ pub async fn resolve(
                 request,
                 context,
                 resolve_options: options,
-                error_message: Some("server relative imports are not implemented yet".to_string()),
+                error_message: Some(
+                    "server relative imports are not implemented yet. Please try an import \
+                     relative to the file you are importing from."
+                        .to_string(),
+                ),
             }
             .into();
             issue.as_issue().emit();
 
-            resolve(context.root(), relative, options)
+            resolve_internal(context.root(), relative, options)
         }
         Request::Windows { path: _ } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
@@ -696,20 +815,12 @@ pub async fn resolve(
             ResolveResult::unresolveable().into()
         }
         Request::Uri {
-            protocol: _,
-            remainder: _,
-        } => {
-            let issue: ResolvingIssueVc = ResolvingIssue {
-                request_type: "URI imports: not implemented yet".to_string(),
-                request,
-                context,
-                resolve_options: options,
-                error_message: Some("URI imports are not implemented yet".to_string()),
-            }
-            .into();
-            issue.as_issue().emit();
-            ResolveResult::unresolveable().into()
-        }
+            protocol,
+            remainder,
+        } => ResolveResult::primary(PrimaryResolveResult::OriginalReferenceTypeExternal(
+            format!("{}{}", protocol, remainder),
+        ))
+        .into(),
         Request::Unknown { path } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
                 request_type: format!("unknown import: `{}`", path),
@@ -758,7 +869,7 @@ async fn resolve_into_folder(
                         )
                     })?;
                 let request = RequestVc::parse(Value::new(str.into()));
-                return Ok(resolve(package_path, request, options));
+                return Ok(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) => {
                 if let FileJsonContent::Content(package_json) = &*package_json.await? {
@@ -766,7 +877,7 @@ async fn resolve_into_folder(
                         let request =
                             RequestVc::parse(Value::new(normalize_request(field_value).into()));
 
-                        let result = &*resolve(package_path, request, options).await?;
+                        let result = &*resolve_internal(package_path, request, options).await?;
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable() {
@@ -810,6 +921,7 @@ async fn resolve_module_request(
     options_value: &ResolveOptions,
     module: &str,
     path: &Pattern,
+    _: &QueryMapVc,
 ) -> Result<ResolveResultVc> {
     let result = find_package(
         context,
@@ -819,7 +931,7 @@ async fn resolve_module_request(
     .await?;
 
     if result.packages.is_empty() {
-        return Ok(ResolveResult::Unresolveable(result.references.clone()).into());
+        return Ok(ResolveResult::unresolveable_with_references(result.references.clone()).into());
     }
 
     let mut results = vec![];
@@ -888,7 +1000,7 @@ async fn resolve_module_request(
             let mut new_pat = path.clone();
             new_pat.push_front(".".to_string().into());
             let relative = RequestVc::relative(Value::new(new_pat), true);
-            results.push(resolve(*package_path, relative, options));
+            results.push(resolve_internal(*package_path, relative, options));
         }
     }
 
@@ -914,9 +1026,18 @@ async fn resolve_import_map_result(
             if request.resolve().await? == original_request
                 && context.resolve().await? == original_context
             {
+                let issue: ResolvingIssueVc = ResolvingIssue {
+                    context: original_context,
+                    request_type: format!("import map alias to {}", request.to_string().await?),
+                    request: original_request,
+                    resolve_options: options,
+                    error_message: Some("cycle during resolving".to_string()),
+                }
+                .cell();
+                issue.as_issue().emit();
                 ResolveResult::unresolveable().cell()
             } else {
-                resolve(context, request, options)
+                resolve_internal(context, request, options)
             }
         }
         ImportMapResult::Alternatives(list) => {
@@ -962,10 +1083,12 @@ async fn resolve_alias_field_result(
     field_name: &str,
 ) -> Result<ResolveResultVc> {
     if result.as_bool() == Some(false) {
-        return Ok(ResolveResult::Special(SpecialType::Ignore, refs).cell());
+        return Ok(
+            ResolveResult::primary_with_references(PrimaryResolveResult::Ignore, refs).cell(),
+        );
     }
     if let Some(value) = result.as_str() {
-        return Ok(resolve(
+        return Ok(resolve_internal(
             package_path,
             RequestVc::parse(Value::new(Pattern::Constant(value.to_string()))),
             resolve_options,
@@ -981,7 +1104,7 @@ async fn resolve_alias_field_result(
     }
     .cell();
     issue.as_issue().emit();
-    Ok(ResolveResult::Unresolveable(refs).cell())
+    Ok(ResolveResult::unresolveable_with_references(refs).cell())
 }
 
 async fn resolved(
@@ -1000,7 +1123,7 @@ async fn resolved(
         match resolve_in {
             ResolveInPackage::AliasField(field) => {
                 if let FindContextFileResult::Found(package_json, refs) =
-                    &*find_context_file(fs_path.parent(), "package.json").await?
+                    &*find_context_file(fs_path.parent(), package_json()).await?
                 {
                     if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
                         if let Some(field_value) = package[field].as_object() {
@@ -1027,8 +1150,9 @@ async fn resolved(
             }
         }
     }
+
     if let Some(resolved_map) = resolved_map {
-        let result = resolved_map.lookup(*path).await?;
+        let result = resolved_map.lookup(*path, original_request).await?;
         if !matches!(&*result, ImportMapResult::NoEntry) {
             return resolve_import_map_result(
                 &result,
@@ -1040,7 +1164,8 @@ async fn resolved(
             .await;
         }
     }
-    Ok(ResolveResult::Single(
+
+    Ok(ResolveResult::asset_with_references(
         SourceAssetVc::new(*path).into(),
         symlinks
             .iter()
@@ -1082,8 +1207,8 @@ fn handle_exports_field(
     let mut resolved_results = Vec::new();
     for path in results {
         if let Some(path) = normalize_path(path) {
-            let request = RequestVc::parse(Value::new(format!("./{}", path).into()));
-            resolved_results.push(resolve(package_path, request, options));
+            let request = RequestVc::relative(Value::new(format!("./{}", path).into()), false);
+            resolved_results.push(resolve_internal(package_path, request, options));
         }
     }
     // other options do not apply anymore when an exports field exist
@@ -1110,7 +1235,7 @@ impl AffectingResolvingAssetReferenceVc {
 impl AssetReference for AffectingResolvingAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(SourceAssetVc::new(self.path).into(), Vec::new()).into()
+        ResolveResult::asset(SourceAssetVc::new(self.path).into()).into()
     }
 }
 
@@ -1127,7 +1252,7 @@ impl ValueToString for AffectingResolvingAssetReference {
 
 pub async fn handle_resolve_error(
     result: ResolveResultVc,
-    request_type: &str,
+    reference_type: Value<ReferenceType>,
     origin: ResolveOriginVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
@@ -1137,7 +1262,7 @@ pub async fn handle_resolve_error(
             if *unresolveable {
                 let issue: ResolvingIssueVc = ResolvingIssue {
                     context: origin.origin_path(),
-                    request_type: request_type.to_string(),
+                    request_type: format!("{} request", reference_type.into_value()),
                     request,
                     resolve_options,
                     error_message: None,
@@ -1150,7 +1275,7 @@ pub async fn handle_resolve_error(
         Err(err) => {
             let issue: ResolvingIssueVc = ResolvingIssue {
                 context: origin.origin_path(),
-                request_type: request_type.to_string(),
+                request_type: format!("{} request", reference_type.into_value()),
                 request,
                 resolve_options,
                 error_message: Some(err.to_string()),

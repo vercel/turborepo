@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -31,8 +32,7 @@ type PackageJSON struct {
 	Dir                    turbopath.AnchoredSystemPath `json:"-"`
 	InternalDeps           []string                     `json:"-"`
 	UnresolvedExternalDeps map[string]string            `json:"-"`
-	ExternalDeps           []string                     `json:"-"`
-	TransitiveDeps         []string                     `json:"-"`
+	TransitiveDeps         []lockfile.Package           `json:"-"`
 	LegacyTurboConfig      *TurboJSON                   `json:"turbo"`
 	Mu                     sync.Mutex                   `json:"-"`
 	ExternalDepsHash       string                       `json:"-"`

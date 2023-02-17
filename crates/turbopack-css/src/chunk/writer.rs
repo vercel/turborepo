@@ -1,100 +1,162 @@
-use std::{collections::VecDeque, fmt::Write};
+use std::{
+    collections::{HashSet, VecDeque},
+    io::Write,
+};
 
-use turbo_tasks::ValueToString;
+use anyhow::Result;
+use turbo_tasks::{primitives::StringVc, ValueToString};
+use turbopack_core::{chunk::ModuleId, code_builder::CodeBuilder};
 
-use crate::CssChunkItemContentVc;
+use super::{CssChunkItemVc, CssImport};
+use crate::chunk::CssChunkItem;
 
-pub async fn expand_imports<T: Write>(
-    writer: &mut WriterWithIndent<T>,
-    content_vc: CssChunkItemContentVc,
-) -> anyhow::Result<()> {
-    let content = &*content_vc.await?;
+pub async fn expand_imports(
+    code: &mut CodeBuilder,
+    chunk_item: CssChunkItemVc,
+) -> Result<Vec<StringVc>> {
+    let content = chunk_item.content().await?;
     let mut stack = vec![(
-        content_vc,
+        chunk_item,
         content.imports.iter().cloned().collect::<VecDeque<_>>(),
-        (0, "".to_string()),
+        "".to_string(),
     )];
+    let mut external_imports = vec![];
+    let mut imported_chunk_items: HashSet<(String, String, CssChunkItemVc)> = HashSet::default();
+    let mut composed_chunk_items: HashSet<CssChunkItemVc> = HashSet::default();
 
-    while let Some((content_vc, imports, (indent, close))) = stack.last_mut() {
-        if let Some((import, imported_chunk_item)) = imports.pop_front() {
-            let (open, inner_indent, close) = import.await?.attributes.await?.print_block()?;
+    while let Some((chunk_item, imports, close)) = stack.last_mut() {
+        match imports.pop_front() {
+            Some(CssImport::Internal(import, imported_chunk_item)) => {
+                let (open, close) = import.await?.attributes.await?.print_block()?;
 
-            let id = &*imported_chunk_item.to_string().await?;
+                if !imported_chunk_items.insert((
+                    open.clone(),
+                    close.clone(),
+                    imported_chunk_item.resolve().await?,
+                )) {
+                    continue;
+                }
 
-            writeln!(writer, "/* import({}) */", id)?;
-            writeln!(writer, "{}", open)?;
-            let imported_content_vc = imported_chunk_item.content();
-            let imported_content = &*imported_content_vc.await?;
-            writer.push_indent(inner_indent)?;
-            stack.push((
-                imported_content_vc,
-                imported_content.imports.iter().cloned().collect(),
-                (inner_indent, close),
-            ));
+                let id = &*imported_chunk_item.to_string().await?;
+                writeln!(code, "/* import({}) */", id)?;
+                writeln!(code, "{}", open)?;
+
+                let imported_content_vc = imported_chunk_item.content();
+                let imported_content = &*imported_content_vc.await?;
+                stack.push((
+                    imported_chunk_item,
+                    imported_content.imports.iter().cloned().collect(),
+                    close,
+                ));
+            }
+            Some(CssImport::Composes(composed_chunk_item)) => {
+                if !composed_chunk_items.insert(composed_chunk_item.resolve().await?) {
+                    continue;
+                }
+
+                let id = &*composed_chunk_item.to_string().await?;
+                writeln!(code, "/* composes({}) */", id)?;
+
+                let composed_content_vc = composed_chunk_item.content();
+                let composed_content = &*composed_content_vc.await?;
+                stack.push((
+                    composed_chunk_item,
+                    composed_content.imports.iter().cloned().collect(),
+                    "".to_string(),
+                ));
+            }
+            Some(CssImport::External(url_vc)) => {
+                external_imports.push(url_vc);
+            }
+            None => {
+                let id = module_id_to_css_ident(&*chunk_item.id().await?);
+
+                // CSS chunk items can be duplicated across chunks. This can cause precedence
+                // issues (WEB-456). We use CSS layers to make sure that the first occurrence of
+                // a CSS chunk item determines its precedence.
+                // TODO(alexkirsz) This currently breaks users using @layer. We can fix that by
+                // moving our @layer into the user layer.
+                writeln!(code, "@layer {id} {{")?;
+
+                let content = chunk_item.content().await?;
+                code.push_source(
+                    &content.inner_code,
+                    content.source_map.map(|sm| sm.as_generate_source_map()),
+                );
+
+                // Closing @layer.
+                writeln!(code, "\n}}")?;
+
+                writeln!(code, "\n{}", close)?;
+
+                stack.pop();
+            }
+        }
+    }
+
+    Ok(external_imports)
+}
+
+fn module_id_to_css_ident(id: &ModuleId) -> String {
+    match id {
+        ModuleId::Number(n) => format!("n{}", n),
+        ModuleId::String(s) => format!("s{}", escape_css_ident(s)),
+    }
+}
+
+/// Escapes a string to be a valid CSS identifier, according to the rules
+/// defined in https://developer.mozilla.org/en-US/docs/Web/CSS/ident
+fn escape_css_ident(s: &str) -> String {
+    let mut escaped = String::new();
+
+    let mut starts_as_a_number = true;
+    for char in s.chars() {
+        if starts_as_a_number {
+            if char.is_ascii_digit() {
+                escaped.push('_');
+                starts_as_a_number = false;
+            } else if char != '-' {
+                starts_as_a_number = false;
+            }
+        }
+
+        if char.is_ascii_alphanumeric() || char == '-' || char == '_' {
+            escaped.push(char);
         } else {
-            let content = &*(*content_vc).await?;
-            writeln!(writer, "{}", content.inner_code)?;
-            writer.pop_indent(*indent)?;
-            writeln!(writer, "{}", close)?;
-            stack.pop();
+            escaped.push('\\');
+            escaped.push(char);
         }
     }
 
-    Ok(())
+    escaped
 }
 
-pub struct WriterWithIndent<T: Write> {
-    writer: T,
-    indent_str: String,
-    needs_indent: bool,
-}
+#[cfg(test)]
+mod tests {
+    //! These cases are taken from https://developer.mozilla.org/en-US/docs/Web/CSS/ident#examples.
 
-impl<T: Write> WriterWithIndent<T> {
-    pub fn new(buffer: T) -> Self {
-        Self {
-            writer: buffer,
-            indent_str: "".to_string(),
-            needs_indent: true,
-        }
+    use super::*;
+
+    #[test]
+    fn test_escape_css_ident_noop() {
+        assert_eq!(escape_css_ident("nono79"), "nono79");
+        assert_eq!(escape_css_ident("ground-level"), "ground-level");
+        assert_eq!(escape_css_ident("-test"), "-test");
+        assert_eq!(escape_css_ident("--toto"), "--toto");
+        assert_eq!(escape_css_ident("_internal"), "_internal");
+        // TODO(alexkirsz) Support unicode characters?
+        // assert_eq!(escape_css_ident("\\22 toto"), "\\22 toto");
+        // TODO(alexkirsz) This CSS identifier is already valid, but we escape
+        // it anyway.
+        assert_eq!(escape_css_ident("bili\\.bob"), "bili\\\\\\.bob");
     }
 
-    pub fn push_indent(&mut self, indent: usize) -> std::fmt::Result {
-        self.indent_str += &" ".repeat(indent);
-
-        Ok(())
-    }
-
-    pub fn pop_indent(&mut self, indent: usize) -> std::fmt::Result {
-        self.indent_str = " ".repeat(self.indent_str.len().saturating_sub(indent));
-
-        Ok(())
-    }
-}
-
-impl<T: Write> Write for WriterWithIndent<T> {
-    #[inline]
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        for c in s.chars() {
-            self.write_char(c)?;
-        }
-
-        Ok(())
-    }
-
-    #[inline]
-    fn write_char(&mut self, c: char) -> std::fmt::Result {
-        if c == '\n' {
-            self.writer.write_char('\n')?;
-            self.needs_indent = true;
-
-            return Ok(());
-        }
-
-        if self.needs_indent {
-            self.writer.write_str(&self.indent_str)?;
-            self.needs_indent = false;
-        }
-
-        self.writer.write_char(c)
+    #[test]
+    fn test_escape_css_ident() {
+        assert_eq!(escape_css_ident("34rem"), "_34rem");
+        assert_eq!(escape_css_ident("-12rad"), "-_12rad");
+        assert_eq!(escape_css_ident("bili.bob"), "bili\\.bob");
+        assert_eq!(escape_css_ident("'bilibob'"), "\\'bilibob\\'");
+        assert_eq!(escape_css_ident("\"bilibob\""), "\\\"bilibob\\\"");
     }
 }

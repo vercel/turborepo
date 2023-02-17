@@ -4,8 +4,23 @@ Thanks for your interest in contributing to Turbo!
 
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
-- [Contributing to Turborepo](#contributing-to-turborepo)
-- [Contributing to Turbopack](#contributing-to-turbopack)
+- [Contributing to Turbo](#contributing-to-turbo)
+  - [Contributing to Turborepo](#contributing-to-turborepo)
+    - [Building Turborepo](#building-turborepo)
+    - [Running Turborepo Tests](#running-turborepo-tests)
+      - [Go Tests](#go-tests)
+      - [Rust Tests](#rust-tests)
+  - [Debugging Turborepo](#debugging-turborepo)
+  - [Benchmarking Turborepo](#benchmarking-turborepo)
+  - [Updating `turbo`](#updating-turbo)
+  - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Adding a new crate](#adding-a-new-crate)
+  - [Contributing to Turbopack](#contributing-to-turbopack)
+    - [Turbopack Architecture](#turbopack-architecture)
+    - [Testing Turbopack](#testing-turbopack)
+    - [Benchmarking Turbopack](#benchmarking-turbopack)
+    - [Profiling Turbopack](#profiling-turbopack)
+  - [Troubleshooting](#troubleshooting)
 
 ## Contributing to Turborepo
 
@@ -13,22 +28,48 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1.  On OSX: `brew install sponge jq protobuf protoc-gen-go protoc-gen-go-grpc golang`
-1.  Run `pnpm install` at root
+1. Install [turborepo crate](./crates/turborepo/README.md) build requirements
+
+1. Run `pnpm install` at root
 
 Building
 
 - Building `turbo` CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
-### Testing Turborepo
+### TLS Implementation
 
-From the `cli/` directory, you can
+Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS
+implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
+is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
+and `rustls-tls` features. By default, the `native-tls` feature is selected---this is done so that `cargo build` works
+out of the box. If you wish to select `rustls-tls`, you may do so by passing `--no-default-features --features rustls-tls`
+to the build command. This allows for us to build for more platforms, as `native-tls` is not supported everywhere.
 
-- run smoke tests with `make e2e`
-- run unit tests with `make test-go`
+### Running Turborepo Tests
 
-To run a single test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
+Dependencies
+
+1. Install `jq`, `sponge`, and `zstd`
+
+On macOS: `brew install sponge jq zstd`
+
+#### Go Tests
+
+From the root directory, you can
+
+- run unit tests with `pnpm run --filter=cli test`
+- run integration tests with `pnpm run --filter=cli integration-tests`
+- run e2e tests with `pnpm run --filter=cli e2e`
+
+To run a single Go test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
+
+#### Rust Tests
+
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib --features rustls-tls`.
+You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
+
+You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
 
 ## Debugging Turborepo
 
@@ -60,22 +101,104 @@ TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 
 If you're using a different package manager replace npm accordingly.
 
+## Manually testing `turbo`
+
+Before releasing, it's recommended to test the `turbo` binary manually.
+Here's a checklist of testing strategies to cover:
+
+- Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test `prune` (Note `turbo` here is the unreleased turbo binary)
+  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
+  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer build`
+- Test `--dry-run` and `--graph`.
+- Test with and without daemon.
+
+There are also multiple installation scenarios worth testing:
+
+- Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+
+Here are a few repositories that you can test on:
+
+- [next.js](https://github.com/vercel/next.js)
+- [tldraw](https://github.com/tldraw/tldraw)
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [vercel](https://github.com/vercel/vercel)
+
+These lists are by no means exhaustive. Feel free to add to them with other strategies.
+
 ## Publishing `turbo` to the npm registry
 
-All builds are handled by manually triggering the appropriate [`release` GitHub workflow](./.github/workflows/release.yml).
+See [the publishing guide](./release.md#release-turborepo).
 
-To manually run a release:
+## Adding A New Crate
 
-1. `brew install goreleaser`
-2. Add `GORELEASER_KEY` env var with the GoReleaser Pro key (ask @turbo-oss to get access to the key)
-3. Update `version.txt` (do not commit this change to git manually)
-4. `cd cli && make publish`
+When adding a new crate to the repo, it is essential that it is included/excluded from the
+relevant workflows. This ensures that changes to the crate are tested by the correct workflows,
+but that they do not trigger unnecessary workflows as well.
+
+First, determine whether the crate is for Turbopack or Turborepo. If it is for Turbopack, then the crate
+should be added to the `default-members` key in the root `Cargo.toml`. If the crate is for Turborepo, the
+crate must be added to the `PATTERNS` list in "Turborepo related changes" section of the `test.yml`
+workflow file. It must also be excluded from the "Turbopack related changes" section of the
+`test.yml` workflow file.
+
+For instance, if we were adding a `turborepo-foo` crate, we would add the following patterns:
+
+```diff
+      - name: Turbopack related changes
+        id: turbopack
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            xtask/**
+            .cargo/**
+            rust-toolchain
+            !crates/turborepo/**
+            !crates/turborepo-lib/**
+            !crates/turborepo-ffi/**
+            !crates/turbo-updater/**
++           !crates/turborepo-foo/**
+            !**.md
+            !**.mdx
+
+      - name: Turborepo related changes
+        id: turborepo
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/turborepo/**
+            crates/turborepo-lib/**
+            crates/turborepo-ffi/**
+            crates/turbo-updater/**
++           crates/turborepo-foo/**
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+```
+
+The crate must also be explicitly excluded from build commands
+when building Turbopack. To do so, add a `--exclude turbopack-foo`
+flag to the build command. Search through `test.yml` and add this
+flag to all cargo commands that already exclude `turborepo-lib`.
 
 ## Contributing to Turbopack
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command.
+crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+
+### Turbopack Architecture
+
+A high-level introduction to Turbopack's architecture, workspace crates, and Turbo engine (the turbo-tasks crates) is available at [crates/turbopack/architecture.md](crates/turbopack/architecture.md).
 
 ### Testing Turbopack
 
@@ -89,7 +212,7 @@ Run via:
 cargo nextest run
 ```
 
-For the test cases you need to run `yarn` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
+For the test cases you need to run `pnpm install` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
 
 You can also create a little demo app and run
 
@@ -100,6 +223,10 @@ cargo run -p node-file-trace -- print demo/index.js
 ### Benchmarking Turbopack
 
 See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
+
+### Profiling Turbopack
+
+See [the profiling docs for Turbopack](https://turbo.build/pack/docs/advanced/profiling) for details.
 
 ## Troubleshooting
 

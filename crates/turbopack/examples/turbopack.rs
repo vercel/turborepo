@@ -11,8 +11,8 @@ use std::{
 
 use anyhow::Result;
 use tokio::{spawn, time::sleep};
-use turbo_tasks::{util::FormatDuration, NothingVc, TurboTasks, Value};
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
+use turbo_tasks::{util::FormatDuration, NothingVc, TurboTasks, TurboTasksBackendApi, Value};
+use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz::graph::{visualize_stats_tree, wrap_html},
@@ -23,6 +23,7 @@ use turbopack::{
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
 };
 use turbopack_core::{
+    compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     source_asset::SourceAssetVc,
@@ -32,7 +33,7 @@ use turbopack_core::{
 async fn main() -> Result<()> {
     register();
 
-    let tt = TurboTasks::new(MemoryBackend::new());
+    let tt = TurboTasks::new(MemoryBackend::default());
     let start = Instant::now();
 
     let task = tt.spawn_root_task(|| {
@@ -50,12 +51,12 @@ async fn main() -> Result<()> {
             let source = SourceAssetVc::new(entry);
             let context = turbopack::ModuleAssetContextVc::new(
                 TransitionsByNameVc::cell(HashMap::new()),
-                EnvironmentVc::new(
+                CompileTimeInfoVc::new(EnvironmentVc::new(
                     Value::new(ExecutionEnvironment::NodeJsLambda(
                         NodeJsEnvironment::default().into(),
                     )),
                     Value::new(EnvironmentIntention::ServerRendering),
-                ),
+                )),
                 Default::default(),
                 ResolveOptionsContext {
                     enable_typescript: true,
@@ -66,7 +67,10 @@ async fn main() -> Result<()> {
                 }
                 .cell(),
             );
-            let module = context.process(source.into());
+            let module = context.process(
+                source.into(),
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            );
             let rebased = RebasedAssetVc::new(module, input, output);
             emit_with_completion(rebased.into(), output).await?;
 
@@ -111,7 +115,11 @@ async fn main() -> Result<()> {
         // write HTML
         fs::write(
             "graph.html",
-            wrap_html(&visualize_stats_tree(tree, ReferenceType::Child)),
+            wrap_html(&visualize_stats_tree(
+                tree,
+                ReferenceType::Child,
+                tt.stats_type(),
+            )),
         )
         .unwrap();
         println!("graph.html written");

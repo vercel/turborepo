@@ -91,7 +91,7 @@ export default async function openGraphImage(
     return new Response(undefined, {
       status: 302,
       headers: {
-        "Location": "https://turbo.build/og-image.png",
+        Location: "https://turbo.build/og-image.png",
       },
     });
   }
@@ -126,7 +126,7 @@ export function OGImage({
       {/* eslint-disable-next-line  @next/next/no-img-element, jsx-a11y/alt-text */}
       <div style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}>
         {type === "pack" ? (
-          <PackLogo height={96 * 1.1} width={594 * 1.1} />
+          <PackLogo height={103 * 1.1} width={697 * 1.1} />
         ) : type === "repo" ? (
           <RepoLogo height={83 * 1.1} width={616 * 1.1} />
         ) : (

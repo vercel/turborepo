@@ -3,7 +3,7 @@ use std::{
     env::{self, current_dir},
     fmt::{Display, Write},
     fs::read_dir,
-    path::PathBuf,
+    path::{PathBuf, MAIN_SEPARATOR as PATH_SEP},
 };
 
 use anyhow::{Context, Result};
@@ -149,7 +149,7 @@ pub fn generate_register() {
         }
 
         let code = format!("{{\n{register_code}{values_code}}}\n");
-        std::fs::write(&out_file, &code).unwrap();
+        std::fs::write(out_file, code).unwrap();
 
         // println!("cargo:warning={}", out_file.display());
         // for line in code.lines() {
@@ -160,8 +160,10 @@ pub fn generate_register() {
 
 pub fn rerun_if_glob(globs: &str, root: &str) {
     let cwd = env::current_dir().unwrap();
-    let globs = cwd.join(globs);
-    let mut seen = HashSet::from([cwd.join(root)]);
+    let globs = cwd.join(globs.replace('/', PATH_SEP.to_string().as_str()));
+    let root = cwd.join(root.replace('/', PATH_SEP.to_string().as_str()));
+    println!("cargo:rerun-if-changed={}", root.display());
+    let mut seen = HashSet::from([root]);
     for entry in glob(globs.to_str().unwrap()).unwrap() {
         let path = entry.unwrap();
         for ancestor in path.ancestors() {
@@ -373,7 +375,8 @@ impl<'a> RegisterContext<'a> {
         let entry = self.values.get_mut(&key);
         if entry.is_none() {
             panic!(
-                "failed to add value trait {} to {} in {}",
+                "failed to add value trait {} to {} in {}. Did you try to implement a trait on a \
+                 Vc instead of its value?",
                 trait_ident,
                 ident,
                 self.file_path.display()
@@ -396,23 +399,27 @@ impl<'a> RegisterContext<'a> {
 
     /// Declares the default derive of the `ValueDebug` trait.
     fn register_debug_impl(&mut self, ident: &Ident, dbg_ty: DebugType) -> std::fmt::Result {
-        let fn_ident = Ident::new("dbg", ident.span());
+        for fn_name in ["dbg", "dbg_depth"] {
+            let fn_ident = Ident::new(fn_name, ident.span());
 
-        let (impl_fn_ident, global_name) = match dbg_ty {
-            DebugType::Value => {
-                let trait_ident = Ident::new("ValueDebug", ident.span());
-                (
-                    get_trait_impl_function_ident(ident, &trait_ident, &fn_ident),
-                    self.get_global_name(&[ident, &trait_ident, &fn_ident]),
-                )
-            }
-            DebugType::Trait => (
-                get_impl_function_ident(ident, &fn_ident),
-                self.get_global_name(&[ident, &fn_ident]),
-            ),
-        };
+            let (impl_fn_ident, global_name) = match dbg_ty {
+                DebugType::Value => {
+                    let trait_ident = Ident::new("ValueDebug", ident.span());
+                    (
+                        get_trait_impl_function_ident(ident, &trait_ident, &fn_ident),
+                        self.get_global_name(&[ident, &trait_ident, &fn_ident]),
+                    )
+                }
+                DebugType::Trait => (
+                    get_impl_function_ident(ident, &fn_ident),
+                    self.get_global_name(&[ident, &fn_ident]),
+                ),
+            };
 
-        self.register(impl_fn_ident, global_name)
+            self.register(impl_fn_ident, global_name)?;
+        }
+
+        Ok(())
     }
 }
 

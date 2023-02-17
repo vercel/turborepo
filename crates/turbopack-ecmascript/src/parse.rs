@@ -1,6 +1,6 @@
 use std::{future::Future, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use swc_core::{
     base::SwcComments,
     common::{
@@ -19,11 +19,11 @@ use swc_core::{
         visit::VisitMutWith,
     },
 };
-use turbo_tasks::{primitives::U64Vc, Value};
+use turbo_tasks::{primitives::U64Vc, Value, ValueToString};
 use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
 use turbo_tasks_hash::{DeterministicHasher, Xxh3Hash64Hasher};
 use turbopack_core::{
-    asset::{AssetContent, AssetVc},
+    asset::{Asset, AssetContent, AssetVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -98,8 +98,7 @@ impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> SourceMapVc {
         let map = self.source_map.build_source_map_with_config(
-            // SWC expects a mutable vec, but it never modifies. Seems like an oversight.
-            &mut self.mappings.clone(),
+            &self.mappings,
             None,
             InlineSourcesContentConfig {},
         );
@@ -142,7 +141,7 @@ pub async fn parse(
             FileContent::Content(file) => match file.content().to_str() {
                 Ok(string) => {
                     let transforms = &*transforms.await?;
-                    parse_content(
+                    match parse_content(
                         string.into_owned(),
                         fs_path,
                         file_path_hash,
@@ -150,7 +149,16 @@ pub async fn parse(
                         ty,
                         transforms,
                     )
-                    .await?
+                    .await
+                    {
+                        Ok(result) => result,
+                        Err(e) => {
+                            return Err(e).context(anyhow!(
+                                "Transforming and/or parsing of {} failed",
+                                source.path().to_string().await?
+                            ));
+                        }
+                    }
                 }
                 // FIXME: report error
                 Err(_) => ParseResult::Unparseable.cell(),
@@ -203,16 +211,18 @@ async fn parse_content(
                             decorators_before_export: true,
                             export_default_from: true,
                             import_assertions: true,
-                            private_in_object: true,
                             allow_super_outside_method: true,
                             allow_return_outside_function: true,
                         }),
-                        EcmascriptModuleAssetType::Typescript => Syntax::Typescript(TsConfig {
-                            decorators: true,
-                            dts: false,
-                            no_early_errors: true,
-                            tsx: true,
-                        }),
+                        EcmascriptModuleAssetType::Typescript
+                        | EcmascriptModuleAssetType::TypescriptWithTypes => {
+                            Syntax::Typescript(TsConfig {
+                                decorators: true,
+                                dts: false,
+                                no_early_errors: true,
+                                tsx: true,
+                            })
+                        }
                         EcmascriptModuleAssetType::TypescriptDeclaration => {
                             Syntax::Typescript(TsConfig {
                                 decorators: true,
@@ -254,6 +264,7 @@ async fn parse_content(
             let is_typescript = matches!(
                 ty,
                 EcmascriptModuleAssetType::Typescript
+                    | EcmascriptModuleAssetType::TypescriptWithTypes
                     | EcmascriptModuleAssetType::TypescriptDeclaration
             );
             parsed_program.visit_mut_with(&mut resolver(
@@ -267,6 +278,7 @@ async fn parse_content(
                 source_map: &source_map,
                 top_level_mark,
                 unresolved_mark,
+                file_path_str: &fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
             };
