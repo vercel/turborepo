@@ -448,17 +448,80 @@
 <span id="448">448</span>
 <span id="449">449</span>
 <span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-<span class="kw">use </span>turbopack_core::resolve::{
-    options::{
-        ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
-        ResolvedMapVc,
+<span class="kw">use </span>turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
+<span class="kw">use </span>turbopack_core::{
+    asset::Asset,
+    resolve::{
+        options::{
+            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc,
+            ResolveOptionsVc, ResolvedMap, ResolvedMapVc,
+        },
+        parse::RequestVc,
+        pattern::Pattern,
+        resolve, AliasPattern, ExportsValue, ResolveAliasMapVc,
     },
-    AliasPattern, ExportsValue, ResolveAliasMapVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -821,7 +884,58 @@
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
+    import_map.insert_wildcard_alias(
+        <span class="string">&quot;@swc/helpers/&quot;</span>,
+        ImportMapping::PrimaryAlternative(
+            <span class="string">&quot;./*&quot;</span>.to_string(),
+            <span class="prelude-val">Some</span>(get_swc_helpers_package(project_path)),
+        )
+        .cell(),
+    );
+
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>package_lookup_resolve_options(project_root: FileSystemPathVc) -&gt; ResolveOptionsVc {
+    resolve_options(
+        project_root,
+        ResolveOptionsContext {
+            enable_node_modules: <span class="bool-val">true</span>,
+            enable_node_native_modules: <span class="bool-val">true</span>,
+            custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
+            ..Default::default()
+        }
+        .cell(),
+    )
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>get_next_package(project_root: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    <span class="kw">let </span>result = resolve(
+        project_root,
+        RequestVc::parse(Value::new(Pattern::Constant(
+            <span class="string">&quot;next/package.json&quot;</span>.to_string(),
+        ))),
+        package_lookup_resolve_options(project_root),
+    );
+    <span class="kw">let </span>assets = result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>asset = assets.first().context(<span class="string">&quot;Next.js package not found&quot;</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(asset.path().parent())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>get_swc_helpers_package(project_root: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    <span class="kw">let </span>result = resolve(
+        get_next_package(project_root),
+        RequestVc::parse(Value::new(Pattern::Constant(
+            <span class="string">&quot;@swc/helpers/package.json&quot;</span>.to_string(),
+        ))),
+        package_lookup_resolve_options(project_root),
+    );
+    <span class="kw">let </span>assets = result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>asset = assets.first().context(<span class="string">&quot;Next.js package not found&quot;</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(asset.path().parent())
 }
 
 <span class="kw">pub async fn </span>insert_alias_option&lt;<span class="kw">const </span>N: usize&gt;(

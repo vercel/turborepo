@@ -19,73 +19,11 @@
 <span id="19">19</span>
 <span id="20">20</span>
 <span id="21">21</span>
-<span id="22">22</span>
-<span id="23">23</span>
-<span id="24">24</span>
-<span id="25">25</span>
-<span id="26">26</span>
-<span id="27">27</span>
-<span id="28">28</span>
-<span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
-<span id="47">47</span>
-<span id="48">48</span>
-<span id="49">49</span>
-<span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::Value;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
-<span class="kw">use </span>turbopack_core::{
-    asset::Asset,
-    resolve::{
-        options::{ImportMapping, ImportMappingVc},
-        parse::RequestVc,
-        pattern::Pattern,
-        resolve,
-    },
-};
+<span class="kw">use </span>turbopack_core::resolve::options::{ImportMapping, ImportMappingVc};
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>get_next_package(project_root: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-    <span class="kw">let </span>result = resolve(
-        project_root,
-        RequestVc::parse(Value::new(Pattern::Constant(
-            <span class="string">&quot;next/package.json&quot;</span>.to_string(),
-        ))),
-        resolve_options(
-            project_root,
-            ResolveOptionsContext {
-                enable_node_modules: <span class="bool-val">true</span>,
-                enable_node_native_modules: <span class="bool-val">true</span>,
-                custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
-                ..Default::default()
-            }
-            .cell(),
-        ),
-    );
-    <span class="kw">let </span>assets = result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>asset = assets.first().context(<span class="string">&quot;Next.js package not found&quot;</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(asset.path().parent())
-}
+<span class="kw">use </span><span class="kw">crate</span>::next_import_map::get_next_package;
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>get_postcss_package_mapping(
