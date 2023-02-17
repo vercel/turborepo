@@ -345,6 +345,7 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
+
 		if bookkeepingTaskDef.hasField("Outputs") {
 			mergedTaskDefinition.Outputs = taskDef.Outputs
 		}
@@ -357,11 +358,11 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
 
-		if bookkeepingTaskDef.hasField("TopologicalDependencies") {
+		if bookkeepingTaskDef.hasField("DependsOn") {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
 
-		if bookkeepingTaskDef.hasField("TaskDependencies") {
+		if bookkeepingTaskDef.hasField("DependsOn") {
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 
@@ -432,17 +433,21 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	btd.TaskDefinition.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	btd.TaskDefinition.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
+	// If there was a dependsOn field, add the bookkeeping
+	// we don't care what's in the field, just that it was there
+	// We'll use this marker to overwrite while merging TaskDefinitions.
+	if task.DependsOn != nil {
+		btd.definedFields.Add("DependsOn")
+	}
+
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			// Note: This will get assigned multiple times in the loop, but we only care that it's true
-			btd.definedFields.Add("TopologicalDependencies")
 			btd.TaskDefinition.TopologicalDependencies = append(btd.TaskDefinition.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 		} else {
-			// Note: This will get assigned multiple times in the loop, but we only care that it's true
-			btd.definedFields.Add("TaskDependencies")
 			btd.TaskDefinition.TaskDependencies = append(btd.TaskDefinition.TaskDependencies, dependency)
 		}
 	}

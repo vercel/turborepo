@@ -14,7 +14,7 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-1 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-1: cache miss, executing e74036fd7badaaf6
+  cached:cached-task-1: cache miss, executing 26af2215a5ceec12
   cached:cached-task-1: 
   cached:cached-task-1: > cached-task-1
   cached:cached-task-1: > echo 'cached-task-1' > out/foo.min.txt
@@ -39,7 +39,7 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-2: cache bypass, force executing a98a2c287f1d2763
+  cached:cached-task-2: cache bypass, force executing 90e566e56bf1dc12
   cached:cached-task-2: 
   cached:cached-task-2: > cached-task-2
   cached:cached-task-2: > echo 'cached-task-2' > out/foo.min.txt
@@ -61,7 +61,7 @@ no `cache` config in root, cache:false in workspace
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-3 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cached:cached-task-3: cache bypass, force executing 8a426151da6db286
+  cached:cached-task-3: cache bypass, force executing a54ad1f951b3f194
   cached:cached-task-3: 
   cached:cached-task-3: > cached-task-3
   cached:cached-task-3: > echo 'cached-task-3' > out/foo.min.txt
@@ -85,7 +85,7 @@ we already have a workspace that doesn't have a config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:cached-task-4: cache bypass, force executing ecbdd1ee8d9f34a5
+  missing-workspace-config:cached-task-4: cache bypass, force executing b200610f021ed0b8
   missing-workspace-config:cached-task-4: 
   missing-workspace-config:cached-task-4: > cached-task-4
   missing-workspace-config:cached-task-4: > echo 'cached-task-4' > out/foo.min.txt
