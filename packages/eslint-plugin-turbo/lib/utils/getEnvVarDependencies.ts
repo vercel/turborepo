@@ -1,9 +1,4 @@
-import {
-  getTurboRoot,
-  getTurboConfigs,
-  readTurboConfigPaths,
-  TurboConfigs,
-} from "turbo-utils";
+import { getTurboConfigs } from "turbo-utils";
 
 function findDependsOnEnvVars({
   dependencies,
@@ -24,20 +19,11 @@ function findDependsOnEnvVars({
 }
 
 function getEnvVarDependencies({
-  turboConfigPaths,
   cwd,
 }: {
-  turboConfigPaths?: Array<string>;
   cwd: string | undefined;
 }): Record<string, Set<string>> | null {
-  let turboConfigs: TurboConfigs = [];
-  if (turboConfigPaths) {
-    turboConfigs = readTurboConfigPaths({
-      configPaths: turboConfigPaths,
-    });
-  } else {
-    turboConfigs = getTurboConfigs(cwd);
-  }
+  const turboConfigs = getTurboConfigs(cwd);
 
   if (!turboConfigs.length) {
     return null;

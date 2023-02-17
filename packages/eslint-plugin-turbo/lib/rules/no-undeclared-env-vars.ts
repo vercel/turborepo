@@ -18,12 +18,10 @@ const meta: Rule.RuleMetaData = {
       default: {},
       additionalProperties: false,
       properties: {
-        turboConfigPaths: {
+        // override cwd, primarily exposed for easier testing
+        cwd: {
           require: false,
-          type: "array",
-          items: {
-            type: "string",
-          },
+          type: "string",
         },
         allowList: {
           default: [],
@@ -42,7 +40,14 @@ const meta: Rule.RuleMetaData = {
  * Extracted from eslint
  * SPDX-License-Identifier: MIT
  */
-function normalizeCwd(cwd: string | undefined): string | undefined {
+function normalizeCwd(
+  cwd: string | undefined,
+  options: Array<any>
+): string | undefined {
+  if (options?.[0]?.cwd) {
+    return options[0].cwd;
+  }
+
   if (cwd) {
     return cwd;
   }
@@ -66,12 +71,13 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     }
   });
 
-  const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
+  const cwd = normalizeCwd(
+    context.getCwd ? context.getCwd() : undefined,
+    options
+  );
   const filePath = getPhysicalFilename();
-  const turboConfigPaths = options?.[0]?.turboConfigPaths;
   const allTurboVars =
     getEnvVarDependencies({
-      turboConfigPaths,
       cwd,
     }) || {};
 

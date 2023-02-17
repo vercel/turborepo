@@ -7,7 +7,11 @@ const envVars = getEnvVarDependencies({
 });
 const settings = {
   turbo: {
-    envVars: envVars ? [...Object.values(envVars).flat()].sort() : [],
+    envVars: envVars
+      ? Object.values(envVars)
+          .flatMap((s) => Array.from(s))
+          .sort()
+      : [],
   },
 };
 

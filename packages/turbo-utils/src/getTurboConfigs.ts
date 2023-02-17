@@ -36,34 +36,10 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-export function readTurboConfigPaths({
-  configPaths,
-}: {
-  configPaths: Array<string>;
-}) {
-  const configs: TurboConfigs = [];
-  configPaths.forEach((configPath) => {
-    try {
-      const raw = fs.readFileSync(configPath, "utf8");
-      const turboJsonContent: Schema = JSON5.parse(raw);
-
-      configs.push({
-        config: turboJsonContent,
-        turboConfigPath: configPath,
-        workspacePath: path.dirname(configPath),
-        isRootConfig: !("extends" in turboJsonContent),
-      });
-    } catch (e) {
-      // if we can't parse the config, just ignore it
-      console.error(e);
-    }
-  });
-
-  return configs;
-}
-
 function getTurboConfigs(cwd?: string): TurboConfigs {
   const turboRoot = getTurboRoot(cwd);
+  const configs: TurboConfigs = [];
+
   // parse workspaces
   if (turboRoot) {
     const workspaceGlobs = getWorkspaceGlobs(turboRoot);
@@ -80,10 +56,37 @@ function getTurboConfigs(cwd?: string): TurboConfigs {
       })
       .map((configPath) => path.join(turboRoot, configPath));
 
-    return readTurboConfigPaths({ configPaths });
+    configPaths.forEach((configPath) => {
+      try {
+        const raw = fs.readFileSync(configPath, "utf8");
+        const turboJsonContent: Schema = JSON5.parse(raw);
+        // basic config validation
+        let isRootConfig = path.dirname(configPath) === turboRoot;
+        if (isRootConfig) {
+          // invalid - root config with extends
+          if ("extends" in turboJsonContent) {
+            return;
+          }
+        } else {
+          // invalid - workspace config with no extends
+          if (!("extends" in turboJsonContent)) {
+            return;
+          }
+        }
+        configs.push({
+          config: turboJsonContent,
+          turboConfigPath: configPath,
+          workspacePath: path.dirname(configPath),
+          isRootConfig: !("extends" in turboJsonContent),
+        });
+      } catch (e) {
+        // if we can't parse the config, just ignore it
+        console.error(e);
+      }
+    });
   }
 
-  return [];
+  return configs;
 }
 
 export default getTurboConfigs;
