@@ -427,23 +427,14 @@ impl<B: Backend> TurboTasks<B> {
                     }
 
                     // Setup thread locals
-                    if let Some((result, duration, instant)) = CELL_COUNTERS
-                        .scope(Default::default(), async {
-                            if let Some(execution) =
-                                this.backend.try_start_task_execution(task_id, &*this)
-                            {
-                                Some(
-                                    TimedFuture::new(
-                                        AssertUnwindSafe(execution.future).catch_unwind(),
-                                    )
-                                    .await,
-                                )
-                            } else {
-                                None
-                            }
-                        })
-                        .await
-                    {
+                    let execution_future = CELL_COUNTERS.scope(Default::default(), async {
+                        let execution = this.backend.try_start_task_execution(task_id, &*this)?;
+                        Some(
+                            TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
+                                .await,
+                        )
+                    });
+                    if let Some((result, duration, instant)) = execution_future.await {
                         if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
                             println!(
                                 "{} took {}",
