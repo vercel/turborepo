@@ -527,6 +527,15 @@ export const users: Array<TurboUser> = [
     },
   },
   {
+    caption: "Comparastore",
+    image: "/images/logos/comparastore.svg",
+    infoLink: "https://www.comparastore.com",
+    pinned: true,
+    style: {
+      width: 175,
+    },
+  },
+  {
     caption: "Block Protocol",
     image: "/images/logos/blockprotocol.svg",
     infoLink: "https://blockprotocol.org/",
