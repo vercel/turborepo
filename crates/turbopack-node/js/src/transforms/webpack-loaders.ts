@@ -18,13 +18,11 @@ type LoaderConfig =
       options: { [k: string]: unknown };
     };
 
+// @ts-ignore
 let runLoaders: typeof import("loader-runner");
 try {
-  ({ runLoaders } = __turbopack_external_require__(
-    "next/dist/compiled/loader-runner"
-  ));
+  ({ runLoaders } = require("@vercel/turbopack/loader-runner"));
 } catch {
-  // TODO: Remove when all supported versions of Next.js ship with compiled loader-runner
   ({ runLoaders } = __turbopack_external_require__("loader-runner"));
 }
 
