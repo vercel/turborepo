@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
+use tokio::time::sleep;
 use turbo_tasks::{emit, primitives::StringVc, CollectiblesSource, ValueToString, ValueToStringVc};
 use turbo_tasks_testing::{register, run};
 register!();
@@ -134,6 +135,7 @@ async fn my_transitive_emitting_function_with_child_scope(
 
 #[turbo_tasks::function]
 async fn my_emitting_function(_key: &str) -> Result<()> {
+    sleep(Duration::from_millis(100)).await;
     emit(ThingVc::new(123).as_value_to_string());
     emit(ThingVc::new(42).as_value_to_string());
     Ok(())
