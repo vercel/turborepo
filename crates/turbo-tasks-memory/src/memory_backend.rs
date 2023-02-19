@@ -50,8 +50,6 @@ pub struct MemoryBackend {
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
     task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
-    read_collectibles_task_cache:
-        DashMap<(TaskScopeId, TraitTypeId), TaskId, BuildHasherDefault<FxHasher>>,
     memory_limit: usize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
@@ -80,7 +78,6 @@ impl MemoryBackend {
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
-            read_collectibles_task_cache: DashMap::default(),
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
@@ -126,14 +123,6 @@ impl MemoryBackend {
         for id in self.task_cache.clone().into_read_only().values() {
             func(*id);
         }
-        for id in self
-            .read_collectibles_task_cache
-            .clone()
-            .into_read_only()
-            .values()
-        {
-            func(*id);
-        }
     }
 
     #[inline(always)]
@@ -151,6 +140,15 @@ impl MemoryBackend {
         unsafe {
             self.memory_task_scopes
                 .insert(*id, TaskScope::new(id, tasks));
+        }
+        id
+    }
+
+    pub fn create_new_no_collectibles_scope(&self, tasks: usize) -> TaskScopeId {
+        let id = self.scope_id_factory.get();
+        unsafe {
+            self.memory_task_scopes
+                .insert(*id, TaskScope::new_no_collectibles(id, tasks));
         }
         id
     }
@@ -277,43 +275,65 @@ impl MemoryBackend {
         }
     }
 
-    pub(crate) fn get_or_create_read_collectibles_task(
+    pub(crate) fn get_or_create_read_task_collectibles_task(
+        &self,
+        task_id: TaskId,
+        trait_type: TraitTypeId,
+        parent_task: TaskId,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> TaskId {
+        self.with_task(task_id, |task| {
+            let id = task.get_read_collectibles_task(trait_type, || {
+                let scope = self.create_new_no_collectibles_scope(1);
+
+                let id = turbo_tasks.get_fresh_task_id().into();
+                let task = Task::new_read_task_collectibles(
+                    // Safety: That task will hold the value, but we are still in
+                    // control of the task
+                    id,
+                    scope,
+                    task_id,
+                    trait_type,
+                    turbo_tasks.stats_type(),
+                );
+                // Safety: We have a fresh task id that nobody knows about yet
+                unsafe { self.memory_tasks.insert(*id, task) };
+                self.with_scope(scope, |scope| {
+                    scope.state.lock().add_dirty_task(id);
+                });
+                id
+            });
+            self.connect_task_child(parent_task, id, turbo_tasks);
+            id
+        })
+    }
+
+    pub(crate) fn get_or_create_read_scope_collectibles_task(
         &self,
         scope_id: TaskScopeId,
         trait_type: TraitTypeId,
         parent_task: TaskId,
-        root_scoped: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
-        if let Some(task) = self.lookup_and_connect_task(
-            parent_task,
-            &self.read_collectibles_task_cache,
-            &(scope_id, trait_type),
-            turbo_tasks,
-        ) {
-            // fast pass without creating a new task
-            task
-        } else {
-            // slow pass with key lock
-            let id = turbo_tasks.get_fresh_task_id();
-            let task = Task::new_read_collectibles(
-                // Safety: That task will hold the value, but we are still in
-                // control of the task
-                *unsafe { id.get_unchecked() },
-                scope_id,
-                trait_type,
-                turbo_tasks.stats_type(),
-            );
-            self.insert_and_connect_fresh_task(
-                parent_task,
-                &self.read_collectibles_task_cache,
-                (scope_id, trait_type),
-                id,
-                task,
-                root_scoped,
-                turbo_tasks,
-            )
-        }
+        self.with_scope(scope_id, |scope| {
+            let mut state = scope.state.lock();
+            let task_id = state.get_read_collectibles_task(trait_type, || {
+                let id = turbo_tasks.get_fresh_task_id().into();
+                let task = Task::new_read_scope_collectibles(
+                    // Safety: That task will hold the value, but we are still in
+                    // control of the task
+                    id,
+                    scope_id,
+                    trait_type,
+                    turbo_tasks.stats_type(),
+                );
+                // Safety: We have a fresh task id that nobody knows about yet
+                unsafe { self.memory_tasks.insert(*id, task) };
+                id
+            });
+            self.connect_task_child(parent_task, task_id, turbo_tasks);
+            task_id
+        })
     }
 
     fn insert_and_connect_fresh_task<K: Eq + Hash, H: BuildHasher + Clone>(
@@ -656,6 +676,15 @@ impl Backend for MemoryBackend {
                 turbo_tasks,
             )
         }
+    }
+
+    fn connect_task(
+        &self,
+        task: TaskId,
+        parent_task: TaskId,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        self.connect_task_child(parent_task, task, turbo_tasks);
     }
 
     fn create_transient_task(

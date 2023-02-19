@@ -314,6 +314,13 @@ pub trait Backend: Sync + Send {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId;
 
+    fn connect_task(
+        &self,
+        task: TaskId,
+        parent_task: TaskId,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    );
+
     fn create_transient_task(
         &self,
         task_type: TransientTaskType,

@@ -108,6 +108,8 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
 
     fn read_current_task_cell(&self, index: CellId) -> Result<CellContent>;
     fn update_current_task_cell(&self, index: CellId, content: CellContent);
+
+    fn connect_task(&self, task: TaskId);
 }
 
 /// The type of stats reporting.
@@ -884,6 +886,11 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
             content,
             self,
         );
+    }
+
+    fn connect_task(&self, task: TaskId) {
+        self.backend
+            .connect_task(task, current_task("connecting task"), self);
     }
 }
 

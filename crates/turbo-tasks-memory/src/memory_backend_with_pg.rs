@@ -1526,6 +1526,15 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         }
     }
 
+    fn connect_task(
+        &self,
+        _task: TaskId,
+        _parent_task: TaskId,
+        _turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        todo!()
+    }
+
     fn create_transient_task(
         &self,
         task_type: TransientTaskType,
