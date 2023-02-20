@@ -850,37 +850,26 @@ impl Task {
             }) => {
                 // Connect the task to the current task. This makes strongly consistent behaving
                 // as expected and we can look up the collectibles in the current scope.
-                self.connect_child_internal(state, task_id, backend, turbo_tasks);
+                self.connect_child_internal(state, task_id, backend, &*turbo_tasks);
                 // state was dropped by previous method
-
-                backend.with_task(task_id, |task| {
-                    let state =
-                        task.ensure_root_scoped(task.full_state_mut(), backend, turbo_tasks);
-                    if let TaskScopes::Root(scope_id) = state.scopes {
-                        Task::make_read_scope_collectibles_execution_future(
-                            self.id,
-                            scope_id,
-                            trait_type,
-                            backend,
-                            turbo_tasks,
-                        )
-                    } else {
-                        unreachable!();
-                    }
-                })
+                Box::pin(Self::execute_read_task_collectibles(
+                    self.id,
+                    task_id,
+                    trait_type,
+                    turbo_tasks.pin(),
+                ))
             }
             &TaskType::ReadScopeCollectibles(box ReadScopeCollectiblesTaskType {
                 scope,
                 trait_type,
             }) => {
                 drop(state);
-                Task::make_read_scope_collectibles_execution_future(
+                Box::pin(Self::execute_read_scope_collectibles(
                     self.id,
                     scope,
                     trait_type,
-                    backend,
-                    turbo_tasks,
-                )
+                    turbo_tasks.pin(),
+                ))
             }
             TaskType::Persistent(ty) => match &**ty {
                 PersistentTaskType::Native(native_fn, inputs) => {
@@ -2131,16 +2120,78 @@ impl Task {
         }
     }
 
-    fn make_read_scope_collectibles_execution_future(
+    async fn execute_read_task_collectibles(
+        read_task_id: TaskId,
         task_id: TaskId,
+        trait_type_id: TraitTypeId,
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
+    ) -> Result<RawVc> {
+        Self::execute_read_collectibles(
+            read_task_id,
+            |turbo_tasks| {
+                let backend = turbo_tasks.backend();
+                backend.with_task(task_id, |task| {
+                    let state =
+                        task.ensure_root_scoped(task.full_state_mut(), backend, &*turbo_tasks);
+                    if let TaskScopes::Root(scope_id) = state.scopes {
+                        backend.with_scope(scope_id, |scope| {
+                            scope.read_collectibles_and_children(
+                                scope_id,
+                                trait_type_id,
+                                read_task_id,
+                            )
+                        })
+                    } else {
+                        unreachable!();
+                    }
+                })
+            },
+            trait_type_id,
+            turbo_tasks,
+        )
+        .await
+    }
+
+    async fn execute_read_scope_collectibles(
+        read_task_id: TaskId,
         scope_id: TaskScopeId,
         trait_type_id: TraitTypeId,
-        backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
-        let (mut current, children) = backend.with_scope(scope_id, |scope| {
-            scope.read_collectibles_and_children(scope_id, trait_type_id, task_id)
-        });
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
+    ) -> Result<RawVc> {
+        Self::execute_read_collectibles(
+            read_task_id,
+            |turbo_tasks| {
+                let backend = turbo_tasks.backend();
+                backend.with_scope(scope_id, |scope| {
+                    scope.read_collectibles_and_children(scope_id, trait_type_id, read_task_id)
+                })
+            },
+            trait_type_id,
+            turbo_tasks,
+        )
+        .await
+    }
+
+    async fn execute_read_collectibles(
+        read_task_id: TaskId,
+        read_collectibles_and_children: impl Fn(
+            &dyn TurboTasksBackendApi<MemoryBackend>,
+        ) -> Result<
+            (CountHashSet<RawVc>, Vec<TaskScopeId>),
+            EventListener,
+        >,
+        trait_type_id: TraitTypeId,
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
+    ) -> Result<RawVc> {
+        let (mut current, children) = loop {
+            // For performance reasons we only want to read collectibles when there are no
+            // unfinished tasks anymore.
+            match read_collectibles_and_children(&*turbo_tasks) {
+                Ok(r) => break r,
+                Err(listener) => listener.await,
+            }
+        };
+        let backend = turbo_tasks.backend();
         let children = children
             .into_iter()
             .filter_map(|child| {
@@ -2149,7 +2200,7 @@ impl Task {
                         let task = backend.get_or_create_read_scope_collectibles_task(
                             child,
                             trait_type_id,
-                            task_id,
+                            read_task_id,
                             &*turbo_tasks,
                         );
                         // Safety: RawVcSet is a transparent value
@@ -2160,16 +2211,14 @@ impl Task {
                     })
                 })
             })
-            .collect::<Vec<_>>();
-        Box::pin(async move {
-            let children = children.into_iter().try_join().await?;
-            for child in children {
-                for v in child.iter() {
-                    current.add(*v);
-                }
+            .try_join()
+            .await?;
+        for child in children {
+            for v in child.iter() {
+                current.add(*v);
             }
-            Ok(RawVcSetVc::cell(current.iter().copied().collect()).into())
-        })
+        }
+        Ok(RawVcSetVc::cell(current.iter().copied().collect()).into())
     }
 
     pub(crate) fn read_task_collectibles(

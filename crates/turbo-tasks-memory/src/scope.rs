@@ -340,8 +340,11 @@ impl TaskScope {
         self_id: TaskScopeId,
         trait_id: TraitTypeId,
         reader: TaskId,
-    ) -> (CountHashSet<RawVc>, Vec<TaskScopeId>) {
+    ) -> Result<(CountHashSet<RawVc>, Vec<TaskScopeId>), EventListener> {
         let mut state = self.state.lock();
+        if state.has_unfinished_tasks {
+            return Err(state.event.listen());
+        }
         let children = state.children.iter().copied().collect::<Vec<_>>();
         state.dependent_tasks.insert(reader);
         Task::add_dependency_to_current(TaskDependency::ScopeChildren(self_id));
@@ -358,7 +361,7 @@ impl TaskScope {
         };
         drop(state);
 
-        (current, children)
+        Ok((current, children))
     }
 
     pub(crate) fn remove_dependent_task(&self, reader: TaskId) {

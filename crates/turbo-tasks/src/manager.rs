@@ -198,6 +198,8 @@ pub trait TurboTasksBackendApi<B: Backend + 'static>:
     fn set_stats_type(&self, stats_type: StatsType);
     /// Returns the duration from the start of the program to the given instant.
     fn program_duration_until(&self, instant: Instant) -> Duration;
+    /// Returns a reference to the backend.
+    fn backend(&self) -> &B;
 }
 
 impl StatsType {
@@ -899,6 +901,9 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
 impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
     fn pin(&self) -> Arc<dyn TurboTasksBackendApi<B>> {
         self.pin()
+    }
+    fn backend(&self) -> &B {
+        &self.backend
     }
     #[track_caller]
     fn schedule_backend_background_job(&self, id: BackendJobId) {
