@@ -3,12 +3,10 @@ use std::io::Write as _;
 use anyhow::{anyhow, bail, Result};
 use indoc::writedoc;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkableAsset, ChunkingContext,
-        ChunkingContextVc,
+        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
@@ -45,21 +43,14 @@ fn modifier() -> StringVc {
 /// import appears in.
 #[turbo_tasks::value]
 pub struct ManifestLoaderItem {
-    context: ChunkingContextVc,
     manifest: ManifestChunkAssetVc,
 }
 
 #[turbo_tasks::value_impl]
 impl ManifestLoaderItemVc {
     #[turbo_tasks::function]
-    pub fn new(context: ChunkingContextVc, manifest: ManifestChunkAssetVc) -> Self {
-        Self::cell(ManifestLoaderItem { context, manifest })
-    }
-
-    #[turbo_tasks::function]
-    async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
-        let this = &*self.await?;
-        Ok(this.context.chunk_list_path(this.manifest.ident()))
+    pub fn new(manifest: ManifestChunkAssetVc) -> Self {
+        Self::cell(ManifestLoaderItem { manifest })
     }
 }
 
@@ -81,9 +72,9 @@ impl ChunkItem for ManifestLoaderItem {
             .into(),
             // This creates the chunk list corresponding to the manifest chunk's chunk group.
             ChunkListReferenceVc::new(
-                this.context.output_root(),
+                this.manifest.await?.chunking_context.output_root(),
                 this.manifest.chunk_group(),
-                self_vc.chunk_list_path(),
+                this.manifest.chunk_list_path(),
             )
             .into(),
         ]))
@@ -93,8 +84,8 @@ impl ChunkItem for ManifestLoaderItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestLoaderItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
-        self.context
+    async fn chunking_context(&self) -> Result<ChunkingContextVc> {
+        Ok(self.manifest.await?.chunking_context)
     }
 
     #[turbo_tasks::function]
@@ -104,10 +95,10 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
 
         let manifest = this.manifest.await?;
         let asset = manifest.asset.as_asset();
-        let chunk = this.manifest.as_chunk(this.context);
+        let chunk = this.manifest.manifest_chunk();
         let chunk_path = &*chunk.path().await?;
 
-        let output_root = this.context.output_root().await?;
+        let output_root = manifest.chunking_context.output_root().await?;
 
         // We need several items in order for a dynamic import to fully load. First, we
         // need the chunk path of the manifest chunk, relative from the output root. The
@@ -119,20 +110,27 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
             bail!(
                 "chunk path {} is not in output root {}",
                 chunk.path().to_string().await?,
-                this.context.output_root().to_string().await?
+                manifest.chunking_context.output_root().to_string().await?
             );
         };
 
         // We also need the manifest chunk item's id, which points to a CJS module that
         // exports a promise for all of the necessary chunk loads.
-        let item_id = &*this.manifest.as_chunk_item(this.context).id().await?;
+        let item_id = &*this
+            .manifest
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .await?;
 
         // Finally, we need the id of the module that we're actually trying to
         // dynamically import.
         let placeable = EcmascriptChunkPlaceableVc::resolve_from(asset)
             .await?
             .ok_or_else(|| anyhow!("asset is not placeable in ecmascript chunk"))?;
-        let dynamic_id = &*placeable.as_chunk_item(this.context).id().await?;
+        let dynamic_id = &*placeable
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .await?;
 
         // This is the code that will be executed when the dynamic import is reached.
         // It will load the manifest chunk, which will load all the chunks needed by
@@ -159,7 +157,7 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
             dynamic_id = stringify_js(dynamic_id),
             chunk_list_path = stringify_js(
                 output_root
-                    .get_path_to(&*self_vc.chunk_list_path().await?)
+                    .get_path_to(&*this.manifest.chunk_list_path().await?)
                     .ok_or(anyhow!("chunk list path is not in output root"))?
             )
         )?;

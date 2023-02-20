@@ -24,6 +24,7 @@ use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
+        available_assets::AvailableAssetsVc,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkListReferenceVc,
         ChunkReferenceVc, ChunkVc, ChunkingContext, ChunkingContextVc,
@@ -62,6 +63,8 @@ pub struct EcmascriptChunk {
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
     evaluate: Option<EcmascriptChunkEvaluateVc>,
+    available_assets: Option<AvailableAssetsVc>,
+    current_availability_root: Option<AssetVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -72,23 +75,34 @@ impl EcmascriptChunkVc {
         main_entries: EcmascriptChunkPlaceablesVc,
         omit_entries: Option<EcmascriptChunkPlaceablesVc>,
         evaluate: Option<EcmascriptChunkEvaluateVc>,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
     ) -> Self {
         EcmascriptChunk {
             context,
             main_entries,
             omit_entries,
             evaluate,
+            available_assets,
+            current_availability_root,
         }
         .cell()
     }
 
     #[turbo_tasks::function]
-    pub fn new(context: ChunkingContextVc, main_entry: EcmascriptChunkPlaceableVc) -> Self {
+    pub fn new(
+        context: ChunkingContextVc,
+        main_entry: EcmascriptChunkPlaceableVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
+    ) -> Self {
         Self::new_normalized(
             context,
             EcmascriptChunkPlaceablesVc::cell(vec![main_entry]),
             None,
             None,
+            available_assets,
+            current_availability_root,
         )
     }
 
@@ -116,6 +130,8 @@ impl EcmascriptChunkVc {
                 }
                 .cell(),
             ),
+            None,
+            Some(main_entry.as_asset()),
         ))
     }
 
@@ -154,8 +170,20 @@ impl EcmascriptChunkVc {
         let a = left.await?;
         let b = right.await?;
 
-        let a = ecmascript_chunk_content(a.context, a.main_entries, a.omit_entries);
-        let b = ecmascript_chunk_content(b.context, b.main_entries, b.omit_entries);
+        let a = ecmascript_chunk_content(
+            a.context,
+            a.main_entries,
+            a.omit_entries,
+            a.available_assets,
+            a.current_availability_root,
+        );
+        let b = ecmascript_chunk_content(
+            b.context,
+            b.main_entries,
+            b.omit_entries,
+            b.available_assets,
+            b.current_availability_root,
+        );
 
         let a = a.await?.chunk_items.to_set();
         let b = b.await?.chunk_items.to_set();
@@ -263,6 +291,8 @@ impl EcmascriptChunkVc {
             this.context,
             this.main_entries,
             this.omit_entries,
+            this.available_assets,
+            this.current_availability_root,
         ))
     }
 
@@ -295,6 +325,8 @@ impl EcmascriptChunkVc {
             this.omit_entries,
             chunk_path,
             evaluate,
+            this.available_assets,
+            this.current_availability_root,
         );
         Ok(content)
     }
@@ -336,6 +368,20 @@ impl Asset for EcmascriptChunk {
             }
         }
 
+        // Current availability root is included
+        if let Some(current_availability_root) = this.current_availability_root {
+            let ident = current_availability_root.ident();
+            let need_root = if let [(_, main_entry)] = &assets[..] {
+                main_entry.resolve().await? != ident.resolve().await?
+            } else {
+                false
+            };
+            if need_root {
+                let availability_root_key = StringVc::cell("current_availability_root".to_string());
+                assets.push((availability_root_key, ident));
+            }
+        }
+
         // Evaluate info is included
         let mut modifiers = Vec::new();
         if let Some(evaluate) = this.evaluate {
@@ -355,6 +401,11 @@ impl Asset for EcmascriptChunk {
                     .map(StringVc::cell),
             );
             modifiers.extend(evaluate.entry_modules_ids.iter().map(|id| id.to_string()));
+        }
+
+        // Available assets are include
+        if let Some(available_assets) = this.available_assets {
+            modifiers.push(available_assets.hash().to_string());
         }
 
         // Simplify when it's only a single main entry without extra info
@@ -383,8 +434,14 @@ impl Asset for EcmascriptChunk {
     #[turbo_tasks::function]
     async fn references(self_vc: EcmascriptChunkVc) -> Result<AssetReferencesVc> {
         let this = self_vc.await?;
-        let content =
-            ecmascript_chunk_content(this.context, this.main_entries, this.omit_entries).await?;
+        let content = ecmascript_chunk_content(
+            this.context,
+            this.main_entries,
+            this.omit_entries,
+            this.available_assets,
+            this.current_availability_root,
+        )
+        .await?;
         let mut references = Vec::new();
         for r in content.external_asset_references.iter() {
             references.push(*r);
@@ -452,8 +509,14 @@ impl Introspectable for EcmascriptChunk {
         let content = content_to_details(self_vc.content());
         let mut details = String::new();
         let this = self_vc.await?;
-        let chunk_content =
-            ecmascript_chunk_content(this.context, this.main_entries, this.omit_entries).await?;
+        let chunk_content = ecmascript_chunk_content(
+            this.context,
+            this.main_entries,
+            this.omit_entries,
+            this.available_assets,
+            this.current_availability_root,
+        )
+        .await?;
         let chunk_items = chunk_content.chunk_items.await?;
         details += "Chunk items:\n\n";
         for chunk in chunk_items.iter() {

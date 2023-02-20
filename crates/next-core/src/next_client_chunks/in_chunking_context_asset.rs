@@ -6,7 +6,10 @@ use turbopack::ecmascript::chunk::{
 };
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        available_assets::AvailableAssetsVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContextVc,
+    },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -43,8 +46,19 @@ impl Asset for InChunkingContextAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for InChunkingContextAsset {
     #[turbo_tasks::function]
-    fn as_chunk(&self, _context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(self.chunking_context, self.asset).into()
+    fn as_chunk(
+        &self,
+        _context: ChunkingContextVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(
+            self.chunking_context,
+            self.asset,
+            available_assets,
+            current_availability_root,
+        )
+        .into()
     }
 }
 

@@ -248,7 +248,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
                 // TODO: Load runtime entries from snapshots
                 Ok(ecmascript.as_evaluated_chunk(chunking_context, runtime_entries))
             } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
-                Ok(chunkable.as_chunk(chunking_context))
+                Ok(chunkable.as_chunk(chunking_context, None, Some(chunkable.into())))
             } else {
                 // TODO convert into a serve-able asset
                 Err(anyhow!(

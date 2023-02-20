@@ -6,7 +6,8 @@ use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::AssetVc,
     chunk::{
-        ChunkItem, ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
+        available_assets::AvailableAssetsVc, ChunkItem, ChunkItemVc, ChunkableAssetVc,
+        ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
     },
 };
 
@@ -60,9 +61,19 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
     async fn from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
     ) -> Result<Option<Self>> {
-        let chunk = ManifestChunkAssetVc::new(asset, context);
-        Ok(Some(ManifestLoaderItemVc::new(context, chunk).into()))
+        let next_available_assets = if let Some(next_available_assets) =
+            AvailableAssetsVc::from(available_assets, current_availability_root)
+        {
+            Some(next_available_assets.resolve().await?)
+        } else {
+            None
+        };
+        let manifest_asset = ManifestChunkAssetVc::new(asset, context, next_available_assets);
+        let manifest_loader = ManifestLoaderItemVc::new(manifest_asset);
+        Ok(Some(manifest_loader.into()))
     }
 }
 

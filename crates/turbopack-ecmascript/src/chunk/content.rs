@@ -6,10 +6,10 @@ use indoc::{indoc, writedoc};
 use turbo_tasks::TryJoinIterExt;
 use turbo_tasks_fs::{embed_file, File, FileContent, FileSystemPathReadRef, FileSystemPathVc};
 use turbopack_core::{
-    asset::AssetContentVc,
+    asset::{AssetContentVc, AssetVc},
     chunk::{
-        chunk_content, chunk_content_split, ChunkContentResult, ChunkGroupVc, ChunkVc,
-        ChunkingContext, ChunkingContextVc, ModuleId,
+        available_assets::AvailableAssetsVc, chunk_content, chunk_content_split,
+        ChunkContentResult, ChunkGroupVc, ChunkVc, ChunkingContext, ChunkingContextVc, ModuleId,
     },
     code_builder::{CodeBuilder, CodeVc},
     environment::{ChunkLoading, EnvironmentVc},
@@ -64,10 +64,22 @@ pub(crate) fn ecmascript_chunk_content(
     context: ChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
+    available_assets: Option<AvailableAssetsVc>,
+    current_availability_root: Option<AssetVc>,
 ) -> EcmascriptChunkContentResultVc {
-    let mut chunk_content = ecmascript_chunk_content_internal(context, main_entries);
+    let mut chunk_content = ecmascript_chunk_content_internal(
+        context,
+        main_entries,
+        available_assets,
+        current_availability_root,
+    );
     if let Some(omit_entries) = omit_entries {
-        let omit_chunk_content = ecmascript_chunk_content_internal(context, omit_entries);
+        let omit_chunk_content = ecmascript_chunk_content_internal(
+            context,
+            omit_entries,
+            available_assets,
+            current_availability_root,
+        );
         chunk_content = chunk_content.filter(omit_chunk_content);
     }
     chunk_content
@@ -77,12 +89,21 @@ pub(crate) fn ecmascript_chunk_content(
 async fn ecmascript_chunk_content_internal(
     context: ChunkingContextVc,
     entries: EcmascriptChunkPlaceablesVc,
+    available_assets: Option<AvailableAssetsVc>,
+    current_availability_root: Option<AssetVc>,
 ) -> Result<EcmascriptChunkContentResultVc> {
     let entries = entries.await?;
     let entries = entries.iter().copied();
 
     let contents = entries
-        .map(|entry| ecmascript_chunk_content_single_entry(context, entry))
+        .map(|entry| {
+            ecmascript_chunk_content_single_entry(
+                context,
+                entry,
+                available_assets,
+                current_availability_root,
+            )
+        })
         .collect::<Vec<_>>();
 
     if contents.len() == 1 {
@@ -124,14 +145,31 @@ async fn ecmascript_chunk_content_internal(
 async fn ecmascript_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: EcmascriptChunkPlaceableVc,
+    available_assets: Option<AvailableAssetsVc>,
+    current_availability_root: Option<AssetVc>,
 ) -> Result<EcmascriptChunkContentResultVc> {
     let asset = entry.as_asset();
 
     Ok(EcmascriptChunkContentResultVc::cell(
-        if let Some(res) = chunk_content::<EcmascriptChunkItemVc>(context, asset, None).await? {
+        if let Some(res) = chunk_content::<EcmascriptChunkItemVc>(
+            context,
+            asset,
+            None,
+            available_assets,
+            current_availability_root,
+        )
+        .await?
+        {
             res
         } else {
-            chunk_content_split::<EcmascriptChunkItemVc>(context, asset, None).await?
+            chunk_content_split::<EcmascriptChunkItemVc>(
+                context,
+                asset,
+                None,
+                available_assets,
+                current_availability_root,
+            )
+            .await?
         }
         .into(),
     ))
@@ -155,10 +193,18 @@ impl EcmascriptChunkContentVc {
         omit_entries: Option<EcmascriptChunkPlaceablesVc>,
         chunk_path: FileSystemPathVc,
         evaluate: Option<EcmascriptChunkContentEvaluateVc>,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
     ) -> Result<Self> {
         // TODO(alexkirsz) All of this should be done in a transition, otherwise we run
         // the risks of values not being strongly consistent with each other.
-        let chunk_content = ecmascript_chunk_content(context, main_entries, omit_entries);
+        let chunk_content = ecmascript_chunk_content(
+            context,
+            main_entries,
+            omit_entries,
+            available_assets,
+            current_availability_root,
+        );
         let chunk_content = chunk_content.await?;
         let chunk_path = chunk_path.await?;
         let module_factories = chunk_content.chunk_items.to_entry_snapshot().await?;

@@ -16,8 +16,8 @@ use turbo_tasks_fs::FileContent;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc,
+        available_assets::AvailableAssetsVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
@@ -80,8 +80,19 @@ impl Asset for StaticModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for StaticModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: StaticModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
+    fn as_chunk(
+        self_vc: StaticModuleAssetVc,
+        context: ChunkingContextVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.as_ecmascript_chunk_placeable(),
+            available_assets,
+            current_availability_root,
+        )
+        .into()
     }
 }
 

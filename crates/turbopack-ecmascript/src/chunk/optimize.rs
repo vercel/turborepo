@@ -63,11 +63,14 @@ async fn merge_chunks(
         .flat_map(|e| e.iter().copied())
         .collect::<IndexSet<_>>();
     let evaluate = chunks.iter().find_map(|e| e.evaluate);
+    let first = first.await?;
     Ok(EcmascriptChunkVc::new_normalized(
-        first.await?.context,
+        first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         None,
         evaluate,
+        first.available_assets,
+        first.current_availability_root,
     ))
 }
 
@@ -403,6 +406,8 @@ async fn optimize_ecmascript(
                         }
                         .cell(),
                     ),
+                    content.available_assets,
+                    content.current_availability_root,
                 )
             }
         }

@@ -1,10 +1,12 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        ChunkGroupVc, ChunkVc, ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc,
-        ChunkableAssetVc, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        available_assets::AvailableAssetsVc, ChunkGroupVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -26,6 +28,11 @@ fn modifier() -> StringVc {
     StringVc::cell("manifest chunk".to_string())
 }
 
+#[turbo_tasks::function]
+fn chunk_list_modifier() -> StringVc {
+    StringVc::cell("chunks list".to_string())
+}
+
 /// The manifest chunk is deferred until requested by the manifest loader
 /// item when the dynamic `import()` expression is reached. Its responsibility
 /// is to generate a Promise that will resolve only after all the necessary
@@ -40,22 +47,57 @@ fn modifier() -> StringVc {
 pub struct ManifestChunkAsset {
     pub asset: ChunkableAssetVc,
     pub chunking_context: ChunkingContextVc,
+    pub available_assets: Option<AvailableAssetsVc>,
 }
 
 #[turbo_tasks::value_impl]
 impl ManifestChunkAssetVc {
     #[turbo_tasks::function]
-    pub fn new(asset: ChunkableAssetVc, chunking_context: ChunkingContextVc) -> Self {
+    pub fn new(
+        asset: ChunkableAssetVc,
+        chunking_context: ChunkingContextVc,
+        available_assets: Option<AvailableAssetsVc>,
+    ) -> Self {
         Self::cell(ManifestChunkAsset {
             asset,
             chunking_context,
+            available_assets,
         })
     }
 
     #[turbo_tasks::function]
     pub(super) async fn chunk_group(self) -> Result<ChunkGroupVc> {
         let this = self.await?;
-        Ok(ChunkGroupVc::from_asset(this.asset, this.chunking_context))
+        Ok(ChunkGroupVc::from_asset(
+            this.asset,
+            this.chunking_context,
+            this.available_assets,
+            Some(this.asset.as_asset()),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    pub(super) async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
+        let this = &*self.await?;
+        Ok(this.chunking_context.chunk_list_path(self.ident()))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn manifest_chunk(self) -> Result<ChunkVc> {
+        let this = self.await?;
+        Ok(self.as_chunk(
+            this.chunking_context,
+            this.available_assets,
+            Some(self.as_asset()),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunks_list_path(self) -> Result<FileSystemPathVc> {
+        Ok(self
+            .await?
+            .chunking_context
+            .chunk_path(self.ident().with_modifier(chunk_list_modifier()), ".json"))
     }
 }
 
@@ -80,8 +122,19 @@ impl Asset for ManifestChunkAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for ManifestChunkAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: ManifestChunkAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+    fn as_chunk(
+        self_vc: ManifestChunkAssetVc,
+        context: ChunkingContextVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.into(),
+            available_assets,
+            current_availability_root,
+        )
+        .into()
     }
 }
 

@@ -13,9 +13,9 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        available_assets::AvailableAssetsVc, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc,
+        ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -57,10 +57,17 @@ impl Asset for WithClientChunksAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for WithClientChunksAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: WithClientChunksAssetVc, context: ChunkingContextVc) -> ChunkVc {
+    fn as_chunk(
+        self_vc: WithClientChunksAssetVc,
+        context: ChunkingContextVc,
+        available_assets: Option<AvailableAssetsVc>,
+        current_availability_root: Option<AssetVc>,
+    ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context.with_layer("rsc"),
             self_vc.as_ecmascript_chunk_placeable(),
+            available_assets,
+            current_availability_root,
         )
         .into()
     }
@@ -104,7 +111,7 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let inner = self.inner.await?;
-        let group = ChunkGroupVc::from_asset(inner.asset.into(), self.context);
+        let group = ChunkGroupVc::from_asset(inner.asset.into(), self.context, None, None);
         let chunks = group.chunks().await?;
         let server_root = inner.server_root.await?;
 
