@@ -219,7 +219,7 @@ func checkCacheState(turboCache cache.Cache, taskSummaries []taskSummary) ([]tas
 		go func() {
 			defer wg.Done()
 			for index := range queue {
-				task := taskSummaries[index]
+				task := &taskSummaries[index]
 				itemStatus, err := turboCache.Exists(task.Hash)
 				task.CacheState = itemStatus // TODO(mehulkar): Move this to PackageTask
 				returnErr = err
