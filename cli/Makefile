@@ -2,11 +2,14 @@ TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 EXT :=
-ifeq ($(OS),Windows_NT)
+FFI_LIB :=
+ifeq ($(OS), Windows_NT)
 	UNAME := Windows
 	EXT = .exe
+	FFI_LIB = turborepo_ffi.lib
 else
 	UNAME := $(shell uname -s)
+	FFI_LIB = libturborepo_ffi.a
 endif
 
 # Strip debug info
@@ -33,7 +36,7 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi
 	cp -r ../crates/turborepo-ffi/bindings.h \
-	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
+	      ../crates/turborepo-ffi/target/release/$(FFI_LIB) \
 	      ./internal/ffi
 
 .PHONY: turborepo-ffi
@@ -70,9 +73,11 @@ ifeq ($(UNAME), Windows)
 	TURBO_RACE=
 endif
 
+.PHONY: clean-go
 clean-go:
 	go clean -testcache ./...
 
+.PHONY: test-go
 test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
 	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
 
