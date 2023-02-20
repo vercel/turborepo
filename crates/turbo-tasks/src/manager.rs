@@ -170,8 +170,10 @@ impl<T> Unused<T> {
     }
 }
 
-pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send {
-    fn pin(&self) -> Arc<dyn TurboTasksBackendApi>;
+pub trait TurboTasksBackendApi<B: Backend + 'static>:
+    TaskIdProvider + TurboTasksCallApi + Sync + Send
+{
+    fn pin(&self) -> Arc<dyn TurboTasksBackendApi<B>>;
 
     fn schedule(&self, task: TaskId);
     fn schedule_backend_background_job(&self, id: BackendJobId);
@@ -210,7 +212,7 @@ impl StatsType {
     }
 }
 
-impl TaskIdProvider for &dyn TurboTasksBackendApi {
+impl<B: Backend + 'static> TaskIdProvider for &dyn TurboTasksBackendApi<B> {
     fn get_fresh_task_id(&self) -> Unused<TaskId> {
         (*self).get_fresh_task_id()
     }
@@ -274,7 +276,7 @@ task_local! {
     static CURRENT_TASK_STATE: RefCell<CurrentTaskState>;
 }
 
-impl<B: Backend> TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasks<B> {
     // TODO better lifetime management for turbo tasks
     // consider using unsafe for the task_local turbo tasks
     // that should be safe as long tasks can't outlife turbo task
@@ -728,7 +730,7 @@ impl<B: Backend> TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
     fn dynamic_call(&self, func: FunctionId, inputs: Vec<TaskInput>) -> RawVc {
         self.dynamic_call(func, inputs)
     }
@@ -770,7 +772,7 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TurboTasksApi for TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn invalidate(&self, task: TaskId) {
         self.backend.invalidate_task(task, self);
     }
@@ -894,8 +896,8 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
-    fn pin(&self) -> Arc<dyn TurboTasksBackendApi> {
+impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
+    fn pin(&self) -> Arc<dyn TurboTasksBackendApi<B>> {
         self.pin()
     }
     #[track_caller]
@@ -1000,7 +1002,7 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TaskIdProvider for TurboTasks<B> {
+impl<B: Backend + 'static> TaskIdProvider for TurboTasks<B> {
     fn get_fresh_task_id(&self) -> Unused<TaskId> {
         // Safety: This is a fresh id from the factory
         unsafe { Unused::new_unchecked(self.task_id_factory.get()) }

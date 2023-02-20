@@ -770,7 +770,7 @@ impl Task {
     pub(crate) fn execute(
         self: &Task,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
         let mut state = self.full_state_mut();
         if !self.try_start_execution(&mut state, turbo_tasks, backend) {
@@ -785,7 +785,7 @@ impl Task {
     fn try_start_execution(
         &self,
         state: &mut TaskState,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
         backend: &MemoryBackend,
     ) -> bool {
         match state.state_type {
@@ -833,7 +833,7 @@ impl Task {
         self: &Task,
         mut state: FullTaskWriteGuard<'_>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         match &self.ty {
             TaskType::Root(bound_fn) => {
@@ -927,7 +927,7 @@ impl Task {
         &self,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
         match state.state_type {
@@ -979,7 +979,7 @@ impl Task {
         instant: Instant,
         stateful: bool,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
         let mut schedule_task = false;
         let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
@@ -1088,7 +1088,11 @@ impl Task {
         false
     }
 
-    fn make_dirty(&self, backend: &MemoryBackend, turbo_tasks: &dyn TurboTasksBackendApi) {
+    fn make_dirty(
+        &self,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         self.make_dirty_internal(false, backend, turbo_tasks);
     }
 
@@ -1096,7 +1100,7 @@ impl Task {
         &self,
         force_schedule: bool,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         if let TaskType::Once(_) = self.ty {
             // once task won't become dirty
@@ -1162,7 +1166,7 @@ impl Task {
     pub(crate) fn schedule_when_dirty_from_scope(
         &self,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
         if let TaskStateType::Dirty { ref mut event } = state.state_type {
@@ -1184,7 +1188,7 @@ impl Task {
         id: TaskScopeId,
         merging_scopes: usize,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
         queue: &mut VecDeque<TaskId>,
     ) {
         let mut state = self.full_state_mut();
@@ -1265,7 +1269,7 @@ impl Task {
         id: TaskScopeId,
         merging_scopes: usize,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
@@ -1279,7 +1283,7 @@ impl Task {
         state: &mut FullTaskWriteGuard<'_>,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
         let mut schedule_self = false;
         backend.with_scope(id, |scope| {
@@ -1330,7 +1334,7 @@ impl Task {
         state: &mut TaskMetaStateWriteGuard<'_>,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         match state {
             TaskMetaStateWriteGuard::Full(state) => {
@@ -1353,7 +1357,7 @@ impl Task {
         state: &mut FullTaskWriteGuard<'_>,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         backend.with_scope(id, |scope| {
             match state.state_type {
@@ -1397,7 +1401,7 @@ impl Task {
         &self,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
         queue: &mut VecDeque<TaskId>,
     ) {
         let mut state = self.partial_state_mut();
@@ -1498,7 +1502,7 @@ impl Task {
         &self,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
@@ -1512,7 +1516,7 @@ impl Task {
         &self,
         id: TaskScopeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.remove_from_scope_internal(id, backend, turbo_tasks)
     }
@@ -1521,7 +1525,7 @@ impl Task {
         &self,
         scopes: impl Iterator<Item = TaskScopeId>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         for id in scopes {
             self.remove_from_scope_internal(id, backend, turbo_tasks)
@@ -1531,7 +1535,7 @@ impl Task {
     fn remove_root_or_initial_scope(
         &self,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
         match state.scopes {
@@ -1567,7 +1571,7 @@ impl Task {
     pub fn make_root_scoped(
         &self,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let state = self.full_state_mut();
         self.make_root_scoped_internal(state, backend, turbo_tasks);
@@ -1577,7 +1581,7 @@ impl Task {
         &self,
         mut state: FullTaskWriteGuard<'a>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<FullTaskWriteGuard<'a>> {
         if matches!(state.scopes, TaskScopes::Root(_)) {
             return Some(state);
@@ -1748,7 +1752,7 @@ impl Task {
     pub(crate) fn invalidate(
         &self,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.make_dirty(backend, turbo_tasks)
     }
@@ -1758,7 +1762,7 @@ impl Task {
     pub(crate) fn recompute(
         &self,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.make_dirty_internal(true, backend, turbo_tasks)
     }
@@ -1978,7 +1982,7 @@ impl Task {
         &self,
         child_id: TaskId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let state = self.full_state_mut();
         self.connect_child_internal(state, child_id, backend, turbo_tasks);
@@ -1989,7 +1993,7 @@ impl Task {
         mut state: FullTaskWriteGuard<'_>,
         child_id: TaskId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         if state.children.insert(child_id) {
             if let TaskScopes::Inner(_, optimization_counter) = &state.scopes {
@@ -2034,7 +2038,7 @@ impl Task {
         &'a self,
         mut state: FullTaskWriteGuard<'a>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> FullTaskWriteGuard<'a> {
         while !state.scopes.is_root() {
             #[cfg(not(feature = "report_expensive"))]
@@ -2075,7 +2079,7 @@ impl Task {
         func: F,
         note: impl Fn() -> String + Sync + Send + 'static,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<T, EventListener>> {
         let mut state = self.full_state_mut();
         if strongly_consistent {
@@ -2132,7 +2136,7 @@ impl Task {
         scope_id: TaskScopeId,
         trait_type_id: TraitTypeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         let (mut current, children) = backend.with_scope(scope_id, |scope| {
             scope.read_collectibles_and_children(scope_id, trait_type_id, task_id)
@@ -2173,7 +2177,7 @@ impl Task {
         reader: TaskId,
         trait_id: TraitTypeId,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> RawVcSetVc {
         let task = backend.get_or_create_read_task_collectibles_task(
             self.id,
@@ -2189,7 +2193,7 @@ impl Task {
         trait_type: TraitTypeId,
         collectible: RawVc,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.emit(trait_type, collectible) {
@@ -2214,7 +2218,7 @@ impl Task {
         trait_type: TraitTypeId,
         collectible: RawVc,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.unemit(trait_type, collectible) {
@@ -2255,7 +2259,7 @@ impl Task {
         scope_active_cache: &mut HashMap<TaskScopeId, bool, BuildNoHashHasher<TaskScopeId>>,
         stats: &mut GcStats,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<GcPriority> {
         if !self.is_pure() {
             stats.no_gc_needed += 1;
@@ -2551,7 +2555,7 @@ impl Task {
         &self,
         mut full_state: FullTaskWriteGuard<'_>,
         backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
         let mut clear_dependencies = None;
         let TaskState {
@@ -2707,7 +2711,7 @@ fn remove_collectible_from_scopes(
     unemitted: AutoSet<(TraitTypeId, RawVc)>,
     task_scopes: &TaskScopes,
     backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi,
+    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
 ) {
     task_scopes.iter().for_each(|id| {
         backend.with_scope(id, |scope| {
@@ -2737,7 +2741,7 @@ fn remove_from_scopes(
     tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
     task_scopes: &TaskScopes,
     backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi,
+    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
 ) {
     match task_scopes {
         TaskScopes::Root(scope) => {
@@ -2763,7 +2767,7 @@ pub fn run_add_to_scope_queue(
     id: TaskScopeId,
     merging_scopes: usize,
     backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi,
+    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
 ) {
     while let Some(child) = queue.pop_front() {
         backend.with_task(child, |child| {
@@ -2794,7 +2798,7 @@ pub fn run_remove_from_scope_queue(
     mut queue: VecDeque<TaskId>,
     id: TaskScopeId,
     backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi,
+    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
 ) {
     while let Some(child) = queue.pop_front() {
         backend.with_task(child, |child| {
