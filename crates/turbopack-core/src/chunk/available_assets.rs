@@ -1,11 +1,18 @@
+use std::iter::once;
+
 use anyhow::Result;
 use turbo_tasks::{
+    graph::{GraphTraversal, ReverseTopological},
     primitives::{BoolVc, U64Vc},
     TryJoinIterExt, ValueToString,
 };
 use turbo_tasks_hash::Xxh3Hash64Hasher;
 
-use crate::asset::{Asset, AssetVc};
+use super::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType};
+use crate::{
+    asset::{Asset, AssetVc, AssetsSetVc},
+    reference::AssetReference,
+};
 
 #[turbo_tasks::value]
 pub struct AvailableAssets {
@@ -59,7 +66,11 @@ impl AvailableAssetsVc {
                 return Ok(BoolVc::cell(true));
             }
         }
-        // TODO implement
+        for root in this.roots.iter() {
+            if chunkable_assets_set(*root).await?.contains(&asset) {
+                return Ok(BoolVc::cell(true));
+            }
+        }
         Ok(BoolVc::cell(false))
     }
 }
@@ -75,4 +86,39 @@ impl AvailableAssetsVc {
             Some(Self::new(vec![root]))
         }
     }
+}
+
+#[turbo_tasks::function]
+async fn chunkable_assets_set(root: AssetVc) -> Result<AssetsSetVc> {
+    let assets = GraphTraversal::<ReverseTopological<AssetVc>>::visit(
+        once(root),
+        |&asset: &AssetVc| async move {
+            let mut results = Vec::new();
+            for reference in asset.references().await?.iter() {
+                if let Some(chunkable) = ChunkableAssetReferenceVc::resolve_from(reference).await? {
+                    if matches!(
+                        &*chunkable.chunking_type().await?,
+                        Some(
+                            ChunkingType::Parallel
+                                | ChunkingType::PlacedOrParallel
+                                | ChunkingType::Placed
+                        )
+                    ) {
+                        results.extend(
+                            chunkable
+                                .resolve_reference()
+                                .primary_assets()
+                                .await?
+                                .iter()
+                                .copied(),
+                        );
+                    }
+                }
+            }
+            Ok(results)
+        },
+    )
+    .await
+    .completed()?;
+    Ok(AssetsSetVc::cell(assets.into_iter().collect()))
 }
