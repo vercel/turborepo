@@ -24,8 +24,8 @@ export default function setupTestFixtures({
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
-    const tmpDirectory = uuidv4();
-    const testDirectory = path.join(parentDirectory, tmpDirectory);
+    const directoryName = uuidv4();
+    const testDirectory = path.join(parentDirectory, directoryName);
     if (!fs.existsSync(testDirectory)) {
       fs.mkdirSync(testDirectory, { recursive: true });
     }
@@ -39,41 +39,28 @@ export default function setupTestFixtures({
       recursive: true,
     });
 
-    // helpers
-    const read = (filename: string) => {
-      const filePath = path.isAbsolute(filename)
-        ? filename
-        : path.join(testDirectory, filename);
-      try {
-        return fs.readFileSync(filePath, "utf8");
-      } catch (e) {
-        return undefined;
-      }
+    const readGenerator = (method: (filePath: string) => unknown) => {
+      return <T>(filename: string) => {
+        const filePath = path.isAbsolute(filename)
+          ? filename
+          : path.join(testDirectory, filename);
+        try {
+          return method(filePath) as T;
+        } catch (e) {
+          return undefined;
+        }
+      };
     };
 
-    const readJson = (filename: string) => {
-      const filePath = path.isAbsolute(filename)
-        ? filename
-        : path.join(testDirectory, filename);
-      try {
-        return fs.readJSONSync(filePath, "utf8");
-      } catch (e) {
-        return undefined;
-      }
-    };
+    const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
+    const readJson = readGenerator((filePath) =>
+      fs.readJSONSync(filePath, "utf8")
+    );
+    const readYaml = readGenerator((filePath) =>
+      yaml.load(fs.readFileSync(filePath, "utf8"))
+    );
 
-    const readYaml = (filename: string) => {
-      const filePath = path.isAbsolute(filename)
-        ? filename
-        : path.join(testDirectory, filename);
-      try {
-        return yaml.load(fs.readFileSync(filePath, "utf8"));
-      } catch (e) {
-        return undefined;
-      }
-    };
-
-    return { root: testDirectory, read, readJson, readYaml, tmpDirectory };
+    return { root: testDirectory, read, readJson, readYaml, directoryName };
   };
 
   return { useFixture };

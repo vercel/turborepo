@@ -1,16 +1,25 @@
-import { execSync, ExecSyncOptions } from "child_process";
+import execa from "execa";
 import os from "os";
 
+export type PackageManager = "npm" | "yarn" | "pnpm";
 export type PackageManagerAvailable = { available: boolean; version?: string };
-// run this check from home to avoid corepack conflicting
-const execOptions: ExecSyncOptions = { stdio: "pipe", cwd: os.homedir() };
 
-function isNpmAvailable(): PackageManagerAvailable {
+async function getVersion(
+  packageManager: string
+): Promise<PackageManagerAvailable> {
+  // run the check from home to avoid corepack conflicting -
+  // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
+  // but we'll keep the behavior for those on older versions)
+  const execOptions = {
+    cwd: os.homedir(),
+    env: { COREPACK_ENABLE_STRICT: "0" },
+  };
+
   try {
-    const result = execSync("npm --version", execOptions);
+    const result = await execa(packageManager, ["--version"], execOptions);
     return {
       available: true,
-      version: result.toString().trim(),
+      version: result.stdout.trim(),
     };
   } catch (e) {
     return {
@@ -19,32 +28,20 @@ function isNpmAvailable(): PackageManagerAvailable {
   }
 }
 
-function isPnpmAvailable(): PackageManagerAvailable {
-  try {
-    const result = execSync("pnpm --version", execOptions);
-    return {
-      available: true,
-      version: result.toString().trim(),
-    };
-  } catch (e) {
-    return {
-      available: false,
-    };
-  }
+async function getAvailablePackageManagers(): Promise<
+  Record<PackageManager, PackageManagerAvailable>
+> {
+  const [yarn, pnpm, npm] = await Promise.all([
+    getVersion("yarnpkg"),
+    getVersion("npm"),
+    getVersion("pnpm"),
+  ]);
+
+  return {
+    yarn,
+    pnpm,
+    npm,
+  };
 }
 
-function isYarnAvailable(): PackageManagerAvailable {
-  try {
-    const result = execSync("yarnpkg --version", execOptions);
-    return {
-      available: true,
-      version: result.toString().trim(),
-    };
-  } catch (e) {
-    return {
-      available: false,
-    };
-  }
-}
-
-export { isPnpmAvailable, isYarnAvailable, isNpmAvailable };
+export { getAvailablePackageManagers };
