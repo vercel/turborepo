@@ -4,7 +4,7 @@ use indoc::formatdoc;
 use turbo_tasks::ValueToString;
 use turbopack_core::{
     asset::Asset,
-    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -81,17 +81,7 @@ impl ChunkItem for ManifestChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
-        let chunks = self.manifest.chunk_group().chunks();
-
-        Ok(AssetReferencesVc::cell(
-            chunks
-                .await?
-                .iter()
-                .copied()
-                .map(ChunkReferenceVc::new)
-                .map(Into::into)
-                .collect(),
-        ))
+    fn references(&self) -> AssetReferencesVc {
+        self.manifest.references()
     }
 }

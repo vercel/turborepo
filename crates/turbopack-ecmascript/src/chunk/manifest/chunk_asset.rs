@@ -4,9 +4,9 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, ChunkGroupVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        available_assets::AvailableAssetsVc, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
+        ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -114,8 +114,18 @@ impl Asset for ManifestChunkAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        todo!()
+    async fn references(self_vc: ManifestChunkAssetVc) -> Result<AssetReferencesVc> {
+        let chunks = self_vc.chunk_group().chunks();
+
+        Ok(AssetReferencesVc::cell(
+            chunks
+                .await?
+                .iter()
+                .copied()
+                .map(ChunkReferenceVc::new)
+                .map(Into::into)
+                .collect(),
+        ))
     }
 }
 

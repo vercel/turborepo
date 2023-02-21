@@ -5,8 +5,8 @@ use turbo_tasks_fs::FileSystemPathVc;
 use super::asset::ChunkListAssetVc;
 use crate::{
     chunk::{
-        ChunkGroupVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc,
-        ChunkingType, ChunkingTypeOptionVc,
+        ChunkGroupVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType,
+        ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},

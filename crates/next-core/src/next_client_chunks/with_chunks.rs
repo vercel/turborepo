@@ -52,8 +52,26 @@ impl Asset for WithChunksAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        unimplemented!()
+    async fn references(self_vc: WithChunksAssetVc) -> Result<AssetReferencesVc> {
+        let this = self_vc.await?;
+        Ok(AssetReferencesVc::cell(vec![
+            WithChunksAssetReference {
+                asset: InChunkingContextAsset {
+                    asset: this.asset,
+                    chunking_context: this.chunking_context,
+                }
+                .cell()
+                .into(),
+            }
+            .cell()
+            .into(),
+            ChunkListReferenceVc::new(
+                this.server_root,
+                self_vc.chunk_group(),
+                self_vc.chunk_list_path(),
+            )
+            .into(),
+        ]))
     }
 }
 
@@ -100,32 +118,31 @@ impl EcmascriptChunkPlaceable for WithChunksAsset {
     }
 }
 
-#[turbo_tasks::value]
-struct WithChunksChunkItem {
-    context: ChunkingContextVc,
-    inner_context: ChunkingContextVc,
-    inner: WithChunksAssetVc,
-}
-
 #[turbo_tasks::value_impl]
-impl WithChunksChunkItemVc {
+impl WithChunksAssetVc {
     #[turbo_tasks::function]
     async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
         let this = self.await?;
-        Ok(this.inner_context.chunk_list_path(this.inner.ident()))
+        Ok(this.chunking_context.chunk_list_path(self.ident()))
     }
 
     #[turbo_tasks::function]
     async fn chunk_group(self) -> Result<ChunkGroupVc> {
         let this = self.await?;
-        let inner = this.inner.await?;
         Ok(ChunkGroupVc::from_asset(
-            inner.asset.into(),
-            this.inner_context,
+            this.asset.into(),
+            this.chunking_context,
             None,
-            Some(inner.asset.into()),
+            Some(this.asset.into()),
         ))
     }
+}
+
+#[turbo_tasks::value]
+struct WithChunksChunkItem {
+    context: ChunkingContextVc,
+    inner_context: ChunkingContextVc,
+    inner: WithChunksAssetVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -139,12 +156,12 @@ impl EcmascriptChunkItem for WithChunksChunkItem {
     async fn content(self_vc: WithChunksChunkItemVc) -> Result<EcmascriptChunkItemContentVc> {
         let this = self_vc.await?;
         let inner = this.inner.await?;
-        let group = self_vc.chunk_group();
+        let group = this.inner.chunk_group();
         let chunks = group.chunks().await?;
         let server_root = inner.server_root.await?;
         let mut client_chunks = Vec::new();
 
-        let chunk_list_path = self_vc.chunk_list_path().await?;
+        let chunk_list_path = this.inner.chunk_list_path().await?;
         let chunk_list_path = if let Some(path) = server_root.get_path_to(&chunk_list_path) {
             path
         } else {
@@ -185,27 +202,8 @@ impl ChunkItem for WithChunksChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: WithChunksChunkItemVc) -> Result<AssetReferencesVc> {
-        let this = self_vc.await?;
-        let inner = this.inner.await?;
-        Ok(AssetReferencesVc::cell(vec![
-            WithChunksAssetReference {
-                asset: InChunkingContextAsset {
-                    asset: inner.asset,
-                    chunking_context: this.inner_context,
-                }
-                .cell()
-                .into(),
-            }
-            .cell()
-            .into(),
-            ChunkListReferenceVc::new(
-                inner.server_root,
-                self_vc.chunk_group(),
-                self_vc.chunk_list_path(),
-            )
-            .into(),
-        ]))
+    fn references(&self) -> AssetReferencesVc {
+        self.inner.references()
     }
 }
 

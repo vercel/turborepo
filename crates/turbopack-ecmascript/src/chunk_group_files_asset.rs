@@ -74,8 +74,18 @@ impl Asset for ChunkGroupFilesAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        unimplemented!()
+    async fn references(self_vc: ChunkGroupFilesAssetVc) -> Result<AssetReferencesVc> {
+        let chunks = self_vc.chunk_group().chunks();
+
+        Ok(AssetReferencesVc::cell(
+            chunks
+                .await?
+                .iter()
+                .copied()
+                .map(ChunkReferenceVc::new)
+                .map(Into::into)
+                .collect(),
+        ))
     }
 }
 
@@ -169,18 +179,7 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
-        let chunk_group = self.inner.chunk_group();
-        let chunks = chunk_group.chunks();
-
-        let references: Vec<_> = chunks
-            .await?
-            .iter()
-            .copied()
-            .map(ChunkReferenceVc::new)
-            .map(Into::into)
-            .collect();
-
-        Ok(AssetReferencesVc::cell(references))
+    fn references(&self) -> AssetReferencesVc {
+        self.inner.references()
     }
 }
