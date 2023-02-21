@@ -392,12 +392,12 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: "Setup Rust"
+      - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          target: ${{ inputs.target }}
+          target: ${{ matrix.os.name }}
           shared-cache-key: turborepo-debug-build
-          cache-key: ${{ inputs.target }}
+          cache-key: ${{ matrix.os.name }}
           save-cache: true
 
       - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
@@ -1069,6 +1069,11 @@ jobs:
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.os.name }}
+          shared-cache-key: turborepo-debug-build
+          cache-key: ${{ matrix.os.name }}
+          save-cache: true
 
       - name: Format check
         run: pnpm -- turbo run check:fmt
