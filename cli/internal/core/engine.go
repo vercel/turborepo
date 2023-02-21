@@ -160,6 +160,10 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	// we can just exit early.
 	// TODO(mehulkar): but we still need to validate bad task names?
 	if len(pkgs) == 0 {
+		for _, taskName := range taskNames {
+			// look for task name in all workspaces and exit if it isn't found?
+			fmt.Printf("[debug] taskName %#v\n", taskName)
+		}
 		return nil
 	}
 
