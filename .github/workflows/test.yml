@@ -236,6 +236,8 @@ jobs:
 
       - name: "Setup Go"
         uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: pnpm -- turbo run test --filter=cli --color
 
@@ -257,6 +259,8 @@ jobs:
         uses: ./.github/actions/setup-node
       - name: "Setup Go"
         uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Cache Prysk
         id: cache-prysk
@@ -292,6 +296,8 @@ jobs:
 
       - name: "Setup Go"
         uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
         # Turbo has already been built in previous step, no need to rebuild
@@ -384,7 +390,7 @@ jobs:
       - name: "Setup Go"
         uses: ./.github/actions/setup-go
         with:
-          github-token: ${{ inputs.github-token }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: "Setup Rust"
         uses: ./.github/actions/setup-rust
@@ -1058,6 +1064,8 @@ jobs:
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
