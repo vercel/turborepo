@@ -37,7 +37,7 @@ use tokio::{
 };
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::{
-    debug::{ValueDebug, ValueDebugString},
+    debug::{ValueDebug, ValueDebugStringReadRef},
     primitives::BoolVc,
     NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue, TurboTasks,
 };
@@ -469,13 +469,15 @@ async fn get_mock_server_future(mock_dir: &Path) -> Result<(), String> {
 #[turbo_tasks::value(shared)]
 struct TestIssueReporter {
     #[turbo_tasks(trace_ignore, debug_ignore)]
-    pub issue_tx: State<Sender<(PlainIssueReadRef, ValueDebugString)>>,
+    pub issue_tx: State<Sender<(PlainIssueReadRef, ValueDebugStringReadRef)>>,
 }
 
 #[turbo_tasks::value_impl]
 impl TestIssueReporterVc {
     #[turbo_tasks::function]
-    fn new(issue_tx: TransientInstance<Sender<(PlainIssueReadRef, ValueDebugString)>>) -> Self {
+    fn new(
+        issue_tx: TransientInstance<Sender<(PlainIssueReadRef, ValueDebugStringReadRef)>>,
+    ) -> Self {
         TestIssueReporter {
             issue_tx: State::new((*issue_tx).clone()),
         }
@@ -494,9 +496,7 @@ impl IssueReporter for TestIssueReporter {
         let issue_tx = self.issue_tx.get_untracked().clone();
         for issue in captured_issues.iter() {
             let plain = issue.into_plain();
-            issue_tx
-                .send((plain.await?, (*(plain.dbg().await?)).clone()))
-                .await?;
+            issue_tx.send((plain.await?, plain.dbg().await?)).await?;
         }
 
         Ok(BoolVc::cell(false))

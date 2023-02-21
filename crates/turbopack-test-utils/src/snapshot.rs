@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
 use similar::TextDiff;
-use turbo_tasks::{debug::ValueDebugString, TryJoinIterExt, ValueToString};
+use turbo_tasks::{debug::ValueDebugStringReadRef, TryJoinIterExt, ValueToString};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemVc, File, FileContent, FileSystemEntryType,
     FileSystemPathVc,
@@ -21,7 +21,9 @@ use turbopack_core::{
 // e.g. `UPDATE=1 cargo test -p turbopack-tests -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
-pub async fn snapshot_issues<I: IntoIterator<Item = (PlainIssueReadRef, ValueDebugString)>>(
+pub async fn snapshot_issues<
+    I: IntoIterator<Item = (PlainIssueReadRef, ValueDebugStringReadRef)>,
+>(
     captured_issues: I,
     issues_path: FileSystemPathVc,
     workspace_root: &str,

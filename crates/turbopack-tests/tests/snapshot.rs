@@ -107,7 +107,7 @@ async fn run(resource: &'static str) -> Result<()> {
             .map(|issue_vc| async move {
                 Ok((
                     issue_vc.into_plain().await?,
-                    (*(issue_vc.into_plain().dbg().await?)).clone(),
+                    issue_vc.into_plain().dbg().await?,
                 ))
             })
             .try_join()
