@@ -284,6 +284,11 @@ impl RawVc {
         }
     }
 
+    pub fn connect(&self) {
+        let tt = turbo_tasks();
+        tt.connect_task(self.get_task_id());
+    }
+
     pub fn is_resolved(&self) -> bool {
         match self {
             RawVc::TaskOutput(_) => false,
@@ -335,12 +340,7 @@ impl CollectiblesSource for RawVc {
     fn peek_collectibles<T: ValueTraitVc>(self) -> CollectiblesFuture<T> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set: RawVcSetVc = tt
-            .native_call(
-                *crate::collectibles::READ_COLLECTIBLES_FUNCTION_ID,
-                vec![self.into(), (*T::get_trait_type_id()).into()],
-            )
-            .into();
+        let set: RawVcSetVc = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
             inner: set.into_future(),
@@ -352,12 +352,7 @@ impl CollectiblesSource for RawVc {
     fn take_collectibles<T: ValueTraitVc>(self) -> CollectiblesFuture<T> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set: RawVcSetVc = tt
-            .native_call(
-                *crate::collectibles::READ_COLLECTIBLES_FUNCTION_ID,
-                vec![self.into(), (*T::get_trait_type_id()).into()],
-            )
-            .into();
+        let set: RawVcSetVc = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
             inner: set.into_future(),
@@ -509,6 +504,13 @@ pub struct CollectiblesFuture<T: ValueTraitVc> {
     inner: ReadRawVcFuture<RawVcSet, AutoSet<RawVc>>,
     take: bool,
     phantom: PhantomData<fn() -> T>,
+}
+
+impl<T: ValueTraitVc> CollectiblesFuture<T> {
+    pub fn strongly_consistent(mut self) -> Self {
+        self.inner.strongly_consistent = true;
+        self
+    }
 }
 
 impl<T: ValueTraitVc> Future for CollectiblesFuture<T> {
