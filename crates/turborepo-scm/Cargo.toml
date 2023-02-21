@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 dunce = "1.0.3"
-git2 = "0.16.1"
+git2 = { version = "0.16.1", no-default-features = true }
 thiserror = "1.0.38"
 
 [dev-dependencies]
