@@ -22,6 +22,7 @@ use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
+use crate::utils::stringify_js;
 
 pub mod builtin;
 pub mod graph;
@@ -85,7 +86,6 @@ impl PartialEq for ConstantNumber {
 impl Eq for ConstantNumber {}
 
 #[derive(Debug, Clone)]
-
 pub enum ConstantString {
     Word(JsWord),
     Atom(Atom),
@@ -210,10 +210,9 @@ impl Default for ConstantValue {
 
 impl From<bool> for ConstantValue {
     fn from(v: bool) -> Self {
-        if v {
-            ConstantValue::True
-        } else {
-            ConstantValue::False
+        match v {
+            true => ConstantValue::True,
+            false => ConstantValue::False,
         }
     }
 }
@@ -248,7 +247,7 @@ impl Display for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConstantValue::Undefined => write!(f, "undefined"),
-            ConstantValue::Str(str) => write!(f, "\"{str}\""),
+            ConstantValue::Str(str) => f.write_str(&stringify_js(str.as_str())),
             ConstantValue::True => write!(f, "true"),
             ConstantValue::False => write!(f, "false"),
             ConstantValue::Null => write!(f, "null"),
@@ -306,6 +305,21 @@ impl BinaryOperator {
             BinaryOperator::StrictNotEqual => " !== ",
         }
     }
+
+    fn positive_op(&self) -> (PositiveBinaryOperator, bool) {
+        match self {
+            BinaryOperator::Equal => (PositiveBinaryOperator::Equal, false),
+            BinaryOperator::NotEqual => (PositiveBinaryOperator::Equal, true),
+            BinaryOperator::StrictEqual => (PositiveBinaryOperator::StrictEqual, false),
+            BinaryOperator::StrictNotEqual => (PositiveBinaryOperator::StrictEqual, true),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum PositiveBinaryOperator {
+    Equal,
+    StrictEqual,
 }
 
 /// The four categories of [JsValue]s.
@@ -545,7 +559,7 @@ impl Display for JsValue {
                     .collect::<Vec<_>>()
                     .join(op.joiner())
             ),
-            JsValue::Binary(_, a, op, b) => write!(f, "({} {} {})", a, op.joiner(), b),
+            JsValue::Binary(_, a, op, b) => write!(f, "({}{}{})", a, op.joiner(), b),
             JsValue::Call(_, callee, list) => write!(
                 f,
                 "{}({})",
@@ -1163,7 +1177,7 @@ impl JsValue {
                 )
             ),
             JsValue::Binary(_, a, op, b) => format!(
-                "({} {} {})",
+                "({}{}{})",
                 a.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
                 op.joiner(),
                 b.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
@@ -1495,24 +1509,18 @@ impl JsValue {
                 }
             },
             JsValue::Binary(_, box a, op, box b) => {
-                let negate = matches!(
-                    op,
-                    BinaryOperator::NotEqual | BinaryOperator::StrictNotEqual
-                );
-                let positive_op = match op {
-                    BinaryOperator::NotEqual => BinaryOperator::Equal,
-                    BinaryOperator::StrictNotEqual => BinaryOperator::StrictEqual,
-                    _ => *op,
-                };
+                let (positive_op, negate) = op.positive_op();
                 match (positive_op, a, b) {
-                    (BinaryOperator::StrictEqual, JsValue::Constant(a), JsValue::Constant(b))
-                        if a.is_value_type() =>
-                    {
-                        Some((a == b) ^ negate)
-                    }
-                    (BinaryOperator::StrictEqual, JsValue::Constant(a), JsValue::Constant(b))
-                        if a.is_value_type() =>
-                    {
+                    (
+                        PositiveBinaryOperator::StrictEqual,
+                        JsValue::Constant(a),
+                        JsValue::Constant(b),
+                    ) if a.is_value_type() => Some(a == b),
+                    (
+                        PositiveBinaryOperator::StrictEqual,
+                        JsValue::Constant(a),
+                        JsValue::Constant(b),
+                    ) if a.is_value_type() => {
                         let same_type = {
                             use ConstantValue::*;
                             matches!(
@@ -1526,23 +1534,24 @@ impl JsValue {
                             )
                         };
                         if same_type {
-                            Some((a == b) ^ negate)
+                            Some(a == b)
                         } else {
                             None
                         }
                     }
                     (
-                        BinaryOperator::Equal,
+                        PositiveBinaryOperator::Equal,
                         JsValue::Constant(ConstantValue::Str(a)),
                         JsValue::Constant(ConstantValue::Str(b)),
-                    ) => Some((a == b) ^ negate),
+                    ) => Some(a == b),
                     (
-                        BinaryOperator::Equal,
+                        PositiveBinaryOperator::Equal,
                         JsValue::Constant(ConstantValue::Num(a)),
                         JsValue::Constant(ConstantValue::Num(b)),
-                    ) => Some((a == b) ^ negate),
+                    ) => Some(a == b),
                     _ => None,
                 }
+                .map(|x| x ^ negate)
             }
             _ => None,
         }
