@@ -1,9 +1,6 @@
 {
   "$schema": "./docs/public/schema.json",
   "pipeline": {
-    "eslint-plugin-turbo#test": {
-      "dependsOn": ["build"]
-    },
     "test": {
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
@@ -14,9 +11,6 @@
     },
     "dev": {
       "cache": false
-    },
-    "docs#dev": {
-      "dependsOn": ["schema"]
     },
     "//#build:ts": {
       "outputs": ["packages/**/dist"],
@@ -35,50 +29,6 @@
     "//#check:fmt": {
       "dependsOn": ["//#check:prettier", "//#check:toml", "//#lint"]
     },
-    "cli#build": {
-      "outputs": ["turbo", "turbo.exe"],
-      "dependsOn": []
-    },
-    "schema": {
-      "outputs": ["public/schema.json"]
-    },
-    "rss": {
-      "outputs": ["public/feed.xml"]
-    },
-    "create-turbo#test": {
-      "dependsOn": ["create-turbo#build"]
-    },
-    "docs#build": {
-      "env": [
-        "SENTRY_DSN",
-        "TURBOREPO_SFDC_CAMPAIGN_ID",
-        "TRAY_URL",
-        "CONVERTKIT_API_KEY",
-        "CONVERTKIT_API_SECRET"
-      ],
-      "outputs": [".next/**"],
-      "dependsOn": ["^build", "docs#rss", "docs#schema"]
-    },
-    "cli#e2e": {
-      "outputs": [],
-      "inputs": [
-        "cli/**/*.go",
-        "cli/go.mod",
-        "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts",
-        "shim/**/*.rs"
-      ]
-    },
-    "cli#e2e-prebuilt": {
-      "inputs": [
-        "cli/**/*.go",
-        "cli/go.mod",
-        "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts",
-        "shim/**/*.rs"
-      ]
-    },
-    "cli#integration-tests": {},
     "//#run-example": {
       "inputs": [
         "examples/**/*.ts",

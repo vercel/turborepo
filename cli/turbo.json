@@ -1,0 +1,30 @@
+{
+  "$schema": "../docs/public/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "outputs": ["turbo", "turbo.exe"]
+    },
+
+    "e2e": {
+      "outputs": [],
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
+    },
+    "e2e-prebuilt": {
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
+    },
+    "integration-tests": {}
+  }
+}
