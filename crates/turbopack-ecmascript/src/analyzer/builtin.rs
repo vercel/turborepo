@@ -311,7 +311,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                                                 ..
                                             } => {
                                                 items.extend(take(inner));
-                                                *mutable |= inner_mutable;
+                                                *mutable |= *inner_mutable;
                                             }
                                             JsValue::Constant(_)
                                             | JsValue::Url(_)
