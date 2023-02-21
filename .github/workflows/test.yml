@@ -284,8 +284,12 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
+
+      - name: "Setup Go"
+        uses: ./.github/actions/setup-go
 
       - name: E2E Tests
         # Turbo has already been built in previous step, no need to rebuild
