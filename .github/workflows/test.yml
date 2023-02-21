@@ -1056,6 +1056,12 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
       - name: Format check
         run: pnpm -- turbo run check:fmt
 
