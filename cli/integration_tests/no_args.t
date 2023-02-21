@@ -57,6 +57,7 @@ Make sure exit code is 2 when no args are passed
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
+        --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Note that using this option means that tasks running in parallel may stream their logs mixed together
   [1]
   $ ${TURBO} run
   Turbo error: at least one task must be specified

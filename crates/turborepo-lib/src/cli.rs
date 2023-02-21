@@ -352,7 +352,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
-    /// Can be: "none" or missing. Internally, the default is not named yet.
+    /// Use "none" to remove prefixes from task logs. Note that using this
+    /// option means that tasks running in parallel may stream their logs
+    /// mixed together.
     #[clap(long)]
     pub log_prefix: Option<String>,
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
