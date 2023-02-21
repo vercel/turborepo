@@ -110,10 +110,9 @@ impl ContentSource for NextRouterContentSource {
                 .inner
                 .get(path, Value::new(ContentSourceData::default())),
             RouterResult::Rewrite(data) => {
-                // TODO: We can't set response headers on the returned content.
-                let rewrite = RewriteBuilder::new(data.url.clone()).content_source(this.inner);
+                let mut rewrite = RewriteBuilder::new(data.url.clone()).content_source(this.inner);
                 if !data.headers.is_empty() {
-                    rewrite.response_headers(HeaderListVc::new(data.headers.clone()))
+                    rewrite = rewrite.response_headers(HeaderListVc::new(data.headers.clone()));
                 }
                 ContentSourceResultVc::exact(
                     ContentSourceContent::Rewrite(rewrite.build()).cell().into(),
