@@ -4,7 +4,7 @@ package ffi
 //
 // #cgo darwin LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lz -liconv
 // #cgo linux LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lz
-// #cgo windows LDFLAGS: -L${SRCDIR} -lole32 -lbcrypt -lws2_32 -luserenv
+// #cgo windows LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lole32 -lbcrypt -lws2_32 -luserenv
 import "C"
 
 import (
