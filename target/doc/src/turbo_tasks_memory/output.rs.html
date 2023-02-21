@@ -116,6 +116,12 @@
 <span id="116">116</span>
 <span id="117">117</span>
 <span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Debug, Display},
@@ -126,6 +132,8 @@
 <span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
+
+<span class="kw">use </span><span class="kw">crate</span>::MemoryBackend;
 
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub struct </span>Output {
@@ -178,12 +186,12 @@
         }
     }
 
-    <span class="kw">pub fn </span>link(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: RawVc, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>link(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: RawVc, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="macro">debug_assert!</span>(<span class="kw-2">*</span><span class="self">self </span>!= target);
         <span class="self">self</span>.assign(OutputContent::Link(target), turbo_tasks)
     }
 
-    <span class="kw">pub fn </span>error(<span class="kw-2">&amp;mut </span><span class="self">self</span>, error: Error, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>error(<span class="kw-2">&amp;mut </span><span class="self">self</span>, error: Error, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="self">self</span>.content = OutputContent::Error(SharedError::new(error));
         <span class="self">self</span>.updates += <span class="number">1</span>;
         <span class="comment">// notify
@@ -195,7 +203,7 @@
     <span class="kw">pub fn </span>panic(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         message: <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.content = OutputContent::Panic(message);
         <span class="self">self</span>.updates += <span class="number">1</span>;
@@ -205,7 +213,11 @@
         }
     }
 
-    <span class="kw">pub fn </span>assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, content: OutputContent, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>assign(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        content: OutputContent,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) {
         <span class="self">self</span>.content = content;
         <span class="self">self</span>.updates += <span class="number">1</span>;
         <span class="comment">// notify
@@ -218,7 +230,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks
     }
 
-    <span class="kw">pub fn </span>gc_drop(<span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>gc_drop(<span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="comment">// notify
         </span><span class="kw">if </span>!<span class="self">self</span>.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks);

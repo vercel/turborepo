@@ -313,6 +313,12 @@
 <span id="313">313</span>
 <span id="314">314</span>
 <span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     mem::{replace, take},
@@ -325,6 +331,8 @@
     event::{Event, EventListener},
     TaskId, TurboTasksBackendApi,
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::MemoryBackend;
 
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Cell {
@@ -519,7 +527,11 @@
         }
     }
 
-    <span class="kw">pub fn </span>assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, content: CellContent, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>assign(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        content: CellContent,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {
                 <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
@@ -602,7 +614,7 @@
     }
 
     <span class="doccomment">/// Drops the cell after GC. Will notify all dependent tasks and events.
-    </span><span class="kw">pub fn </span>gc_drop(<span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    </span><span class="kw">pub fn </span>gc_drop(<span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {}
             Cell::Recomputing {

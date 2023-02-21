@@ -400,6 +400,13 @@
 <span id="400">400</span>
 <span id="401">401</span>
 <span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -577,17 +584,17 @@
     </span><span class="kw">fn </span>initialize(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_id_provider: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TaskIdProvider) {}
 
     <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">fn </span>startup(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {}
+    </span><span class="kw">fn </span>startup(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;) {}
 
     <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">fn </span>stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {}
+    </span><span class="kw">fn </span>stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;) {}
 
     <span class="attr">#[allow(unused_variables)]
-    </span><span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {}
+    </span><span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;) {}
 
-    <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi);
+    <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;);
 
-    <span class="kw">fn </span>invalidate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: Vec&lt;TaskId&gt;, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi);
+    <span class="kw">fn </span>invalidate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: Vec&lt;TaskId&gt;, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;);
 
     <span class="kw">fn </span>get_task_description(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) -&gt; String;
 
@@ -604,14 +611,14 @@
     <span class="kw">fn </span>try_start_task_execution(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt;;
 
     <span class="kw">fn </span>task_execution_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         result: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc&gt;, <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     );
 
     <span class="kw">fn </span>task_execution_completed(
@@ -620,13 +627,13 @@
         duration: Duration,
         instant: Instant,
         stateful: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; bool;
 
     <span class="kw">fn </span>run_backend_job&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         id: BackendJobId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt;;
 
     <span class="kw">fn </span>try_read_task_output(
@@ -634,7 +641,7 @@
         task: TaskId,
         reader: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt;;
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -643,7 +650,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt;;
 
     <span class="kw">fn </span>try_read_task_cell(
@@ -651,7 +658,7 @@
         task: TaskId,
         index: CellId,
         reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -660,7 +667,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         index: CellId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -669,7 +676,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         current_task: TaskId,
         index: CellId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="kw">match </span><span class="self">self</span>.try_read_task_cell_untracked(current_task, index, turbo_tasks)<span class="question-mark">? </span>{
             <span class="prelude-val">Ok</span>(content) =&gt; <span class="prelude-val">Ok</span>(content),
@@ -682,7 +689,7 @@
         task: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; RawVcSetVc;
 
     <span class="kw">fn </span>emit_collectible(
@@ -690,7 +697,7 @@
         trait_type: TraitTypeId,
         collectible: RawVc,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     );
 
     <span class="kw">fn </span>unemit_collectible(
@@ -698,7 +705,7 @@
         trait_type: TraitTypeId,
         collectible: RawVc,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     );
 
     <span class="kw">fn </span>update_task_cell(
@@ -706,28 +713,35 @@
         task: TaskId,
         index: CellId,
         content: CellContent,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     );
 
     <span class="kw">fn </span>get_or_create_persistent_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: PersistentTaskType,
         parent_task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; TaskId;
+
+    <span class="kw">fn </span>connect_task(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        parent_task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
+    );
 
     <span class="kw">fn </span>create_transient_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: TransientTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     ) -&gt; TaskId;
 }
 
 <span class="kw">impl </span>PersistentTaskType {
-    <span class="kw">pub async fn </span>run_resolve_native(
+    <span class="kw">pub async fn </span>run_resolve_native&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt;(
         fn_id: FunctionId,
         inputs: Vec&lt;TaskInput&gt;,
-        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt;,
+        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>resolved_inputs = Vec::with_capacity(inputs.len());
         <span class="kw">for </span>input <span class="kw">in </span>inputs.into_iter() {
@@ -736,11 +750,11 @@
         <span class="prelude-val">Ok</span>(turbo_tasks.native_call(fn_id, resolved_inputs))
     }
 
-    <span class="kw">pub async fn </span>run_resolve_trait(
+    <span class="kw">pub async fn </span>run_resolve_trait&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt;(
         trait_type: TraitTypeId,
         name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
         inputs: Vec&lt;TaskInput&gt;,
-        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt;,
+        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>resolved_inputs = Vec::with_capacity(inputs.len());
         <span class="kw">let </span><span class="kw-2">mut </span>iter = inputs.into_iter();
@@ -783,9 +797,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>run(
+    <span class="kw">pub fn </span>run&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt;(
         <span class="self">self</span>,
-        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt;,
+        turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt;&gt;,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             PersistentTaskType::Native(fn_id, inputs) =&gt; {

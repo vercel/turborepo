@@ -524,10 +524,22 @@
 <span id="524">524</span>
 <span id="525">525</span>
 <span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     fmt::{Debug, Display},
-    future::Future,
+    future::{Future, IntoFuture},
     hash::Hash,
     marker::PhantomData,
     pin::Pin,
@@ -810,6 +822,11 @@
         }
     }
 
+    <span class="kw">pub fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">let </span>tt = turbo_tasks();
+        tt.connect_task(<span class="self">self</span>.get_task_id());
+    }
+
     <span class="kw">pub fn </span>is_resolved(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
             RawVc::TaskOutput(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
@@ -864,7 +881,7 @@
         <span class="kw">let </span>set: RawVcSetVc = tt.read_task_collectibles(<span class="self">self</span>.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
-            inner: set.strongly_consistent(),
+            inner: set.into_future(),
             take: <span class="bool-val">false</span>,
             phantom: PhantomData,
         }
@@ -876,7 +893,7 @@
         <span class="kw">let </span>set: RawVcSetVc = tt.read_task_collectibles(<span class="self">self</span>.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
-            inner: set.strongly_consistent(),
+            inner: set.into_future(),
             take: <span class="bool-val">true</span>,
             phantom: PhantomData,
         }
@@ -1025,6 +1042,13 @@
     inner: ReadRawVcFuture&lt;RawVcSet, AutoSet&lt;RawVc&gt;&gt;,
     take: bool,
     phantom: PhantomData&lt;<span class="kw">fn</span>() -&gt; T&gt;,
+}
+
+<span class="kw">impl</span>&lt;T: ValueTraitVc&gt; CollectiblesFuture&lt;T&gt; {
+    <span class="kw">pub fn </span>strongly_consistent(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner.strongly_consistent = <span class="bool-val">true</span>;
+        <span class="self">self
+    </span>}
 }
 
 <span class="kw">impl</span>&lt;T: ValueTraitVc&gt; Future <span class="kw">for </span>CollectiblesFuture&lt;T&gt; {

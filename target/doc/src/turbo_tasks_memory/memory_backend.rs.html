@@ -777,6 +777,43 @@
 <span id="777">777</span>
 <span id="778">778</span>
 <span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
+<span id="805">805</span>
+<span id="806">806</span>
+<span id="807">807</span>
+<span id="808">808</span>
+<span id="809">809</span>
+<span id="810">810</span>
+<span id="811">811</span>
+<span id="812">812</span>
+<span id="813">813</span>
+<span id="814">814</span>
+<span id="815">815</span>
+<span id="816">816</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::{Borrow, Cow},
     cell::RefCell,
@@ -829,8 +866,6 @@
     backend_jobs: NoMoveVec&lt;Job&gt;,
     backend_job_id_factory: IdFactory&lt;BackendJobId&gt;,
     task_cache: DashMap&lt;Arc&lt;PersistentTaskType&gt;, TaskId, BuildHasherDefault&lt;FxHasher&gt;&gt;,
-    read_collectibles_task_cache:
-        DashMap&lt;(TaskScopeId, TraitTypeId), TaskId, BuildHasherDefault&lt;FxHasher&gt;&gt;,
     memory_limit: usize,
     gc_queue: <span class="prelude-ty">Option</span>&lt;GcQueue&gt;,
     idle_gc_active: AtomicBool,
@@ -859,7 +894,6 @@
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
-            read_collectibles_task_cache: DashMap::default(),
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(<span class="bool-val">false</span>),
@@ -871,7 +905,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         parent: TaskId,
         child: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.with_task(parent, |parent| {
             parent.connect_child(child, <span class="self">self</span>, turbo_tasks)
@@ -893,7 +927,7 @@
         id: TaskId,
         strongly_consistent: bool,
         note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
         func: F,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;T, EventListener&gt;&gt; {
         <span class="self">self</span>.with_task(id, |task| {
@@ -903,14 +937,6 @@
 
     <span class="kw">pub fn </span>with_all_cached_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>func: <span class="kw">impl </span>FnMut(TaskId)) {
         <span class="kw">for </span>id <span class="kw">in </span><span class="self">self</span>.task_cache.clone().into_read_only().values() {
-            func(<span class="kw-2">*</span>id);
-        }
-        <span class="kw">for </span>id <span class="kw">in </span><span class="self">self
-            </span>.read_collectibles_task_cache
-            .clone()
-            .into_read_only()
-            .values()
-        {
             func(<span class="kw-2">*</span>id);
         }
     }
@@ -934,10 +960,19 @@
         id
     }
 
+    <span class="kw">pub fn </span>create_new_no_collectibles_scope(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: usize) -&gt; TaskScopeId {
+        <span class="kw">let </span>id = <span class="self">self</span>.scope_id_factory.get();
+        <span class="kw">unsafe </span>{
+            <span class="self">self</span>.memory_task_scopes
+                .insert(<span class="kw-2">*</span>id, TaskScope::new_no_collectibles(id, tasks));
+        }
+        id
+    }
+
     <span class="kw">fn </span>increase_scope_active_queue(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>queue: Vec&lt;TaskScopeId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="kw">while let </span><span class="prelude-val">Some</span>(scope) = queue.pop() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(tasks) = <span class="self">self</span>.with_scope(scope, |scope| {
@@ -953,7 +988,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>increase_scope_active(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         scope: TaskScopeId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.increase_scope_active_queue(<span class="macro">vec!</span>[scope], turbo_tasks);
     }
@@ -962,7 +997,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         scope: TaskScopeId,
         count: usize,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>queue = Vec::new();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(tasks) = <span class="self">self</span>.with_scope(scope, |scope| {
@@ -979,7 +1014,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         scope: TaskScopeId,
         task_id: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.decrease_scope_active_by(scope, task_id, <span class="number">1</span>, turbo_tasks);
     }
@@ -989,7 +1024,7 @@
         scope_id: TaskScopeId,
         task_id: TaskId,
         count: usize,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>queue = Vec::new();
         <span class="self">self</span>.with_scope(scope_id, |scope| {
@@ -1018,7 +1053,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>run_gc(<span class="kw-2">&amp;</span><span class="self">self</span>, idle: bool, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">pub fn </span>run_gc(<span class="kw-2">&amp;</span><span class="self">self</span>, idle: bool, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
             <span class="kw">const </span>MAX_COLLECT_FACTOR: u8 = u8::MAX / <span class="number">8</span>;
 
@@ -1056,43 +1091,65 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_or_create_read_collectibles_task(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_or_create_read_task_collectibles_task(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task_id: TaskId,
+        trait_type: TraitTypeId,
+        parent_task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) -&gt; TaskId {
+        <span class="self">self</span>.with_task(task_id, |task| {
+            <span class="kw">let </span>id = task.get_read_collectibles_task(trait_type, || {
+                <span class="kw">let </span>scope = <span class="self">self</span>.create_new_no_collectibles_scope(<span class="number">1</span>);
+
+                <span class="kw">let </span>id = turbo_tasks.get_fresh_task_id().into();
+                <span class="kw">let </span>task = Task::new_read_task_collectibles(
+                    <span class="comment">// Safety: That task will hold the value, but we are still in
+                    // control of the task
+                    </span>id,
+                    scope,
+                    task_id,
+                    trait_type,
+                    turbo_tasks.stats_type(),
+                );
+                <span class="comment">// Safety: We have a fresh task id that nobody knows about yet
+                </span><span class="kw">unsafe </span>{ <span class="self">self</span>.memory_tasks.insert(<span class="kw-2">*</span>id, task) };
+                <span class="self">self</span>.with_scope(scope, |scope| {
+                    scope.state.lock().add_dirty_task(id);
+                });
+                id
+            });
+            <span class="self">self</span>.connect_task_child(parent_task, id, turbo_tasks);
+            id
+        })
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_or_create_read_scope_collectibles_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         scope_id: TaskScopeId,
         trait_type: TraitTypeId,
         parent_task: TaskId,
-        root_scoped: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; TaskId {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = <span class="self">self</span>.lookup_and_connect_task(
-            parent_task,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.read_collectibles_task_cache,
-            <span class="kw-2">&amp;</span>(scope_id, trait_type),
-            turbo_tasks,
-        ) {
-            <span class="comment">// fast pass without creating a new task
-            </span>task
-        } <span class="kw">else </span>{
-            <span class="comment">// slow pass with key lock
-            </span><span class="kw">let </span>id = turbo_tasks.get_fresh_task_id();
-            <span class="kw">let </span>task = Task::new_read_collectibles(
-                <span class="comment">// Safety: That task will hold the value, but we are still in
-                // control of the task
-                </span><span class="kw-2">*</span><span class="kw">unsafe </span>{ id.get_unchecked() },
-                scope_id,
-                trait_type,
-                turbo_tasks.stats_type(),
-            );
-            <span class="self">self</span>.insert_and_connect_fresh_task(
-                parent_task,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.read_collectibles_task_cache,
-                (scope_id, trait_type),
-                id,
-                task,
-                root_scoped,
-                turbo_tasks,
-            )
-        }
+        <span class="self">self</span>.with_scope(scope_id, |scope| {
+            <span class="kw">let </span><span class="kw-2">mut </span>state = scope.state.lock();
+            <span class="kw">let </span>task_id = state.get_read_collectibles_task(trait_type, || {
+                <span class="kw">let </span>id = turbo_tasks.get_fresh_task_id().into();
+                <span class="kw">let </span>task = Task::new_read_scope_collectibles(
+                    <span class="comment">// Safety: That task will hold the value, but we are still in
+                    // control of the task
+                    </span>id,
+                    scope_id,
+                    trait_type,
+                    turbo_tasks.stats_type(),
+                );
+                <span class="comment">// Safety: We have a fresh task id that nobody knows about yet
+                </span><span class="kw">unsafe </span>{ <span class="self">self</span>.memory_tasks.insert(<span class="kw-2">*</span>id, task) };
+                id
+            });
+            <span class="self">self</span>.connect_task_child(parent_task, task_id, turbo_tasks);
+            task_id
+        })
     }
 
     <span class="kw">fn </span>insert_and_connect_fresh_task&lt;K: Eq + Hash, H: BuildHasher + Clone&gt;(
@@ -1103,7 +1160,7 @@
         new_id: Unused&lt;TaskId&gt;,
         task: Task,
         root_scoped: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; TaskId {
         <span class="kw">let </span>new_id = new_id.into();
         <span class="comment">// Safety: We have a fresh task id that nobody knows about yet
@@ -1136,7 +1193,7 @@
         parent_task: TaskId,
         task_cache: <span class="kw-2">&amp;</span>DashMap&lt;K, TaskId, H&gt;,
         key: <span class="kw-2">&amp;</span>Q,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskId&gt;
     <span class="kw">where
         </span>K: Borrow&lt;Q&gt;,
@@ -1151,7 +1208,7 @@
 }
 
 <span class="kw">impl </span>Backend <span class="kw">for </span>MemoryBackend {
-    <span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="kw">if </span><span class="self">self
             </span>.idle_gc_active
             .compare_exchange(<span class="bool-val">false</span>, <span class="bool-val">true</span>, Ordering::AcqRel, Ordering::Acquire)
@@ -1162,11 +1219,15 @@
         }
     }
 
-    <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;) {
         <span class="self">self</span>.with_task(task, |task| task.invalidate(<span class="self">self</span>, turbo_tasks));
     }
 
-    <span class="kw">fn </span>invalidate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: Vec&lt;TaskId&gt;, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>invalidate_tasks(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tasks: Vec&lt;TaskId&gt;,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) {
         <span class="kw">for </span>task <span class="kw">in </span>tasks.into_iter() {
             <span class="self">self</span>.with_task(task, |task| {
                 task.invalidate(<span class="self">self</span>, turbo_tasks);
@@ -1191,7 +1252,7 @@
     <span class="kw">fn </span>try_start_task_execution(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt; {
         <span class="self">self</span>.with_task(task, |task| task.execute(<span class="self">self</span>, turbo_tasks))
     }
@@ -1200,7 +1261,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         result: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc&gt;, <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.with_task(task, |task| {
             task.execution_result(result, <span class="self">self</span>, turbo_tasks);
@@ -1213,7 +1274,7 @@
         duration: Duration,
         instant: Instant,
         stateful: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; bool {
         <span class="kw">let </span>reexecute = <span class="self">self</span>.with_task(task_id, |task| {
             task.execution_completed(duration, instant, stateful, <span class="self">self</span>, turbo_tasks)
@@ -1232,7 +1293,7 @@
         task: TaskId,
         reader: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt; {
         <span class="kw">if </span>task == reader {
             <span class="macro">bail!</span>(<span class="string">&quot;reading it&#39;s own output is not possible&quot;</span>);
@@ -1253,7 +1314,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt; {
         <span class="self">self</span>.try_get_output(
             task,
@@ -1269,7 +1330,7 @@
         task_id: TaskId,
         index: CellId,
         reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="kw">if </span>task_id == reader {
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task_id, |task| {
@@ -1301,7 +1362,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         current_task: TaskId,
         index: CellId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(current_task, |task| {
             task.with_cell(index, |cell| cell.read_own_content_untracked())
@@ -1312,7 +1373,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_id: TaskId,
         index: CellId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="self">self</span>.with_task(task_id, |task| {
             <span class="kw">match </span>task.with_cell_mut(index, |cell| {
@@ -1337,7 +1398,7 @@
         id: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; RawVcSetVc {
         <span class="self">self</span>.with_task(id, |task| {
             task.read_task_collectibles(reader, trait_id, <span class="self">self</span>, turbo_tasks)
@@ -1349,7 +1410,7 @@
         trait_type: TraitTypeId,
         collectible: RawVc,
         id: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.with_task(id, |task| {
             task.emit_collectible(trait_type, collectible, <span class="self">self</span>, turbo_tasks)
@@ -1361,7 +1422,7 @@
         trait_type: TraitTypeId,
         collectible: RawVc,
         id: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.with_task(id, |task| {
             task.unemit_collectible(trait_type, collectible, <span class="self">self</span>, turbo_tasks)
@@ -1373,7 +1434,7 @@
         task: TaskId,
         index: CellId,
         content: CellContent,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) {
         <span class="self">self</span>.with_task(task, |task| {
             task.with_cell_mut(index, |cell| cell.assign(content, turbo_tasks))
@@ -1384,7 +1445,7 @@
     </span><span class="kw">fn </span>run_backend_job&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         id: BackendJobId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
         <span class="comment">// SAFETY: id will not be reused until with job is done
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(job) = <span class="kw">unsafe </span>{ <span class="self">self</span>.backend_jobs.take(<span class="kw-2">*</span>id) } {
@@ -1404,7 +1465,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>task_type: PersistentTaskType,
         parent_task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; TaskId {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(task) =
             <span class="self">self</span>.lookup_and_connect_task(parent_task, <span class="kw-2">&amp;</span><span class="self">self</span>.task_cache, <span class="kw-2">&amp;</span>task_type, turbo_tasks)
@@ -1437,10 +1498,19 @@
         }
     }
 
+    <span class="kw">fn </span>connect_task(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        parent_task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) {
+        <span class="self">self</span>.connect_task_child(parent_task, task, turbo_tasks);
+    }
+
     <span class="kw">fn </span>create_transient_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: TransientTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; TaskId {
         <span class="kw">let </span>id = turbo_tasks.get_fresh_task_id();
         <span class="comment">// use INITIAL_SCOPE
@@ -1498,7 +1568,11 @@
         }
     }
 
-    <span class="kw">async fn </span>run(<span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">async fn </span>run(
+        <span class="self">self</span>,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
+    ) {
         <span class="kw">match </span><span class="self">self </span>{
             Job::RemoveFromScopes(tasks, scopes) =&gt; {
                 <span class="kw">for </span>task <span class="kw">in </span>tasks {

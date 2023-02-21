@@ -1340,6 +1340,20 @@
 <span id="1340">1340</span>
 <span id="1341">1341</span>
 <span id="1342">1342</span>
+<span id="1343">1343</span>
+<span id="1344">1344</span>
+<span id="1345">1345</span>
+<span id="1346">1346</span>
+<span id="1347">1347</span>
+<span id="1348">1348</span>
+<span id="1349">1349</span>
+<span id="1350">1350</span>
+<span id="1351">1351</span>
+<span id="1352">1352</span>
+<span id="1353">1353</span>
+<span id="1354">1354</span>
+<span id="1355">1355</span>
+<span id="1356">1356</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1450,6 +1464,8 @@
 
     <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
     <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent);
+
+    <span class="kw">fn </span>connect_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId);
 }
 
 <span class="doccomment">/// The type of stats reporting.
@@ -1510,8 +1526,10 @@
     }
 }
 
-<span class="kw">pub trait </span>TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send {
-    <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt;;
+<span class="kw">pub trait </span>TurboTasksBackendApi&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt;:
+    TaskIdProvider + TurboTasksCallApi + Sync + Send
+{
+    <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt;&gt;;
 
     <span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId);
     <span class="kw">fn </span>schedule_backend_background_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId);
@@ -1536,6 +1554,8 @@
     </span><span class="kw">fn </span>set_stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>, stats_type: StatsType);
     <span class="doccomment">/// Returns the duration from the start of the program to the given instant.
     </span><span class="kw">fn </span>program_duration_until(<span class="kw-2">&amp;</span><span class="self">self</span>, instant: Instant) -&gt; Duration;
+    <span class="doccomment">/// Returns a reference to the backend.
+    </span><span class="kw">fn </span>backend(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>B;
 }
 
 <span class="kw">impl </span>StatsType {
@@ -1550,7 +1570,7 @@
     }
 }
 
-<span class="kw">impl </span>TaskIdProvider <span class="kw">for </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TaskIdProvider <span class="kw">for </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt; {
     <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
         (<span class="kw-2">*</span><span class="self">self</span>).get_fresh_task_id()
     }
@@ -1614,7 +1634,7 @@
     <span class="kw">static </span>CURRENT_TASK_STATE: RefCell&lt;CurrentTaskState&gt;;
 }
 
-<span class="kw">impl</span>&lt;B: Backend&gt; TurboTasks&lt;B&gt; {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasks&lt;B&gt; {
     <span class="comment">// TODO better lifetime management for turbo tasks
     // consider using unsafe for the task_local turbo tasks
     // that should be safe as long tasks can&#39;t outlife turbo task
@@ -2068,7 +2088,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;B: Backend&gt; TurboTasksCallApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasksCallApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
     <span class="kw">fn </span>dynamic_call(<span class="kw-2">&amp;</span><span class="self">self</span>, func: FunctionId, inputs: Vec&lt;TaskInput&gt;) -&gt; RawVc {
         <span class="self">self</span>.dynamic_call(func, inputs)
     }
@@ -2110,7 +2130,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;B: Backend&gt; TurboTasksApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasksApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
     <span class="kw">fn </span>invalidate(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
         <span class="self">self</span>.backend.invalidate_task(task, <span class="self">self</span>);
     }
@@ -2227,11 +2247,19 @@
             <span class="self">self</span>,
         );
     }
+
+    <span class="kw">fn </span>connect_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
+        <span class="self">self</span>.backend
+            .connect_task(task, current_task(<span class="string">&quot;connecting task&quot;</span>), <span class="self">self</span>);
+    }
 }
 
-<span class="kw">impl</span>&lt;B: Backend&gt; TurboTasksBackendApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
-    <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt; {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasksBackendApi&lt;B&gt; <span class="kw">for </span>TurboTasks&lt;B&gt; {
+    <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&lt;B&gt;&gt; {
         <span class="self">self</span>.pin()
+    }
+    <span class="kw">fn </span>backend(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>B {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.backend
     }
     <span class="attr">#[track_caller]
     </span><span class="kw">fn </span>schedule_backend_background_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId) {
@@ -2335,7 +2363,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;B: Backend&gt; TaskIdProvider <span class="kw">for </span>TurboTasks&lt;B&gt; {
+<span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TaskIdProvider <span class="kw">for </span>TurboTasks&lt;B&gt; {
     <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Unused&lt;TaskId&gt; {
         <span class="comment">// Safety: This is a fresh id from the factory
         </span><span class="kw">unsafe </span>{ Unused::new_unchecked(<span class="self">self</span>.task_id_factory.get()) }

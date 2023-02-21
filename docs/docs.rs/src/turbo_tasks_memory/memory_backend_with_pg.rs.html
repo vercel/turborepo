@@ -1851,6 +1851,69 @@
 <span id="1851">1851</span>
 <span id="1852">1852</span>
 <span id="1853">1853</span>
+<span id="1854">1854</span>
+<span id="1855">1855</span>
+<span id="1856">1856</span>
+<span id="1857">1857</span>
+<span id="1858">1858</span>
+<span id="1859">1859</span>
+<span id="1860">1860</span>
+<span id="1861">1861</span>
+<span id="1862">1862</span>
+<span id="1863">1863</span>
+<span id="1864">1864</span>
+<span id="1865">1865</span>
+<span id="1866">1866</span>
+<span id="1867">1867</span>
+<span id="1868">1868</span>
+<span id="1869">1869</span>
+<span id="1870">1870</span>
+<span id="1871">1871</span>
+<span id="1872">1872</span>
+<span id="1873">1873</span>
+<span id="1874">1874</span>
+<span id="1875">1875</span>
+<span id="1876">1876</span>
+<span id="1877">1877</span>
+<span id="1878">1878</span>
+<span id="1879">1879</span>
+<span id="1880">1880</span>
+<span id="1881">1881</span>
+<span id="1882">1882</span>
+<span id="1883">1883</span>
+<span id="1884">1884</span>
+<span id="1885">1885</span>
+<span id="1886">1886</span>
+<span id="1887">1887</span>
+<span id="1888">1888</span>
+<span id="1889">1889</span>
+<span id="1890">1890</span>
+<span id="1891">1891</span>
+<span id="1892">1892</span>
+<span id="1893">1893</span>
+<span id="1894">1894</span>
+<span id="1895">1895</span>
+<span id="1896">1896</span>
+<span id="1897">1897</span>
+<span id="1898">1898</span>
+<span id="1899">1899</span>
+<span id="1900">1900</span>
+<span id="1901">1901</span>
+<span id="1902">1902</span>
+<span id="1903">1903</span>
+<span id="1904">1904</span>
+<span id="1905">1905</span>
+<span id="1906">1906</span>
+<span id="1907">1907</span>
+<span id="1908">1908</span>
+<span id="1909">1909</span>
+<span id="1910">1910</span>
+<span id="1911">1911</span>
+<span id="1912">1912</span>
+<span id="1913">1913</span>
+<span id="1914">1914</span>
+<span id="1915">1915</span>
+<span id="1916">1916</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -1987,7 +2050,7 @@
     DeactivatePersisted(TaskId),
 }
 
-<span class="kw">pub struct </span>MemoryBackendWithPersistedGraph&lt;P: PersistedGraph&gt; {
+<span class="kw">pub struct </span>MemoryBackendWithPersistedGraph&lt;P: PersistedGraph + <span class="lifetime">&#39;static</span>&gt; {
     <span class="kw">pub </span>pg: P,
     tasks: NoMoveVec&lt;Task&gt;,
     cache: DashMap&lt;PersistentTaskType, TaskId&gt;,
@@ -2042,7 +2105,7 @@
     <span class="kw">fn </span>state_mut(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; (MutexGuard&lt;<span class="lifetime">&#39;_</span>, TaskState&gt;, <span class="kw-2">&amp;</span>Task) {
         <span class="kw">let </span>task_info = <span class="self">self</span>.tasks.get(<span class="kw-2">*</span>task).unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>state = task_info.task_state.lock().unwrap();
@@ -2053,7 +2116,7 @@
     <span class="kw">fn </span>mem_state_mut(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; (MutexGuard&lt;<span class="lifetime">&#39;_</span>, TaskState&gt;, <span class="kw-2">&amp;</span>Task) {
         <span class="kw">let </span>task_info = <span class="self">self</span>.tasks.get(<span class="kw-2">*</span>task).unwrap();
         <span class="kw">loop </span>{
@@ -2087,7 +2150,7 @@
         task: TaskId,
         task_info: <span class="kw-2">&amp;</span>Task,
         task_state: <span class="kw-2">&amp;mut </span>TaskState,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">if </span>task_state.memory.is_none() &amp;&amp; task_state.persisted.is_none() {
             <span class="kw">if let </span>TaskType::Persistent(<span class="kw">_</span>) = <span class="kw-2">&amp;</span>task_info.task_type {
@@ -2110,7 +2173,7 @@
         task: TaskId,
         task_state: <span class="kw-2">&amp;mut </span>TaskState,
         delayed_activate: <span class="kw-2">&amp;mut </span>Vec&lt;TaskId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">if </span>task_state.memory.is_none() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>((data, state)) = <span class="self">self</span>.pg_read(task, turbo_tasks) {
@@ -2170,7 +2233,7 @@
     <span class="kw">fn </span>lookup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: <span class="kw-2">&amp;</span>PersistentTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskId&gt; {
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..task_type.len() {
             <span class="kw">let </span>partial = task_type.partial(i);
@@ -2189,7 +2252,12 @@
         <span class="self">self</span>.pg_lookup_one(task_type, turbo_tasks)
     }
 
-    <span class="kw">fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, parent_task: TaskId, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>connect(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        parent_task: TaskId,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="comment">// connect() will never be called concurrently for the same parent_task
         // therefore it&#39;s safe to add the task into children before incrementing
         // active_parents.
@@ -2214,7 +2282,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         parent_task: TaskId,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="comment">// The active_parents count was already initialized with 1
         // When this was incorrect, we need to revert that.
@@ -2238,7 +2306,11 @@
         }
     }
 
-    <span class="kw">fn </span>schedule_background_job(<span class="kw-2">&amp;</span><span class="self">self</span>, job: BackgroundJob, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>schedule_background_job(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        job: BackgroundJob,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">let </span>id = <span class="self">self</span>.background_job_id_factory.get();
         <span class="comment">// SAFETY: It&#39;s a fresh id
         </span><span class="kw">unsafe </span>{
@@ -2247,7 +2319,11 @@
         turbo_tasks.schedule_backend_background_job(id);
     }
 
-    <span class="kw">fn </span>activate_persisted(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>activate_persisted(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(ActivateResult {
             keeps_external_active,
             external,
@@ -2278,7 +2354,11 @@
         }
     }
 
-    <span class="kw">fn </span>deactivate_persisted(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>deactivate_persisted(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(DeactivateResult {
             more_tasks_to_deactivate,
         }) = <span class="self">self</span>.pg_deactivate_when_needed(task, turbo_tasks)
@@ -2298,7 +2378,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         by: u32,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>delayed_activate = Vec::new();
         <span class="self">self</span>.try_increment_active_parents(task, <span class="bool-val">true</span>, by, <span class="kw-2">&amp;mut </span>delayed_activate, turbo_tasks);
@@ -2322,7 +2402,7 @@
         force: bool,
         by: u32,
         delayed_activate: <span class="kw-2">&amp;mut </span>Vec&lt;TaskId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span>task_info = <span class="self">self</span>.tasks.get(<span class="kw-2">*</span>task).unwrap();
         <span class="kw">let </span>prev = task_info.active_parents.fetch_add(by, Ordering::Relaxed);
@@ -2349,7 +2429,7 @@
         task: TaskId,
         state: MutexGuard&lt;TaskState&gt;,
         task_info: <span class="kw-2">&amp;</span>Task,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>delayed_activate = Vec::new();
         <span class="self">self</span>.activate_task_inner(task, state, task_info, <span class="kw-2">&amp;mut </span>delayed_activate, turbo_tasks);
@@ -2373,7 +2453,7 @@
         <span class="kw-2">mut </span>state: MutexGuard&lt;TaskState&gt;,
         task_info: <span class="kw-2">&amp;</span>Task,
         delayed_activate: <span class="kw-2">&amp;mut </span>Vec&lt;TaskId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span>TaskState {
             <span class="kw-2">ref mut </span>active,
@@ -2439,7 +2519,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         by: u32,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="self">self</span>.decrement_active_parents_limited(<span class="kw-2">&amp;</span>[(task, by)], <span class="number">0</span>, turbo_tasks);
     }
@@ -2448,7 +2528,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tasks: <span class="kw-2">&amp;</span>[(TaskId, u32)],
         remaining_depth: u8,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>delayed_deactivate = Vec::new();
         <span class="kw">for </span>(task, by) <span class="kw">in </span>tasks {
@@ -2474,7 +2554,7 @@
         by: u32,
         remaining_depth: u8,
         delayed_deactivate: <span class="kw-2">&amp;mut </span>Vec&lt;TaskId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span>task_info = <span class="self">self</span>.tasks.get(<span class="kw-2">*</span>task).unwrap();
         <span class="kw">let </span>prev = task_info.active_parents.fetch_sub(by, Ordering::Relaxed);
@@ -2509,7 +2589,7 @@
         task: TaskId,
         state: MutexGuard&lt;TaskState&gt;,
         task_info: <span class="kw-2">&amp;</span>Task,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>delayed_deactivate = Vec::new();
         <span class="self">self</span>.deactivate_task_inner(
@@ -2528,7 +2608,11 @@
         }
     }
 
-    <span class="kw">fn </span>deactivate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>[TaskId], turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>deactivate_tasks(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tasks: <span class="kw-2">&amp;</span>[TaskId],
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">let </span><span class="kw-2">mut </span>delayed_deactivate = Vec::new();
         <span class="kw">for </span>task <span class="kw">in </span>tasks {
             <span class="kw">let </span>(state, task_info) = <span class="self">self</span>.state_mut(<span class="kw-2">*</span>task, turbo_tasks);
@@ -2556,7 +2640,7 @@
         task_info: <span class="kw-2">&amp;</span>Task,
         remaining_depth: u8,
         delayed_deactivate: <span class="kw-2">&amp;mut </span>Vec&lt;TaskId&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>deactivate_persisted = <span class="bool-val">false</span>;
         <span class="kw">let </span>TaskState {
@@ -2591,7 +2675,10 @@
         }
     }
 
-    <span class="kw">fn </span>persist(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; bool {
+    <span class="kw">fn </span>persist(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) -&gt; bool {
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>task) = <span class="self">self</span>.persist_queue1.pop() {
                 <span class="self">self</span>.persist_queue1_queued.remove(<span class="kw-2">&amp;</span>task);
@@ -2732,7 +2819,11 @@
                 .any(|q| !q.lock().unwrap().is_empty())
     }
 
-    <span class="kw">fn </span>increase_persist_workers(<span class="kw-2">&amp;</span><span class="self">self</span>, n: usize, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>increase_persist_workers(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        n: usize,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">loop </span>{
             <span class="kw">let </span>capacity = <span class="self">self</span>.persist_capacity.load(Ordering::Acquire);
             <span class="kw">if </span>capacity == <span class="number">0 </span>{
@@ -2758,7 +2849,7 @@
 }
 
 <span class="kw">impl</span>&lt;P: PersistedGraph&gt; Backend <span class="kw">for </span>MemoryBackendWithPersistedGraph&lt;P&gt; {
-    <span class="kw">fn </span>startup(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>startup(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;) {
         <span class="kw">let </span>(tasks_to_activate, tasks_to_deactivate) =
             <span class="self">self</span>.pg_get_pending_active_update(turbo_tasks);
         <span class="kw">let </span>tasks = <span class="self">self</span>.pg_get_active_external_tasks(turbo_tasks);
@@ -2828,11 +2919,15 @@
         }
     }
 
-    <span class="kw">fn </span>stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;) {
         <span class="self">self</span>.pg_stop(turbo_tasks);
     }
 
-    <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>invalidate_task(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.state_mut(task, turbo_tasks);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(MemoryTaskState { freshness, .. }) = <span class="kw-2">&amp;mut </span>state.memory {
@@ -2855,7 +2950,11 @@
         }
     }
 
-    <span class="kw">fn </span>invalidate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: Vec&lt;TaskId&gt;, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>invalidate_tasks(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tasks: Vec&lt;TaskId&gt;,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="kw">for </span>task <span class="kw">in </span>tasks {
             <span class="self">self</span>.invalidate_task(task, turbo_tasks);
         }
@@ -2878,7 +2977,7 @@
     <span class="kw">fn </span>try_start_task_execution(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt; {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
@@ -2931,7 +3030,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         result: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc&gt;, <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;&gt;,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, _task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>TaskState { <span class="kw-2">ref mut </span>memory, .. } = <span class="kw-2">*</span>state;
@@ -2966,7 +3065,7 @@
         duration: Duration,
         _instant: Instant,
         _stateful: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; bool {
         <span class="attr">#[cfg(feature = <span class="string">&quot;log_running_tasks&quot;</span>)]
         </span>{
@@ -3027,7 +3126,7 @@
     <span class="kw">fn </span>run_backend_job&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         id: BackendJobId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
         <span class="kw">if </span>id == <span class="self">self</span>.persist_job {
             <span class="kw">return </span>Box::pin(<span class="kw">async </span>{
@@ -3073,7 +3172,7 @@
         task: TaskId,
         reader: TaskId,
         _strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt; {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, _task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>TaskState {
@@ -3112,7 +3211,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         _strongly_consistent: bool,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt; {
         <span class="kw">let </span>(state, task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>mem_state = state.memory.as_ref().unwrap();
@@ -3133,7 +3232,7 @@
         task: TaskId,
         index: CellId,
         reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, _task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>TaskState {
@@ -3198,7 +3297,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         index: CellId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>TaskState {
@@ -3236,7 +3335,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         index: CellId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="kw">let </span>(state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>mem_state = state.memory.as_ref().unwrap();
@@ -3255,7 +3354,7 @@
         _task: TaskId,
         _trait_id: TraitTypeId,
         _reader: TaskId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; RawVcSetVc {
         <span class="macro">todo!</span>()
     }
@@ -3265,7 +3364,7 @@
         _trait_id: TraitTypeId,
         _collectible: RawVc,
         _task: TaskId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="macro">todo!</span>()
     }
@@ -3275,7 +3374,7 @@
         _trait_id: TraitTypeId,
         _collectible: RawVc,
         _task: TaskId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="macro">todo!</span>()
     }
@@ -3285,7 +3384,7 @@
         task: TaskId,
         index: CellId,
         content: CellContent,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>TaskState {
@@ -3326,7 +3425,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: PersistentTaskType,
         parent_task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; TaskId {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = <span class="self">self</span>.cache.get(<span class="kw-2">&amp;</span>task_type) {
             <span class="self">self</span>.connect(parent_task, <span class="kw-2">*</span>task, turbo_tasks);
@@ -3379,10 +3478,19 @@
         }
     }
 
+    <span class="kw">fn </span>connect_task(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _task: TaskId,
+        _parent_task: TaskId,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
+        <span class="macro">todo!</span>()
+    }
+
     <span class="kw">fn </span>create_transient_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: TransientTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; TaskId {
         <span class="kw">let </span>task = turbo_tasks.get_fresh_task_id();
         <span class="kw">let </span>task = task.into();
@@ -3409,9 +3517,9 @@
     }
 }
 
-<span class="kw">struct </span>MemoryBackendPersistedGraphApi&lt;<span class="lifetime">&#39;a</span>, P: PersistedGraph&gt; {
+<span class="kw">struct </span>MemoryBackendPersistedGraphApi&lt;<span class="lifetime">&#39;a</span>, P: PersistedGraph + <span class="lifetime">&#39;static</span>&gt; {
     backend: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MemoryBackendWithPersistedGraph&lt;P&gt;,
-    turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi,
+    turbo_tasks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, P: PersistedGraph&gt; PersistedGraphApi <span class="kw">for </span>MemoryBackendPersistedGraphApi&lt;<span class="lifetime">&#39;a</span>, P&gt; {
@@ -3460,7 +3568,7 @@
     <span class="kw">fn </span>pg_read(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(TaskData, ReadTaskState)&gt; {
         <span class="self">self</span>.pg
             .read(
@@ -3476,7 +3584,7 @@
     <span class="kw">fn </span>pg_lookup_one(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task_type: <span class="kw-2">&amp;</span>PersistentTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskId&gt; {
         <span class="self">self</span>.pg
             .lookup_one(
@@ -3492,7 +3600,7 @@
     <span class="kw">fn </span>pg_lookup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         partial_task_type: <span class="kw-2">&amp;</span>PersistentTaskType,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; bool {
         <span class="self">self</span>.pg
             .lookup(
@@ -3505,7 +3613,11 @@
             .unwrap()
     }
 
-    <span class="kw">fn </span>pg_is_persisted(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; bool {
+    <span class="kw">fn </span>pg_is_persisted(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) -&gt; bool {
         <span class="self">self</span>.pg
             .is_persisted(
                 task,
@@ -3522,7 +3634,7 @@
         task: TaskId,
         data: TaskData,
         state: PersistTaskState,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;PersistResult&gt; {
         <span class="self">self</span>.pg
             .persist(
@@ -3541,7 +3653,7 @@
     </span><span class="kw">fn </span>pg_activate_when_needed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ActivateResult&gt; {
         <span class="self">self</span>.pg
             .activate_when_needed(
@@ -3558,7 +3670,7 @@
     </span><span class="kw">fn </span>pg_deactivate_when_needed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DeactivateResult&gt; {
         <span class="self">self</span>.pg
             .deactivate_when_needed(
@@ -3575,7 +3687,7 @@
     </span><span class="kw">fn </span>pg_set_externally_active(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; bool {
         <span class="self">self</span>.pg
             .set_externally_active(
@@ -3592,7 +3704,7 @@
     </span><span class="kw">fn </span>pg_unset_externally_active(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; bool {
         <span class="self">self</span>.pg
             .unset_externally_active(
@@ -3606,7 +3718,11 @@
     }
 
     <span class="attr">#[must_use]
-    </span><span class="kw">fn </span>pg_make_dirty(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; bool {
+    </span><span class="kw">fn </span>pg_make_dirty(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) -&gt; bool {
         <span class="self">self</span>.pg
             .make_dirty(
                 task,
@@ -3622,7 +3738,7 @@
     </span><span class="kw">fn </span>pg_make_dependent_dirty(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         vc: RawVc,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; Vec&lt;TaskId&gt; {
         <span class="self">self</span>.pg
             .make_dependent_dirty(
@@ -3635,7 +3751,11 @@
             .unwrap()
     }
 
-    <span class="kw">fn </span>pg_make_clean(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>pg_make_clean(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task: TaskId,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) {
         <span class="self">self</span>.pg
             .make_clean(
                 task,
@@ -3652,7 +3772,7 @@
     #[must_use]
     </span><span class="kw">fn </span>pg_remove_outdated_externally_active(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; Vec&lt;TaskId&gt; {
         <span class="self">self</span>.pg
             .remove_outdated_externally_active(<span class="kw-2">&amp;</span>MemoryBackendPersistedGraphApi {
@@ -3663,7 +3783,10 @@
     }
 
     <span class="attr">#[must_use]
-    </span><span class="kw">fn </span>pg_get_active_external_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; Vec&lt;TaskId&gt; {
+    </span><span class="kw">fn </span>pg_get_active_external_tasks(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) -&gt; Vec&lt;TaskId&gt; {
         <span class="self">self</span>.pg
             .get_active_external_tasks(<span class="kw-2">&amp;</span>MemoryBackendPersistedGraphApi {
                 backend: <span class="self">self</span>,
@@ -3673,7 +3796,10 @@
     }
 
     <span class="attr">#[must_use]
-    </span><span class="kw">fn </span>pg_get_dirty_active_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; Vec&lt;TaskId&gt; {
+    </span><span class="kw">fn </span>pg_get_dirty_active_tasks(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
+    ) -&gt; Vec&lt;TaskId&gt; {
         <span class="self">self</span>.pg
             .get_dirty_active_tasks(<span class="kw-2">&amp;</span>MemoryBackendPersistedGraphApi {
                 backend: <span class="self">self</span>,
@@ -3685,7 +3811,7 @@
     <span class="attr">#[must_use]
     </span><span class="kw">fn </span>pg_get_pending_active_update(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;,
     ) -&gt; (Vec&lt;TaskId&gt;, Vec&lt;TaskId&gt;) {
         <span class="self">self</span>.pg
             .get_pending_active_update(<span class="kw-2">&amp;</span>MemoryBackendPersistedGraphApi {
@@ -3695,7 +3821,7 @@
             .unwrap()
     }
 
-    <span class="kw">fn </span>pg_stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+    <span class="kw">fn </span>pg_stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackendWithPersistedGraph&lt;P&gt;&gt;) {
         <span class="self">self</span>.pg
             .stop(<span class="kw-2">&amp;</span>MemoryBackendPersistedGraphApi {
                 backend: <span class="self">self</span>,

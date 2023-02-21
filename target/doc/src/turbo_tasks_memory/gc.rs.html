@@ -378,7 +378,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         factor: u8,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;MemoryBackend&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(GcPriority, usize, GcStats)&gt; {
         <span class="comment">// Process through the inactive propagation queue.
         </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(task) = <span class="self">self</span>.inactive_propagate_queue.pop() {
