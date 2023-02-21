@@ -231,6 +231,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - run: pnpm -- turbo run test --filter=cli --color
 
   go_integration:
@@ -247,6 +252,10 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
 
       - name: Cache Prysk
         id: cache-prysk
@@ -276,6 +285,10 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
 
       - name: E2E Tests
         # Turbo has already been built in previous step, no need to rebuild
@@ -343,6 +356,12 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Build Turborepo
+        uses: ./.github/actions/build-debug-turborepo
+        with:
+          target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
@@ -1023,6 +1042,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          target: ubuntu
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Format check
         run: pnpm -- turbo run check:fmt
