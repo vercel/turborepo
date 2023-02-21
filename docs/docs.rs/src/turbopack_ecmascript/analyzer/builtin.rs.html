@@ -451,6 +451,34 @@
 <span id="451">451</span>
 <span id="452">452</span>
 <span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
@@ -473,8 +501,8 @@
             </span>JsValue::Constant(<span class="kw">_</span>)
             | JsValue::Url(<span class="kw">_</span>)
             | JsValue::WellKnownObject(<span class="kw">_</span>)
-            | JsValue::Array(<span class="kw">_</span>, <span class="kw">_</span>)
-            | JsValue::Object(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::Alternatives(<span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Concat(<span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Add(<span class="kw">_</span>, <span class="kw">_</span>)
@@ -532,7 +560,11 @@
                 <span class="bool-val">true
             </span>}
             <span class="comment">// matching property access on an array like `[1,2,3].prop` or `[1,2,3][1]`
-            </span>JsValue::Array(<span class="kw">_</span>, array) =&gt; {
+            </span><span class="kw-2">&amp;mut </span>JsValue::Array {
+                <span class="kw-2">ref mut </span>items,
+                mutable,
+                ..
+            } =&gt; {
                 <span class="kw">fn </span>items_to_alternatives(items: <span class="kw-2">&amp;mut </span>Vec&lt;JsValue&gt;, prop: <span class="kw-2">&amp;mut </span>JsValue) -&gt; JsValue {
                     items.push(JsValue::Unknown(
                         <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
@@ -548,8 +580,11 @@
                     // We can replace this with the value at the index
                     </span>JsValue::Constant(ConstantValue::Num(num @ ConstantNumber(<span class="kw">_</span>))) =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(index) = num.as_u32_index() {
-                            <span class="kw">if </span>index &lt; array.len() {
-                                <span class="kw-2">*</span>value = array.swap_remove(index);
+                            <span class="kw">if </span>index &lt; items.len() {
+                                <span class="kw-2">*</span>value = items.swap_remove(index);
+                                <span class="kw">if </span>mutable {
+                                    value.add_unknown_mutations();
+                                }
                                 <span class="bool-val">true
                             </span>} <span class="kw">else </span>{
                                 <span class="kw-2">*</span>value = JsValue::Unknown(
@@ -583,13 +618,17 @@
                     <span class="comment">// otherwise we can say that this might gives an item of the array
                     // but we also add an unknown value to the alternatives for other properties
                     </span><span class="kw">_ </span>=&gt; {
-                        <span class="kw-2">*</span>value = items_to_alternatives(array, prop);
+                        <span class="kw-2">*</span>value = items_to_alternatives(items, prop);
                         <span class="bool-val">true
                     </span>}
                 }
             }
             <span class="comment">// matching property access on an object like `{a: 1, b: 2}.a`
-            </span>JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
+            </span><span class="kw-2">&amp;mut </span>JsValue::Object {
+                <span class="kw-2">ref mut </span>parts,
+                mutable,
+                ..
+            } =&gt; {
                 <span class="kw">fn </span>parts_to_alternatives(
                     parts: <span class="kw-2">&amp;mut </span>Vec&lt;ObjectPart&gt;,
                     prop: <span class="kw-2">&amp;mut </span>Box&lt;JsValue&gt;,
@@ -673,6 +712,9 @@
                                                     <span class="bool-val">false</span>,
                                                 );
                                             }
+                                            <span class="kw">if </span>mutable {
+                                                value.add_unknown_mutations();
+                                            }
                                             <span class="kw">return </span><span class="bool-val">true</span>;
                                         }
                                     } <span class="kw">else </span>{
@@ -694,6 +736,9 @@
                                 prop,
                                 <span class="bool-val">true</span>,
                             );
+                        }
+                        <span class="kw">if </span>mutable {
+                            value.add_unknown_mutations();
                         }
                         <span class="bool-val">true
                     </span>}
@@ -720,7 +765,7 @@
         </span>JsValue::MemberCall(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw">box </span><span class="kw-2">ref mut </span>prop, <span class="kw-2">ref mut </span>args) =&gt; {
             <span class="kw">match </span>obj {
                 <span class="comment">// matching calls on an array like `[1,2,3].concat([4,5,6])`
-                </span>JsValue::Array(<span class="kw">_</span>, items) =&gt; {
+                </span>JsValue::Array { items, mutable, .. } =&gt; {
                     <span class="comment">// matching cases where the property is a const string
                     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(str) = prop.as_str() {
                         <span class="kw">match </span>str {
@@ -729,7 +774,7 @@
                                 <span class="kw">if </span>args.iter().all(|arg| {
                                     <span class="macro">matches!</span>(
                                         arg,
-                                        JsValue::Array(..)
+                                        JsValue::Array { .. }
                                             | JsValue::Constant(<span class="kw">_</span>)
                                             | JsValue::Url(<span class="kw">_</span>)
                                             | JsValue::Concat(..)
@@ -741,8 +786,13 @@
                                 }) {
                                     <span class="kw">for </span>arg <span class="kw">in </span>args {
                                         <span class="kw">match </span>arg {
-                                            JsValue::Array(<span class="kw">_</span>, inner) =&gt; {
+                                            JsValue::Array {
+                                                items: inner,
+                                                mutable: inner_mutable,
+                                                ..
+                                            } =&gt; {
                                                 items.extend(take(inner));
+                                                <span class="kw-2">*</span>mutable |= <span class="kw-2">*</span>inner_mutable;
                                             }
                                             JsValue::Constant(<span class="kw">_</span>)
                                             | JsValue::Url(<span class="kw">_</span>)
@@ -825,16 +875,22 @@
             <span class="bool-val">true
         </span>}
         <span class="comment">// match object literals
-        </span>JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
+        </span>JsValue::Object { parts, mutable, .. } =&gt; {
             <span class="comment">// If the object contains any spread, we might be able to flatten that
             </span><span class="kw">if </span>parts
                 .iter()
-                .any(|part| <span class="macro">matches!</span>(part, ObjectPart::Spread(JsValue::Object(..))))
+                .any(|part| <span class="macro">matches!</span>(part, ObjectPart::Spread(JsValue::Object { .. })))
             {
                 <span class="kw">let </span>old_parts = take(parts);
                 <span class="kw">for </span>part <span class="kw">in </span>old_parts {
-                    <span class="kw">if let </span>ObjectPart::Spread(JsValue::Object(<span class="kw">_</span>, inner_parts)) = part {
+                    <span class="kw">if let </span>ObjectPart::Spread(JsValue::Object {
+                        parts: inner_parts,
+                        mutable: inner_mutable,
+                        ..
+                    }) = part
+                    {
                         parts.extend(inner_parts);
+                        <span class="kw-2">*</span>mutable |= inner_mutable;
                     } <span class="kw">else </span>{
                         parts.push(part);
                     }

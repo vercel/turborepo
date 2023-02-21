@@ -621,6 +621,12 @@
 <span id="621">621</span>
 <span id="622">622</span>
 <span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -741,11 +747,17 @@
 }
 
 <span class="kw">pub fn </span>object_assign(args: Vec&lt;JsValue&gt;) -&gt; JsValue {
-    <span class="kw">if </span>args.iter().all(|arg| <span class="macro">matches!</span>(arg, JsValue::Object(..))) {
+    <span class="kw">if </span>args.iter().all(|arg| <span class="macro">matches!</span>(arg, JsValue::Object { .. })) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>merged_object) = args.into_iter().reduce(|<span class="kw-2">mut </span>acc, cur| {
-            <span class="kw">if let </span>JsValue::Object(<span class="kw">_</span>, parts) = <span class="kw-2">&amp;mut </span>acc {
-                <span class="kw">if let </span>JsValue::Object(<span class="kw">_</span>, next_parts) = <span class="kw-2">&amp;</span>cur {
+            <span class="kw">if let </span>JsValue::Object { parts, mutable, .. } = <span class="kw-2">&amp;mut </span>acc {
+                <span class="kw">if let </span>JsValue::Object {
+                    parts: next_parts,
+                    mutable: next_mutable,
+                    ..
+                } = <span class="kw-2">&amp;</span>cur
+                {
                     parts.extend_from_slice(next_parts);
+                    <span class="kw-2">*</span>mutable |= <span class="kw-2">*</span>next_mutable;
                 }
             }
             acc

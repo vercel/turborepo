@@ -443,7 +443,7 @@
         .as_issue()
         .emit()
     };
-    <span class="kw">if let </span>JsValue::Object(<span class="kw">_</span>, parts) = value {
+    <span class="kw">if let </span>JsValue::Object { parts, .. } = value {
         <span class="kw">for </span>part <span class="kw">in </span>parts {
             <span class="kw">match </span>part {
                 ObjectPart::Spread(<span class="kw">_</span>) =&gt; invalid_config(

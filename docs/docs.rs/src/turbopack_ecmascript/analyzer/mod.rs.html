@@ -2868,6 +2868,75 @@
 <span id="2868">2868</span>
 <span id="2869">2869</span>
 <span id="2870">2870</span>
+<span id="2871">2871</span>
+<span id="2872">2872</span>
+<span id="2873">2873</span>
+<span id="2874">2874</span>
+<span id="2875">2875</span>
+<span id="2876">2876</span>
+<span id="2877">2877</span>
+<span id="2878">2878</span>
+<span id="2879">2879</span>
+<span id="2880">2880</span>
+<span id="2881">2881</span>
+<span id="2882">2882</span>
+<span id="2883">2883</span>
+<span id="2884">2884</span>
+<span id="2885">2885</span>
+<span id="2886">2886</span>
+<span id="2887">2887</span>
+<span id="2888">2888</span>
+<span id="2889">2889</span>
+<span id="2890">2890</span>
+<span id="2891">2891</span>
+<span id="2892">2892</span>
+<span id="2893">2893</span>
+<span id="2894">2894</span>
+<span id="2895">2895</span>
+<span id="2896">2896</span>
+<span id="2897">2897</span>
+<span id="2898">2898</span>
+<span id="2899">2899</span>
+<span id="2900">2900</span>
+<span id="2901">2901</span>
+<span id="2902">2902</span>
+<span id="2903">2903</span>
+<span id="2904">2904</span>
+<span id="2905">2905</span>
+<span id="2906">2906</span>
+<span id="2907">2907</span>
+<span id="2908">2908</span>
+<span id="2909">2909</span>
+<span id="2910">2910</span>
+<span id="2911">2911</span>
+<span id="2912">2912</span>
+<span id="2913">2913</span>
+<span id="2914">2914</span>
+<span id="2915">2915</span>
+<span id="2916">2916</span>
+<span id="2917">2917</span>
+<span id="2918">2918</span>
+<span id="2919">2919</span>
+<span id="2920">2920</span>
+<span id="2921">2921</span>
+<span id="2922">2922</span>
+<span id="2923">2923</span>
+<span id="2924">2924</span>
+<span id="2925">2925</span>
+<span id="2926">2926</span>
+<span id="2927">2927</span>
+<span id="2928">2928</span>
+<span id="2929">2929</span>
+<span id="2930">2930</span>
+<span id="2931">2931</span>
+<span id="2932">2932</span>
+<span id="2933">2933</span>
+<span id="2934">2934</span>
+<span id="2935">2935</span>
+<span id="2936">2936</span>
+<span id="2937">2937</span>
+<span id="2938">2938</span>
+<span id="2939">2939</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::Display,
@@ -3136,9 +3205,17 @@
     <span class="comment">// NESTED VALUES
     // ----------------------------
     </span><span class="doccomment">/// An array of nested values
-    </span>Array(usize, Vec&lt;JsValue&gt;),
+    </span>Array {
+        total_nodes: usize,
+        items: Vec&lt;JsValue&gt;,
+        mutable: bool,
+    },
     <span class="doccomment">/// An object of nested values
-    </span>Object(usize, Vec&lt;ObjectPart&gt;),
+    </span>Object {
+        total_nodes: usize,
+        parts: Vec&lt;ObjectPart&gt;,
+        mutable: bool,
+    },
     <span class="doccomment">/// A list of alternative values
     </span>Alternatives(usize, Vec&lt;JsValue&gt;),
     <span class="doccomment">/// A function reference. The return value might contain [JsValue::Argument]
@@ -3251,18 +3328,20 @@
         <span class="kw">match </span><span class="self">self </span>{
             JsValue::Constant(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{v}&quot;</span>),
             JsValue::Url(url) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, url),
-            JsValue::Array(<span class="kw">_</span>, elems) =&gt; <span class="macro">write!</span>(
+            JsValue::Array { items, mutable, .. } =&gt; <span class="macro">write!</span>(
                 f,
-                <span class="string">&quot;[{}]&quot;</span>,
-                elems
+                <span class="string">&quot;{}[{}]&quot;</span>,
+                <span class="kw">if </span><span class="kw-2">*</span>mutable { <span class="string">&quot;&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;frozen &quot; </span>},
+                items
                     .iter()
                     .map(|v| v.to_string())
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                     .join(<span class="string">&quot;, &quot;</span>)
             ),
-            JsValue::Object(<span class="kw">_</span>, parts) =&gt; <span class="macro">write!</span>(
+            JsValue::Object { parts, mutable, .. } =&gt; <span class="macro">write!</span>(
                 f,
-                <span class="string">&quot;{{{}}}&quot;</span>,
+                <span class="string">&quot;{}{{{}}}&quot;</span>,
+                <span class="kw">if </span><span class="kw-2">*</span>mutable { <span class="string">&quot;&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;frozen &quot; </span>},
                 parts
                     .iter()
                     .map(|v| v.to_string())
@@ -3398,8 +3477,8 @@
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Unknown(..) =&gt; JsValueMetaKind::Leaf,
-            JsValue::Array(..)
-            | JsValue::Object(..)
+            JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::Alternatives(..)
             | JsValue::Function(..) =&gt; JsValueMetaKind::Nested,
             JsValue::Concat(..)
@@ -3451,8 +3530,20 @@
         <span class="self">Self</span>::Not(<span class="number">1 </span>+ inner.total_nodes(), inner)
     }
 
-    <span class="kw">pub fn </span>array(list: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::Array(<span class="number">1 </span>+ total_nodes(<span class="kw-2">&amp;</span>list), list)
+    <span class="kw">pub fn </span>array(items: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::Array {
+            total_nodes: <span class="number">1 </span>+ total_nodes(<span class="kw-2">&amp;</span>items),
+            items,
+            mutable: <span class="bool-val">true</span>,
+        }
+    }
+
+    <span class="kw">pub fn </span>frozen_array(items: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::Array {
+            total_nodes: <span class="number">1 </span>+ total_nodes(<span class="kw-2">&amp;</span>items),
+            items,
+            mutable: <span class="bool-val">false</span>,
+        }
     }
 
     <span class="kw">pub fn </span>function(func_ident: u32, return_value: Box&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
@@ -3460,16 +3551,31 @@
     }
 
     <span class="kw">pub fn </span>object(list: Vec&lt;ObjectPart&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::Object(
-            <span class="number">1 </span>+ list
+        <span class="self">Self</span>::Object {
+            total_nodes: <span class="number">1 </span>+ list
                 .iter()
                 .map(|v| <span class="kw">match </span>v {
                     ObjectPart::KeyValue(k, v) =&gt; k.total_nodes() + v.total_nodes(),
                     ObjectPart::Spread(s) =&gt; s.total_nodes(),
                 })
                 .sum::&lt;usize&gt;(),
-            list,
-        )
+            parts: list,
+            mutable: <span class="bool-val">true</span>,
+        }
+    }
+
+    <span class="kw">pub fn </span>frozen_object(list: Vec&lt;ObjectPart&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::Object {
+            total_nodes: <span class="number">1 </span>+ list
+                .iter()
+                .map(|v| <span class="kw">match </span>v {
+                    ObjectPart::KeyValue(k, v) =&gt; k.total_nodes() + v.total_nodes(),
+                    ObjectPart::Spread(s) =&gt; s.total_nodes(),
+                })
+                .sum::&lt;usize&gt;(),
+            parts: list,
+            mutable: <span class="bool-val">false</span>,
+        }
     }
 
     <span class="kw">pub fn </span>call(f: Box&lt;JsValue&gt;, args: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
@@ -3503,8 +3609,8 @@
             | JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Argument(..) =&gt; <span class="number">1</span>,
 
-            JsValue::Array(c, <span class="kw">_</span>)
-            | JsValue::Object(c, <span class="kw">_</span>)
+            JsValue::Array { total_nodes: c, .. }
+            | JsValue::Object { total_nodes: c, .. }
             | JsValue::Alternatives(c, <span class="kw">_</span>)
             | JsValue::Concat(c, <span class="kw">_</span>)
             | JsValue::Add(c, <span class="kw">_</span>)
@@ -3529,7 +3635,11 @@
             | JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Argument(..) =&gt; {}
 
-            JsValue::Array(c, list)
+            JsValue::Array {
+                total_nodes: c,
+                items: list,
+                ..
+            }
             | JsValue::Alternatives(c, list)
             | JsValue::Concat(c, list)
             | JsValue::Add(c, list)
@@ -3541,8 +3651,12 @@
                 <span class="kw-2">*</span>c = <span class="number">1 </span>+ r.total_nodes();
             }
 
-            JsValue::Object(c, props) =&gt; {
-                <span class="kw-2">*</span>c = <span class="number">1 </span>+ props
+            JsValue::Object {
+                total_nodes: c,
+                parts,
+                mutable: <span class="kw">_</span>,
+            } =&gt; {
+                <span class="kw-2">*</span>c = <span class="number">1 </span>+ parts
                     .iter()
                     .map(|v| <span class="kw">match </span>v {
                         ObjectPart::KeyValue(k, v) =&gt; k.total_nodes() + v.total_nodes(),
@@ -3601,7 +3715,7 @@
                 | JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>)
                 | JsValue::Argument(..) =&gt; <span class="self">self</span>.make_unknown_without_content(<span class="string">&quot;node limit reached&quot;</span>),
 
-                JsValue::Array(<span class="kw">_</span>, list)
+                JsValue::Array { items: list, .. }
                 | JsValue::Alternatives(<span class="kw">_</span>, list)
                 | JsValue::Concat(<span class="kw">_</span>, list)
                 | JsValue::Logical(<span class="kw">_</span>, <span class="kw">_</span>, list)
@@ -3612,8 +3726,8 @@
                 JsValue::Not(<span class="kw">_</span>, r) =&gt; {
                     r.make_unknown_without_content(<span class="string">&quot;node limit reached&quot;</span>);
                 }
-                JsValue::Object(<span class="kw">_</span>, list) =&gt; {
-                    make_max_unknown(list.iter_mut().flat_map(|v| <span class="kw">match </span>v {
+                JsValue::Object { parts, .. } =&gt; {
+                    make_max_unknown(parts.iter_mut().flat_map(|v| <span class="kw">match </span>v {
                         <span class="comment">// TODO this probably can avoid heap allocation somehow
                         </span>ObjectPart::KeyValue(k, v) =&gt; <span class="macro">vec!</span>[k, v].into_iter(),
                         ObjectPart::Spread(s) =&gt; <span class="macro">vec!</span>[s].into_iter(),
@@ -3704,10 +3818,11 @@
     ) -&gt; String {
         <span class="kw">match </span><span class="self">self </span>{
             JsValue::Constant(v) =&gt; <span class="macro">format!</span>(<span class="string">&quot;{v}&quot;</span>),
-            JsValue::Array(<span class="kw">_</span>, elems) =&gt; <span class="macro">format!</span>(
-                <span class="string">&quot;[{}]&quot;</span>,
+            JsValue::Array { items, mutable, .. } =&gt; <span class="macro">format!</span>(
+                <span class="string">&quot;{}[{}]&quot;</span>,
+                <span class="kw">if </span><span class="kw-2">*</span>mutable { <span class="string">&quot;&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;frozen &quot; </span>},
                 pretty_join(
-                    <span class="kw-2">&amp;</span>elems
+                    <span class="kw-2">&amp;</span>items
                         .iter()
                         .map(|v| v.explain_internal_inner(
                             hints,
@@ -3722,8 +3837,9 @@
                     <span class="string">&quot;&quot;
                 </span>)
             ),
-            JsValue::Object(<span class="kw">_</span>, parts) =&gt; <span class="macro">format!</span>(
-                <span class="string">&quot;{{{}}}&quot;</span>,
+            JsValue::Object { parts, mutable, .. } =&gt; <span class="macro">format!</span>(
+                <span class="string">&quot;{}{{{}}}&quot;</span>,
+                <span class="kw">if </span><span class="kw-2">*</span>mutable { <span class="string">&quot;&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;frozen &quot; </span>},
                 pretty_join(
                     <span class="kw-2">&amp;</span>parts
                         .iter()
@@ -4125,6 +4241,10 @@
             <span class="bool-val">false
         </span>}
     }
+
+    <span class="kw">pub fn </span>add_unknown_mutations(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.add_alt(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unknown mutation&quot;</span>));
+    }
 }
 
 <span class="comment">// Compile-time information gathering
@@ -4144,8 +4264,8 @@
             JsValue::Constant(c) =&gt; <span class="prelude-val">Some</span>(c.is_truthy()),
             JsValue::Concat(..) =&gt; <span class="self">self</span>.is_empty_string().map(|x| !x),
             JsValue::Url(..)
-            | JsValue::Array(..)
-            | JsValue::Object(..)
+            | JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Function(..) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
@@ -4175,8 +4295,8 @@
             JsValue::Constant(c) =&gt; <span class="prelude-val">Some</span>(c.is_nullish()),
             JsValue::Concat(..)
             | JsValue::Url(..)
-            | JsValue::Array(..)
-            | JsValue::Object(..)
+            | JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Not(..)
@@ -4222,8 +4342,8 @@
                 }
             },
             JsValue::Url(..)
-            | JsValue::Array(..)
-            | JsValue::Object(..)
+            | JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Function(..) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
@@ -4250,8 +4370,8 @@
             | JsValue::Concat(..) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
 
             JsValue::Constant(..)
-            | JsValue::Array(..)
-            | JsValue::Object(..)
+            | JsValue::Array { .. }
+            | JsValue::Object { .. }
             | JsValue::Url(..)
             | JsValue::Module(..)
             | JsValue::Function(..)
@@ -4445,7 +4565,7 @@
             | JsValue::Concat(<span class="kw">_</span>, list)
             | JsValue::Add(<span class="kw">_</span>, list)
             | JsValue::Logical(<span class="kw">_</span>, <span class="kw">_</span>, list)
-            | JsValue::Array(<span class="kw">_</span>, list) =&gt; {
+            | JsValue::Array{ items: list, ..} =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
                 <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
                     <span class="kw">let </span>(v, m) = <span class="macro-nonterminal">$visit_fn</span>(take(item), $(<span class="macro-nonterminal">$args</span>),+).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4457,9 +4577,9 @@
                 <span class="macro-nonterminal">$value</span>.update_total_nodes();
                 (<span class="macro-nonterminal">$value</span>, modified)
             }
-            JsValue::Object(<span class="kw">_</span>, list) =&gt; {
+            JsValue::Object{ parts, ..} =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
-                <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
+                <span class="kw">for </span>item <span class="kw">in </span>parts.iter_mut() {
                     <span class="kw">match </span>item {
                         ObjectPart::KeyValue(key, value) =&gt; {
                             <span class="kw">let </span>(v, m) = <span class="macro-nonterminal">$visit_fn</span>(take(key), $(<span class="macro-nonterminal">$args</span>),+).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4702,7 +4822,7 @@
             | JsValue::Concat(<span class="kw">_</span>, list)
             | JsValue::Add(<span class="kw">_</span>, list)
             | JsValue::Logical(<span class="kw">_</span>, <span class="kw">_</span>, list)
-            | JsValue::Array(<span class="kw">_</span>, list) =&gt; {
+            | JsValue::Array { items: list, .. } =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
                 <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
                     <span class="kw">if </span>visitor(item) {
@@ -4721,9 +4841,9 @@
                 }
                 modified
             }
-            JsValue::Object(<span class="kw">_</span>, list) =&gt; {
+            JsValue::Object { parts, .. } =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
-                <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
+                <span class="kw">for </span>item <span class="kw">in </span>parts.iter_mut() {
                     <span class="kw">match </span>item {
                         ObjectPart::KeyValue(key, value) =&gt; {
                             <span class="kw">if </span>visitor(key) {
@@ -4889,7 +5009,7 @@
             | JsValue::Concat(<span class="kw">_</span>, list)
             | JsValue::Add(<span class="kw">_</span>, list)
             | JsValue::Logical(<span class="kw">_</span>, <span class="kw">_</span>, list)
-            | JsValue::Array(<span class="kw">_</span>, list) =&gt; {
+            | JsValue::Array { items: list, .. } =&gt; {
                 <span class="kw">for </span>item <span class="kw">in </span>list.iter() {
                     visitor(item);
                 }
@@ -4897,8 +5017,8 @@
             JsValue::Not(<span class="kw">_</span>, value) =&gt; {
                 visitor(value);
             }
-            JsValue::Object(<span class="kw">_</span>, list) =&gt; {
-                <span class="kw">for </span>item <span class="kw">in </span>list.iter() {
+            JsValue::Object { parts, .. } =&gt; {
+                <span class="kw">for </span>item <span class="kw">in </span>parts.iter() {
                     <span class="kw">match </span>item {
                         ObjectPart::KeyValue(key, value) =&gt; {
                             visitor(key);
@@ -5127,12 +5247,30 @@
         }
         <span class="kw">match </span>(<span class="self">self</span>, other) {
             (JsValue::Constant(l), JsValue::Constant(r)) =&gt; l == r,
-            (JsValue::Array(lc, l), JsValue::Array(rc, r)) =&gt; {
-                lc == rc &amp;&amp; all_similar(l, r, depth - <span class="number">1</span>)
-            }
-            (JsValue::Object(lc, l), JsValue::Object(rc, r)) =&gt; {
-                lc == rc &amp;&amp; all_parts_similar(l, r, depth - <span class="number">1</span>)
-            }
+            (
+                JsValue::Array {
+                    total_nodes: lc,
+                    items: li,
+                    mutable: lm,
+                },
+                JsValue::Array {
+                    total_nodes: rc,
+                    items: ri,
+                    mutable: rm,
+                },
+            ) =&gt; lc == rc &amp;&amp; lm == rm &amp;&amp; all_similar(li, ri, depth - <span class="number">1</span>),
+            (
+                JsValue::Object {
+                    total_nodes: lc,
+                    parts: lp,
+                    mutable: lm,
+                },
+                JsValue::Object {
+                    total_nodes: rc,
+                    parts: rp,
+                    mutable: rm,
+                },
+            ) =&gt; lc == rc &amp;&amp; lm == rm &amp;&amp; all_parts_similar(lp, rp, depth - <span class="number">1</span>),
             (JsValue::Url(l), JsValue::Url(r)) =&gt; l == r,
             (JsValue::Alternatives(lc, l), JsValue::Alternatives(rc, r)) =&gt; {
                 lc == rc &amp;&amp; all_similar(l, r, depth - <span class="number">1</span>)
@@ -5212,11 +5350,11 @@
 
         <span class="kw">match </span><span class="self">self </span>{
             JsValue::Constant(v) =&gt; Hash::hash(v, state),
-            JsValue::Object(<span class="kw">_</span>, v) =&gt; all_parts_similar_hash(v, state, depth - <span class="number">1</span>),
+            JsValue::Object { parts, .. } =&gt; all_parts_similar_hash(parts, state, depth - <span class="number">1</span>),
             JsValue::Url(v) =&gt; Hash::hash(v, state),
             JsValue::FreeVar(v) =&gt; Hash::hash(v, state),
             JsValue::Variable(v) =&gt; Hash::hash(v, state),
-            JsValue::Array(<span class="kw">_</span>, v)
+            JsValue::Array { items: v, .. }
             | JsValue::Alternatives(<span class="kw">_</span>, v)
             | JsValue::Concat(<span class="kw">_</span>, v)
             | JsValue::Add(<span class="kw">_</span>, v)

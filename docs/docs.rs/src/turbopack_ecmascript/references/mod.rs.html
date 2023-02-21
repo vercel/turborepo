@@ -2184,6 +2184,14 @@
 <span id="2184">2184</span>
 <span id="2185">2185</span>
 <span id="2186">2186</span>
+<span id="2187">2187</span>
+<span id="2188">2188</span>
+<span id="2189">2189</span>
+<span id="2190">2190</span>
+<span id="2191">2191</span>
+<span id="2192">2192</span>
+<span id="2193">2193</span>
+<span id="2194">2194</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -3197,13 +3205,13 @@
                     JsValue::WellKnownFunction(WellKnownFunctionKind::NodeProtobufLoad) =&gt; {
                         <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">if </span>args.len() == <span class="number">2 </span>{
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(JsValue::Object(<span class="kw">_</span>, parts)) = args.get(<span class="number">1</span>) {
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(JsValue::Object { parts, .. }) = args.get(<span class="number">1</span>) {
                                 <span class="kw">for </span>dir <span class="kw">in </span>parts
                                     .iter()
                                     .filter_map(|object_part| {
                                         <span class="kw">if let </span>ObjectPart::KeyValue(
                                             JsValue::Constant(key),
-                                            JsValue::Array(<span class="kw">_</span>, dirs),
+                                            JsValue::Array { items: dirs, .. },
                                         ) = object_part
                                         {
                                             <span class="kw">if </span>key.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;includeDirs&quot;</span>) {
@@ -3465,13 +3473,21 @@
                                 <span class="kw">let </span><span class="kw-2">mut </span>obj = link_value(obj).<span class="kw">await</span><span class="question-mark">?</span>;
                                 <span class="kw">let </span>prop = link_value(prop).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                                <span class="kw">if let </span>JsValue::Array(<span class="kw">_</span>, <span class="kw-2">ref mut </span>values) = obj {
+                                <span class="kw">if let </span>JsValue::Array {
+                                    items: <span class="kw-2">ref mut </span>values,
+                                    mutable,
+                                    ..
+                                } = obj
+                                {
                                     <span class="kw">if </span><span class="macro">matches!</span>(prop.as_str(), <span class="prelude-val">Some</span>(<span class="string">&quot;map&quot; </span>| <span class="string">&quot;forEach&quot; </span>| <span class="string">&quot;filter&quot;</span>)) {
                                         <span class="kw">if let </span>[EffectArg::Closure(value, block)] = <span class="kw-2">&amp;mut </span>args[..] {
                                             <span class="kw-2">*</span>value = link_value(take(value)).<span class="kw">await</span><span class="question-mark">?</span>;
                                             <span class="kw">if let </span>JsValue::Function(<span class="kw">_</span>, func_ident, <span class="kw">_</span>) = value {
-                                                <span class="kw">let </span>closure_arg =
+                                                <span class="kw">let </span><span class="kw-2">mut </span>closure_arg =
                                                     JsValue::alternatives(take(values));
+                                                <span class="kw">if </span>mutable {
+                                                    closure_arg.add_unknown_mutations();
+                                                }
                                                 fun_args_values
                                                     .get_mut()
                                                     .insert(<span class="kw-2">*</span>func_ident, <span class="macro">vec!</span>[closure_arg]);
@@ -3593,7 +3609,7 @@
     args: Vec&lt;JsValue&gt;,
 ) {
     <span class="kw">match </span><span class="kw-2">&amp;</span>args[..] {
-        [JsValue::Constant(id), JsValue::Array(<span class="kw">_</span>, deps), <span class="kw">_</span>] <span class="kw">if </span>id.as_str().is_some() =&gt; {
+        [JsValue::Constant(id), JsValue::Array { items: deps, .. }, <span class="kw">_</span>] <span class="kw">if </span>id.as_str().is_some() =&gt; {
             analyze_amd_define_with_deps(
                 analysis,
                 origin,
@@ -3604,7 +3620,7 @@
                 deps,
             );
         }
-        [JsValue::Array(<span class="kw">_</span>, deps), <span class="kw">_</span>] =&gt; {
+        [JsValue::Array { items: deps, .. }, <span class="kw">_</span>] =&gt; {
             analyze_amd_define_with_deps(analysis, origin, handler, span, ast_path, <span class="prelude-val">None</span>, deps);
         }
         [JsValue::Constant(id), JsValue::Function(..)] <span class="kw">if </span>id.as_str().is_some() =&gt; {
@@ -3643,7 +3659,7 @@
                 AmdDefineFactoryType::Function,
             ));
         }
-        [JsValue::Object(..)] =&gt; {
+        [JsValue::Object { .. }] =&gt; {
             analysis.add_code_gen(AmdDefineWithDependenciesCodeGenVc::new(
                 <span class="macro">vec!</span>[],
                 origin,
