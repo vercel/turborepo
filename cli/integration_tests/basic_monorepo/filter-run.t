@@ -15,7 +15,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 # Running non-existent task with --filter still throws error
-  $ ${TURBO} run build --filter=main
+  $ ${TURBO} run doesnotexist --filter=main
   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
   Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
   [1]
