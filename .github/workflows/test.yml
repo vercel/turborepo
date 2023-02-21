@@ -98,6 +98,7 @@ jobs:
             !crates/turborepo/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
+            !crates/turborepo-scm/**
             !crates/turbo-updater/**
             !**.md
             !**.mdx
@@ -112,6 +113,7 @@ jobs:
             crates/turborepo/**
             crates/turborepo-lib/**
             crates/turborepo-ffi/**
+            crates/turborepo-scm/**
             crates/turbo-updater/**
             .cargo/**
             rust-toolchain
@@ -570,7 +572,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib --features rustls-tls
+          cargo test -p turborepo-lib -p turborepo-scm --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -603,12 +605,12 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -667,13 +669,13 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]
