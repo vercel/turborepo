@@ -177,6 +177,7 @@ mod tests {
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
+        repo.config()?.set_str("user.name", "test")?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
