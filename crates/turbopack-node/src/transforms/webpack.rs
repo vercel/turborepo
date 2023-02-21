@@ -8,6 +8,7 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -18,7 +19,7 @@ use turbopack_ecmascript::{
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
-    embed_js::embed_file,
+    embed_js::embed_file_path,
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
@@ -115,13 +116,9 @@ struct ProcessWebpackLoadersResult {
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContextVc) -> AssetVc {
+fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
     EcmascriptModuleAssetVc::new(
-        VirtualAssetVc::new(
-            project_root.join("__turbopack__/webpack-loaders-executor.ts"),
-            AssetContent::File(embed_file("transforms/webpack-loaders.ts")).cell(),
-        )
-        .into(),
+        SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
@@ -154,7 +151,7 @@ impl WebpackLoadersProcessedAssetVc {
         let content = content.content().to_str()?;
         let context = this.evaluate_context;
 
-        let webpack_loaders_executor = webpack_loaders_executor(project_root, context);
+        let webpack_loaders_executor = webpack_loaders_executor(context);
         let resource_fs_path = this.source.path().await?;
         let resource_path = resource_fs_path.path.as_str();
         let loaders = this.loaders.await?;

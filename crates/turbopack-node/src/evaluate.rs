@@ -263,6 +263,26 @@ pub async fn evaluate(
                     cwd.join(&path).read_glob(GlobVc::new(&glob), false),
                 ));
             }
+            EvalJavaScriptIncomingMessage::EmittedError {
+                name,
+                message,
+                stack,
+                severity,
+            } => {
+                EvaluateEmittedErrorIssue {
+                    context: context_path_for_issue,
+                    cwd,
+                    error: StructuredError {
+                        name,
+                        message,
+                        stack,
+                    },
+                    severity: severity.cell(),
+                }
+                .cell()
+                .as_issue()
+                .emit();
+            }
         }
     };
     // Read dependencies to make them a dependencies of this task. This task will
@@ -390,4 +410,48 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
         }
     }
     Ok(CompletionVc::new())
+}
+
+#[turbo_tasks::value(shared)]
+pub struct EvaluateEmittedErrorIssue {
+    pub context: FileSystemPathVc,
+    pub cwd: FileSystemPathVc,
+    pub severity: IssueSeverityVc,
+    pub error: StructuredError,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for EvaluateEmittedErrorIssue {
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.context
+    }
+
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("loaders".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> StringVc {
+        StringVc::cell("Issue while running loader".to_string())
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<StringVc> {
+        let root = to_sys_path(self.cwd.root())
+            .await?
+            .context("Must have path on disk")?;
+
+        Ok(StringVc::cell(
+            self.error
+                .print(Default::default(), &root.to_string_lossy())
+                .await?,
+        ))
+    }
 }

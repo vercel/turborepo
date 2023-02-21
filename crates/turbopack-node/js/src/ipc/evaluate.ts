@@ -23,6 +23,13 @@ type IpcOutgoingMessage =
       type: "dirDependency";
       path: string;
       glob: string;
+    }
+  | {
+      type: "emittedError";
+      severity: "warning" | "error";
+      name: string;
+      message: string;
+      stack: string[];
     };
 
 export type Ipc = GenericIpc<IpcIncomingMessage, IpcOutgoingMessage>;

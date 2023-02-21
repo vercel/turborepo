@@ -21,6 +21,7 @@ use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
+    issue::IssueSeverity,
     reference::AssetReference,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     virtual_asset::VirtualAssetVc,
@@ -249,10 +250,25 @@ enum EvalJavaScriptOutgoingMessage<'a> {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptIncomingMessage {
-    FileDependency { path: String },
-    BuildDependency { path: String },
-    DirDependency { path: String, glob: String },
-    JsonValue { data: String },
+    FileDependency {
+        path: String,
+    },
+    BuildDependency {
+        path: String,
+    },
+    DirDependency {
+        path: String,
+        glob: String,
+    },
+    JsonValue {
+        data: String,
+    },
+    EmittedError {
+        severity: IssueSeverity,
+        name: String,
+        message: String,
+        stack: Vec<StackFrame>,
+    },
     Error(StructuredError),
 }
 

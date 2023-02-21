@@ -10,6 +10,10 @@ import {
   dirname,
   resolve as pathResolve,
 } from "path";
+import {
+  StackFrame,
+  parse as parseStackTrace,
+} from "../compiled/stacktrace-parser";
 
 type LoaderConfig =
   | string
@@ -57,11 +61,13 @@ const transform = (
         context: {
           rootContext: contextDir,
           getOptions() {
-            var entry = this.loaders[this.loaderIndex];
+            const entry = this.loaders[this.loaderIndex];
             return entry.options && typeof entry.options === "object"
               ? entry.options
               : {};
           },
+          emitWarning: makeErrorEmitter("warning", ipc),
+          emitError: makeErrorEmitter("error", ipc),
         },
         loaders: loadersWithOptions.map((loader) => ({
           loader: __turbopack_external_require__.resolve(loader.loader, {
@@ -98,3 +104,17 @@ const transform = (
 };
 
 export { transform as default };
+
+function makeErrorEmitter(severity: "warning" | "error", ipc: Ipc) {
+  return function (error: Error | string) {
+    const errorObject = error instanceof Error ? error : new Error(error);
+
+    ipc.send({
+      type: "emittedError",
+      severity: "warning",
+      name: errorObject.name,
+      message: errorObject.message,
+      stack: parseStackTrace(errorObject.stack),
+    });
+  };
+}
