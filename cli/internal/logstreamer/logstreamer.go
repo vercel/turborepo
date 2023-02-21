@@ -27,9 +27,11 @@ type Logstreamer struct {
 	colorOkay  string
 	colorFail  string
 	colorReset string
+
+	grouped bool
 }
 
-func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
+func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
 		buf:        bytes.NewBuffer([]byte("")),
@@ -39,6 +41,7 @@ func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer
 		colorOkay:  "",
 		colorFail:  "",
 		colorReset: "",
+		grouped:    grouped,
 	}
 
 	if strings.HasPrefix(os.Getenv("TERM"), "xterm") {
@@ -55,6 +58,11 @@ func (l *Logstreamer) Write(p []byte) (n int, err error) {
 		return
 	}
 
+	// If we want logs to be grouped, do not output them when we receive them, only when they are flushed
+	if l.grouped {
+		return
+	}
+
 	err = l.OutputLines()
 	return
 }
@@ -68,12 +76,11 @@ func (l *Logstreamer) Close() error {
 }
 
 func (l *Logstreamer) Flush() error {
-	p := make([]byte, l.buf.Len())
-	if _, err := l.buf.Read(p); err != nil {
+	err := l.OutputLines()
+	if err != nil {
 		return err
 	}
 
-	l.out(string(p))
 	return nil
 }
 
