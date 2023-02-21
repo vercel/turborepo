@@ -372,6 +372,19 @@ jobs:
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
 
+      - name: "Setup Go"
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: ${{ inputs.github-token }}
+
+      - name: "Setup Rust"
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ inputs.target }}
+          shared-cache-key: turborepo-debug-build
+          cache-key: ${{ inputs.target }}
+          save-cache: true
+
       - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
         shell: bash
         env:
