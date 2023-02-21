@@ -87,7 +87,7 @@ async function getResolveRoute(
 }
 
 export default async function route(
-  _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   routerRequest: RouterRequest,
   dir: string
 ) {
@@ -142,7 +142,7 @@ export default async function route(
 }
 
 async function handleClientResponse(
-  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponse: IncomingMessage
 ): Promise<MessageData> {
   if (clientResponse.headers["x-nextjs-route-result"] === "1") {
