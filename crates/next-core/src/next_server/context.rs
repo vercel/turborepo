@@ -3,7 +3,10 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
-    module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
+    module_options::{
+        ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions,
+        WebpackLoadersOptions,
+    },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
 use turbopack_core::{
@@ -21,7 +24,7 @@ use super::{
 };
 use crate::{
     babel::maybe_add_babel_loader,
-    next_build::get_postcss_package_mapping,
+    next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
     util::foreign_code_context_condition,
@@ -174,10 +177,22 @@ pub async fn get_server_module_options_context(
         postcss_package: Some(get_postcss_package_mapping(project_path)),
         ..Default::default()
     });
-    let enable_webpack_loaders =
-        maybe_add_babel_loader(project_path, next_config.webpack_loaders_options())
+
+    let enable_webpack_loaders = {
+        let options = &*next_config.webpack_loaders_options().await?;
+        let loaders_options = WebpackLoadersOptions {
+            extension_to_loaders: options.clone(),
+            loader_runner_package: Some(get_external_next_compiled_package_mapping(
+                StringVc::cell("loader-runner".to_owned()),
+            )),
+            placeholder_for_future_extensions: (),
+        }
+        .cell();
+
+        maybe_add_babel_loader(project_path, loaders_options)
             .await?
-            .clone_if();
+            .clone_if()
+    };
 
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {

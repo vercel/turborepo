@@ -2,13 +2,13 @@ use core::{default::Default, result::Result::Ok};
 use std::collections::HashMap;
 
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
-        PostCssTransformOptions,
+        PostCssTransformOptions, WebpackLoadersOptions,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -29,7 +29,7 @@ use crate::{
     babel::maybe_add_babel_loader,
     embed_js::attached_next_js_package_path,
     env::env_for_js,
-    next_build::get_postcss_package_mapping,
+    next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_config::NextConfigVc,
     next_import_map::{
@@ -114,14 +114,27 @@ pub async fn get_client_module_options_context(
             .await?
             .is_found();
 
+    let enable_webpack_loaders = {
+        let options = &*next_config.webpack_loaders_options().await?;
+        let loaders_options = WebpackLoadersOptions {
+            extension_to_loaders: options.clone(),
+            loader_runner_package: Some(get_external_next_compiled_package_mapping(
+                StringVc::cell("loader-runner".to_owned()),
+            )),
+            placeholder_for_future_extensions: (),
+        }
+        .cell();
+
+        maybe_add_babel_loader(project_path, loaders_options)
+            .await?
+            .clone_if()
+    };
+
     let module_options_context = ModuleOptionsContext {
         preset_env_versions: Some(env),
         execution_context: Some(execution_context),
         ..Default::default()
     };
-
-    let webpack_loaders_options =
-        maybe_add_babel_loader(project_path, next_config.webpack_loaders_options());
 
     let module_options_context = ModuleOptionsContext {
         // We don't need to resolve React Refresh for each module. Instead,
@@ -136,7 +149,7 @@ pub async fn get_client_module_options_context(
             postcss_package: Some(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
-        enable_webpack_loaders: webpack_loaders_options.await?.clone_if(),
+        enable_webpack_loaders,
         enable_typescript_transform: true,
         rules: vec![(
             foreign_code_context_condition(next_config).await?,
