@@ -116,7 +116,7 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
     "build": {
       // "A workspace's `build` command depends on its dependencies'
       // or devDependencies' `build` command being completed first"
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "dependsOn": ["^build"]
     },
     "test": {
