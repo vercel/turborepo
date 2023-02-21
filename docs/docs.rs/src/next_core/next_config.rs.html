@@ -597,9 +597,6 @@
 <span id="597">597</span>
 <span id="598">598</span>
 <span id="599">599</span>
-<span id="600">600</span>
-<span id="601">601</span>
-<span id="602">602</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -611,10 +608,7 @@
 };
 <span class="kw">use </span>turbo_tasks_env::EnvMapVc;
 <span class="kw">use </span>turbo_tasks_fs::json::parse_json_rope_with_source_context;
-<span class="kw">use </span>turbopack::{
-    evaluate_context::node_evaluate_asset_context,
-    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
-};
+<span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     context::AssetContext,
@@ -1048,6 +1042,10 @@
     Config { exclude: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt; },
 }
 
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>WebpackExtensionToLoaders(IndexMap&lt;String, WebpackLoaderConfigsVc&gt;);
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>NextConfigVc {
     <span class="attr">#[turbo_tasks::function]
@@ -1102,20 +1100,16 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>webpack_loaders_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackLoadersOptionsVc&gt; {
+    </span><span class="kw">pub async fn </span>webpack_loaders_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackExtensionToLoadersVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="prelude-val">Some</span>(turbo_loaders) = this.experimental.turbo.as_ref().and_then(|t| t.loaders.as_ref()) <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackExtensionToLoadersVc::cell(IndexMap::new()));
         };
         <span class="kw">let </span><span class="kw-2">mut </span>extension_to_loaders = IndexMap::new();
         <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbo_loaders {
             extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
         }
-        <span class="prelude-val">Ok</span>(WebpackLoadersOptions {
-            extension_to_loaders,
-            ..Default::default()
-        }
-        .cell())
+        <span class="prelude-val">Ok</span>(WebpackExtensionToLoaders(extension_to_loaders).cell())
     }
 
     <span class="attr">#[turbo_tasks::function]

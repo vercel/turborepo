@@ -75,6 +75,7 @@
 <span id="75">75</span>
 <span id="76">76</span>
 <span id="77">77</span>
+<span id="78">78</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -97,6 +98,7 @@
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>WebpackLoadersOptions {
     <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, WebpackLoaderConfigsVc&gt;,
+    <span class="kw">pub </span>loader_runner_package: <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 
