@@ -26,7 +26,7 @@ Setup
   
   build app-a
 
-# Should get a cache hit and no prefixes
+# Running again should get a cache hit and no prefixes
   $ ${TURBO} run build --log-prefix=none
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -42,8 +42,8 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-# Should get a cache hit, but should print prefixes this time
-  $ ${TURBO} run build # without option
+# Running again withuot `--log-prefix` should get a cache hit, but should print prefixes this time
+  $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -58,3 +58,21 @@ Setup
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+
+# Running with bogus option
+  $ ${TURBO} run build --log-prefix=blah
+  ERROR invalid value 'blah' for '--log-prefix <LOG_PREFIX>'
+    [possible values: none]
+  
+  For more information, try '--help'.
+  
+  [1]
+
+# Running with missing value for option
+  $ ${TURBO} run build --log-prefix
+  ERROR a value is required for '--log-prefix <LOG_PREFIX>' but none was supplied
+    [possible values: none]
+  
+  For more information, try '--help'.
+  
+  [1]
