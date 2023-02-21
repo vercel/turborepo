@@ -87,7 +87,7 @@ async function getResolveRoute(
 }
 
 export default async function route(
-  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   routerRequest: RouterRequest,
   dir: string
 ) {
