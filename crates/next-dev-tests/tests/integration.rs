@@ -37,15 +37,14 @@ use tokio::{
 };
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::{
-    primitives::BoolVc, NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue,
-    TurboTasks,
+    debug::{ValueDebug, ValueDebugString},
+    primitives::BoolVc,
+    NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue, TurboTasks,
 };
 use turbo_tasks_fs::{util::sys_to_unix, DiskFileSystemVc, FileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbo_tasks_testing::retry::retry_async;
-use turbopack_core::issue::{
-    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssueReadRef,
-};
+use turbopack_core::issue::{CapturedIssues, IssueReporter, IssueReporterVc, PlainIssueReadRef};
 use turbopack_test_utils::snapshot::snapshot_issues;
 
 fn register() {
@@ -470,13 +469,13 @@ async fn get_mock_server_future(mock_dir: &Path) -> Result<(), String> {
 #[turbo_tasks::value(shared)]
 struct TestIssueReporter {
     #[turbo_tasks(trace_ignore, debug_ignore)]
-    pub issue_tx: State<Sender<PlainIssueReadRef>>,
+    pub issue_tx: State<Sender<(PlainIssueReadRef, ValueDebugString)>>,
 }
 
 #[turbo_tasks::value_impl]
 impl TestIssueReporterVc {
     #[turbo_tasks::function]
-    fn new(issue_tx: TransientInstance<Sender<PlainIssueReadRef>>) -> Self {
+    fn new(issue_tx: TransientInstance<Sender<(PlainIssueReadRef, ValueDebugString)>>) -> Self {
         TestIssueReporter {
             issue_tx: State::new((*issue_tx).clone()),
         }
@@ -493,15 +492,13 @@ impl IssueReporter for TestIssueReporter {
         _source: TransientValue<RawVc>,
     ) -> Result<BoolVc> {
         let issue_tx = self.issue_tx.get_untracked().clone();
-        let mut has_fatal = false;
         for issue in captured_issues.iter() {
-            let plain = issue.into_plain().await?;
-            if plain.severity == IssueSeverity::Fatal {
-                has_fatal = true;
-            }
-            issue_tx.send(plain).await?;
+            let plain = issue.into_plain();
+            issue_tx
+                .send((plain.await?, (*(plain.dbg().await?)).clone()))
+                .await?;
         }
 
-        Ok(BoolVc::cell(has_fatal))
+        Ok(BoolVc::cell(false))
     }
 }

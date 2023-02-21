@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
 use similar::TextDiff;
-use turbo_tasks::{TryJoinIterExt, ValueToString};
+use turbo_tasks::{debug::ValueDebugString, TryJoinIterExt, ValueToString};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystemVc, File, FileContent, FileSystemEntryType,
     FileSystemPathVc,
@@ -21,14 +21,14 @@ use turbopack_core::{
 // e.g. `UPDATE=1 cargo test -p turbopack-tests -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
-pub async fn snapshot_issues<I: IntoIterator<Item = PlainIssueReadRef>>(
+pub async fn snapshot_issues<I: IntoIterator<Item = (PlainIssueReadRef, ValueDebugString)>>(
     captured_issues: I,
     issues_path: FileSystemPathVc,
     workspace_root: &str,
 ) -> Result<()> {
     let expected_issues = expected(issues_path).await?;
     let mut seen = HashSet::new();
-    for plain_issue in captured_issues.into_iter() {
+    for (plain_issue, debug_string) in captured_issues.into_iter() {
         let hash = encode_hex(plain_issue.internal_hash());
 
         // We replace "*" because it's not allowed for filename on Windows.
@@ -42,7 +42,9 @@ pub async fn snapshot_issues<I: IntoIterator<Item = PlainIssueReadRef>>(
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
         // PlainAsset.path -> FileSystemPath.fs -> DiskFileSystem.root changes
         // for everyone.
-        let content = format!("{:#?}", plain_issue).replace(workspace_root, "WORKSPACE_ROOT");
+        let content = debug_string
+            .as_str()
+            .replace(workspace_root, "WORKSPACE_ROOT");
         let asset = File::from(content).into();
 
         diff(path, asset).await?;

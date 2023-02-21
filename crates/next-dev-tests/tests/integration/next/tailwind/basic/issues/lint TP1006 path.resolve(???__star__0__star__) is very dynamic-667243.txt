@@ -10,31 +10,19 @@ PlainIssue {
         PlainIssueSource {
             asset: PlainAsset {
                 path: FileSystemPath {
-                    fs: FileSystemVc {
-                        node: TaskCell(
-                            TaskId {
-                                id: 1716,
-                            },
-                            CellId {
-                                type_id: ValueTypeId {
-                                    id: 36,
-                                    name: "turbo-tasks-fs@TODO::::attach::AttachedFileSystem",
-                                },
-                                index: 0,
-                            },
-                        ),
-                    },
+                    fs: FileSystem(AttachedFileSystem {
+                        root_fs: FileSystem(DiskFileSystem {
+                            name: "project",
+                            root: "WORKSPACE_ROOT",
+                        }),
+                        child_path: "crates/next-dev-tests/tests/integration/next/tailwind/basic/input/[embedded_modules]/@vercel/turbopack-next",
+                        child_fs: FileSystem(DiskFileSystem {
+                            name: "next",
+                            root: "WORKSPACE_ROOT/crates/next-core/js/src",
+                        }),
+                    }),
                     path: "node_modules/.pnpm/postcss@8.4.20/node_modules/postcss/lib/input.js",
                 },
-                content: Content(
-                    File {
-                        meta: FileMeta {
-                            permissions: Writable,
-                            content_type: None,
-                        },
-                        content (hash): 6045537986029936691,
-                    },
-                ),
             },
             start: SourcePos {
                 line: 43,

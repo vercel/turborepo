@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use test_generator::test_resources;
-use turbo_tasks::{NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
+use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
 use turbo_tasks_env::DotenvProcessEnvVc;
 use turbo_tasks_fs::{
     json::parse_json_with_source_context, util::sys_to_unix, DiskFileSystemVc, FileSystem,
@@ -104,7 +104,12 @@ async fn run(resource: &'static str) -> Result<()> {
 
         let plain_issues = captured_issues
             .iter()
-            .map(|issue_vc| async move { issue_vc.into_plain().await })
+            .map(|issue_vc| async move {
+                Ok((
+                    issue_vc.into_plain().await?,
+                    (*(issue_vc.into_plain().dbg().await?)).clone(),
+                ))
+            })
             .try_join()
             .await?;
 
