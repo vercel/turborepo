@@ -11,6 +11,6 @@ export default function Foo() {
 
 function runTests() {
   it("it should display foo, not index", () => {
-    expect(document.textContent).toBe("foo");
+    expect(document.getElementById("__next").textContent).toBe("foo");
   });
 }
