@@ -235,7 +235,7 @@ jobs:
         uses: ./.github/actions/setup-node
 
       - name: "Setup Go"
-        users: ./.github/actions/setup-go
+        uses: ./.github/actions/setup-go
 
       - run: pnpm -- turbo run test --filter=cli --color
 
