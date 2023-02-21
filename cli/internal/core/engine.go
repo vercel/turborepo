@@ -158,6 +158,9 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 	traversalQueue := []string{}
 
+	// get a set of taskNames passed in. we'll remove the ones that have a definition
+	missing := util.SetFromStrings(taskNames)
+
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
@@ -180,13 +183,22 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 					return err
 				}
-
+				// delete taskName if it was found
+				missing.Delete(taskName)
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
 	}
 
 	visited := make(util.Set)
+
+	// validate that all tasks passed were found
+	missingList := missing.UnsafeListOfStrings()
+	sort.Strings(missingList)
+
+	if len(missingList) > 0 {
+		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(missingList, ", "))
+	}
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
 	for len(traversalQueue) > 0 {

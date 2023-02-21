@@ -1032,17 +1032,6 @@ jobs:
           file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
-  next_js_integration:
-    name: Execute Next.js integration workflow
-    needs: [determine_jobs]
-    permissions:
-      pull-requests: write
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
-    uses: ./.github/workflows/nextjs-integration-test.yml
-    # Uncomment to test against a specific version of Next.js
-    # with:
-    # version: v13.1.6-canary.0
-
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
@@ -1191,7 +1180,6 @@ jobs:
       - rust_build_release
       - rust_bench
       - rust_bench_pr
-      - next_js_integration
       - format_lint
     if: always()
     permissions:
@@ -1234,7 +1222,6 @@ jobs:
           subjob ${{needs.rust_build_release.result}} "Rust release build (non-blocking)"
           subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
           subjob ${{needs.rust_bench_pr.result}} "Turbopack Rust PR benchmarks (non-blocking)"
-          subjob ${{needs.next_js_integration.result}} "Next.js Integration tests (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then

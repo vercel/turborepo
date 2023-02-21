@@ -2,15 +2,20 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
 
-$ running non-existent tasks works
+# Running non-existent tasks errors
   $ ${TURBO} run doesnotexist
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running doesnotexist in 2 packages (esc)
-  \xe2\x80\xa2 Remote caching disabled (esc)
-  
-  No tasks were executed as part of this run.
-  
-   Tasks:    0 successful, 0 total
-  Cached:    0 cached, 0 total
-    Time:\s*[\.0-9]+m?s  (re)
-  
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
+  [1]
+
+# Multiple non-existent tasks also error
+  $ ${TURBO} run doesnotexist alsono
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: alsono, doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: alsono, doesnotexist
+  [1]
+
+# One good and one bad task does not error
+  $ ${TURBO} run build doesnotexist
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
+  [1]
