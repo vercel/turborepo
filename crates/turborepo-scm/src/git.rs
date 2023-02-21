@@ -177,7 +177,9 @@ mod tests {
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
-        repo.config()?.set_str("user.name", "test")?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
@@ -236,6 +238,10 @@ mod tests {
     fn test_previous_content() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
 
