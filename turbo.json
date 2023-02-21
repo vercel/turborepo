@@ -5,7 +5,16 @@
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "//#lint": {},
+
+    // lint tasks
+    "lint": {},
+    // root lint task runs toml check and prettier
+    // TODO: run prettier in individual workspaces instead of globally.
+    "//#lint": {
+      "dependsOn": ["//#check:toml", "//#check:prettier"]
+    },
+    "//#check:prettier": {},
+    "//#check:toml": {},
     "check-types": {
       "dependsOn": ["//#build:ts", "^build"]
     },
@@ -13,21 +22,11 @@
       "cache": false
     },
     "//#build:ts": {
-      "outputs": ["packages/**/dist"],
-      "dependsOn": []
+      "outputs": ["packages/**/dist"]
     },
     "build": {
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
-    },
-    "//#check:prettier": {
-      "dependsOn": []
-    },
-    "//#check:toml": {
-      "dependsOn": []
-    },
-    "//#check:fmt": {
-      "dependsOn": ["//#check:prettier", "//#check:toml", "//#lint"]
     },
     "//#run-example": {
       "inputs": [
@@ -40,8 +39,7 @@
         "cli/go.mod",
         "cli/go.sum",
         "./scripts/run-example.sh"
-      ],
-      "dependsOn": []
+      ]
     }
   }
 }

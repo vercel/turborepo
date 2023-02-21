@@ -12,7 +12,6 @@
     "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "lint": "eslint . --ext js,jsx,ts,tsx",
     "turbo": "pnpm run build:turbo && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
