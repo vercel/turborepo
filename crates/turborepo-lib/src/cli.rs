@@ -352,12 +352,23 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Use "none" to remove prefixes from task logs. Note that tasks running
+    /// in parallel interleave their logs and prefix is the only way
+    /// to identify which task produced a log.
+    #[clap(long, value_enum)]
+    pub log_prefix: Option<LogPrefix>,
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
     pub tasks: Vec<String>,
     #[clap(last = true, hide = true)]
     pub pass_through_args: Vec<String>,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum LogPrefix {
+    #[serde(rename = "none")]
+    None,
 }
 
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
