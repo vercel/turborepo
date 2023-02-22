@@ -10,7 +10,7 @@
 0 -> 6 call = require*0*("charenc")
 - *0* require: The require method from CommonJS
 
-0 -> 8 conditional = (???*0*  ==  ???*2*)
+0 -> 8 conditional = (???*0* == ???*2*)
 - *0* ???*1*["constructor"]
   ⚠️  unknown object
 - *1* arguments[0]
@@ -18,7 +18,7 @@
 - *2* FreeVar(String)
   ⚠️  unknown global
 
-8 -> 10 conditional = (???*0* | (???*1*  ===  "binary"))
+8 -> 10 conditional = (???*0* | (???*1* === "binary"))
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["encoding"]

@@ -1,4 +1,4 @@
-0 -> 11 conditional = (???*0*  ===  "function")
+0 -> 11 conditional = (???*0* === "function")
 - *0* unsupported expression
 
 11 -> 13 member call = ???*0*["captureStackTrace"](???*1*, (...) => undefined)
@@ -12,7 +12,7 @@
 
 0 -> 17 call = (...) => (
   | undefined
-  | ...[...](..., ...)["replace"](/"/g, "\"")["replace"](/\0/g, "\0")["replace"](/\t/g, "\t")["replace"](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, *anonymous function 1822*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 1920*)
+  | ...[...](..., ...)["replace"](/"/g, "\\\"")["replace"](/\0/g, "\\0")["replace"](/\t/g, "\\t")["replace"](/\n/g, "\\n")["replace"](/\r/g, "\\r")["replace"](/[\x00-\x0F]/g, *anonymous function 1822*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 1920*)
 )(???*0*)
 - *0* ???*1*["text"]
   ⚠️  unknown object
@@ -21,7 +21,7 @@
 
 0 -> 25 call = (...) => (
   | undefined
-  | ...[...](..., ...)["replace"](/-/g, "\-")["replace"](/\0/g, "\0")["replace"](/\t/g, "\t")["replace"](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  | ...[...](..., ...)["replace"](/-/g, "\\-")["replace"](/\0/g, "\\0")["replace"](/\t/g, "\\t")["replace"](/\n/g, "\\n")["replace"](/\r/g, "\\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
 )(???*0*)
 - *0* ???*1*[0]
   ⚠️  unknown object
@@ -34,7 +34,7 @@
 
 0 -> 29 call = (...) => (
   | undefined
-  | ...[...](..., ...)["replace"](/-/g, "\-")["replace"](/\0/g, "\0")["replace"](/\t/g, "\t")["replace"](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  | ...[...](..., ...)["replace"](/-/g, "\\-")["replace"](/\0/g, "\\0")["replace"](/\t/g, "\\t")["replace"](/\n/g, "\\n")["replace"](/\r/g, "\\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
 )(???*0*)
 - *0* ???*1*[1]
   ⚠️  unknown object
@@ -47,7 +47,7 @@
 
 0 -> 32 call = (...) => (
   | undefined
-  | ...[...](..., ...)["replace"](/-/g, "\-")["replace"](/\0/g, "\0")["replace"](/\t/g, "\t")["replace"](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  | ...[...](..., ...)["replace"](/-/g, "\\-")["replace"](/\0/g, "\\0")["replace"](/\t/g, "\\t")["replace"](/\n/g, "\\n")["replace"](/\r/g, "\\r")["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
 )(???*0*)
 - *0* ???*1*[i]
   ⚠️  unknown object
@@ -74,68 +74,68 @@
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 49 member call = ???*0*["replace"](/\\/g, "\\")
+0 -> 49 member call = ???*0*["replace"](/\\/g, "\\\\")
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 50 member call = ???*0*["replace"](/"/g, "\"")
-- *0* ???*1*["replace"](/\\/g, "\\")
+0 -> 50 member call = ???*0*["replace"](/"/g, "\\\"")
+- *0* ???*1*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 51 member call = ???*0*["replace"](/\0/g, "\0")
-- *0* ???*1*["replace"](/"/g, "\"")
+0 -> 51 member call = ???*0*["replace"](/\0/g, "\\0")
+- *0* ???*1*["replace"](/"/g, "\\\"")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\\/g, "\\")
+- *1* ???*2*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 52 member call = ???*0*["replace"](/\t/g, "\t")
-- *0* ???*1*["replace"](/\0/g, "\0")
+0 -> 52 member call = ???*0*["replace"](/\t/g, "\\t")
+- *0* ???*1*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/"/g, "\"")
+- *1* ???*2*["replace"](/"/g, "\\\"")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\\/g, "\\")
+- *2* ???*3*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 53 member call = ???*0*["replace"](/\n/g, "\n")
-- *0* ???*1*["replace"](/\t/g, "\t")
+0 -> 53 member call = ???*0*["replace"](/\n/g, "\\n")
+- *0* ???*1*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\0/g, "\0")
+- *1* ???*2*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/"/g, "\"")
+- *2* ???*3*["replace"](/"/g, "\\\"")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\\/g, "\\")
+- *3* ???*4*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 54 member call = ???*0*["replace"](/\r/g, "\r")
-- *0* ???*1*["replace"](/\n/g, "\n")
+0 -> 54 member call = ???*0*["replace"](/\r/g, "\\r")
+- *0* ???*1*["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\t/g, "\t")
+- *1* ???*2*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\0/g, "\0")
+- *2* ???*3*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/"/g, "\"")
+- *3* ???*4*["replace"](/"/g, "\\\"")
   ⚠️  unknown callee object
-- *4* ???["replace"](/\\/g, "\\")
+- *4* ???["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 
 0 -> 55 member call = ???*0*["replace"](/[\x00-\x0F]/g, (...) => (undefined | `\x0${hex(ch)}`))
-- *0* ???*1*["replace"](/\r/g, "\r")
+- *0* ???*1*["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\n/g, "\n")
+- *1* ???*2*["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\t/g, "\t")
+- *2* ???*3*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\0/g, "\0")
+- *3* ???*4*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *4* ???["replace"](/"/g, "\"")
+- *4* ???["replace"](/"/g, "\\\"")
   ⚠️  unknown callee object
 
 55 -> 56 call = (...) => (
@@ -148,13 +148,13 @@
 0 -> 57 member call = ???*0*["replace"](/[\x10-\x1F\x7F-\x9F]/g, (...) => (undefined | `\x${hex(ch)}`))
 - *0* ???*1*["replace"](/[\x00-\x0F]/g, *anonymous function 1822*)
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\r/g, "\r")
+- *1* ???*2*["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\n/g, "\n")
+- *2* ???*3*["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\t/g, "\t")
+- *3* ???*4*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *4* ???["replace"](/\0/g, "\0")
+- *4* ???["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
 
 57 -> 58 call = (...) => (
@@ -164,92 +164,92 @@
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 69 member call = ???*0*["replace"](/\\/g, "\\")
+0 -> 69 member call = ???*0*["replace"](/\\/g, "\\\\")
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 70 member call = ???*0*["replace"](/\]/g, "\]")
-- *0* ???*1*["replace"](/\\/g, "\\")
+0 -> 70 member call = ???*0*["replace"](/\]/g, "\\]")
+- *0* ???*1*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 71 member call = ???*0*["replace"](/\^/g, "\^")
-- *0* ???*1*["replace"](/\]/g, "\]")
+0 -> 71 member call = ???*0*["replace"](/\^/g, "\\^")
+- *0* ???*1*["replace"](/\]/g, "\\]")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\\/g, "\\")
+- *1* ???*2*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 72 member call = ???*0*["replace"](/-/g, "\-")
-- *0* ???*1*["replace"](/\^/g, "\^")
+0 -> 72 member call = ???*0*["replace"](/-/g, "\\-")
+- *0* ???*1*["replace"](/\^/g, "\\^")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\]/g, "\]")
+- *1* ???*2*["replace"](/\]/g, "\\]")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\\/g, "\\")
+- *2* ???*3*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 73 member call = ???*0*["replace"](/\0/g, "\0")
-- *0* ???*1*["replace"](/-/g, "\-")
+0 -> 73 member call = ???*0*["replace"](/\0/g, "\\0")
+- *0* ???*1*["replace"](/-/g, "\\-")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\^/g, "\^")
+- *1* ???*2*["replace"](/\^/g, "\\^")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\]/g, "\]")
+- *2* ???*3*["replace"](/\]/g, "\\]")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\\/g, "\\")
+- *3* ???*4*["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 74 member call = ???*0*["replace"](/\t/g, "\t")
-- *0* ???*1*["replace"](/\0/g, "\0")
+0 -> 74 member call = ???*0*["replace"](/\t/g, "\\t")
+- *0* ???*1*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/-/g, "\-")
+- *1* ???*2*["replace"](/-/g, "\\-")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\^/g, "\^")
+- *2* ???*3*["replace"](/\^/g, "\\^")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\]/g, "\]")
+- *3* ???*4*["replace"](/\]/g, "\\]")
   ⚠️  unknown callee object
-- *4* ???["replace"](/\\/g, "\\")
-  ⚠️  unknown callee object
-
-0 -> 75 member call = ???*0*["replace"](/\n/g, "\n")
-- *0* ???*1*["replace"](/\t/g, "\t")
-  ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\0/g, "\0")
-  ⚠️  unknown callee object
-- *2* ???*3*["replace"](/-/g, "\-")
-  ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\^/g, "\^")
-  ⚠️  unknown callee object
-- *4* ???["replace"](/\]/g, "\]")
+- *4* ???["replace"](/\\/g, "\\\\")
   ⚠️  unknown callee object
 
-0 -> 76 member call = ???*0*["replace"](/\r/g, "\r")
-- *0* ???*1*["replace"](/\n/g, "\n")
+0 -> 75 member call = ???*0*["replace"](/\n/g, "\\n")
+- *0* ???*1*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\t/g, "\t")
+- *1* ???*2*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\0/g, "\0")
+- *2* ???*3*["replace"](/-/g, "\\-")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/-/g, "\-")
+- *3* ???*4*["replace"](/\^/g, "\\^")
   ⚠️  unknown callee object
-- *4* ???["replace"](/\^/g, "\^")
+- *4* ???["replace"](/\]/g, "\\]")
+  ⚠️  unknown callee object
+
+0 -> 76 member call = ???*0*["replace"](/\r/g, "\\r")
+- *0* ???*1*["replace"](/\n/g, "\\n")
+  ⚠️  unknown callee object
+- *1* ???*2*["replace"](/\t/g, "\\t")
+  ⚠️  unknown callee object
+- *2* ???*3*["replace"](/\0/g, "\\0")
+  ⚠️  unknown callee object
+- *3* ???*4*["replace"](/-/g, "\\-")
+  ⚠️  unknown callee object
+- *4* ???["replace"](/\^/g, "\\^")
   ⚠️  unknown callee object
 
 0 -> 77 member call = ???*0*["replace"](/[\x00-\x0F]/g, (...) => (undefined | `\x0${hex(ch)}`))
-- *0* ???*1*["replace"](/\r/g, "\r")
+- *0* ???*1*["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\n/g, "\n")
+- *1* ???*2*["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\t/g, "\t")
+- *2* ???*3*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\0/g, "\0")
+- *3* ???*4*["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
-- *4* ???["replace"](/-/g, "\-")
+- *4* ???["replace"](/-/g, "\\-")
   ⚠️  unknown callee object
 
 77 -> 78 call = (...) => (
@@ -262,13 +262,13 @@
 0 -> 79 member call = ???*0*["replace"](/[\x10-\x1F\x7F-\x9F]/g, (...) => (undefined | `\x${hex(ch)}`))
 - *0* ???*1*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
   ⚠️  unknown callee object
-- *1* ???*2*["replace"](/\r/g, "\r")
+- *1* ???*2*["replace"](/\r/g, "\\r")
   ⚠️  unknown callee object
-- *2* ???*3*["replace"](/\n/g, "\n")
+- *2* ???*3*["replace"](/\n/g, "\\n")
   ⚠️  unknown callee object
-- *3* ???*4*["replace"](/\t/g, "\t")
+- *3* ???*4*["replace"](/\t/g, "\\t")
   ⚠️  unknown callee object
-- *4* ???["replace"](/\0/g, "\0")
+- *4* ???["replace"](/\0/g, "\\0")
   ⚠️  unknown callee object
 
 79 -> 80 call = (...) => (
@@ -304,7 +304,7 @@
 0 -> 90 member call = ???*0*["sort"]()
 - *0* unknown new expression
 
-0 -> 95 conditional = (???*0*  !==  ???*3*)
+0 -> 95 conditional = (???*0* !== ???*3*)
 - *0* ???*1*[???*2*]
   ⚠️  unknown object
 - *1* unknown new expression
@@ -325,7 +325,7 @@
 
 0 -> 109 call = (...) => (
   | undefined
-  | ...[...](..., ...)["replace"](/"/g, "\"")["replace"](/\0/g, "\0")["replace"](/\t/g, "\t")["replace"](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, *anonymous function 1822*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 1920*)
+  | ...[...](..., ...)["replace"](/"/g, "\\\"")["replace"](/\0/g, "\\0")["replace"](/\t/g, "\\t")["replace"](/\n/g, "\\n")["replace"](/\r/g, "\\r")["replace"](/[\x00-\x0F]/g, *anonymous function 1822*)["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 1920*)
 )(???*0*)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -433,7 +433,7 @@
 0 -> 129 call = (...) => (
   | undefined
   | {"type": "literal", "text": text, "ignoreCase": ignoreCase}
-)(""", false)
+)("\"", false)
 
 0 -> 131 member call = ???*0*["join"]("")
 - *0* arguments[0]
@@ -447,17 +447,7 @@
 0 -> 133 call = (...) => (
   | undefined
   | {"type": "class", "parts": parts, "inverted": inverted, "ignoreCase": ignoreCase}
-)(
-    [
-        " ",
-        "	",
-        "
-",
-        ""
-    ],
-    false,
-    false
-)
+)([" ", "\t", "\n", "\r"], false, false)
 
 0 -> 134 call = (...) => (
   | undefined
@@ -467,15 +457,7 @@
 0 -> 135 call = (...) => (
   | undefined
   | {"type": "class", "parts": parts, "inverted": inverted, "ignoreCase": ignoreCase}
-)(
-    [
-        "
-",
-        ""
-    ],
-    false,
-    false
-)
+)(["\n", "\r"], false, false)
 
 0 -> 136 call = (...) => (
   | undefined
@@ -621,7 +603,7 @@
 0 -> 166 call = (...) => (
   | undefined
   | {"type": "literal", "text": text, "ignoreCase": ignoreCase}
-)("\", false)
+)("\\", false)
 
 0 -> 167 call = (...) => (undefined | input["substring"](peg$savedPos, peg$currPos))()
 
@@ -904,7 +886,7 @@
   ⚠️  pattern without value
 - *2* unsupported expression
 
-222 -> 229 conditional = (???*0*  ===  10)
+222 -> 229 conditional = (???*0* === 10)
 - *0* ???*1*["charCodeAt"](p)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -940,7 +922,7 @@
 
 247 -> 248 call = (...) => (undefined | s0)()
 
-247 -> 249 conditional = ((???*0* | undefined | [])  !==  {})
+247 -> 249 conditional = ((???*0* | undefined | []) !== {})
 - *0* s3
   ⚠️  pattern without value
 
@@ -954,7 +936,7 @@
 
 252 -> 253 call = (...) => (undefined | s0)()
 
-252 -> 254 conditional = ((???*0* | undefined | [])  !==  {})
+252 -> 254 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1058,7 +1040,7 @@
 
 290 -> 291 call = (...) => (undefined | s0)()
 
-290 -> 292 conditional = ((???*0* | undefined | [])  !==  {})
+290 -> 292 conditional = ((???*0* | undefined | []) !== {})
 - *0* s13
   ⚠️  pattern without value
 
@@ -1069,7 +1051,7 @@
 
 294 -> 295 call = (...) => (undefined | s0)()
 
-294 -> 296 conditional = ((???*0* | undefined | [])  !==  {})
+294 -> 296 conditional = ((???*0* | undefined | []) !== {})
 - *0* s15
   ⚠️  pattern without value
 
@@ -1110,7 +1092,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 304 conditional = (???*0*  ===  42)
+0 -> 304 conditional = (???*0* === 42)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1154,7 +1136,7 @@
 
 315 -> 316 call = (...) => (undefined | s0)()
 
-315 -> 317 conditional = ((???*0* | undefined | [])  !==  {})
+315 -> 317 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1181,7 +1163,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-324 -> 327 conditional = (???*0*  ===  44)
+324 -> 327 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1196,13 +1178,13 @@
     )
 )
 
-324 -> 330 conditional = ((???*0* | "," | {})  !==  {})
+324 -> 330 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 330 -> 331 call = (...) => (undefined | s0)()
 
-330 -> 332 conditional = ((???*0* | undefined | [])  !==  {})
+330 -> 332 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1230,7 +1212,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-339 -> 342 conditional = (???*0*  ===  44)
+339 -> 342 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1245,13 +1227,13 @@
     )
 )
 
-339 -> 345 conditional = ((???*0* | "," | {})  !==  {})
+339 -> 345 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 345 -> 346 call = (...) => (undefined | s0)()
 
-345 -> 347 conditional = ((???*0* | undefined | [])  !==  {})
+345 -> 347 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1264,7 +1246,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-322 -> 351 conditional = ((???*0* | [])  !==  {})
+322 -> 351 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1294,7 +1276,7 @@
 
 358 -> 359 call = (...) => (undefined | s0)()
 
-358 -> 360 conditional = ((???*0* | undefined | [])  !==  {})
+358 -> 360 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1324,7 +1306,7 @@
 
 369 -> 370 call = (...) => (undefined | s0)()
 
-369 -> 371 conditional = ((???*0* | undefined | [])  !==  {})
+369 -> 371 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1337,7 +1319,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-354 -> 375 conditional = ((???*0* | [])  !==  {})
+354 -> 375 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1461,7 +1443,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-413 -> 416 conditional = (???*0*  ===  44)
+413 -> 416 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1476,13 +1458,13 @@
     )
 )
 
-413 -> 419 conditional = ((???*0* | "," | {})  !==  {})
+413 -> 419 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 419 -> 420 call = (...) => (undefined | s0)()
 
-419 -> 421 conditional = ((???*0* | undefined | [])  !==  {})
+419 -> 421 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1510,7 +1492,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-428 -> 431 conditional = (???*0*  ===  44)
+428 -> 431 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1525,13 +1507,13 @@
     )
 )
 
-428 -> 434 conditional = ((???*0* | "," | {})  !==  {})
+428 -> 434 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 434 -> 435 call = (...) => (undefined | s0)()
 
-434 -> 436 conditional = ((???*0* | undefined | [])  !==  {})
+434 -> 436 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1544,7 +1526,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-411 -> 440 conditional = ((???*0* | [])  !==  {})
+411 -> 440 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1598,7 +1580,7 @@
 
 454 -> 455 call = (...) => (undefined | s0)()
 
-454 -> 456 conditional = ((???*0* | undefined | [])  !==  {})
+454 -> 456 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1607,7 +1589,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-456 -> 459 conditional = (???*0*  ===  46)
+456 -> 459 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1622,13 +1604,13 @@
     )
 )
 
-456 -> 462 conditional = ((???*0* | "." | {} | "(")  !==  {})
+456 -> 462 conditional = ((???*0* | "." | {} | "(") !== {})
 - *0* s3
   ⚠️  pattern without value
 
 462 -> 463 call = (...) => (undefined | s0)()
 
-462 -> 464 conditional = ((???*0* | undefined | [])  !==  {})
+462 -> 464 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -1639,7 +1621,7 @@
 
 466 -> 467 call = (...) => (undefined | s0)()
 
-466 -> 468 conditional = ((???*0* | undefined | [])  !==  {})
+466 -> 468 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1648,7 +1630,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-468 -> 471 conditional = (???*0*  ===  40)
+468 -> 471 conditional = (???*0* === 40)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1663,13 +1645,13 @@
     )
 )
 
-468 -> 474 conditional = ((???*0* | "(" | {} | ")")  !==  {})
+468 -> 474 conditional = ((???*0* | "(" | {} | ")") !== {})
 - *0* s7
   ⚠️  pattern without value
 
 474 -> 475 call = (...) => (undefined | s0)()
 
-474 -> 476 conditional = ((???*0* | undefined | [])  !==  {})
+474 -> 476 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -1680,7 +1662,7 @@
 
 478 -> 479 call = (...) => (undefined | s0)()
 
-478 -> 480 conditional = ((???*0* | undefined | [])  !==  {})
+478 -> 480 conditional = ((???*0* | undefined | []) !== {})
 - *0* s10
   ⚠️  pattern without value
 
@@ -1689,7 +1671,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-480 -> 483 conditional = (???*0*  ===  41)
+480 -> 483 conditional = (???*0* === 41)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1704,7 +1686,7 @@
     )
 )
 
-480 -> 486 conditional = ((???*0* | ")" | {})  !==  {})
+480 -> 486 conditional = ((???*0* | ")" | {}) !== {})
 - *0* s11
   ⚠️  pattern without value
 
@@ -1725,7 +1707,7 @@
 
 490 -> 491 call = (...) => (undefined | s0)()
 
-490 -> 492 conditional = ((???*0* | undefined | [])  !==  {})
+490 -> 492 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1734,7 +1716,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-492 -> 495 conditional = (???*0*  ===  40)
+492 -> 495 conditional = (???*0* === 40)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1749,13 +1731,13 @@
     )
 )
 
-492 -> 498 conditional = ((???*0* | "." | {} | "(")  !==  {})
+492 -> 498 conditional = ((???*0* | "." | {} | "(") !== {})
 - *0* s3
   ⚠️  pattern without value
 
 498 -> 499 call = (...) => (undefined | s0)()
 
-498 -> 500 conditional = ((???*0* | undefined | [])  !==  {})
+498 -> 500 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -1766,7 +1748,7 @@
 
 502 -> 503 call = (...) => (undefined | s0)()
 
-502 -> 504 conditional = ((???*0* | undefined | [])  !==  {})
+502 -> 504 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -1775,7 +1757,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-504 -> 507 conditional = (???*0*  ===  41)
+504 -> 507 conditional = (???*0* === 41)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1790,7 +1772,7 @@
     )
 )
 
-504 -> 510 conditional = ((???*0* | "(" | {} | ")")  !==  {})
+504 -> 510 conditional = ((???*0* | "(" | {} | ")") !== {})
 - *0* s7
   ⚠️  pattern without value
 
@@ -1806,7 +1788,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 514 conditional = (???*0*  ===  123)
+0 -> 514 conditional = (???*0* === 123)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1826,7 +1808,7 @@
 
 517 -> 518 call = (...) => (undefined | s0)()
 
-517 -> 519 conditional = ((???*0* | undefined | [])  !==  {})
+517 -> 519 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -1845,7 +1827,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-523 -> 526 conditional = (???*0*  ===  44)
+523 -> 526 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1860,13 +1842,13 @@
     )
 )
 
-523 -> 529 conditional = ((???*0* | "," | {})  !==  {})
+523 -> 529 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 529 -> 530 call = (...) => (undefined | s0)()
 
-529 -> 531 conditional = ((???*0* | undefined | [])  !==  {})
+529 -> 531 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -1894,7 +1876,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-538 -> 541 conditional = (???*0*  ===  44)
+538 -> 541 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1909,13 +1891,13 @@
     )
 )
 
-538 -> 544 conditional = ((???*0* | "," | {})  !==  {})
+538 -> 544 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 544 -> 545 call = (...) => (undefined | s0)()
 
-544 -> 546 conditional = ((???*0* | undefined | [])  !==  {})
+544 -> 546 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -1928,7 +1910,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-521 -> 550 conditional = ((???*0* | [])  !==  {})
+521 -> 550 conditional = ((???*0* | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -1942,7 +1924,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-552 -> 555 conditional = (???*0*  ===  125)
+552 -> 555 conditional = (???*0* === 125)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1974,7 +1956,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 562 conditional = (???*0*  ===  91)
+0 -> 562 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -1994,7 +1976,7 @@
 
 565 -> 566 call = (...) => (undefined | s0)()
 
-565 -> 567 conditional = ((???*0* | undefined | [])  !==  {})
+565 -> 567 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2005,7 +1987,7 @@
 
 569 -> 570 call = (...) => (undefined | s0)()
 
-569 -> 571 conditional = ((???*0* | undefined | [])  !==  {})
+569 -> 571 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -2014,7 +1996,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-571 -> 574 conditional = (???*0*  ===  93)
+571 -> 574 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2029,7 +2011,7 @@
     )
 )
 
-571 -> 577 conditional = ((???*0* | "]" | {})  !==  {})
+571 -> 577 conditional = ((???*0* | "]" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -2076,7 +2058,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 594 conditional = (???*0*  ===  "undefined")
+0 -> 594 conditional = (???*0* === "undefined")
 - *0* ???*1*["substr"](peg$currPos, 9)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2091,7 +2073,7 @@
     )
 )
 
-0 -> 597 conditional = ((???*0* | "undefined" | {} | undefined | {"type": "undefined_constant"})  !==  {})
+0 -> 597 conditional = ((???*0* | "undefined" | {} | undefined | {"type": "undefined_constant"}) !== {})
 - *0* s1
   ⚠️  pattern without value
 
@@ -2126,7 +2108,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 611 conditional = (???*0*  ===  45)
+0 -> 611 conditional = (???*0* === 45)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2141,7 +2123,7 @@
     )
 )
 
-0 -> 614 conditional = ((???*0* | "-" | {} | null | undefined | {"type": "number_constant", "value": ???*1*})  !==  {})
+0 -> 614 conditional = ((???*0* | "-" | {} | null | undefined | {"type": "number_constant", "value": ???*1*}) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*(text(), 16)
@@ -2154,7 +2136,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-614 -> 617 conditional = (???*0*  ===  "0x")
+614 -> 617 conditional = (???*0* === "0x")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2169,7 +2151,7 @@
     )
 )
 
-614 -> 620 conditional = ((???*0* | "0x" | {} | null)  !==  {})
+614 -> 620 conditional = ((???*0* | "0x" | {} | null) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2251,7 +2233,7 @@
     )
 )
 
-620 -> 642 conditional = ((???*0* | [] | {})  !==  {})
+620 -> 642 conditional = ((???*0* | [] | {}) !== {})
 - *0* s3
   ⚠️  pattern without value
 
@@ -2260,7 +2242,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-642 -> 645 conditional = (???*0*  ===  46)
+642 -> 645 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2275,7 +2257,7 @@
     )
 )
 
-642 -> 648 conditional = ((???*0* | "." | {} | [???*1*, (???*2* | [] | {})])  !==  {})
+642 -> 648 conditional = ((???*0* | "." | {} | [???*1*, (???*2* | [] | {})]) !== {})
 - *0* s5
   ⚠️  pattern without value
 - *1* s5
@@ -2318,7 +2300,7 @@
     )
 )
 
-648 -> 658 conditional = ((???*0* | ???*1* | {})  !==  {})
+648 -> 658 conditional = ((???*0* | ???*1* | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -2389,7 +2371,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 674 conditional = (???*0*  ===  34)
+0 -> 674 conditional = (???*0* === 34)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2400,18 +2382,18 @@
 675 -> 676 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": """, "ignoreCase": false}
+      | {"type": "literal", "text": "\"", "ignoreCase": false}
     )
 )
 
 0 -> 677 conditional = ((
   | ???*0*
-  | """
+  | "\""
   | {}
   | undefined
   | {"type": "string_constant", "value": (???*1* | ???*3*)}
   | "'"
-)  !==  {})
+) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["join"]("")
@@ -2432,7 +2414,7 @@
 
 677 -> 681 call = (...) => (undefined | s0)()
 
-677 -> 682 conditional = ((???*0* | [])  !==  {})
+677 -> 682 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2441,7 +2423,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-682 -> 685 conditional = (???*0*  ===  34)
+682 -> 685 conditional = (???*0* === 34)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2452,7 +2434,7 @@
 686 -> 687 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": """, "ignoreCase": false}
+      | {"type": "literal", "text": "\"", "ignoreCase": false}
     )
 )
 
@@ -2474,7 +2456,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-690 -> 693 conditional = (???*0*  ===  39)
+690 -> 693 conditional = (???*0* === 39)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2491,12 +2473,12 @@
 
 690 -> 696 conditional = ((
   | ???*0*
-  | """
+  | "\""
   | {}
   | undefined
   | {"type": "string_constant", "value": (???*1* | ???*3*)}
   | "'"
-)  !==  {})
+) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["join"]("")
@@ -2517,7 +2499,7 @@
 
 696 -> 700 call = (...) => (undefined | s0)()
 
-696 -> 701 conditional = ((???*0* | [])  !==  {})
+696 -> 701 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2526,7 +2508,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-701 -> 704 conditional = (???*0*  ===  39)
+701 -> 704 conditional = (???*0* === 39)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2556,7 +2538,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 711 conditional = (???*0*  ===  91)
+0 -> 711 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2576,7 +2558,7 @@
 
 714 -> 715 call = (...) => (undefined | s0)()
 
-714 -> 716 conditional = ((???*0* | undefined | [])  !==  {})
+714 -> 716 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2595,7 +2577,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-720 -> 723 conditional = (???*0*  ===  44)
+720 -> 723 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2610,13 +2592,13 @@
     )
 )
 
-720 -> 726 conditional = ((???*0* | "," | {})  !==  {})
+720 -> 726 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 726 -> 727 call = (...) => (undefined | s0)()
 
-726 -> 728 conditional = ((???*0* | undefined | [])  !==  {})
+726 -> 728 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -2644,7 +2626,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-735 -> 738 conditional = (???*0*  ===  44)
+735 -> 738 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2659,13 +2641,13 @@
     )
 )
 
-735 -> 741 conditional = ((???*0* | "," | {})  !==  {})
+735 -> 741 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 741 -> 742 call = (...) => (undefined | s0)()
 
-741 -> 743 conditional = ((???*0* | undefined | [])  !==  {})
+741 -> 743 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -2678,7 +2660,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-718 -> 747 conditional = ((???*0* | [])  !==  {})
+718 -> 747 conditional = ((???*0* | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -2692,7 +2674,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-749 -> 752 conditional = (???*0*  ===  93)
+749 -> 752 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2721,7 +2703,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 759 conditional = (???*0*  ===  123)
+0 -> 759 conditional = (???*0* === 123)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2741,7 +2723,7 @@
 
 762 -> 763 call = (...) => (undefined | s0)()
 
-762 -> 764 conditional = ((???*0* | undefined | [])  !==  {})
+762 -> 764 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -2760,7 +2742,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-768 -> 771 conditional = (???*0*  ===  44)
+768 -> 771 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2775,13 +2757,13 @@
     )
 )
 
-768 -> 774 conditional = ((???*0* | "," | {})  !==  {})
+768 -> 774 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 774 -> 775 call = (...) => (undefined | s0)()
 
-774 -> 776 conditional = ((???*0* | undefined | [])  !==  {})
+774 -> 776 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -2809,7 +2791,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-783 -> 786 conditional = (???*0*  ===  44)
+783 -> 786 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2824,13 +2806,13 @@
     )
 )
 
-783 -> 789 conditional = ((???*0* | "," | {})  !==  {})
+783 -> 789 conditional = ((???*0* | "," | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 789 -> 790 call = (...) => (undefined | s0)()
 
-789 -> 791 conditional = ((???*0* | undefined | [])  !==  {})
+789 -> 791 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -2843,7 +2825,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-766 -> 795 conditional = ((???*0* | [])  !==  {})
+766 -> 795 conditional = ((???*0* | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -2857,7 +2839,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-797 -> 800 conditional = (???*0*  ===  125)
+797 -> 800 conditional = (???*0* === 125)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2931,18 +2913,7 @@
 820 -> 821 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {
-            "type": "class",
-            "parts": [
-                " ",
-                "	",
-                "
-",
-                ""
-            ],
-            "inverted": false,
-            "ignoreCase": false
-        }
+      | {"type": "class", "parts": [" ", "\t", "\n", "\r"], "inverted": false, "ignoreCase": false}
     )
 )
 
@@ -2951,7 +2922,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 824 conditional = (???*0*  ===  "--")
+0 -> 824 conditional = (???*0* === "--")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -2966,7 +2937,7 @@
     )
 )
 
-0 -> 827 conditional = ((???*0* | "--" | {} | [???*1*, (???*2* | [])])  !==  {})
+0 -> 827 conditional = ((???*0* | "--" | {} | [???*1*, (???*2* | [])]) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* s1
@@ -3005,16 +2976,7 @@
 835 -> 836 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {
-            "type": "class",
-            "parts": [
-                "
-",
-                ""
-            ],
-            "inverted": false,
-            "ignoreCase": false
-        }
+      | {"type": "class", "parts": ["\n", "\r"], "inverted": false, "ignoreCase": false}
     )
 )
 
@@ -3059,16 +3021,7 @@
 848 -> 849 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {
-            "type": "class",
-            "parts": [
-                "
-",
-                ""
-            ],
-            "inverted": false,
-            "ignoreCase": false
-        }
+      | {"type": "class", "parts": ["\n", "\r"], "inverted": false, "ignoreCase": false}
     )
 )
 
@@ -3088,7 +3041,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 856 conditional = (???*0*  ===  "select")
+0 -> 856 conditional = (???*0* === "select")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3128,7 +3081,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 867 conditional = (???*0*  ===  "top")
+0 -> 867 conditional = (???*0* === "top")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3168,7 +3121,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 878 conditional = (???*0*  ===  "from")
+0 -> 878 conditional = (???*0* === "from")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3208,7 +3161,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 889 conditional = (???*0*  ===  "where")
+0 -> 889 conditional = (???*0* === "where")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3248,7 +3201,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 900 conditional = (???*0*  ===  "order")
+0 -> 900 conditional = (???*0* === "order")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3288,7 +3241,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 911 conditional = (???*0*  ===  "by")
+0 -> 911 conditional = (???*0* === "by")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3328,7 +3281,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 922 conditional = (???*0*  ===  "as")
+0 -> 922 conditional = (???*0* === "as")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3368,7 +3321,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 933 conditional = (???*0*  ===  "join")
+0 -> 933 conditional = (???*0* === "join")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3408,7 +3361,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 944 conditional = (???*0*  ===  "in")
+0 -> 944 conditional = (???*0* === "in")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3448,7 +3401,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 955 conditional = (???*0*  ===  "value")
+0 -> 955 conditional = (???*0* === "value")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3488,7 +3441,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 966 conditional = (???*0*  ===  "asc")
+0 -> 966 conditional = (???*0* === "asc")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3512,7 +3465,7 @@
     )
 )
 
-0 -> 971 conditional = ((???*0* | ???*1* | {} | undefined | "ASC")  !==  {})
+0 -> 971 conditional = ((???*0* | ???*1* | {} | undefined | "ASC") !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substr"](peg$currPos, 3)
@@ -3538,7 +3491,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 979 conditional = (???*0*  ===  "desc")
+0 -> 979 conditional = (???*0* === "desc")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3562,7 +3515,7 @@
     )
 )
 
-0 -> 984 conditional = ((???*0* | ???*1* | {} | undefined | "DESC")  !==  {})
+0 -> 984 conditional = ((???*0* | ???*1* | {} | undefined | "DESC") !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substr"](peg$currPos, 4)
@@ -3588,7 +3541,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 992 conditional = (???*0*  ===  "and")
+0 -> 992 conditional = (???*0* === "and")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3612,7 +3565,7 @@
     )
 )
 
-0 -> 997 conditional = ((???*0* | ???*1* | {} | undefined | "AND")  !==  {})
+0 -> 997 conditional = ((???*0* | ???*1* | {} | undefined | "AND") !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substr"](peg$currPos, 3)
@@ -3638,7 +3591,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1005 conditional = (???*0*  ===  "or")
+0 -> 1005 conditional = (???*0* === "or")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3662,7 +3615,7 @@
     )
 )
 
-0 -> 1010 conditional = ((???*0* | ???*1* | {} | undefined | "OR")  !==  {})
+0 -> 1010 conditional = ((???*0* | ???*1* | {} | undefined | "OR") !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substr"](peg$currPos, 2)
@@ -3688,7 +3641,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1018 conditional = (???*0*  ===  "not")
+0 -> 1018 conditional = (???*0* === "not")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3712,7 +3665,7 @@
     )
 )
 
-0 -> 1023 conditional = ((???*0* | ???*1* | {} | undefined | "NOT")  !==  {})
+0 -> 1023 conditional = ((???*0* | ???*1* | {} | undefined | "NOT") !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substr"](peg$currPos, 3)
@@ -3738,7 +3691,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1031 conditional = (???*0*  ===  "between")
+0 -> 1031 conditional = (???*0* === "between")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3778,7 +3731,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1042 conditional = (???*0*  ===  "exists")
+0 -> 1042 conditional = (???*0* === "exists")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3818,7 +3771,7 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1053 conditional = (???*0*  ===  "array")
+0 -> 1053 conditional = (???*0* === "array")
 - *0* ???*1*()
   ⚠️  nested operation
 - *1* ???*2*["toLowerCase"]
@@ -3852,7 +3805,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1062 conditional = (???*0*  ===  "null")
+0 -> 1062 conditional = (???*0* === "null")
 - *0* ???*1*["substr"](peg$currPos, 4)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -3877,7 +3830,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1069 conditional = (???*0*  ===  "true")
+0 -> 1069 conditional = (???*0* === "true")
 - *0* ???*1*["substr"](peg$currPos, 4)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -3902,7 +3855,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1076 conditional = (???*0*  ===  "false")
+0 -> 1076 conditional = (???*0* === "false")
 - *0* ???*1*["substr"](peg$currPos, 5)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -3927,7 +3880,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1083 conditional = (???*0*  ===  "udf")
+0 -> 1083 conditional = (???*0* === "udf")
 - *0* ???*1*["substr"](peg$currPos, 3)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4104,7 +4057,7 @@
 
 0 -> 1145 call = (...) => (undefined | s0)()
 
-0 -> 1146 conditional = ((???*0* | undefined | ???*1* | {} | ???*3*)  !==  {})
+0 -> 1146 conditional = ((???*0* | undefined | ???*1* | {} | ???*3*) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -4214,7 +4167,7 @@
     )
 )
 
-1146 -> 1167 conditional = ((???*0* | [])  !==  {})
+1146 -> 1167 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -4246,7 +4199,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1171 conditional = (???*0*  ===  64)
+0 -> 1171 conditional = (???*0* === 64)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4267,7 +4220,7 @@
   | {}
   | undefined
   | {"type": "parameter_name", "name": (undefined | ???*1*)}
-)  !==  {})
+) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*["substring"](peg$savedPos, peg$currPos)
@@ -4287,7 +4240,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1180 conditional = (???*0*  ===  43)
+0 -> 1180 conditional = (???*0* === 43)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4310,7 +4263,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1183 -> 1186 conditional = (???*0*  ===  45)
+1183 -> 1186 conditional = (???*0* === 45)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4333,7 +4286,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1189 -> 1192 conditional = (???*0*  ===  126)
+1189 -> 1192 conditional = (???*0* === 126)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4358,7 +4311,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1199 conditional = (???*0*  ===  34)
+0 -> 1199 conditional = (???*0* === 34)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4369,7 +4322,7 @@
 1200 -> 1201 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": """, "ignoreCase": false}
+      | {"type": "literal", "text": "\"", "ignoreCase": false}
     )
 )
 
@@ -4381,7 +4334,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1202 -> 1205 conditional = (???*0*  ===  92)
+1202 -> 1205 conditional = (???*0* === 92)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4392,7 +4345,7 @@
 1206 -> 1207 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": "\", "ignoreCase": false}
+      | {"type": "literal", "text": "\\", "ignoreCase": false}
     )
 )
 
@@ -4414,7 +4367,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1212 -> 1215 conditional = (???*0*  ===  92)
+1212 -> 1215 conditional = (???*0* === 92)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4425,7 +4378,7 @@
 1216 -> 1217 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": "\", "ignoreCase": false}
+      | {"type": "literal", "text": "\\", "ignoreCase": false}
     )
 )
 
@@ -4445,7 +4398,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1224 conditional = (???*0*  ===  39)
+0 -> 1224 conditional = (???*0* === 39)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4468,7 +4421,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1227 -> 1230 conditional = (???*0*  ===  92)
+1227 -> 1230 conditional = (???*0* === 92)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4479,7 +4432,7 @@
 1231 -> 1232 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": "\", "ignoreCase": false}
+      | {"type": "literal", "text": "\\", "ignoreCase": false}
     )
 )
 
@@ -4501,7 +4454,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1237 -> 1240 conditional = (???*0*  ===  92)
+1237 -> 1240 conditional = (???*0* === 92)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4512,7 +4465,7 @@
 1241 -> 1242 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": "\", "ignoreCase": false}
+      | {"type": "literal", "text": "\\", "ignoreCase": false}
     )
 )
 
@@ -4555,7 +4508,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1260 conditional = (???*0*  ===  39)
+0 -> 1260 conditional = (???*0* === 39)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4578,7 +4531,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1263 -> 1266 conditional = (???*0*  ===  34)
+1263 -> 1266 conditional = (???*0* === 34)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4589,7 +4542,7 @@
 1267 -> 1268 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": """, "ignoreCase": false}
+      | {"type": "literal", "text": "\"", "ignoreCase": false}
     )
 )
 
@@ -4601,7 +4554,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1269 -> 1272 conditional = (???*0*  ===  92)
+1269 -> 1272 conditional = (???*0* === 92)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4612,7 +4565,7 @@
 1273 -> 1274 call = (...) => (undefined | FreeVar(undefined))(
     (
       | undefined
-      | {"type": "literal", "text": "\", "ignoreCase": false}
+      | {"type": "literal", "text": "\\", "ignoreCase": false}
     )
 )
 
@@ -4624,7 +4577,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1275 -> 1278 conditional = (???*0*  ===  98)
+1275 -> 1278 conditional = (???*0* === 98)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4639,26 +4592,11 @@
     )
 )
 
-1275 -> 1281 conditional = ((
-  | ???*0*
-  | "b"
-  | {}
-  | undefined
-  | ""
-  | "f"
-  | ""
-  | "n"
-  | "
-"
-  | "r"
-  | ""
-  | "t"
-  | "	"
-)  !==  {})
+1275 -> 1281 conditional = ((???*0* | "b" | {} | undefined | "\b" | "f" | "\f" | "n" | "\n" | "r" | "\r" | "t" | "\t") !== {})
 - *0* s1
   ⚠️  pattern without value
 
-1281 -> 1282 call = (...) => (undefined | "")()
+1281 -> 1282 call = (...) => (undefined | "\b")()
 
 1275 -> 1283 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -4668,7 +4606,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1283 -> 1286 conditional = (???*0*  ===  102)
+1283 -> 1286 conditional = (???*0* === 102)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4683,26 +4621,11 @@
     )
 )
 
-1283 -> 1289 conditional = ((
-  | ???*0*
-  | "b"
-  | {}
-  | undefined
-  | ""
-  | "f"
-  | ""
-  | "n"
-  | "
-"
-  | "r"
-  | ""
-  | "t"
-  | "	"
-)  !==  {})
+1283 -> 1289 conditional = ((???*0* | "b" | {} | undefined | "\b" | "f" | "\f" | "n" | "\n" | "r" | "\r" | "t" | "\t") !== {})
 - *0* s1
   ⚠️  pattern without value
 
-1289 -> 1290 call = (...) => (undefined | "")()
+1289 -> 1290 call = (...) => (undefined | "\f")()
 
 1283 -> 1291 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -4712,7 +4635,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1291 -> 1294 conditional = (???*0*  ===  110)
+1291 -> 1294 conditional = (???*0* === 110)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4727,30 +4650,11 @@
     )
 )
 
-1291 -> 1297 conditional = ((
-  | ???*0*
-  | "b"
-  | {}
-  | undefined
-  | ""
-  | "f"
-  | ""
-  | "n"
-  | "
-"
-  | "r"
-  | ""
-  | "t"
-  | "	"
-)  !==  {})
+1291 -> 1297 conditional = ((???*0* | "b" | {} | undefined | "\b" | "f" | "\f" | "n" | "\n" | "r" | "\r" | "t" | "\t") !== {})
 - *0* s1
   ⚠️  pattern without value
 
-1297 -> 1298 call = (...) => (
-  | undefined
-  | "
-"
-)()
+1297 -> 1298 call = (...) => (undefined | "\n")()
 
 1291 -> 1299 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -4760,7 +4664,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1299 -> 1302 conditional = (???*0*  ===  114)
+1299 -> 1302 conditional = (???*0* === 114)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4775,26 +4679,11 @@
     )
 )
 
-1299 -> 1305 conditional = ((
-  | ???*0*
-  | "b"
-  | {}
-  | undefined
-  | ""
-  | "f"
-  | ""
-  | "n"
-  | "
-"
-  | "r"
-  | ""
-  | "t"
-  | "	"
-)  !==  {})
+1299 -> 1305 conditional = ((???*0* | "b" | {} | undefined | "\b" | "f" | "\f" | "n" | "\n" | "r" | "\r" | "t" | "\t") !== {})
 - *0* s1
   ⚠️  pattern without value
 
-1305 -> 1306 call = (...) => (undefined | "")()
+1305 -> 1306 call = (...) => (undefined | "\r")()
 
 1299 -> 1307 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -4804,7 +4693,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1307 -> 1310 conditional = (???*0*  ===  116)
+1307 -> 1310 conditional = (???*0* === 116)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4819,26 +4708,11 @@
     )
 )
 
-1307 -> 1313 conditional = ((
-  | ???*0*
-  | "b"
-  | {}
-  | undefined
-  | ""
-  | "f"
-  | ""
-  | "n"
-  | "
-"
-  | "r"
-  | ""
-  | "t"
-  | "	"
-)  !==  {})
+1307 -> 1313 conditional = ((???*0* | "b" | {} | undefined | "\b" | "f" | "\f" | "n" | "\n" | "r" | "\r" | "t" | "\t") !== {})
 - *0* s1
   ⚠️  pattern without value
 
-1313 -> 1314 call = (...) => (undefined | "	")()
+1313 -> 1314 call = (...) => (undefined | "\t")()
 
 0 -> 1315 call = (...) => (undefined | s0)()
 
@@ -4862,7 +4736,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1321 -> 1324 conditional = (???*0*  ===  117)
+1321 -> 1324 conditional = (???*0* === 117)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4882,7 +4756,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 1329 conditional = (???*0*  ===  117)
+0 -> 1329 conditional = (???*0* === 117)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -4913,7 +4787,7 @@
         (???*7* | undefined | ???*8* | {}),
         (???*10* | undefined | ???*11* | {})
     ]
-)  !==  {})
+) !== {})
 - *0* s4
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -4943,7 +4817,7 @@
 
 1334 -> 1335 call = (...) => (undefined | s0)()
 
-1334 -> 1336 conditional = ((???*0* | undefined | ???*1* | {})  !==  {})
+1334 -> 1336 conditional = ((???*0* | undefined | ???*1* | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -4953,7 +4827,7 @@
 
 1336 -> 1337 call = (...) => (undefined | s0)()
 
-1336 -> 1338 conditional = ((???*0* | undefined | ???*1* | {})  !==  {})
+1336 -> 1338 conditional = ((???*0* | undefined | ???*1* | {}) !== {})
 - *0* s6
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -5087,7 +4961,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1378 -> 1381 conditional = (???*0*  ===  40)
+1378 -> 1381 conditional = (???*0* === 40)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5107,7 +4981,7 @@
 
 1384 -> 1385 call = (...) => (undefined | s0)()
 
-1384 -> 1386 conditional = ((???*0* | undefined | [])  !==  {})
+1384 -> 1386 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5118,7 +4992,7 @@
 
 1388 -> 1389 call = (...) => (undefined | s0)()
 
-1388 -> 1390 conditional = ((???*0* | undefined | [])  !==  {})
+1388 -> 1390 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -5127,7 +5001,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1390 -> 1393 conditional = (???*0*  ===  41)
+1390 -> 1393 conditional = (???*0* === 41)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5142,7 +5016,7 @@
     )
 )
 
-1390 -> 1396 conditional = ((???*0* | ")" | {})  !==  {})
+1390 -> 1396 conditional = ((???*0* | ")" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -5168,7 +5042,7 @@
 
 1404 -> 1405 call = (...) => (undefined | s0)()
 
-1404 -> 1406 conditional = ((???*0* | undefined | [])  !==  {})
+1404 -> 1406 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5190,7 +5064,7 @@
 
 1411 -> 1412 call = (...) => (undefined | s0)()
 
-1411 -> 1413 conditional = ((???*0* | undefined | [])  !==  {})
+1411 -> 1413 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5231,7 +5105,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1423 -> 1426 conditional = (???*0*  ===  46)
+1423 -> 1426 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5246,13 +5120,13 @@
     )
 )
 
-1423 -> 1429 conditional = ((???*0* | "." | {} | "[")  !==  {})
+1423 -> 1429 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1429 -> 1430 call = (...) => (undefined | s0)()
 
-1429 -> 1431 conditional = ((???*0* | undefined | [])  !==  {})
+1429 -> 1431 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5263,7 +5137,7 @@
 
 1433 -> 1434 call = (...) => (undefined | s0)()
 
-1433 -> 1435 conditional = ((???*0* | undefined | [])  !==  {})
+1433 -> 1435 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -5284,7 +5158,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1439 -> 1442 conditional = (???*0*  ===  91)
+1439 -> 1442 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5299,13 +5173,13 @@
     )
 )
 
-1439 -> 1445 conditional = ((???*0* | "." | {} | "[")  !==  {})
+1439 -> 1445 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1445 -> 1446 call = (...) => (undefined | s0)()
 
-1445 -> 1447 conditional = ((???*0* | undefined | [])  !==  {})
+1445 -> 1447 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5326,7 +5200,7 @@
 
 1453 -> 1454 call = (...) => (undefined | s0)()
 
-1453 -> 1455 conditional = ((???*0* | undefined | [])  !==  {})
+1453 -> 1455 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -5335,7 +5209,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1455 -> 1458 conditional = (???*0*  ===  93)
+1455 -> 1458 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5350,7 +5224,7 @@
     )
 )
 
-1455 -> 1461 conditional = ((???*0* | "]" | {})  !==  {})
+1455 -> 1461 conditional = ((???*0* | "]" | {}) !== {})
 - *0* s9
   ⚠️  pattern without value
 
@@ -5373,7 +5247,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1466 -> 1469 conditional = (???*0*  ===  46)
+1466 -> 1469 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5388,13 +5262,13 @@
     )
 )
 
-1466 -> 1472 conditional = ((???*0* | "." | {} | "[")  !==  {})
+1466 -> 1472 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1472 -> 1473 call = (...) => (undefined | s0)()
 
-1472 -> 1474 conditional = ((???*0* | undefined | [])  !==  {})
+1472 -> 1474 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5405,7 +5279,7 @@
 
 1476 -> 1477 call = (...) => (undefined | s0)()
 
-1476 -> 1478 conditional = ((???*0* | undefined | [])  !==  {})
+1476 -> 1478 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -5426,7 +5300,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1482 -> 1485 conditional = (???*0*  ===  91)
+1482 -> 1485 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5441,13 +5315,13 @@
     )
 )
 
-1482 -> 1488 conditional = ((???*0* | "." | {} | "[")  !==  {})
+1482 -> 1488 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1488 -> 1489 call = (...) => (undefined | s0)()
 
-1488 -> 1490 conditional = ((???*0* | undefined | [])  !==  {})
+1488 -> 1490 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5468,7 +5342,7 @@
 
 1496 -> 1497 call = (...) => (undefined | s0)()
 
-1496 -> 1498 conditional = ((???*0* | undefined | [])  !==  {})
+1496 -> 1498 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -5477,7 +5351,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1498 -> 1501 conditional = (???*0*  ===  93)
+1498 -> 1501 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5492,7 +5366,7 @@
     )
 )
 
-1498 -> 1504 conditional = ((???*0* | "]" | {})  !==  {})
+1498 -> 1504 conditional = ((???*0* | "]" | {}) !== {})
 - *0* s9
   ⚠️  pattern without value
 
@@ -5500,7 +5374,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-1421 -> 1506 conditional = ((???*0* | [])  !==  {})
+1421 -> 1506 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5526,7 +5400,7 @@
 
 1513 -> 1514 call = (...) => (undefined | s0)()
 
-1513 -> 1515 conditional = ((???*0* | undefined | [])  !==  {})
+1513 -> 1515 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5549,7 +5423,7 @@
 
 1520 -> 1521 call = (...) => (undefined | s0)()
 
-1520 -> 1522 conditional = ((???*0* | undefined | [])  !==  {})
+1520 -> 1522 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5558,7 +5432,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1522 -> 1525 conditional = (???*0*  ===  63)
+1522 -> 1525 conditional = (???*0* === 63)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5573,13 +5447,13 @@
     )
 )
 
-1522 -> 1528 conditional = ((???*0* | "?" | {})  !==  {})
+1522 -> 1528 conditional = ((???*0* | "?" | {}) !== {})
 - *0* s3
   ⚠️  pattern without value
 
 1528 -> 1529 call = (...) => (undefined | s0)()
 
-1528 -> 1530 conditional = ((???*0* | undefined | [])  !==  {})
+1528 -> 1530 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -5590,7 +5464,7 @@
 
 1532 -> 1533 call = (...) => (undefined | s0)()
 
-1532 -> 1534 conditional = ((???*0* | undefined | [])  !==  {})
+1532 -> 1534 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5599,7 +5473,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1534 -> 1537 conditional = (???*0*  ===  58)
+1534 -> 1537 conditional = (???*0* === 58)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5614,13 +5488,13 @@
     )
 )
 
-1534 -> 1540 conditional = ((???*0* | ":" | {})  !==  {})
+1534 -> 1540 conditional = ((???*0* | ":" | {}) !== {})
 - *0* s7
   ⚠️  pattern without value
 
 1540 -> 1541 call = (...) => (undefined | s0)()
 
-1540 -> 1542 conditional = ((???*0* | undefined | [])  !==  {})
+1540 -> 1542 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -5667,7 +5541,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1553 -> 1556 conditional = (???*0*  ===  "??")
+1553 -> 1556 conditional = (???*0* === "??")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5687,7 +5561,7 @@
 
 1559 -> 1560 call = (...) => (undefined | s0)()
 
-1559 -> 1561 conditional = ((???*0* | undefined | [])  !==  {})
+1559 -> 1561 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5713,7 +5587,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1568 -> 1571 conditional = (???*0*  ===  "??")
+1568 -> 1571 conditional = (???*0* === "??")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5733,13 +5607,13 @@
 
 1574 -> 1575 call = (...) => (undefined | s0)()
 
-1574 -> 1576 conditional = ((???*0* | undefined | [])  !==  {})
+1574 -> 1576 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1576 -> 1577 call = (...) => (undefined | s0)()
 
-1549 -> 1578 conditional = ((???*0* | [])  !==  {})
+1549 -> 1578 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5765,7 +5639,7 @@
 
 1585 -> 1586 call = (...) => (undefined | s0)()
 
-1585 -> 1587 conditional = ((???*0* | undefined | [])  !==  {})
+1585 -> 1587 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5788,13 +5662,13 @@
 
 1594 -> 1595 call = (...) => (undefined | s0)()
 
-1594 -> 1596 conditional = ((???*0* | undefined | [])  !==  {})
+1594 -> 1596 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1596 -> 1597 call = (...) => (undefined | s0)()
 
-1581 -> 1598 conditional = ((???*0* | [])  !==  {})
+1581 -> 1598 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -5818,7 +5692,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1603 -> 1606 conditional = (???*0*  ===  61)
+1603 -> 1606 conditional = (???*0* === 61)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5833,7 +5707,7 @@
     )
 )
 
-1603 -> 1609 conditional = ((???*0* | "=" | {} | "!=" | "<>")  ===  {})
+1603 -> 1609 conditional = ((???*0* | "=" | {} | "!=" | "<>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -5842,7 +5716,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1609 -> 1612 conditional = (???*0*  ===  "!=")
+1609 -> 1612 conditional = (???*0* === "!=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5857,7 +5731,7 @@
     )
 )
 
-1609 -> 1615 conditional = ((???*0* | "=" | {} | "!=" | "<>")  ===  {})
+1609 -> 1615 conditional = ((???*0* | "=" | {} | "!=" | "<>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -5866,7 +5740,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1615 -> 1618 conditional = (???*0*  ===  "<>")
+1615 -> 1618 conditional = (???*0* === "<>")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5881,13 +5755,13 @@
     )
 )
 
-1603 -> 1621 conditional = ((???*0* | "=" | {} | "!=" | "<>")  !==  {})
+1603 -> 1621 conditional = ((???*0* | "=" | {} | "!=" | "<>") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1621 -> 1622 call = (...) => (undefined | s0)()
 
-1621 -> 1623 conditional = ((???*0* | undefined | [])  !==  {})
+1621 -> 1623 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -5908,7 +5782,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1628 -> 1631 conditional = (???*0*  ===  61)
+1628 -> 1631 conditional = (???*0* === 61)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5923,7 +5797,7 @@
     )
 )
 
-1628 -> 1634 conditional = ((???*0* | "=" | {} | "!=" | "<>")  ===  {})
+1628 -> 1634 conditional = ((???*0* | "=" | {} | "!=" | "<>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -5932,7 +5806,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1634 -> 1637 conditional = (???*0*  ===  "!=")
+1634 -> 1637 conditional = (???*0* === "!=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5947,7 +5821,7 @@
     )
 )
 
-1634 -> 1640 conditional = ((???*0* | "=" | {} | "!=" | "<>")  ===  {})
+1634 -> 1640 conditional = ((???*0* | "=" | {} | "!=" | "<>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -5956,7 +5830,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1640 -> 1643 conditional = (???*0*  ===  "<>")
+1640 -> 1643 conditional = (???*0* === "<>")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -5971,19 +5845,19 @@
     )
 )
 
-1628 -> 1646 conditional = ((???*0* | "=" | {} | "!=" | "<>")  !==  {})
+1628 -> 1646 conditional = ((???*0* | "=" | {} | "!=" | "<>") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1646 -> 1647 call = (...) => (undefined | s0)()
 
-1646 -> 1648 conditional = ((???*0* | undefined | [])  !==  {})
+1646 -> 1648 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1648 -> 1649 call = (...) => (undefined | s0)()
 
-1601 -> 1650 conditional = ((???*0* | [])  !==  {})
+1601 -> 1650 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6007,7 +5881,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1655 -> 1658 conditional = (???*0*  ===  "<=")
+1655 -> 1658 conditional = (???*0* === "<=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6022,7 +5896,7 @@
     )
 )
 
-1655 -> 1661 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1655 -> 1661 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6031,7 +5905,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1661 -> 1664 conditional = (???*0*  ===  ">=")
+1661 -> 1664 conditional = (???*0* === ">=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6046,7 +5920,7 @@
     )
 )
 
-1661 -> 1667 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1661 -> 1667 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6055,7 +5929,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1667 -> 1670 conditional = (???*0*  ===  60)
+1667 -> 1670 conditional = (???*0* === 60)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6070,7 +5944,7 @@
     )
 )
 
-1667 -> 1673 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1667 -> 1673 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6079,7 +5953,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1673 -> 1676 conditional = (???*0*  ===  62)
+1673 -> 1676 conditional = (???*0* === 62)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6094,13 +5968,13 @@
     )
 )
 
-1655 -> 1679 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  !==  {})
+1655 -> 1679 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1679 -> 1680 call = (...) => (undefined | s0)()
 
-1679 -> 1681 conditional = ((???*0* | undefined | [])  !==  {})
+1679 -> 1681 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6121,7 +5995,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1686 -> 1689 conditional = (???*0*  ===  "<=")
+1686 -> 1689 conditional = (???*0* === "<=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6136,7 +6010,7 @@
     )
 )
 
-1686 -> 1692 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1686 -> 1692 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6145,7 +6019,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1692 -> 1695 conditional = (???*0*  ===  ">=")
+1692 -> 1695 conditional = (???*0* === ">=")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6160,7 +6034,7 @@
     )
 )
 
-1692 -> 1698 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1692 -> 1698 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6169,7 +6043,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1698 -> 1701 conditional = (???*0*  ===  60)
+1698 -> 1701 conditional = (???*0* === 60)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6184,7 +6058,7 @@
     )
 )
 
-1698 -> 1704 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  ===  {})
+1698 -> 1704 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6193,7 +6067,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1704 -> 1707 conditional = (???*0*  ===  62)
+1704 -> 1707 conditional = (???*0* === 62)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6208,19 +6082,19 @@
     )
 )
 
-1686 -> 1710 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">")  !==  {})
+1686 -> 1710 conditional = ((???*0* | "<=" | {} | ">=" | "<" | ">") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1710 -> 1711 call = (...) => (undefined | s0)()
 
-1710 -> 1712 conditional = ((???*0* | undefined | [])  !==  {})
+1710 -> 1712 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1712 -> 1713 call = (...) => (undefined | s0)()
 
-1653 -> 1714 conditional = ((???*0* | [])  !==  {})
+1653 -> 1714 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6236,7 +6110,7 @@
 
 1717 -> 1718 call = (...) => (undefined | s0)()
 
-1717 -> 1719 conditional = ((???*0* | undefined | [])  !==  {})
+1717 -> 1719 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6247,7 +6121,7 @@
 
 1721 -> 1722 call = (...) => (undefined | s0)()
 
-1721 -> 1723 conditional = ((???*0* | undefined | [])  !==  {})
+1721 -> 1723 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -6256,7 +6130,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1723 -> 1726 conditional = (???*0*  ===  40)
+1723 -> 1726 conditional = (???*0* === 40)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6271,13 +6145,13 @@
     )
 )
 
-1723 -> 1729 conditional = ((???*0* | "(" | {})  !==  {})
+1723 -> 1729 conditional = ((???*0* | "(" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1729 -> 1730 call = (...) => (undefined | s0)()
 
-1729 -> 1731 conditional = ((???*0* | undefined | [])  !==  {})
+1729 -> 1731 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6288,7 +6162,7 @@
 
 1733 -> 1734 call = (...) => (undefined | s0)()
 
-1733 -> 1735 conditional = ((???*0* | undefined | [])  !==  {})
+1733 -> 1735 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -6297,7 +6171,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1735 -> 1738 conditional = (???*0*  ===  41)
+1735 -> 1738 conditional = (???*0* === 41)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6312,7 +6186,7 @@
     )
 )
 
-1735 -> 1741 conditional = ((???*0* | ")" | {})  !==  {})
+1735 -> 1741 conditional = ((???*0* | ")" | {}) !== {})
 - *0* s9
   ⚠️  pattern without value
 
@@ -6335,7 +6209,7 @@
 
 1746 -> 1747 call = (...) => (undefined | s0)()
 
-1746 -> 1748 conditional = ((???*0* | undefined | [])  !==  {})
+1746 -> 1748 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6346,7 +6220,7 @@
 
 1750 -> 1751 call = (...) => (undefined | s0)()
 
-1750 -> 1752 conditional = ((???*0* | undefined | [])  !==  {})
+1750 -> 1752 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -6357,7 +6231,7 @@
 
 1754 -> 1755 call = (...) => (undefined | s0)()
 
-1754 -> 1756 conditional = ((???*0* | undefined | [])  !==  {})
+1754 -> 1756 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6368,7 +6242,7 @@
 
 1758 -> 1759 call = (...) => (undefined | s0)()
 
-1758 -> 1760 conditional = ((???*0* | undefined | [])  !==  {})
+1758 -> 1760 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -6405,7 +6279,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1769 -> 1772 conditional = (???*0*  ===  124)
+1769 -> 1772 conditional = (???*0* === 124)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6420,13 +6294,13 @@
     )
 )
 
-1769 -> 1775 conditional = ((???*0* | "|" | {})  !==  {})
+1769 -> 1775 conditional = ((???*0* | "|" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1775 -> 1776 call = (...) => (undefined | s0)()
 
-1775 -> 1777 conditional = ((???*0* | undefined | [])  !==  {})
+1775 -> 1777 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6447,7 +6321,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1782 -> 1785 conditional = (???*0*  ===  124)
+1782 -> 1785 conditional = (???*0* === 124)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6462,19 +6336,19 @@
     )
 )
 
-1782 -> 1788 conditional = ((???*0* | "|" | {})  !==  {})
+1782 -> 1788 conditional = ((???*0* | "|" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1788 -> 1789 call = (...) => (undefined | s0)()
 
-1788 -> 1790 conditional = ((???*0* | undefined | [])  !==  {})
+1788 -> 1790 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1790 -> 1791 call = (...) => (undefined | s0)()
 
-1767 -> 1792 conditional = ((???*0* | [])  !==  {})
+1767 -> 1792 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6498,7 +6372,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1797 -> 1800 conditional = (???*0*  ===  94)
+1797 -> 1800 conditional = (???*0* === 94)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6513,13 +6387,13 @@
     )
 )
 
-1797 -> 1803 conditional = ((???*0* | "^" | {})  !==  {})
+1797 -> 1803 conditional = ((???*0* | "^" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1803 -> 1804 call = (...) => (undefined | s0)()
 
-1803 -> 1805 conditional = ((???*0* | undefined | [])  !==  {})
+1803 -> 1805 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6540,7 +6414,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1810 -> 1813 conditional = (???*0*  ===  94)
+1810 -> 1813 conditional = (???*0* === 94)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6555,19 +6429,19 @@
     )
 )
 
-1810 -> 1816 conditional = ((???*0* | "^" | {})  !==  {})
+1810 -> 1816 conditional = ((???*0* | "^" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1816 -> 1817 call = (...) => (undefined | s0)()
 
-1816 -> 1818 conditional = ((???*0* | undefined | [])  !==  {})
+1816 -> 1818 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1818 -> 1819 call = (...) => (undefined | s0)()
 
-1795 -> 1820 conditional = ((???*0* | [])  !==  {})
+1795 -> 1820 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6591,7 +6465,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1825 -> 1828 conditional = (???*0*  ===  38)
+1825 -> 1828 conditional = (???*0* === 38)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6606,13 +6480,13 @@
     )
 )
 
-1825 -> 1831 conditional = ((???*0* | "&" | {})  !==  {})
+1825 -> 1831 conditional = ((???*0* | "&" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1831 -> 1832 call = (...) => (undefined | s0)()
 
-1831 -> 1833 conditional = ((???*0* | undefined | [])  !==  {})
+1831 -> 1833 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6633,7 +6507,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1838 -> 1841 conditional = (???*0*  ===  38)
+1838 -> 1841 conditional = (???*0* === 38)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6648,19 +6522,19 @@
     )
 )
 
-1838 -> 1844 conditional = ((???*0* | "&" | {})  !==  {})
+1838 -> 1844 conditional = ((???*0* | "&" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1844 -> 1845 call = (...) => (undefined | s0)()
 
-1844 -> 1846 conditional = ((???*0* | undefined | [])  !==  {})
+1844 -> 1846 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1846 -> 1847 call = (...) => (undefined | s0)()
 
-1823 -> 1848 conditional = ((???*0* | [])  !==  {})
+1823 -> 1848 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6684,7 +6558,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1853 -> 1856 conditional = (???*0*  ===  "<<")
+1853 -> 1856 conditional = (???*0* === "<<")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6699,7 +6573,7 @@
     )
 )
 
-1853 -> 1859 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  ===  {})
+1853 -> 1859 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6708,7 +6582,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1859 -> 1862 conditional = (???*0*  ===  ">>>")
+1859 -> 1862 conditional = (???*0* === ">>>")
 - *0* ???*1*["substr"](peg$currPos, 3)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6723,7 +6597,7 @@
     )
 )
 
-1859 -> 1865 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  ===  {})
+1859 -> 1865 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6732,7 +6606,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1865 -> 1868 conditional = (???*0*  ===  ">>")
+1865 -> 1868 conditional = (???*0* === ">>")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6747,13 +6621,13 @@
     )
 )
 
-1853 -> 1871 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  !==  {})
+1853 -> 1871 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1871 -> 1872 call = (...) => (undefined | s0)()
 
-1871 -> 1873 conditional = ((???*0* | undefined | [])  !==  {})
+1871 -> 1873 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6774,7 +6648,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1878 -> 1881 conditional = (???*0*  ===  "<<")
+1878 -> 1881 conditional = (???*0* === "<<")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6789,7 +6663,7 @@
     )
 )
 
-1878 -> 1884 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  ===  {})
+1878 -> 1884 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6798,7 +6672,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1884 -> 1887 conditional = (???*0*  ===  ">>>")
+1884 -> 1887 conditional = (???*0* === ">>>")
 - *0* ???*1*["substr"](peg$currPos, 3)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6813,7 +6687,7 @@
     )
 )
 
-1884 -> 1890 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  ===  {})
+1884 -> 1890 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6822,7 +6696,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1890 -> 1893 conditional = (???*0*  ===  ">>")
+1890 -> 1893 conditional = (???*0* === ">>")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6837,19 +6711,19 @@
     )
 )
 
-1878 -> 1896 conditional = ((???*0* | "<<" | {} | ">>>" | ">>")  !==  {})
+1878 -> 1896 conditional = ((???*0* | "<<" | {} | ">>>" | ">>") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1896 -> 1897 call = (...) => (undefined | s0)()
 
-1896 -> 1898 conditional = ((???*0* | undefined | [])  !==  {})
+1896 -> 1898 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1898 -> 1899 call = (...) => (undefined | s0)()
 
-1851 -> 1900 conditional = ((???*0* | [])  !==  {})
+1851 -> 1900 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -6873,7 +6747,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1905 -> 1908 conditional = (???*0*  ===  43)
+1905 -> 1908 conditional = (???*0* === 43)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6888,7 +6762,7 @@
     )
 )
 
-1905 -> 1911 conditional = ((???*0* | "+" | {} | "-" | "||")  ===  {})
+1905 -> 1911 conditional = ((???*0* | "+" | {} | "-" | "||") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6897,7 +6771,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1911 -> 1914 conditional = (???*0*  ===  45)
+1911 -> 1914 conditional = (???*0* === 45)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6912,7 +6786,7 @@
     )
 )
 
-1911 -> 1917 conditional = ((???*0* | "+" | {} | "-" | "||")  ===  {})
+1911 -> 1917 conditional = ((???*0* | "+" | {} | "-" | "||") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6921,7 +6795,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1917 -> 1920 conditional = (???*0*  ===  "||")
+1917 -> 1920 conditional = (???*0* === "||")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6936,13 +6810,13 @@
     )
 )
 
-1905 -> 1923 conditional = ((???*0* | "+" | {} | "-" | "||")  !==  {})
+1905 -> 1923 conditional = ((???*0* | "+" | {} | "-" | "||") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1923 -> 1924 call = (...) => (undefined | s0)()
 
-1923 -> 1925 conditional = ((???*0* | undefined | [])  !==  {})
+1923 -> 1925 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -6963,7 +6837,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1930 -> 1933 conditional = (???*0*  ===  43)
+1930 -> 1933 conditional = (???*0* === 43)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -6978,7 +6852,7 @@
     )
 )
 
-1930 -> 1936 conditional = ((???*0* | "+" | {} | "-" | "||")  ===  {})
+1930 -> 1936 conditional = ((???*0* | "+" | {} | "-" | "||") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -6987,7 +6861,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1936 -> 1939 conditional = (???*0*  ===  45)
+1936 -> 1939 conditional = (???*0* === 45)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7002,7 +6876,7 @@
     )
 )
 
-1936 -> 1942 conditional = ((???*0* | "+" | {} | "-" | "||")  ===  {})
+1936 -> 1942 conditional = ((???*0* | "+" | {} | "-" | "||") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -7011,7 +6885,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1942 -> 1945 conditional = (???*0*  ===  "||")
+1942 -> 1945 conditional = (???*0* === "||")
 - *0* ???*1*["substr"](peg$currPos, 2)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7026,19 +6900,19 @@
     )
 )
 
-1930 -> 1948 conditional = ((???*0* | "+" | {} | "-" | "||")  !==  {})
+1930 -> 1948 conditional = ((???*0* | "+" | {} | "-" | "||") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1948 -> 1949 call = (...) => (undefined | s0)()
 
-1948 -> 1950 conditional = ((???*0* | undefined | [])  !==  {})
+1948 -> 1950 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 1950 -> 1951 call = (...) => (undefined | s0)()
 
-1903 -> 1952 conditional = ((???*0* | [])  !==  {})
+1903 -> 1952 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7062,7 +6936,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1957 -> 1960 conditional = (???*0*  ===  42)
+1957 -> 1960 conditional = (???*0* === 42)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7077,7 +6951,7 @@
     )
 )
 
-1957 -> 1963 conditional = ((???*0* | "*" | {} | "/" | "%")  ===  {})
+1957 -> 1963 conditional = ((???*0* | "*" | {} | "/" | "%") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -7086,7 +6960,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1963 -> 1966 conditional = (???*0*  ===  47)
+1963 -> 1966 conditional = (???*0* === 47)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7101,7 +6975,7 @@
     )
 )
 
-1963 -> 1969 conditional = ((???*0* | "*" | {} | "/" | "%")  ===  {})
+1963 -> 1969 conditional = ((???*0* | "*" | {} | "/" | "%") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -7110,7 +6984,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1969 -> 1972 conditional = (???*0*  ===  37)
+1969 -> 1972 conditional = (???*0* === 37)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7125,13 +6999,13 @@
     )
 )
 
-1957 -> 1975 conditional = ((???*0* | "*" | {} | "/" | "%")  !==  {})
+1957 -> 1975 conditional = ((???*0* | "*" | {} | "/" | "%") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 1975 -> 1976 call = (...) => (undefined | s0)()
 
-1975 -> 1977 conditional = ((???*0* | undefined | [])  !==  {})
+1975 -> 1977 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7152,7 +7026,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1982 -> 1985 conditional = (???*0*  ===  42)
+1982 -> 1985 conditional = (???*0* === 42)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7167,7 +7041,7 @@
     )
 )
 
-1982 -> 1988 conditional = ((???*0* | "*" | {} | "/" | "%")  ===  {})
+1982 -> 1988 conditional = ((???*0* | "*" | {} | "/" | "%") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -7176,7 +7050,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1988 -> 1991 conditional = (???*0*  ===  47)
+1988 -> 1991 conditional = (???*0* === 47)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7191,7 +7065,7 @@
     )
 )
 
-1988 -> 1994 conditional = ((???*0* | "*" | {} | "/" | "%")  ===  {})
+1988 -> 1994 conditional = ((???*0* | "*" | {} | "/" | "%") === {})
 - *0* s5
   ⚠️  pattern without value
 
@@ -7200,7 +7074,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-1994 -> 1997 conditional = (???*0*  ===  37)
+1994 -> 1997 conditional = (???*0* === 37)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7215,19 +7089,19 @@
     )
 )
 
-1982 -> 2000 conditional = ((???*0* | "*" | {} | "/" | "%")  !==  {})
+1982 -> 2000 conditional = ((???*0* | "*" | {} | "/" | "%") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2000 -> 2001 call = (...) => (undefined | s0)()
 
-2000 -> 2002 conditional = ((???*0* | undefined | [])  !==  {})
+2000 -> 2002 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
 2002 -> 2003 call = (...) => (undefined | s0)()
 
-1955 -> 2004 conditional = ((???*0* | [])  !==  {})
+1955 -> 2004 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7248,7 +7122,7 @@
 
 2009 -> 2010 call = (...) => (undefined | s0)()
 
-2009 -> 2011 conditional = ((???*0* | undefined | [])  !==  {})
+2009 -> 2011 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7257,7 +7131,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2011 -> 2014 conditional = (???*0*  ===  58)
+2011 -> 2014 conditional = (???*0* === 58)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7272,13 +7146,13 @@
     )
 )
 
-2011 -> 2017 conditional = ((???*0* | ":" | {})  !==  {})
+2011 -> 2017 conditional = ((???*0* | ":" | {}) !== {})
 - *0* s3
   ⚠️  pattern without value
 
 2017 -> 2018 call = (...) => (undefined | s0)()
 
-2017 -> 2019 conditional = ((???*0* | undefined | [])  !==  {})
+2017 -> 2019 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -7303,7 +7177,7 @@
 
 2026 -> 2027 call = (...) => (undefined | s0)()
 
-2026 -> 2028 conditional = ((???*0* | undefined | [])  !==  {})
+2026 -> 2028 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7312,7 +7186,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2028 -> 2031 conditional = (???*0*  ===  58)
+2028 -> 2031 conditional = (???*0* === 58)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7327,13 +7201,13 @@
     )
 )
 
-2028 -> 2034 conditional = ((???*0* | ":" | {})  !==  {})
+2028 -> 2034 conditional = ((???*0* | ":" | {}) !== {})
 - *0* s3
   ⚠️  pattern without value
 
 2034 -> 2035 call = (...) => (undefined | s0)()
 
-2034 -> 2036 conditional = ((???*0* | undefined | [])  !==  {})
+2034 -> 2036 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -7372,7 +7246,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2046 -> 2049 conditional = (???*0*  ===  46)
+2046 -> 2049 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7387,13 +7261,13 @@
     )
 )
 
-2046 -> 2052 conditional = ((???*0* | "." | {} | "[")  !==  {})
+2046 -> 2052 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2052 -> 2053 call = (...) => (undefined | s0)()
 
-2052 -> 2054 conditional = ((???*0* | undefined | [])  !==  {})
+2052 -> 2054 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7404,7 +7278,7 @@
 
 2056 -> 2057 call = (...) => (undefined | s0)()
 
-2056 -> 2058 conditional = ((???*0* | undefined | [])  !==  {})
+2056 -> 2058 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -7425,7 +7299,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2062 -> 2065 conditional = (???*0*  ===  91)
+2062 -> 2065 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7440,13 +7314,13 @@
     )
 )
 
-2062 -> 2068 conditional = ((???*0* | "." | {} | "[")  !==  {})
+2062 -> 2068 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2068 -> 2069 call = (...) => (undefined | s0)()
 
-2068 -> 2070 conditional = ((???*0* | undefined | [])  !==  {})
+2068 -> 2070 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7467,7 +7341,7 @@
 
 2076 -> 2077 call = (...) => (undefined | s0)()
 
-2076 -> 2078 conditional = ((???*0* | undefined | [])  !==  {})
+2076 -> 2078 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -7476,7 +7350,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2078 -> 2081 conditional = (???*0*  ===  93)
+2078 -> 2081 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7491,7 +7365,7 @@
     )
 )
 
-2078 -> 2084 conditional = ((???*0* | "]" | {})  !==  {})
+2078 -> 2084 conditional = ((???*0* | "]" | {}) !== {})
 - *0* s9
   ⚠️  pattern without value
 
@@ -7517,7 +7391,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2090 -> 2093 conditional = (???*0*  ===  46)
+2090 -> 2093 conditional = (???*0* === 46)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7532,13 +7406,13 @@
     )
 )
 
-2090 -> 2096 conditional = ((???*0* | "." | {} | "[")  !==  {})
+2090 -> 2096 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2096 -> 2097 call = (...) => (undefined | s0)()
 
-2096 -> 2098 conditional = ((???*0* | undefined | [])  !==  {})
+2096 -> 2098 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7549,7 +7423,7 @@
 
 2100 -> 2101 call = (...) => (undefined | s0)()
 
-2100 -> 2102 conditional = ((???*0* | undefined | [])  !==  {})
+2100 -> 2102 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -7570,7 +7444,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2106 -> 2109 conditional = (???*0*  ===  91)
+2106 -> 2109 conditional = (???*0* === 91)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7585,13 +7459,13 @@
     )
 )
 
-2106 -> 2112 conditional = ((???*0* | "." | {} | "[")  !==  {})
+2106 -> 2112 conditional = ((???*0* | "." | {} | "[") !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2112 -> 2113 call = (...) => (undefined | s0)()
 
-2112 -> 2114 conditional = ((???*0* | undefined | [])  !==  {})
+2112 -> 2114 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7612,7 +7486,7 @@
 
 2120 -> 2121 call = (...) => (undefined | s0)()
 
-2120 -> 2122 conditional = ((???*0* | undefined | [])  !==  {})
+2120 -> 2122 conditional = ((???*0* | undefined | []) !== {})
 - *0* s8
   ⚠️  pattern without value
 
@@ -7621,7 +7495,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2122 -> 2125 conditional = (???*0*  ===  93)
+2122 -> 2125 conditional = (???*0* === 93)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7636,7 +7510,7 @@
     )
 )
 
-2122 -> 2128 conditional = ((???*0* | "]" | {})  !==  {})
+2122 -> 2128 conditional = ((???*0* | "]" | {}) !== {})
 - *0* s9
   ⚠️  pattern without value
 
@@ -7644,7 +7518,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-2044 -> 2130 conditional = ((???*0* | [] | {})  !==  {})
+2044 -> 2130 conditional = ((???*0* | [] | {}) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7712,7 +7586,7 @@
     )
 )
 
-0 -> 2149 conditional = ((???*0* | ???*1* | {})  !==  {})
+0 -> 2149 conditional = ((???*0* | ???*1* | {}) !== {})
 - *0* s2
   ⚠️  pattern without value
 - *1* ???*2*["charAt"](peg$currPos)
@@ -7769,7 +7643,7 @@
     )
 )
 
-0 -> 2161 conditional = ((???*0* | [] | {} | undefined | {"type": "number_constant", "value": ???*1*})  !==  {})
+0 -> 2161 conditional = ((???*0* | [] | {} | undefined | {"type": "number_constant", "value": ???*1*}) !== {})
 - *0* s1
   ⚠️  pattern without value
 - *1* ???*2*(text())
@@ -7797,7 +7671,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2166 -> 2169 conditional = (???*0*  ===  44)
+2166 -> 2169 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7812,13 +7686,13 @@
     )
 )
 
-2166 -> 2172 conditional = ((???*0* | "," | {})  !==  {})
+2166 -> 2172 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2172 -> 2173 call = (...) => (undefined | s0)()
 
-2172 -> 2174 conditional = ((???*0* | undefined | [])  !==  {})
+2172 -> 2174 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7846,7 +7720,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2181 -> 2184 conditional = (???*0*  ===  44)
+2181 -> 2184 conditional = (???*0* === 44)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7861,13 +7735,13 @@
     )
 )
 
-2181 -> 2187 conditional = ((???*0* | "," | {})  !==  {})
+2181 -> 2187 conditional = ((???*0* | "," | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
 2187 -> 2188 call = (...) => (undefined | s0)()
 
-2187 -> 2189 conditional = ((???*0* | undefined | [])  !==  {})
+2187 -> 2189 conditional = ((???*0* | undefined | []) !== {})
 - *0* s6
   ⚠️  pattern without value
 
@@ -7880,7 +7754,7 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-2164 -> 2193 conditional = ((???*0* | [])  !==  {})
+2164 -> 2193 conditional = ((???*0* | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7895,7 +7769,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 2197 conditional = (???*0*  ===  40)
+0 -> 2197 conditional = (???*0* === 40)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7915,7 +7789,7 @@
 
 2200 -> 2201 call = (...) => (undefined | s0)()
 
-2200 -> 2202 conditional = ((???*0* | undefined | [])  !==  {})
+2200 -> 2202 conditional = ((???*0* | undefined | []) !== {})
 - *0* s2
   ⚠️  pattern without value
 
@@ -7926,7 +7800,7 @@
 
 2204 -> 2205 call = (...) => (undefined | s0)()
 
-2204 -> 2206 conditional = ((???*0* | undefined | [])  !==  {})
+2204 -> 2206 conditional = ((???*0* | undefined | []) !== {})
 - *0* s4
   ⚠️  pattern without value
 
@@ -7935,7 +7809,7 @@
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2206 -> 2209 conditional = (???*0*  ===  41)
+2206 -> 2209 conditional = (???*0* === 41)
 - *0* ???*1*["charCodeAt"](peg$currPos)
   ⚠️  unknown callee object
 - *1* arguments[0]
@@ -7950,7 +7824,7 @@
     )
 )
 
-2206 -> 2212 conditional = ((???*0* | ")" | {})  !==  {})
+2206 -> 2212 conditional = ((???*0* | ")" | {}) !== {})
 - *0* s5
   ⚠️  pattern without value
 
