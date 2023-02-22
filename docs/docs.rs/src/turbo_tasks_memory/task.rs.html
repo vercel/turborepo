@@ -2900,8 +2900,6 @@
 <span id="2900">2900</span>
 <span id="2901">2901</span>
 <span id="2902">2902</span>
-<span id="2903">2903</span>
-<span id="2904">2904</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -3754,7 +3752,7 @@
             }) =&gt; {
                 <span class="comment">// Connect the task to the current task. This makes strongly consistent behaving
                 // as expected and we can look up the collectibles in the current scope.
-                </span><span class="self">self</span>.connect_child_internal(state, task_id, backend, <span class="kw-2">&amp;*</span>turbo_tasks);
+                </span><span class="self">self</span>.connect_child_internal(state, task_id, backend, turbo_tasks);
                 <span class="comment">// state was dropped by previous method
                 </span>Box::pin(<span class="self">Self</span>::execute_read_task_collectibles(
                     <span class="self">self</span>.id,
@@ -4126,18 +4124,16 @@
                 <span class="kw-2">*</span>optimization_counter += <span class="number">1</span>;
                 <span class="kw">if </span>merging_scopes &gt; <span class="number">0 </span>{
                     <span class="kw-2">*</span>optimization_counter = optimization_counter.saturating_sub(merging_scopes);
-                } <span class="kw">else </span>{
-                    <span class="kw">if </span>should_optimize_to_root_scoped(<span class="kw-2">*</span>optimization_counter, children.len()) {
-                        list.remove(id);
-                        drop(<span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks));
-                        <span class="kw">return </span><span class="self">self</span>.add_to_scope_internal_shallow(
-                            id,
-                            merging_scopes,
-                            backend,
-                            turbo_tasks,
-                            queue,
-                        );
-                    }
+                } <span class="kw">else if </span>should_optimize_to_root_scoped(<span class="kw-2">*</span>optimization_counter, children.len()) {
+                    list.remove(id);
+                    drop(<span class="self">self</span>.make_root_scoped_internal(state, backend, turbo_tasks));
+                    <span class="kw">return </span><span class="self">self</span>.add_to_scope_internal_shallow(
+                        id,
+                        merging_scopes,
+                        backend,
+                        turbo_tasks,
+                        queue,
+                    );
                 }
 
                 <span class="kw">if </span>queue.capacity() == <span class="number">0 </span>{
@@ -5036,7 +5032,7 @@
                 <span class="kw">let </span>backend = turbo_tasks.backend();
                 backend.with_task(task_id, |task| {
                     <span class="kw">let </span>state =
-                        task.ensure_root_scoped(task.full_state_mut(), backend, <span class="kw-2">&amp;*</span>turbo_tasks);
+                        task.ensure_root_scoped(task.full_state_mut(), backend, turbo_tasks);
                     <span class="kw">if let </span>TaskScopes::Root(scope_id) = state.scopes {
                         backend.with_scope(scope_id, |scope| {
                             scope.read_collectibles_and_children(

@@ -200,8 +200,15 @@
 <span id="200">200</span>
 <span id="201">201</span>
 <span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>serde_json::Value;
+<span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::ecmascript::{
@@ -318,31 +325,38 @@
         <span class="kw">let </span>group = ChunkGroupVc::from_asset(inner.asset.into(), <span class="self">self</span>.context);
         <span class="kw">let </span>chunks = group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>server_root = inner.server_root.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>client_chunks = Vec::new();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>asset_paths = <span class="macro">vec!</span>[];
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
             <span class="kw">for </span>reference <span class="kw">in </span>chunk.references().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">let </span>assets = <span class="kw-2">&amp;*</span>reference.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">for </span>asset <span class="kw">in </span>assets.iter() {
-                    <span class="kw">let </span>path = <span class="kw-2">&amp;*</span>asset.path().<span class="kw">await</span><span class="question-mark">?</span>;
-
-                    <span class="comment">// only client chunks have an path from the server root
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = server_root.get_path_to(path) {
-                        client_chunks.push(Value::String(path.to_string()));
-                    }
+                    asset_paths.push(asset.path().<span class="kw">await</span><span class="question-mark">?</span>);
                 }
             }
+
+            asset_paths.push(chunk.path().<span class="kw">await</span><span class="question-mark">?</span>);
         }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>client_chunks = Vec::new();
+        <span class="kw">for </span>asset_path <span class="kw">in </span>asset_paths {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = server_root.get_path_to(<span class="kw-2">&amp;</span>asset_path) {
+                client_chunks.push(path.to_string());
+            }
+        }
+
         <span class="kw">let </span>module_id = stringify_js(<span class="kw-2">&amp;*</span>inner.asset.as_chunk_item(<span class="self">self</span>.context).id().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
-            inner_code: <span class="macro">format!</span>(
-                <span class="string">&quot;__turbopack_esm__({{
-  default: () =&gt; __turbopack_import__({}),
-  chunks: () =&gt; chunks
-}});
-const chunks = {};
-&quot;</span>,
+            inner_code: <span class="macro">formatdoc!</span>(
+                <span class="string">r#&quot;
+                    __turbopack_esm__({{
+                        default: () =&gt; __turbopack_import__({}),
+                        chunks: () =&gt; chunks
+                    }});
+                    const chunks = {};
+                &quot;#</span>,
                 module_id,
-                Value::Array(client_chunks)
+                stringify_js(<span class="kw-2">&amp;</span>client_chunks)
             )
             .into(),
             ..Default::default()
