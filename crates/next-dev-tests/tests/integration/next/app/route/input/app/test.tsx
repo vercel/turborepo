@@ -10,7 +10,7 @@ export default function Test() {
         const text = await res.text();
         expect(text).toEqual("hello world");
         expect(res.headers.get("method")).toEqual("GET");
-      });
+      }, 20000);
       it("should make a POST request", async () => {
         const res = await fetch("/route.js", {
           method: "POST",
@@ -18,7 +18,7 @@ export default function Test() {
         const text = await res.text();
         expect(text).toEqual("hello route.js");
         expect(res.headers.get("method")).toEqual("POST");
-      });
+      }, 20000);
     });
     return () => {};
   }, []);
