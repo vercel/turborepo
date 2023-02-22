@@ -251,13 +251,13 @@ Let's take a look inside `turbo.json`, at the root:
 {
   "pipeline": {
     "build": {
-      //   ^^^^^
+//   ^^^^^
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
     "lint": {},
     "dev": {
-      //   ^^^
+//   ^^^
       "cache": false
     }
   }
