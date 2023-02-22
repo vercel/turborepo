@@ -1007,15 +1007,6 @@
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
-    <span class="kw">let </span>entry_asset = server_context.process(
-        page_asset,
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
-    );
-    <span class="kw">let </span>data_asset = server_data_context.process(
-        page_asset,
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
-    );
-
     <span class="kw">let </span>server_chunking_context = DevChunkingContextVc::builder(
         project_path,
         intermediate_output_path,
@@ -1052,14 +1043,7 @@
     <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>);
     <span class="kw">let </span>route_matcher = NextParamsMatcherVc::new(pathname);
 
-    <span class="kw">let </span>page_config = parse_config_from_source(entry_asset);
-
     <span class="prelude-val">Ok</span>(<span class="kw">if </span>is_api_path {
-        <span class="kw">let </span>ty = <span class="kw">if </span>page_config.<span class="kw">await</span><span class="question-mark">?</span>.runtime == NextRuntime::Edge {
-            SsrType::EdgeApi
-        } <span class="kw">else </span>{
-            SsrType::Api
-        };
         create_node_api_source(
             project_path,
             specificity,
@@ -1068,8 +1052,8 @@
             route_matcher.into(),
             SsrEntry {
                 context: server_context,
-                entry_asset,
-                ty,
+                entry_asset: page_asset,
+                ty: SsrType::AutoApi,
                 chunking_context: server_chunking_context,
                 intermediate_output_path,
                 output_root,
@@ -1084,7 +1068,7 @@
 
         <span class="kw">let </span>ssr_entry = SsrEntry {
             context: server_context,
-            entry_asset,
+            entry_asset: page_asset,
             ty: SsrType::Html,
             chunking_context: server_chunking_context,
             intermediate_output_path,
@@ -1095,7 +1079,7 @@
 
         <span class="kw">let </span>ssr_data_entry = SsrEntry {
             context: server_data_context,
-            entry_asset: data_asset,
+            entry_asset: page_asset,
             ty: SsrType::Data,
             chunking_context: server_data_chunking_context,
             intermediate_output_path: data_intermediate_output_path,
@@ -1129,7 +1113,7 @@
                 server_root,
                 client_context,
                 client_chunking_context,
-                entry_asset,
+                page_asset,
                 pathname,
             ),
         ])
@@ -1338,6 +1322,7 @@
 </span><span class="kw">enum </span>SsrType {
     Api,
     EdgeApi,
+    AutoApi,
     Html,
     Data,
 }
@@ -1358,7 +1343,22 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>entry(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>virtual_asset = <span class="kw">match </span>this.ty {
+        <span class="kw">let </span>ty = <span class="kw">if </span>this.ty == SsrType::AutoApi {
+            <span class="kw">let </span>entry_asset = this.context.process(
+                this.entry_asset,
+                Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+            );
+            <span class="kw">let </span>page_config = parse_config_from_source(entry_asset);
+            <span class="kw">if </span>page_config.<span class="kw">await</span><span class="question-mark">?</span>.runtime == NextRuntime::Edge {
+                SsrType::EdgeApi
+            } <span class="kw">else </span>{
+                SsrType::Api
+            }
+        } <span class="kw">else </span>{
+            this.ty
+        };
+        <span class="kw">let </span>virtual_asset = <span class="kw">match </span>ty {
+            SsrType::AutoApi =&gt; <span class="macro">unreachable!</span>(),
             SsrType::Api =&gt; VirtualAssetVc::new(
                 this.entry_asset.path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-api.tsx&quot;</span>).into(),
