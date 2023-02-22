@@ -1,5 +1,3 @@
-use std::mem::Discriminant;
-
 pub use turbo_tasks_macros::DeterministicHash;
 
 macro_rules! deterministic_hash_number {
@@ -147,27 +145,5 @@ impl<T: DeterministicHash> DeterministicHash for Vec<T> {
         for v in self {
             v.deterministic_hash(state);
         }
-    }
-}
-
-/// HasherWrapper allows the DeterministicHasher to be used as a Hasher, for
-/// standard types that do not allow us to directly access their internals.
-struct HasherWrapper<'a, D: DeterministicHasher>(&'a mut D);
-impl<'a, D: DeterministicHasher> std::hash::Hasher for HasherWrapper<'a, D> {
-    fn write(&mut self, bytes: &[u8]) {
-        self.0.write_bytes(bytes);
-    }
-
-    fn finish(&self) -> u64 {
-        unimplemented!();
-    }
-}
-
-impl<T> DeterministicHash for Discriminant<T> {
-    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
-        // The Discriminant does not allow us to access its internal state, but does
-        // allow us to Hash it.
-        let mut wrapper = HasherWrapper(state);
-        std::hash::Hash::hash(self, &mut wrapper);
     }
 }
