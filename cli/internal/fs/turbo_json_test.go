@@ -29,7 +29,7 @@ func assertIsSorted(t *testing.T, arr []string, msg string) {
 
 func Test_ReadTurboConfig(t *testing.T) {
 	testDir := getTestDir(t, "correct")
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	if turboJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
@@ -37,7 +37,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
@@ -48,7 +48,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"lint": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
@@ -70,7 +70,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"publish": {
-			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "TaskDependencies", "TopologicalDependencies", "ShouldCache"}),
+			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
@@ -120,7 +120,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
@@ -141,7 +141,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-1")
-	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
+	_, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
@@ -149,21 +149,21 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 
 func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-2")
-	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
+	_, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
 	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
-	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
+	_, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
 	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "legacy-env")
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	if turboJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)

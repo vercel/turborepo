@@ -156,7 +156,17 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	taskNames := options.TaskNames
 	tasksOnly := options.TasksOnly
 
+	// If there are no affected packages, we don't need to go through all this work
+	// we can just exit early.
+	// TODO(mehulkar): but we still need to validate bad task names?
+	if len(pkgs) == 0 {
+		return nil
+	}
+
 	traversalQueue := []string{}
+
+	// get a set of taskNames passed in. we'll remove the ones that have a definition
+	missing := util.SetFromStrings(taskNames)
 
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
@@ -180,13 +190,22 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 					return err
 				}
-
+				// delete taskName if it was found
+				missing.Delete(taskName)
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
 	}
 
 	visited := make(util.Set)
+
+	// validate that all tasks passed were found
+	missingList := missing.UnsafeListOfStrings()
+	sort.Strings(missingList)
+
+	if len(missingList) > 0 {
+		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(missingList, ", "))
+	}
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
 	for len(traversalQueue) > 0 {

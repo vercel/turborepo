@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, Value};
+use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, File, FileContent, FileSystemPathVc,
 };
@@ -35,7 +35,7 @@ struct WebpackLoadersProcessingResult {
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum WebpackLoaderConfig {
+pub enum WebpackLoaderConfigItem {
     LoaderName(String),
     LoaderNameWithOptions {
         loader: String,
@@ -45,14 +45,14 @@ pub enum WebpackLoaderConfig {
 }
 
 #[derive(Debug, Clone)]
-#[turbo_tasks::value(shared)]
-pub struct WebpackLoaderConfigs(Vec<WebpackLoaderConfig>);
+#[turbo_tasks::value(shared, transparent)]
+pub struct WebpackLoaderConfigItems(pub Vec<WebpackLoaderConfigItem>);
 
 #[turbo_tasks::value]
 pub struct WebpackLoaders {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigsVc,
+    loaders: WebpackLoaderConfigItemsVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -61,7 +61,7 @@ impl WebpackLoadersVc {
     pub fn new(
         evaluate_context: AssetContextVc,
         execution_context: ExecutionContextVc,
-        loaders: WebpackLoaderConfigsVc,
+        loaders: WebpackLoaderConfigItemsVc,
     ) -> Self {
         WebpackLoaders {
             evaluate_context,
@@ -91,7 +91,7 @@ impl SourceTransform for WebpackLoaders {
 struct WebpackLoadersProcessedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigsVc,
+    loaders: WebpackLoaderConfigItemsVc,
     source: AssetVc,
 }
 
@@ -125,7 +125,7 @@ fn webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContex
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
-        context.environment(),
+        context.compile_time_info(),
     )
     .into()
 }
@@ -139,6 +139,7 @@ impl WebpackLoadersProcessedAssetVc {
         let ExecutionContext {
             project_root,
             intermediate_output_path,
+            env,
         } = *this.execution_context.await?;
         let source_content = this.source.content();
         let AssetContent::File(file) = *source_content.await? else {
@@ -161,6 +162,7 @@ impl WebpackLoadersProcessedAssetVc {
             project_root,
             webpack_loaders_executor,
             project_root,
+            env,
             this.source.path(),
             context,
             intermediate_output_path,
@@ -170,6 +172,7 @@ impl WebpackLoadersProcessedAssetVc {
                 JsonValueVc::cell(resource_path.into()),
                 JsonValueVc::cell(json!(*loaders)),
             ],
+            CompletionVc::immutable(),
             /* debug */ false,
         )
         .await?;

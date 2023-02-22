@@ -1,21 +1,29 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use indexmap::IndexSet;
+use turbo_tasks::{primitives::StringVc, CompletionVc, Value};
+use turbopack_core::{
+    environment::ServerAddrVc,
+    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+};
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
-    ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult, RewriteVc,
+    ContentSourceResultVc, ContentSourceVc, HeaderListVc, NeededData, ProxyResult, RewriteBuilder,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
-use crate::router::{route, RouterRequest, RouterResult};
+use crate::{
+    next_config::NextConfigVc,
+    router::{route, RouterRequest, RouterResult},
+};
 
 #[turbo_tasks::value(shared)]
 pub struct NextRouterContentSource {
     /// A wrapped content source from which we will fetch assets.
     inner: ContentSourceVc,
     execution_context: ExecutionContextVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
+    routes_changed: CompletionVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -24,10 +32,16 @@ impl NextRouterContentSourceVc {
     pub fn new(
         inner: ContentSourceVc,
         execution_context: ExecutionContextVc,
+        next_config: NextConfigVc,
+        server_addr: ServerAddrVc,
+        routes_changed: CompletionVc,
     ) -> NextRouterContentSourceVc {
         NextRouterContentSource {
             inner,
             execution_context,
+            next_config,
+            server_addr,
+            routes_changed,
         }
         .cell()
     }
@@ -77,7 +91,13 @@ impl ContentSource for NextRouterContentSource {
         }
         .cell();
 
-        let res = route(this.execution_context, request);
+        let res = route(
+            this.execution_context,
+            request,
+            this.next_config,
+            this.server_addr,
+            this.routes_changed,
+        );
         let Ok(res) = res.await else {
             return Ok(this
                 .inner
@@ -90,12 +110,16 @@ impl ContentSource for NextRouterContentSource {
                 this.inner
                     .get(path, Value::new(ContentSourceData::default()))
             }
+            RouterResult::None => this
+                .inner
+                .get(path, Value::new(ContentSourceData::default())),
             RouterResult::Rewrite(data) => {
-                // TODO: We can't set response headers on the returned content.
+                let mut rewrite = RewriteBuilder::new(data.url.clone()).content_source(this.inner);
+                if !data.headers.is_empty() {
+                    rewrite = rewrite.response_headers(HeaderListVc::new(data.headers.clone()));
+                }
                 ContentSourceResultVc::exact(
-                    ContentSourceContent::Rewrite(RewriteVc::new(data.url.clone(), this.inner))
-                        .cell()
-                        .into(),
+                    ContentSourceContent::Rewrite(rewrite.build()).cell().into(),
                 )
             }
             RouterResult::FullMiddleware(data) => ContentSourceResultVc::exact(
@@ -128,7 +152,7 @@ impl Introspectable for NextRouterContentSource {
 
     #[turbo_tasks::function]
     async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        let mut children = HashSet::new();
+        let mut children = IndexSet::new();
         if let Some(inner) = IntrospectableVc::resolve_from(self.inner).await? {
             children.insert((StringVc::cell("inner".to_string()), inner));
         }

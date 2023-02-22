@@ -98,6 +98,7 @@ jobs:
             !crates/turborepo/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
+            !crates/turborepo-scm/**
             !crates/turbo-updater/**
             !**.md
             !**.mdx
@@ -112,6 +113,7 @@ jobs:
             crates/turborepo/**
             crates/turborepo-lib/**
             crates/turborepo-ffi/**
+            crates/turborepo-scm/**
             crates/turbo-updater/**
             .cargo/**
             rust-toolchain
@@ -570,7 +572,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib --features rustls-tls
+          cargo test -p turborepo-lib -p turborepo-scm --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -603,12 +605,12 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -667,13 +669,13 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]
@@ -1032,17 +1034,6 @@ jobs:
           file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
-  next_js_integration:
-    name: Execute Next.js integration workflow
-    needs: [determine_jobs]
-    permissions:
-      pull-requests: write
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
-    uses: ./.github/workflows/nextjs-integration-test.yml
-    # Uncomment to test against a specific version of Next.js
-    # with:
-    # version: v13.1.6-canary.0
-
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
@@ -1191,7 +1182,6 @@ jobs:
       - rust_build_release
       - rust_bench
       - rust_bench_pr
-      - next_js_integration
       - format_lint
     if: always()
     permissions:
@@ -1234,7 +1224,6 @@ jobs:
           subjob ${{needs.rust_build_release.result}} "Rust release build (non-blocking)"
           subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
           subjob ${{needs.rust_bench_pr.result}} "Turbopack Rust PR benchmarks (non-blocking)"
-          subjob ${{needs.next_js_integration.result}} "Next.js Integration tests (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then

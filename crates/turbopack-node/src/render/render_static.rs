@@ -7,7 +7,7 @@ use turbopack_core::{
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
-    source::{HeaderListVc, RewriteVc},
+    source::{HeaderListVc, RewriteBuilder, RewriteVc},
 };
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
@@ -47,6 +47,7 @@ impl StaticResultVc {
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]
 pub async fn render_static(
+    cwd: FileSystemPathVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
@@ -61,6 +62,7 @@ pub async fn render_static(
         intermediate_output_path,
     );
     let renderer_pool = get_renderer_pool(
+        cwd,
         intermediate_asset,
         intermediate_output_path,
         output_root,
@@ -118,7 +120,7 @@ async fn run_static_operation(
             .context("receiving from node.js process")?
         {
             RenderStaticIncomingMessage::Rewrite { path } => {
-                StaticResultVc::rewrite(RewriteVc::new_path_query(path))
+                StaticResultVc::rewrite(RewriteBuilder::new(path).build())
             }
             RenderStaticIncomingMessage::Response {
                 status_code,

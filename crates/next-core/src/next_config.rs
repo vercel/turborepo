@@ -5,14 +5,11 @@ use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
-    Value,
+    CompletionVc, Value,
 };
 use turbo_tasks_env::EnvMapVc;
 use turbo_tasks_fs::json::parse_json_rope_with_source_context;
-use turbopack::{
-    evaluate_context::node_evaluate_asset_context,
-    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
-};
+use turbopack::evaluate_context::node_evaluate_asset_context;
 use turbopack_core::{
     asset::Asset,
     context::AssetContext,
@@ -31,7 +28,7 @@ use turbopack_ecmascript::{
 use turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
-    transforms::webpack::{WebpackLoaderConfigs, WebpackLoaderConfigsVc},
+    transforms::webpack::{WebpackLoaderConfigItems, WebpackLoaderConfigItemsVc},
 };
 
 use crate::embed_js::next_asset;
@@ -336,7 +333,7 @@ pub enum RemotePatternProtocal {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalTurboConfig {
-    pub loaders: Option<IndexMap<String, WebpackLoaderConfigs>>,
+    pub loaders: Option<IndexMap<String, WebpackLoaderConfigItems>>,
     pub resolve_alias: Option<IndexMap<String, JsonValue>>,
 }
 
@@ -446,6 +443,10 @@ pub enum RemoveConsoleConfig {
     Config { exclude: Option<Vec<String>> },
 }
 
+#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+pub struct WebpackExtensionToLoaders(IndexMap<String, WebpackLoaderConfigItemsVc>);
+
 #[turbo_tasks::value_impl]
 impl NextConfigVc {
     #[turbo_tasks::function]
@@ -500,20 +501,19 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn webpack_loaders_options(self) -> Result<WebpackLoadersOptionsVc> {
+    pub async fn webpack_loaders_options(self) -> Result<WebpackExtensionToLoadersVc> {
         let this = self.await?;
         let Some(turbo_loaders) = this.experimental.turbo.as_ref().and_then(|t| t.loaders.as_ref()) else {
-            return Ok(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
+            return Ok(WebpackExtensionToLoadersVc::cell(IndexMap::new()));
         };
         let mut extension_to_loaders = IndexMap::new();
         for (ext, loaders) in turbo_loaders {
-            extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
+            extension_to_loaders.insert(
+                ext.clone(),
+                WebpackLoaderConfigItemsVc::cell(loaders.0.clone()),
+            );
         }
-        Ok(WebpackLoadersOptions {
-            extension_to_loaders,
-            ..Default::default()
-        }
-        .cell())
+        Ok(WebpackExtensionToLoaders(extension_to_loaders).cell())
     }
 
     #[turbo_tasks::function]
@@ -541,6 +541,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     let ExecutionContext {
         project_root,
         intermediate_output_path,
+        env,
     } = *execution_context.await?;
     let mut import_map = ImportMap::default();
 
@@ -549,7 +550,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
     import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
 
-    let context = node_evaluate_asset_context(Some(import_map.cell()));
+    let context = node_evaluate_asset_context(Some(import_map.cell()), None);
     let find_config_result = find_context_file(project_root, next_configs());
     let config_asset = match &*find_config_result.await? {
         FindContextFileResult::Found(config_path, _) => Some(SourceAssetVc::new(*config_path)),
@@ -563,7 +564,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
             context,
             Value::new(EcmascriptModuleAssetType::Ecmascript),
             EcmascriptInputTransformsVc::cell(vec![]),
-            context.environment(),
+            context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();
         EcmascriptChunkPlaceablesVc::cell(vec![config_chunk])
@@ -579,11 +580,13 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         project_root,
         load_next_config_asset,
         project_root,
+        env,
         config_asset.map_or(project_root, |c| c.path()),
         context,
         intermediate_output_path,
         runtime_entries,
         vec![],
+        CompletionVc::immutable(),
         /* debug */ false,
     )
     .await?;

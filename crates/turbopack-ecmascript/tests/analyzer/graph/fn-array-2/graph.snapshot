@@ -24,9 +24,9 @@
                     Constant(
                         Undefined,
                     ),
-                    Array(
-                        5,
-                        [
+                    Array {
+                        total_nodes: 5,
+                        items: [
                             Concat(
                                 3,
                                 [
@@ -51,7 +51,8 @@
                                 ),
                             ),
                         ],
-                    ),
+                        mutable: true,
+                    },
                 ],
             ),
         ),
@@ -68,13 +69,17 @@
             ),
             [
                 Constant(
-                    StrWord(
-                        Atom('1' type=inline),
+                    Str(
+                        Word(
+                            Atom('1' type=inline),
+                        ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('2' type=inline),
+                    Str(
+                        Word(
+                            Atom('2' type=inline),
+                        ),
                     ),
                 ),
             ],

@@ -20,7 +20,7 @@ import {
 import { parse, ParsedUrlQuery } from "querystring";
 import type { Params } from "next/dist/shared/lib/router/utils/route-matcher";
 import { FetchEventResult } from "next/dist/server/web/types";
-import { getClonableBody } from "next/dist/server/body-streams";
+import { getCloneableBody } from "next/dist/server/body-streams";
 
 startHandler(async ({ request, response, query, params, path }) => {
   await runEdgeFunction({
@@ -52,7 +52,9 @@ async function runEdgeFunction({
 }): Promise<FetchEventResult | null> {
   const edgeInfo = {
     name: "edge",
-    paths: chunkGroup.map((chunk: string) => join(process.cwd(), chunk)),
+    paths: chunkGroup.map((chunk: string) =>
+      join(process.cwd(), ".next/server/pages", chunk)
+    ),
     wasm: [],
     env: [],
     assets: [],
@@ -77,7 +79,7 @@ async function runEdgeFunction({
 
   const { run } = require("next/dist/server/web/sandbox");
   const result = (await run({
-    distDir: process.cwd(),
+    distDir: join(process.cwd(), ".next/server/pages"),
     name: edgeInfo.name,
     paths: edgeInfo.paths,
     env: edgeInfo.env,
@@ -95,7 +97,7 @@ async function runEdgeFunction({
         name: path,
         ...(params && { params: params }),
       },
-      body: getClonableBody(req.body),
+      body: getCloneableBody(req.body),
     },
     useCache: false,
     onWarning,

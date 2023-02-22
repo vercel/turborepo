@@ -3,8 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build:index": "ncc build src/index.ts -o dist --source-map --minify",
-    "prepare": "npm run build:index"
+    "build": "ncc build src/index.ts -o dist --source-map --minify",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
