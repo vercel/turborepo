@@ -1685,6 +1685,34 @@
 <span id="1685">1685</span>
 <span id="1686">1686</span>
 <span id="1687">1687</span>
+<span id="1688">1688</span>
+<span id="1689">1689</span>
+<span id="1690">1690</span>
+<span id="1691">1691</span>
+<span id="1692">1692</span>
+<span id="1693">1693</span>
+<span id="1694">1694</span>
+<span id="1695">1695</span>
+<span id="1696">1696</span>
+<span id="1697">1697</span>
+<span id="1698">1698</span>
+<span id="1699">1699</span>
+<span id="1700">1700</span>
+<span id="1701">1701</span>
+<span id="1702">1702</span>
+<span id="1703">1703</span>
+<span id="1704">1704</span>
+<span id="1705">1705</span>
+<span id="1706">1706</span>
+<span id="1707">1707</span>
+<span id="1708">1708</span>
+<span id="1709">1709</span>
+<span id="1710">1710</span>
+<span id="1711">1711</span>
+<span id="1712">1712</span>
+<span id="1713">1713</span>
+<span id="1714">1714</span>
+<span id="1715">1715</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2092,6 +2120,34 @@
                 right,
                 ..
             }) =&gt; JsValue::nullish_coalescing(<span class="macro">vec!</span>[<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)]),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;==&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::equal(<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;!=&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::not_equal(<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;===&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::strict_equal(<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;!==&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::strict_not_equal(<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)),
 
             <span class="kw-2">&amp;</span>Expr::Cond(CondExpr {
                 <span class="kw">box </span><span class="kw-2">ref </span>cons,

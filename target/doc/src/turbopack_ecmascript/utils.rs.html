@@ -124,7 +124,6 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
-<span id="127">127</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     future::Future,
     pin::Pin,
@@ -154,8 +153,7 @@
 <span class="kw">pub fn </span>js_value_to_pattern(value: <span class="kw-2">&amp;</span>JsValue) -&gt; Pattern {
     <span class="kw">let </span><span class="kw-2">mut </span>result = <span class="kw">match </span>value {
         JsValue::Constant(v) =&gt; Pattern::Constant(<span class="kw">match </span>v {
-            ConstantValue::StrWord(str) =&gt; str.to_string(),
-            ConstantValue::StrAtom(str) =&gt; str.to_string(),
+            ConstantValue::Str(str) =&gt; str.to_string(),
             ConstantValue::True =&gt; <span class="string">&quot;true&quot;</span>.to_string(),
             ConstantValue::False =&gt; <span class="string">&quot;false&quot;</span>.to_string(),
             ConstantValue::Null =&gt; <span class="string">&quot;null&quot;</span>.to_string(),

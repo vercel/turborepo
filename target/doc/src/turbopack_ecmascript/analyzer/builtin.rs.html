@@ -479,6 +479,20 @@
 <span id="479">479</span>
 <span id="480">480</span>
 <span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
@@ -693,7 +707,7 @@
                 <span class="kw">match </span><span class="kw-2">&amp;mut **</span>prop {
                     <span class="comment">// matching constant string property access on an object like `{a: 1, b:
                     // 2}[&quot;a&quot;]`
-                    </span>JsValue::Constant(ConstantValue::StrAtom(<span class="kw">_</span>) | ConstantValue::StrWord(<span class="kw">_</span>)) =&gt; {
+                    </span>JsValue::Constant(ConstantValue::Str(<span class="kw">_</span>)) =&gt; {
                         <span class="kw">let </span>prop_str = prop.as_str().unwrap();
                         <span class="kw">let </span><span class="kw-2">mut </span>potential_values = Vec::new();
                         <span class="kw">for </span>(i, part) <span class="kw">in </span>parts.iter_mut().enumerate().rev() {
@@ -942,6 +956,20 @@
                 <span class="comment">// If not, we know that it will be one of the remaining values.
                 </span><span class="kw-2">*</span>value = JsValue::alternatives(take(parts));
                 <span class="bool-val">true
+            </span>}
+        }
+        <span class="comment">// match a binary operator like `a == b`
+        </span>JsValue::Binary(..) =&gt; {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = value.is_truthy() {
+                <span class="kw">let </span>v = <span class="kw">if </span>v {
+                    ConstantValue::True
+                } <span class="kw">else </span>{
+                    ConstantValue::False
+                };
+                <span class="kw-2">*</span>value = JsValue::Constant(v);
+                <span class="bool-val">true
+            </span>} <span class="kw">else </span>{
+                <span class="bool-val">false
             </span>}
         }
         <span class="comment">// match the not operator like `!a`

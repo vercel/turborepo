@@ -626,7 +626,6 @@
 <span id="626">626</span>
 <span id="627">627</span>
 <span id="628">628</span>
-<span id="629">629</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -916,16 +915,15 @@
     <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = args.iter_mut().next() {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(str) = arg.as_str() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = str.rfind(<span class="string">&#39;/&#39;</span>) {
-                <span class="kw">return </span>JsValue::Constant(ConstantValue::StrWord(str[..i].to_string().into()));
+                <span class="kw">return </span>JsValue::Constant(ConstantValue::Str(str[..i].to_string().into()));
             } <span class="kw">else </span>{
-                <span class="kw">return </span>JsValue::Constant(ConstantValue::StrWord(<span class="string">&quot;&quot;</span>.into()));
+                <span class="kw">return </span>JsValue::Constant(ConstantValue::Str(<span class="string">&quot;&quot;</span>.into()));
             }
         } <span class="kw">else if let </span>JsValue::Concat(<span class="kw">_</span>, items) = arg {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(last) = items.last_mut() {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(str) = last.as_str() {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = str.rfind(<span class="string">&#39;/&#39;</span>) {
-                        <span class="kw-2">*</span>last =
-                            JsValue::Constant(ConstantValue::StrWord(str[..i].to_string().into()));
+                        <span class="kw-2">*</span>last = JsValue::Constant(ConstantValue::Str(str[..i].to_string().into()));
                         <span class="kw">return </span>take(arg);
                     }
                 }
