@@ -81,6 +81,12 @@ func (l *Logstreamer) Flush() error {
 		return err
 	}
 
+	p := make([]byte, l.buf.Len())
+	if _, err := l.buf.Read(p); err != nil {
+		return err
+	}
+
+	l.out(string(p))
 	return nil
 }
 
