@@ -247,13 +247,14 @@
 <span id="247">247</span>
 <span id="248">248</span>
 <span id="249">249</span>
+<span id="250">250</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    TryJoinIterExt, Value,
+    CompletionVc, TryJoinIterExt, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, File, FileContent, FileSystemEntryType,
@@ -477,6 +478,7 @@
                 JsonValueVc::cell(content.into()),
                 JsonValueVc::cell(css_path.into()),
             ],
+            CompletionVc::immutable(),
             <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;

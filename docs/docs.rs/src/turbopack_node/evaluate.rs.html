@@ -350,6 +350,10 @@
 <span id="350">350</span>
 <span id="351">351</span>
 <span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
@@ -401,6 +405,7 @@
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
     <span class="kw">let </span>chunking_context = DevChunkingContextVc::builder(
@@ -466,6 +471,7 @@
         available_parallelism().map_or(<span class="number">1</span>, |v| v.get()),
         debug,
     );
+    additional_invalidation.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(pool.cell())
 }
 
@@ -502,6 +508,7 @@
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
     args: Vec&lt;JsonValueVc&gt;,
+    additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JavaScriptValueVc&gt; {
     <span class="kw">let </span>pool = get_evaluate_pool(
@@ -511,6 +518,7 @@
         context,
         intermediate_output_path,
         runtime_entries,
+        additional_invalidation,
         debug,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;

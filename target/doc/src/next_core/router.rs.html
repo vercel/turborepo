@@ -336,13 +336,15 @@
 <span id="336">336</span>
 <span id="337">337</span>
 <span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    Value,
+    CompletionVc, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, to_sys_path, File, FileSystemPathVc,
@@ -619,6 +621,7 @@
     request: RouterRequestVc,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
+    routes_changed: CompletionVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;RouterResultVc&gt; {
     <span class="kw">let </span>ExecutionContext {
         project_root,
@@ -659,6 +662,7 @@
             JsonValueVc::cell(request),
             JsonValueVc::cell(dir.to_string_lossy().into()),
         ],
+        routes_changed,
         <span class="bool-val">false</span>,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;

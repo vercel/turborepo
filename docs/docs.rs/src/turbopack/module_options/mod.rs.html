@@ -285,17 +285,6 @@
 <span id="285">285</span>
 <span id="286">286</span>
 <span id="287">287</span>
-<span id="288">288</span>
-<span id="289">289</span>
-<span id="290">290</span>
-<span id="291">291</span>
-<span id="292">292</span>
-<span id="293">293</span>
-<span id="294">294</span>
-<span id="295">295</span>
-<span id="296">296</span>
-<span id="297">297</span>
-<span id="298">298</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -304,7 +293,6 @@
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -319,12 +307,12 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>package_import_map_from_import_mapping(
-    package_name: StringVc,
+    package_name: <span class="kw-2">&amp;</span>str,
     package_mapping: ImportMappingVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
     import_map.insert_exact_alias(
-        <span class="macro">format!</span>(<span class="string">&quot;@vercel/turbopack/{}&quot;</span>, package_name.<span class="kw">await</span><span class="question-mark">?</span>),
+        <span class="macro">format!</span>(<span class="string">&quot;@vercel/turbopack/{}&quot;</span>, package_name),
         package_mapping,
     );
     <span class="prelude-val">Ok</span>(import_map.cell())
@@ -332,10 +320,9 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>package_import_map_from_context(
-    package_name: StringVc,
+    package_name: <span class="kw-2">&amp;</span>str,
     context_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
-    <span class="kw">let </span>package_name = <span class="kw-2">&amp;*</span>package_name.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
     import_map.insert_exact_alias(
         <span class="macro">format!</span>(<span class="string">&quot;@vercel/turbopack/{}&quot;</span>, package_name),
@@ -447,15 +434,9 @@
                             </span>.join(<span class="string">&quot;postcss&quot;</span>);
 
                         <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss_package) = options.postcss_package {
-                            package_import_map_from_import_mapping(
-                                StringVc::cell(<span class="string">&quot;postcss&quot;</span>.to_owned()),
-                                postcss_package,
-                            )
+                            package_import_map_from_import_mapping(<span class="string">&quot;postcss&quot;</span>, postcss_package)
                         } <span class="kw">else </span>{
-                            package_import_map_from_context(
-                                StringVc::cell(<span class="string">&quot;postcss&quot;</span>.to_owned()),
-                                path,
-                            )
+                            package_import_map_from_context(<span class="string">&quot;postcss&quot;</span>, path)
                         };
                         <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
@@ -564,12 +545,9 @@
             <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(loader_runner_package) =
                 webpack_loaders_options.loader_runner_package
             {
-                package_import_map_from_import_mapping(
-                    StringVc::cell(<span class="string">&quot;loader-runner&quot;</span>.to_owned()),
-                    loader_runner_package,
-                )
+                package_import_map_from_import_mapping(<span class="string">&quot;loader-runner&quot;</span>, loader_runner_package)
             } <span class="kw">else </span>{
-                package_import_map_from_context(StringVc::cell(<span class="string">&quot;loader-runner&quot;</span>.to_owned()), path)
+                package_import_map_from_context(<span class="string">&quot;loader-runner&quot;</span>, path)
             };
             <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>webpack_loaders_options.extension_to_loaders.iter() {
                 rules.push(ModuleRule::new(

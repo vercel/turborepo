@@ -591,6 +591,20 @@
 <span id="591">591</span>
 <span id="592">592</span>
 <span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -612,17 +626,18 @@
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>dunce::canonicalize;
 <span class="kw">use </span>next_core::{
-    create_app_source, create_page_source, create_web_entry_source, env::load_env,
-    manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc, router_source::NextRouterContentSourceVc,
+    app_structure::find_app_structure, create_app_source, create_page_source,
+    create_web_entry_source, env::load_env, manifest::DevManifestContentSource,
+    next_config::load_next_config, next_image::NextImageContentSourceVc,
+    pages_structure::find_pages_structure, router_source::NextRouterContentSourceVc,
     source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
 <span class="kw">use </span>turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    CollectiblesSource, RawVc, StatsType, TransientInstance, TransientValue, TurboTasks,
-    TurboTasksBackendApi, Value,
+    CollectiblesSource, CompletionsVc, RawVc, StatsType, TransientInstance, TransientValue,
+    TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
@@ -920,7 +935,9 @@
         <span class="kw-2">&amp;</span>browserslist_query,
         next_config,
     );
+    <span class="kw">let </span>pages_structure = find_pages_structure(project_path, dev_server_root, next_config);
     <span class="kw">let </span>page_source = create_page_source(
+        pages_structure,
         project_path,
         execution_context,
         output_root.join(<span class="string">&quot;pages&quot;</span>),
@@ -930,7 +947,9 @@
         next_config,
         server_addr,
     );
+    <span class="kw">let </span>app_structure = find_app_structure(project_path, dev_server_root, next_config);
     <span class="kw">let </span>app_source = create_app_source(
+        app_structure,
         project_path,
         execution_context,
         output_root.join(<span class="string">&quot;app&quot;</span>),
@@ -972,9 +991,18 @@
         CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, page_source]).into(),
     )
     .into();
-    <span class="kw">let </span>router_source =
-        NextRouterContentSourceVc::new(main_source, execution_context, next_config, server_addr)
-            .into();
+    <span class="kw">let </span>router_source = NextRouterContentSourceVc::new(
+        main_source,
+        execution_context,
+        next_config,
+        server_addr,
+        CompletionsVc::cell(<span class="macro">vec!</span>[
+            app_structure.routes_changed(),
+            pages_structure.routes_changed(),
+        ])
+        .all(),
+    )
+    .into();
     <span class="kw">let </span>source = RouterContentSource {
         routes: <span class="macro">vec!</span>[
             (<span class="string">&quot;__turbopack__/&quot;</span>.to_string(), introspect),

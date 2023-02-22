@@ -47,6 +47,16 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
 </pre><pre class="rust"><code><span class="kw">use crate</span>::{<span class="self">self </span><span class="kw">as </span>turbo_tasks, RawVc};
 
 <span class="doccomment">/// Just an empty type, but it&#39;s never equal to itself.
@@ -63,10 +73,20 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CompletionVc {
+    <span class="doccomment">/// This will always be the same and never invalidates the reading task.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>immutable() -&gt; <span class="self">Self </span>{
+        CompletionVc::cell(Completion)
+    }
+}
+
 <span class="comment">// no #[turbo_tasks::value_impl] to inline new into the caller task
 // this ensures it&#39;s re-created on each execution
 </span><span class="kw">impl </span>CompletionVc {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// This will always be a new completion and invalidates the reading task.
+    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         CompletionVc::cell(Completion)
     }
 
