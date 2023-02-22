@@ -127,6 +127,48 @@
 <span id="127">127</span>
 <span id="128">128</span>
 <span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -134,9 +176,9 @@
     source_map::{GenerateSourceMap, GenerateSourceMapVc},
 };
 <span class="kw">use </span>turbopack_dev_server::source::{
+    wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-    ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc, ContentSourceVc,
-    ContentSourcesVc, GetContentSourceContent, NeededData,
+    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
 };
 <span class="kw">use </span>url::Url;
 
@@ -198,42 +240,19 @@
             <span class="prelude-val">Some</span>(p) =&gt; p,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };
-        <span class="kw">let </span>id = file
-            .query_pairs()
-            .find_map(|(k, v)| <span class="kw">if </span>k == <span class="string">&quot;id&quot; </span>{ <span class="prelude-val">Some</span>(v) } <span class="kw">else </span>{ <span class="prelude-val">None </span>});
-
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>result = this.asset_source.get(path, Default::default()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>content = <span class="kw">match </span><span class="kw-2">&amp;*</span>result {
-            ContentSourceResult::Result { get_content, .. } =&gt; {
-                get_content.get(Default::default()).<span class="kw">await</span><span class="question-mark">?
+        <span class="kw">let </span>id = file.query_pairs().find_map(|(k, v)| {
+            <span class="kw">if </span>k == <span class="string">&quot;id&quot; </span>{
+                <span class="prelude-val">Some</span>(v.into_owned())
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
             </span>}
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-        <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
-            ContentSourceContent::Static(static_content) =&gt; static_content.<span class="kw">await</span><span class="question-mark">?</span>.content,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
+        });
 
-        <span class="kw">let </span>gen = <span class="kw">match </span>GenerateSourceMapVc::resolve_from(file).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="prelude-val">Some</span>(f) =&gt; f,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-
-        <span class="kw">let </span>sm = <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
-            <span class="kw">let </span>section = gen.by_section(<span class="kw-2">&amp;</span>id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>section {
-                <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-            }
-        } <span class="kw">else </span>{
-            gen.generate_source_map()
-        };
-
-        <span class="kw">let </span>traced = SourceMapTraceVc::new(sm, line, column, frame.name);
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(traced.content().into()).into(),
-        ))
+        <span class="kw">let </span>wrapped = WrappedContentSourceVc::new(
+            self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
+            NextSourceMapTraceContentProcessorVc::new(id, line, column, frame.name).into(),
+        );
+        <span class="prelude-val">Ok</span>(wrapped.as_content_source().get(path, Default::default()))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -254,6 +273,71 @@
         StringVc::cell(
             <span class="string">&quot;supports tracing an error stack frame to its original source location&quot;</span>.to_string(),
         )
+    }
+}
+
+<span class="doccomment">/// Processes the eventual [ContentSourceContent] to transform it into a source
+/// map trace&#39;s JSON content.
+</span><span class="attr">#[turbo_tasks::value]
+</span><span class="kw">pub struct </span>NextSourceMapTraceContentProcessor {
+    <span class="doccomment">/// An optional section id to use when tracing the map. Specifying a
+    /// section id trace starting at that section. Otherwise, it traces starting
+    /// at the full source map.
+    </span>id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="doccomment">/// The generated line we are trying to trace.
+    </span>line: usize,
+
+    <span class="doccomment">/// The generated column we are trying to trace.
+    </span>column: usize,
+
+    <span class="doccomment">/// An optional name originally assigned to the stack frame, used as a
+    /// default if the trace finds an unnamed source map segment.
+    </span>name: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>NextSourceMapTraceContentProcessorVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>new(id: <span class="prelude-ty">Option</span>&lt;String&gt;, line: usize, column: usize, name: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        NextSourceMapTraceContentProcessor {
+            id,
+            line,
+            column,
+            name,
+        }
+        .cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ContentSourceProcessor <span class="kw">for </span>NextSourceMapTraceContentProcessor {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>process(<span class="kw-2">&amp;</span><span class="self">self</span>, content: ContentSourceContentVc) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+            ContentSourceContent::Static(static_content) =&gt; static_content.<span class="kw">await</span><span class="question-mark">?</span>.content,
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+        };
+
+        <span class="kw">let </span>gen = <span class="kw">match </span>GenerateSourceMapVc::resolve_from(file).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(f) =&gt; f,
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+        };
+
+        <span class="kw">let </span>sm = <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = <span class="kw-2">&amp;</span><span class="self">self</span>.id {
+            <span class="kw">let </span>section = gen.by_section(id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>section {
+                <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+            }
+        } <span class="kw">else </span>{
+            gen.generate_source_map()
+        };
+
+        <span class="kw">let </span>traced = SourceMapTraceVc::new(sm, <span class="self">self</span>.line, <span class="self">self</span>.column, <span class="self">self</span>.name.clone());
+        <span class="prelude-val">Ok</span>(ContentSourceContentVc::static_content(
+            traced.content().into(),
+        ))
     }
 }
 </code></pre></div>

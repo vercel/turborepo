@@ -96,10 +96,6 @@
 <span id="96">96</span>
 <span id="97">97</span>
 <span id="98">98</span>
-<span id="99">99</span>
-<span id="100">100</span>
-<span id="101">101</span>
-<span id="102">102</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>anyhow::Result;
@@ -107,8 +103,8 @@
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableVc};
 <span class="kw">use </span>turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
-    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc,
-    ContentSourceVc, NeededData, ProxyResult,
+    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    NeededData, ProxyResult,
 };
 
 <span class="doccomment">/// Serves, resizes, optimizes, and re-encodes images to be used with
@@ -167,11 +163,7 @@
         <span class="comment">// TODO: consume the assets, resize and reduce quality, re-encode into next-gen
         // formats.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = url.strip_prefix(<span class="string">&#39;/&#39;</span>) {
-            <span class="kw">let </span>asset = this.asset_source.get(path, Default::default());
-            <span class="kw">let </span>inner = asset.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span>ContentSourceResult::Result { .. } = <span class="kw-2">&amp;*</span>inner {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(asset);
-            }
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(this.asset_source.get(path, Default::default()));
         }
 
         <span class="comment">// TODO: This should be downloaded by the server, and resized, etc.

@@ -118,7 +118,32 @@
 <span id="118">118</span>
 <span id="119">119</span>
 <span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>mime::APPLICATION_JSON;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
@@ -128,11 +153,12 @@
 };
 
 <span class="kw">use super</span>::{
-    query::QueryValue, ContentSource, ContentSourceContent, ContentSourceContentVc,
-    ContentSourceData, ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResult,
-    ContentSourceResultVc, ContentSourceVc, NeededData,
+    query::QueryValue,
+    wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
+    ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
+    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    NeededData,
 };
-<span class="kw">use </span><span class="kw">crate</span>::source::GetContentSourceContent;
 
 <span class="doccomment">/// SourceMapContentSource allows us to serve full source maps, and individual
 /// sections of source maps, of any found asset in the graph without adding
@@ -186,43 +212,17 @@
         };
 
         <span class="kw">let </span>id = <span class="kw">match </span>query.get(<span class="string">&quot;id&quot;</span>) {
-            <span class="prelude-val">Some</span>(QueryValue::String(s)) =&gt; <span class="prelude-val">Some</span>(s),
+            <span class="prelude-val">Some</span>(QueryValue::String(s)) =&gt; <span class="prelude-val">Some</span>(s.clone()),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         };
 
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>result = this.asset_source.get(pathname, Default::default()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>content = <span class="kw">match </span><span class="kw-2">&amp;*</span>result {
-            ContentSourceResult::Result { get_content, .. } =&gt; {
-                get_content.get(Default::default()).<span class="kw">await</span><span class="question-mark">?
-            </span>}
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-        <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
-            ContentSourceContent::Static(static_content) =&gt; static_content.<span class="kw">await</span><span class="question-mark">?</span>.content,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-
-        <span class="kw">let </span>gen = <span class="kw">match </span>GenerateSourceMapVc::resolve_from(file).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="prelude-val">Some</span>(f) =&gt; f,
-            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
-
-        <span class="kw">let </span>sm = <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
-            <span class="kw">let </span>section = gen.by_section(id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>section {
-                <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-            }
-        } <span class="kw">else </span>{
-            gen.generate_source_map()
-        };
-        <span class="kw">let </span>content = sm.to_rope().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>asset = AssetContentVc::from(File::from(content));
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(asset.into()).into(),
-        ))
+        <span class="kw">let </span>wrapped = WrappedContentSourceVc::new(
+            self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
+            SourceMapContentProcessorVc::new(id).into(),
+        );
+        <span class="prelude-val">Ok</span>(wrapped
+            .as_content_source()
+            .get(pathname, Default::default()))
     }
 }
 
@@ -236,6 +236,54 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
         StringVc::cell(<span class="string">&quot;serves chunk and chunk item source maps&quot;</span>.to_string())
+    }
+}
+
+<span class="doccomment">/// Processes the eventual [ContentSourceContent] to transform it into a source
+/// map JSON content.
+</span><span class="attr">#[turbo_tasks::value]
+</span><span class="kw">pub struct </span>SourceMapContentProcessor {
+    <span class="doccomment">/// An optional section id to use when generating the map. Specifying a
+    /// section id will only output that section. Otherwise, it prints the
+    /// full source map.
+    </span>id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>SourceMapContentProcessorVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>new(id: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        SourceMapContentProcessor { id }.cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ContentSourceProcessor <span class="kw">for </span>SourceMapContentProcessor {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>process(<span class="kw-2">&amp;</span><span class="self">self</span>, content: ContentSourceContentVc) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+            ContentSourceContent::Static(static_content) =&gt; static_content.<span class="kw">await</span><span class="question-mark">?</span>.content,
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+        };
+
+        <span class="kw">let </span>gen = <span class="kw">match </span>GenerateSourceMapVc::resolve_from(file).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(f) =&gt; f,
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+        };
+
+        <span class="kw">let </span>sm = <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = <span class="kw-2">&amp;</span><span class="self">self</span>.id {
+            <span class="kw">let </span>section = gen.by_section(id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>section {
+                <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
+            }
+        } <span class="kw">else </span>{
+            gen.generate_source_map()
+        };
+
+        <span class="kw">let </span>content = sm.to_rope().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>asset = AssetContentVc::from(File::from(content).with_content_type(APPLICATION_JSON));
+        <span class="prelude-val">Ok</span>(ContentSourceContentVc::static_content(asset.into()))
     }
 }
 </code></pre></div>
