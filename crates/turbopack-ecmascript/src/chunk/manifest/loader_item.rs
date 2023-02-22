@@ -6,13 +6,14 @@ use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkingContext, ChunkingContextVc,
+        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkReferenceVc, ChunkingContext,
+        ChunkingContextVc,
     },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 
-use super::chunk_asset::{ManifestChunkAssetReference, ManifestChunkAssetVc};
+use super::chunk_asset::ManifestChunkAssetVc;
 use crate::{
     chunk::{
         item::{
@@ -62,19 +63,14 @@ impl ChunkItem for ManifestLoaderItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: ManifestLoaderItemVc) -> Result<AssetReferencesVc> {
-        let this = &*self_vc.await?;
+    async fn references(&self) -> Result<AssetReferencesVc> {
         Ok(AssetReferencesVc::cell(vec![
-            ManifestChunkAssetReference {
-                manifest: this.manifest,
-            }
-            .cell()
-            .into(),
+            ChunkReferenceVc::new(self.manifest.manifest_chunk()).into(),
             // This creates the chunk list corresponding to the manifest chunk's chunk group.
             ChunkListReferenceVc::new(
-                this.manifest.await?.chunking_context.output_root(),
-                this.manifest.chunk_group(),
-                this.manifest.chunk_list_path(),
+                self.manifest.await?.chunking_context.output_root(),
+                self.manifest.chunk_group(),
+                self.manifest.chunk_list_path(),
             )
             .into(),
         ]))

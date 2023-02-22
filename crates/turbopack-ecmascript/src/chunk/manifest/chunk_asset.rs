@@ -1,16 +1,14 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::primitives::StringVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         available_assets::AvailableAssetsVc, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
-        ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    reference::AssetReferencesVc,
 };
 
 use super::chunk_item::ManifestChunkItem;
@@ -166,37 +164,5 @@ impl EcmascriptChunkPlaceable for ManifestChunkAsset {
     #[turbo_tasks::function]
     fn get_exports(&self) -> EcmascriptExportsVc {
         EcmascriptExports::Value.cell()
-    }
-}
-
-#[turbo_tasks::value(shared)]
-pub(super) struct ManifestChunkAssetReference {
-    pub manifest: ManifestChunkAssetVc,
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for ManifestChunkAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "referenced manifest {}",
-            self.manifest.ident().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl AssetReference for ManifestChunkAssetReference {
-    #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(self.manifest.into()).cell()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ChunkableAssetReference for ManifestChunkAssetReference {
-    #[turbo_tasks::function]
-    fn chunking_type(&self) -> ChunkingTypeOptionVc {
-        ChunkingTypeOptionVc::cell(Some(ChunkingType::Separate))
     }
 }
