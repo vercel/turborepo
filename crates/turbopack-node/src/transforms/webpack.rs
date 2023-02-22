@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, Value};
+use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, File, FileContent, FileSystemPathVc,
 };
@@ -139,6 +139,7 @@ impl WebpackLoadersProcessedAssetVc {
         let ExecutionContext {
             project_root,
             intermediate_output_path,
+            env,
         } = *this.execution_context.await?;
         let source_content = this.source.content();
         let AssetContent::File(file) = *source_content.await? else {
@@ -161,6 +162,7 @@ impl WebpackLoadersProcessedAssetVc {
             project_root,
             webpack_loaders_executor,
             project_root,
+            env,
             this.source.path(),
             context,
             intermediate_output_path,
@@ -170,6 +172,7 @@ impl WebpackLoadersProcessedAssetVc {
                 JsonValueVc::cell(resource_path.into()),
                 JsonValueVc::cell(json!(*loaders)),
             ],
+            CompletionVc::immutable(),
             /* debug */ false,
         )
         .await?;

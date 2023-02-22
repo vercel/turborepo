@@ -2,13 +2,13 @@ use core::{default::Default, result::Result::Ok};
 use std::collections::HashMap;
 
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
-        PostCssTransformOptions,
+        PostCssTransformOptions, WebpackLoadersOptions,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -16,7 +16,8 @@ use turbopack::{
 };
 use turbopack_core::{
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
-    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
     resolve::{parse::RequestVc, pattern::Pattern},
@@ -28,7 +29,7 @@ use super::transforms::get_next_client_transforms_rules;
 use crate::{
     embed_js::attached_next_js_package_path,
     env::env_for_js,
-    next_build::get_postcss_package_mapping,
+    next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_config::NextConfigVc,
     next_import_map::{
@@ -38,6 +39,14 @@ use crate::{
     react_refresh::assert_can_resolve_react_refresh,
     util::foreign_code_context_condition,
 };
+
+pub fn next_client_defines() -> CompileTimeDefinesVc {
+    compile_time_defines!(
+        process.turbopack = true,
+        process.env.NODE_ENV = "development"
+    )
+    .cell()
+}
 
 #[turbo_tasks::function]
 pub fn get_client_compile_time_info(browserslist_query: &str) -> CompileTimeInfoVc {
@@ -54,6 +63,7 @@ pub fn get_client_compile_time_info(browserslist_query: &str) -> CompileTimeInfo
             )),
             Value::new(EnvironmentIntention::Client),
         ),
+        defines: next_client_defines(),
     }
     .cell()
 }
@@ -113,6 +123,16 @@ pub async fn get_client_module_options_context(
             .await?
             .is_found();
 
+    let options = &*next_config.webpack_loaders_options().await?;
+    let enable_webpack_loaders = WebpackLoadersOptions {
+        extension_to_loaders: options.clone(),
+        loader_runner_package: Some(get_external_next_compiled_package_mapping(StringVc::cell(
+            "loader-runner".to_owned(),
+        ))),
+        placeholder_for_future_extensions: (),
+    }
+    .clone_if();
+
     let module_options_context = ModuleOptionsContext {
         preset_env_versions: Some(env),
         execution_context: Some(execution_context),
@@ -131,7 +151,7 @@ pub async fn get_client_module_options_context(
             postcss_package: Some(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
-        enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
+        enable_webpack_loaders,
         enable_typescript_transform: true,
         rules: vec![(
             foreign_code_context_condition(next_config).await?,

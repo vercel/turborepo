@@ -3,11 +3,15 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
-    module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
+    module_options::{
+        ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions,
+        WebpackLoadersOptions,
+    },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
 use turbopack_core::{
-    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     environment::{
         EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc,
         ServerAddrVc,
@@ -20,7 +24,7 @@ use super::{
     resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
 };
 use crate::{
-    next_build::get_postcss_package_mapping,
+    next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
     util::foreign_code_context_condition,
@@ -134,6 +138,14 @@ pub async fn get_server_resolve_options_context(
     .cell())
 }
 
+pub fn next_server_defines() -> CompileTimeDefinesVc {
+    compile_time_defines!(
+        process.turbopack = true,
+        process.env.NODE_ENV = "development"
+    )
+    .cell()
+}
+
 #[turbo_tasks::function]
 pub fn get_server_compile_time_info(
     ty: Value<ServerContextType>,
@@ -156,6 +168,7 @@ pub fn get_server_compile_time_info(
                 ServerContextType::Middleware => Value::new(EnvironmentIntention::Middleware),
             },
         ),
+        defines: next_server_defines(),
     }
     .cell()
 }
@@ -173,7 +186,15 @@ pub async fn get_server_module_options_context(
         postcss_package: Some(get_postcss_package_mapping(project_path)),
         ..Default::default()
     });
-    let enable_webpack_loaders = next_config.webpack_loaders_options().await?.clone_if();
+    let options = &*next_config.webpack_loaders_options().await?;
+    let enable_webpack_loaders = WebpackLoadersOptions {
+        loader_runner_package: Some(get_external_next_compiled_package_mapping(StringVc::cell(
+            "loader-runner".to_owned(),
+        ))),
+        extension_to_loaders: options.clone(),
+        placeholder_for_future_extensions: (),
+    }
+    .clone_if();
 
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {

@@ -6,6 +6,7 @@ use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
+use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
     glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
@@ -46,9 +47,11 @@ pub async fn get_evaluate_pool(
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    additional_invalidation: CompletionVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
     let chunking_context = DevChunkingContextVc::builder(
@@ -100,6 +103,27 @@ pub async fn get_evaluate_pool(
     let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(path).await?) else {
         panic!("can only evaluate from a disk filesystem");
     };
+
+    let runtime_entries = {
+        let globals_module = EcmascriptModuleAssetVc::new(
+            SourceAssetVc::new(embed_file_path("globals.ts")).into(),
+            context,
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+            context.compile_time_info(),
+        )
+        .as_ecmascript_chunk_placeable();
+
+        let mut entries = vec![globals_module];
+        if let Some(other_entries) = runtime_entries {
+            for entry in &*other_entries.await? {
+                entries.push(*entry)
+            }
+        };
+
+        Some(EcmascriptChunkPlaceablesVc::cell(entries))
+    };
+
     let bootstrap = NodeJsBootstrapAsset {
         path,
         chunk_group: ChunkGroupVc::from_chunk(
@@ -110,10 +134,15 @@ pub async fn get_evaluate_pool(
     let pool = NodeJsPool::new(
         cwd,
         entrypoint,
-        HashMap::new(),
+        env.read_all()
+            .await?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     );
+    additional_invalidation.await?;
     Ok(pool.cell())
 }
 
@@ -145,20 +174,24 @@ pub async fn evaluate(
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context_path_for_issue: FileSystemPathVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
     args: Vec<JsonValueVc>,
+    additional_invalidation: CompletionVc,
     debug: bool,
 ) -> Result<JavaScriptValueVc> {
     let pool = get_evaluate_pool(
         context_path,
         module_asset,
         cwd,
+        env,
         context,
         intermediate_output_path,
         runtime_entries,
+        additional_invalidation,
         debug,
     )
     .await?;

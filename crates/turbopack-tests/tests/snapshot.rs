@@ -28,6 +28,7 @@ use turbopack::{
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkableAsset, ChunkableAssetVc},
+    compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
@@ -172,7 +173,17 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         )),
         Value::new(EnvironmentIntention::Client),
     );
-    let compile_time_info = CompileTimeInfo { environment: env }.cell();
+    let compile_time_info = CompileTimeInfo {
+        environment: env,
+        defines: compile_time_defines!(
+            process.env.NODE_ENV = "development",
+            DEFINED_VALUE = "value",
+            DEFINED_TRUE = true,
+            A.VERY.LONG.DEFINED.VALUE = "value",
+        )
+        .cell(),
+    }
+    .cell();
 
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
