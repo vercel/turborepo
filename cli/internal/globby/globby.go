@@ -133,8 +133,6 @@ func globWalkFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns 
 	includePattern = filepath.ToSlash(includePattern)
 	excludePattern = filepath.ToSlash(excludePattern)
 
-	fmt.Printf("[debug] includePattern %#v\n")
-
 	err := doublestar.GlobWalk(fsys, includePattern, func(path string, dirEntry iofs.DirEntry) error {
 		if !includeDirs && dirEntry.IsDir() {
 			return nil
