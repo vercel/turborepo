@@ -64,16 +64,10 @@ func GetHashableEnvPairs(envKeys []string, envPrefixes []string) []string {
 	// convert to set to eliminate duplicates, then cast back to slice to sort for stable hashing
 	uniqueHashableEnvPairs := make(util.Set, len(hashableEnvFromKeys)+len(hashableEnvFromPrefixes))
 	for _, pair := range hashableEnvFromKeys {
-		value := strings.Split(pair, "=")[1]
-		if value != "" {
-			uniqueHashableEnvPairs.Add(pair)
-		}
+		uniqueHashableEnvPairs.Add(pair)
 	}
 	for _, pair := range hashableEnvFromPrefixes {
-		value := strings.Split(pair, "=")[1]
-		if value != "" {
-			uniqueHashableEnvPairs.Add(pair)
-		}
+		uniqueHashableEnvPairs.Add(pair)
 	}
 
 	allHashableEnvPairs := uniqueHashableEnvPairs.UnsafeListOfStrings()
