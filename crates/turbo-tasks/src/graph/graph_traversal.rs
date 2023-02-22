@@ -128,7 +128,7 @@ where
                 let futures_pin = unsafe { Pin::new_unchecked(&mut running.futures) };
                 match futures_pin.poll_next(cx) {
                     std::task::Poll::Ready(Some((parent_handle, Ok(children)))) => {
-                        match running.visit.join_children(children) {
+                        match running.visit.map_children(children) {
                             GraphTraversalControlFlow::Continue(children) => {
                                 for item in children {
                                     let (child_handle, item) =

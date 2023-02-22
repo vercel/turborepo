@@ -11,7 +11,7 @@ pub trait Visit<T, A = !, Impl = ()> {
     type Future: Future<Output = Result<Self::Children>>;
 
     fn get_children(&mut self, item: &T) -> GraphTraversalControlFlow<Self::Future, A>;
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::MapChildren, A>;
@@ -38,7 +38,7 @@ where
         GraphTraversalControlFlow::Continue((self)(item))
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children> {
@@ -65,7 +65,7 @@ where
         }
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children> {
@@ -90,7 +90,7 @@ where
         (self)(item)
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children, A> {
@@ -115,7 +115,7 @@ where
         GraphTraversalControlFlow::Continue((self)(item.clone()))
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children, !> {
@@ -143,7 +143,7 @@ where
         }
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children, !> {
@@ -168,7 +168,7 @@ where
         (self)(item.clone())
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::Children, A> {
@@ -217,10 +217,10 @@ where
         }
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::MapChildren, A> {
-        self.visit.join_children(children)
+        self.visit.map_children(children)
     }
 }

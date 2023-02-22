@@ -587,7 +587,7 @@ where
         ))
     }
 
-    fn join_children(
+    fn map_children(
         &mut self,
         children: Self::Children,
     ) -> GraphTraversalControlFlow<Self::MapChildren, ()> {
@@ -606,7 +606,11 @@ where
             }
         }
 
+        // Make sure the chunk doesn't become too large.
+        // This will hurt performance in many aspects.
         if !self.context.split && self.chunk_items_count >= MAX_CHUNK_ITEMS_COUNT {
+            // Chunk is too large, cancel this algorithm and restart with splitting from the
+            // start.
             return GraphTraversalControlFlow::Abort(());
         }
 
@@ -625,7 +629,6 @@ where
 {
     let mut processed_assets: HashSet<(ChunkingType, AssetVc)> = HashSet::default();
 
-    // TODO(alexkirsz) We shouldn't need a clone here.
     let additional_entries = if let Some(additional_entries) = additional_entries {
         additional_entries.await?.clone_value().into_iter()
     } else {
@@ -633,7 +636,6 @@ where
     };
 
     let entries = [entry].into_iter().chain(additional_entries);
-    // TODO(alexkirsz) We shouldn't need a clone here.
     for entry in entries.clone() {
         processed_assets.insert((ChunkingType::Placed, entry));
     }
