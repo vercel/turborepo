@@ -5,7 +5,7 @@ use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
-    Value,
+    CompletionVc, Value,
 };
 use turbo_tasks_env::EnvMapVc;
 use turbo_tasks_fs::json::parse_json_rope_with_source_context;
@@ -584,6 +584,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         intermediate_output_path,
         runtime_entries,
         vec![],
+        CompletionVc::immutable(),
         /* debug */ false,
     )
     .await?;
