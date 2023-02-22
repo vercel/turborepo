@@ -131,7 +131,7 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
 
         let mut client_chunks = Vec::new();
         for asset_path in asset_paths {
-            if let Some(path) = server_root.get_path_to(&*asset_path) {
+            if let Some(path) = server_root.get_path_to(&asset_path) {
                 client_chunks.push(path.to_string());
             }
         }
