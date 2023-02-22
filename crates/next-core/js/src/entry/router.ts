@@ -5,19 +5,12 @@ import { join } from "node:path";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
 import { toPairs } from "@vercel/turbopack-next/internal/headers";
 import { makeResolver } from "next/dist/server/router.js";
-import DevServer from "next/dist/server/dev/next-dev-server";
 import loadConfig from "next/dist/server/config";
 import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
 
 import "next/dist/server/node-polyfill-fetch.js";
 
 import middlewareChunkGroup from "MIDDLEWARE_CHUNK_GROUP";
-
-// @ts-expect-error hack
-DevServer.prototype.startWatcher = function () {
-  // @ts-expect-error protected
-  this.matchers.reload();
-};
 
 type RouterRequest = {
   method: string;
