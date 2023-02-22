@@ -255,7 +255,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	globalHash, err := gh.CalculateGlobalHash()
+	globalHash, err := gh.calculateGlobalHash()
 	if err != nil {
 		return fmt.Errorf("error building global hash: %v", err)
 	}

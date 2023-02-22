@@ -40,7 +40,7 @@ type GlobalHashInputs struct {
 	pipeline             fs.PristinePipeline
 }
 
-func (th *GlobalTracker) CalculateGlobalHash() (string, error) {
+func (th *GlobalTracker) calculateGlobalHash() (string, error) {
 	globalHash, err := fs.HashObject(&GlobalHashInputs{
 		globalFileHashMap:    th.GlobalFileHashMap,
 		rootExternalDepsHash: th.RootExternalDepsHash,
