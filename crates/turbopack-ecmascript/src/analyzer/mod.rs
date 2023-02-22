@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     fmt::Display,
     future::Future,
@@ -18,10 +19,12 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
+use turbopack_core::compile_time_info::CompileTimeDefineValue;
 use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
+use crate::utils::stringify_js;
 
 pub mod builtin;
 pub mod graph;
@@ -84,11 +87,73 @@ impl PartialEq for ConstantNumber {
 
 impl Eq for ConstantNumber {}
 
+#[derive(Debug, Clone)]
+pub enum ConstantString {
+    Word(JsWord),
+    Atom(Atom),
+}
+
+impl ConstantString {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Word(s) => s,
+            Self::Atom(s) => s,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.as_str().is_empty()
+    }
+}
+
+impl PartialEq for ConstantString {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for ConstantString {}
+
+impl Hash for ConstantString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
+    }
+}
+
+impl Display for ConstantString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+impl From<JsWord> for ConstantString {
+    fn from(v: JsWord) -> Self {
+        ConstantString::Word(v)
+    }
+}
+
+impl From<Atom> for ConstantString {
+    fn from(v: Atom) -> Self {
+        ConstantString::Atom(v)
+    }
+}
+
+impl From<&'static str> for ConstantString {
+    fn from(v: &'static str) -> Self {
+        ConstantString::Word(v.into())
+    }
+}
+
+impl From<String> for ConstantString {
+    fn from(v: String) -> Self {
+        ConstantString::Atom(v.into())
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum ConstantValue {
     Undefined,
-    StrWord(JsWord),
-    StrAtom(Atom),
+    Str(ConstantString),
     Num(ConstantNumber),
     True,
     False,
@@ -100,8 +165,7 @@ pub enum ConstantValue {
 impl ConstantValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            Self::StrWord(s) => Some(s),
-            Self::StrAtom(s) => Some(s),
+            Self::Str(s) => Some(s.as_str()),
             _ => None,
         }
     }
@@ -110,8 +174,7 @@ impl ConstantValue {
         match self {
             Self::Undefined | Self::False | Self::Null => false,
             Self::True | Self::Regex(..) => true,
-            Self::StrWord(s) => !s.is_empty(),
-            Self::StrAtom(s) => !s.is_empty(),
+            Self::Str(s) => !s.is_empty(),
             Self::Num(ConstantNumber(n)) => *n != 0.0,
             Self::BigInt(n) => !n.is_zero(),
         }
@@ -120,8 +183,7 @@ impl ConstantValue {
     pub fn is_nullish(&self) -> bool {
         match self {
             Self::Undefined | Self::Null => true,
-            Self::StrWord(..)
-            | Self::StrAtom(..)
+            Self::Str(..)
             | Self::Num(..)
             | Self::True
             | Self::False
@@ -132,10 +194,13 @@ impl ConstantValue {
 
     pub fn is_empty_string(&self) -> bool {
         match self {
-            Self::StrWord(s) => s.is_empty(),
-            Self::StrAtom(s) => s.is_empty(),
+            Self::Str(s) => s.is_empty(),
             _ => false,
         }
+    }
+
+    pub fn is_value_type(&self) -> bool {
+        !matches!(self, Self::Regex(..))
     }
 }
 
@@ -145,10 +210,25 @@ impl Default for ConstantValue {
     }
 }
 
+impl From<bool> for ConstantValue {
+    fn from(v: bool) -> Self {
+        match v {
+            true => ConstantValue::True,
+            false => ConstantValue::False,
+        }
+    }
+}
+
+impl From<&'_ str> for ConstantValue {
+    fn from(v: &str) -> Self {
+        ConstantValue::Str(ConstantString::Word(v.into()))
+    }
+}
+
 impl From<Lit> for ConstantValue {
     fn from(v: Lit) -> Self {
         match v {
-            Lit::Str(v) => ConstantValue::StrWord(v.value),
+            Lit::Str(v) => ConstantValue::Str(ConstantString::Word(v.value)),
             Lit::Bool(v) => {
                 if v.value {
                     ConstantValue::True
@@ -160,7 +240,7 @@ impl From<Lit> for ConstantValue {
             Lit::Num(v) => ConstantValue::Num(ConstantNumber(v.value)),
             Lit::BigInt(v) => ConstantValue::BigInt(*v.value),
             Lit::Regex(v) => ConstantValue::Regex(v.exp, v.flags),
-            Lit::JSXText(v) => ConstantValue::StrAtom(v.value),
+            Lit::JSXText(v) => ConstantValue::Str(ConstantString::Atom(v.value)),
         }
     }
 }
@@ -169,8 +249,7 @@ impl Display for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConstantValue::Undefined => write!(f, "undefined"),
-            ConstantValue::StrWord(str) => write!(f, "\"{str}\""),
-            ConstantValue::StrAtom(str) => write!(f, "\"{str}\""),
+            ConstantValue::Str(str) => f.write_str(&stringify_js(str.as_str())),
             ConstantValue::True => write!(f, "true"),
             ConstantValue::False => write!(f, "false"),
             ConstantValue::Null => write!(f, "null"),
@@ -187,7 +266,7 @@ pub struct ModuleValue {
     pub annotations: ImportAnnotations,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum LogicalOperator {
     And,
     Or,
@@ -209,6 +288,40 @@ impl LogicalOperator {
             LogicalOperator::NullishCoalescing => "?? ",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum BinaryOperator {
+    Equal,
+    NotEqual,
+    StrictEqual,
+    StrictNotEqual,
+}
+
+impl BinaryOperator {
+    fn joiner(&self) -> &'static str {
+        match self {
+            BinaryOperator::Equal => " == ",
+            BinaryOperator::NotEqual => " != ",
+            BinaryOperator::StrictEqual => " === ",
+            BinaryOperator::StrictNotEqual => " !== ",
+        }
+    }
+
+    fn positive_op(&self) -> (PositiveBinaryOperator, bool) {
+        match self {
+            BinaryOperator::Equal => (PositiveBinaryOperator::Equal, false),
+            BinaryOperator::NotEqual => (PositiveBinaryOperator::Equal, true),
+            BinaryOperator::StrictEqual => (PositiveBinaryOperator::StrictEqual, false),
+            BinaryOperator::StrictNotEqual => (PositiveBinaryOperator::StrictEqual, true),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum PositiveBinaryOperator {
+    Equal,
+    StrictEqual,
 }
 
 /// The four categories of [JsValue]s.
@@ -297,6 +410,8 @@ pub enum JsValue {
     Not(usize, Box<JsValue>),
     /// Logical operator chain e. g. `expr && expr`
     Logical(usize, LogicalOperator, Vec<JsValue>),
+    /// Binary expression e. g. `expr == expr`
+    Binary(usize, Box<JsValue>, BinaryOperator, Box<JsValue>),
     /// A function call without a this context.
     /// `(total_node_count, callee, args)`
     Call(usize, Box<JsValue>, Vec<JsValue>),
@@ -323,19 +438,19 @@ pub enum JsValue {
 
 impl From<&'_ str> for JsValue {
     fn from(v: &str) -> Self {
-        ConstantValue::StrWord(v.into()).into()
+        ConstantValue::Str(ConstantString::Word(v.into())).into()
     }
 }
 
 impl From<JsWord> for JsValue {
     fn from(v: JsWord) -> Self {
-        ConstantValue::StrWord(v).into()
+        ConstantValue::Str(ConstantString::Word(v)).into()
     }
 }
 
 impl From<Atom> for JsValue {
     fn from(v: Atom) -> Self {
-        ConstantValue::StrAtom(v).into()
+        ConstantValue::Str(ConstantString::Atom(v)).into()
     }
 }
 
@@ -353,19 +468,28 @@ impl From<f64> for JsValue {
 
 impl From<String> for JsValue {
     fn from(v: String) -> Self {
-        ConstantValue::StrWord(v.into()).into()
+        ConstantValue::Str(v.into()).into()
     }
 }
 
 impl From<swc_core::ecma::ast::Str> for JsValue {
     fn from(v: swc_core::ecma::ast::Str) -> Self {
-        ConstantValue::StrWord(v.value).into()
+        ConstantValue::Str(v.value.into()).into()
     }
 }
 
 impl From<ConstantValue> for JsValue {
     fn from(v: ConstantValue) -> Self {
         JsValue::Constant(v)
+    }
+}
+
+impl From<&CompileTimeDefineValue> for JsValue {
+    fn from(v: &CompileTimeDefineValue) -> Self {
+        match v {
+            CompileTimeDefineValue::String(s) => JsValue::Constant(s.as_str().into()),
+            CompileTimeDefineValue::Bool(b) => JsValue::Constant((*b).into()),
+        }
     }
 }
 
@@ -446,6 +570,7 @@ impl Display for JsValue {
                     .collect::<Vec<_>>()
                     .join(op.joiner())
             ),
+            JsValue::Binary(_, a, op, b) => write!(f, "({}{}{})", a, op.joiner(), b),
             JsValue::Call(_, callee, list) => write!(
                 f,
                 "{}({})",
@@ -541,14 +666,15 @@ impl JsValue {
             JsValue::Array { .. }
             | JsValue::Object { .. }
             | JsValue::Alternatives(..)
-            | JsValue::Function(..) => JsValueMetaKind::Nested,
+            | JsValue::Function(..)
+            | JsValue::Member(..) => JsValueMetaKind::Nested,
             JsValue::Concat(..)
             | JsValue::Add(..)
             | JsValue::Not(..)
             | JsValue::Logical(..)
+            | JsValue::Binary(..)
             | JsValue::Call(..)
-            | JsValue::MemberCall(..)
-            | JsValue::Member(..) => JsValueMetaKind::Operation,
+            | JsValue::MemberCall(..) => JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
             | JsValue::FreeVar(..)
@@ -584,6 +710,42 @@ impl JsValue {
             1 + total_nodes(&list),
             LogicalOperator::NullishCoalescing,
             list,
+        )
+    }
+
+    pub fn equal(a: JsValue, b: JsValue) -> Self {
+        Self::Binary(
+            1 + a.total_nodes() + b.total_nodes(),
+            box a,
+            BinaryOperator::Equal,
+            box b,
+        )
+    }
+
+    pub fn not_equal(a: JsValue, b: JsValue) -> Self {
+        Self::Binary(
+            1 + a.total_nodes() + b.total_nodes(),
+            box a,
+            BinaryOperator::NotEqual,
+            box b,
+        )
+    }
+
+    pub fn strict_equal(a: JsValue, b: JsValue) -> Self {
+        Self::Binary(
+            1 + a.total_nodes() + b.total_nodes(),
+            box a,
+            BinaryOperator::StrictEqual,
+            box b,
+        )
+    }
+
+    pub fn strict_not_equal(a: JsValue, b: JsValue) -> Self {
+        Self::Binary(
+            1 + a.total_nodes() + b.total_nodes(),
+            box a,
+            BinaryOperator::StrictNotEqual,
+            box b,
         )
     }
 
@@ -677,6 +839,7 @@ impl JsValue {
             | JsValue::Add(c, _)
             | JsValue::Not(c, _)
             | JsValue::Logical(c, _, _)
+            | JsValue::Binary(c, _, _, _)
             | JsValue::Call(c, _, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
@@ -708,6 +871,9 @@ impl JsValue {
                 *c = 1 + total_nodes(list);
             }
 
+            JsValue::Binary(c, a, _, b) => {
+                *c = 1 + a.total_nodes() + b.total_nodes();
+            }
             JsValue::Not(c, r) => {
                 *c = 1 + r.total_nodes();
             }
@@ -786,6 +952,14 @@ impl JsValue {
                 }
                 JsValue::Not(_, r) => {
                     r.make_unknown_without_content("node limit reached");
+                }
+                JsValue::Binary(_, a, _, b) => {
+                    if a.total_nodes() > b.total_nodes() {
+                        a.make_unknown_without_content("node limit reached");
+                    } else {
+                        b.make_unknown_without_content("node limit reached");
+                    }
+                    self.update_total_nodes();
                 }
                 JsValue::Object { parts, .. } => {
                     make_max_unknown(parts.iter_mut().flat_map(|v| match v {
@@ -1013,6 +1187,12 @@ impl JsValue {
                     op.multi_line_joiner()
                 )
             ),
+            JsValue::Binary(_, a, op, b) => format!(
+                "({}{}{})",
+                a.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+                op.joiner(),
+                b.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+            ),
             JsValue::Not(_, value) => format!(
                 "!({})",
                 value.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
@@ -1126,6 +1306,10 @@ impl JsValue {
                     WellKnownObjectKind::NodeProcess => (
                         "process",
                         "The Node.js process module: https://nodejs.org/api/process.html",
+                    ),
+                    WellKnownObjectKind::NodeProcessEnv => (
+                        "process.env",
+                        "The Node.js process.env property: https://nodejs.org/api/process.html#processenv",
                     ),
                     WellKnownObjectKind::NodePreGyp => (
                         "@mapbox/node-pre-gyp",
@@ -1308,6 +1492,77 @@ impl JsValue {
     }
 }
 
+// Defineable name management
+impl JsValue {
+    pub fn get_defineable_name_len(&self) -> Option<usize> {
+        match self {
+            JsValue::FreeVar(_) => Some(1),
+            JsValue::Member(_, obj, prop) if prop.as_str().is_some() => {
+                Some(obj.get_defineable_name_len()? + 1)
+            }
+            JsValue::WellKnownObject(obj) => obj.as_define_name().map(|d| d.len()),
+            JsValue::WellKnownFunction(func) => func.as_define_name().map(|d| d.len()),
+            JsValue::MemberCall(_, callee, prop, args)
+                if args.is_empty() && prop.as_str().is_some() =>
+            {
+                Some(callee.get_defineable_name_len()? + 1)
+            }
+
+            _ => None,
+        }
+    }
+
+    pub fn iter_defineable_name_rev(&self) -> DefineableNameIter<'_> {
+        DefineableNameIter {
+            next: Some(self),
+            index: 0,
+        }
+    }
+}
+
+pub struct DefineableNameIter<'a> {
+    next: Option<&'a JsValue>,
+    index: usize,
+}
+
+impl<'a> Iterator for DefineableNameIter<'a> {
+    type Item = Cow<'a, str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let value = self.next.take()?;
+        Some(match value {
+            JsValue::FreeVar(kind) => kind.as_str().into(),
+            JsValue::Member(_, obj, prop) => {
+                self.next = Some(obj);
+                prop.as_str()?.into()
+            }
+            JsValue::WellKnownObject(obj) => {
+                let name = obj.as_define_name()?;
+                let i = self.index;
+                self.index += 1;
+                if self.index < name.len() {
+                    self.next = Some(value);
+                }
+                name[name.len() - i - 1].into()
+            }
+            JsValue::WellKnownFunction(func) => {
+                let name = func.as_define_name()?;
+                let i = self.index;
+                self.index += 1;
+                if self.index < name.len() {
+                    self.next = Some(value);
+                }
+                name[name.len() - i - 1].into()
+            }
+            JsValue::MemberCall(_, callee, prop, args) if args.is_empty() => {
+                self.next = Some(callee);
+                format!("{}()", prop.as_str()?).into()
+            }
+            _ => return None,
+        })
+    }
+}
+
 // Compile-time information gathering
 impl JsValue {
     /// Returns the constant string if the value represents a constant string.
@@ -1336,9 +1591,54 @@ impl JsValue {
                 LogicalOperator::And => all_if_known(list, JsValue::is_truthy),
                 LogicalOperator::Or => any_if_known(list, JsValue::is_truthy),
                 LogicalOperator::NullishCoalescing => {
-                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_truthy)
+                    shortcircuit_if_known(list, JsValue::is_not_nullish, JsValue::is_truthy)
                 }
             },
+            JsValue::Binary(_, box a, op, box b) => {
+                let (positive_op, negate) = op.positive_op();
+                match (positive_op, a, b) {
+                    (
+                        PositiveBinaryOperator::StrictEqual,
+                        JsValue::Constant(a),
+                        JsValue::Constant(b),
+                    ) if a.is_value_type() => Some(a == b),
+                    (
+                        PositiveBinaryOperator::StrictEqual,
+                        JsValue::Constant(a),
+                        JsValue::Constant(b),
+                    ) if a.is_value_type() => {
+                        let same_type = {
+                            use ConstantValue::*;
+                            matches!(
+                                (a, b),
+                                (Num(_), Num(_))
+                                    | (Str(_), Str(_))
+                                    | (BigInt(_), BigInt(_))
+                                    | (True | False, True | False)
+                                    | (Undefined, Undefined)
+                                    | (Null, Null)
+                            )
+                        };
+                        if same_type {
+                            Some(a == b)
+                        } else {
+                            None
+                        }
+                    }
+                    (
+                        PositiveBinaryOperator::Equal,
+                        JsValue::Constant(ConstantValue::Str(a)),
+                        JsValue::Constant(ConstantValue::Str(b)),
+                    ) => Some(a == b),
+                    (
+                        PositiveBinaryOperator::Equal,
+                        JsValue::Constant(ConstantValue::Num(a)),
+                        JsValue::Constant(ConstantValue::Num(b)),
+                    ) => Some(a == b),
+                    _ => None,
+                }
+                .map(|x| x ^ negate)
+            }
             _ => None,
         }
     }
@@ -1361,14 +1661,15 @@ impl JsValue {
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Not(..)
+            | JsValue::Binary(..)
             | JsValue::Function(..) => Some(false),
             JsValue::Alternatives(_, list) => merge_if_known(list, JsValue::is_nullish),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
-                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_nullish)
+                    shortcircuit_if_known(list, JsValue::is_truthy, JsValue::is_nullish)
                 }
                 LogicalOperator::Or => {
-                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_nullish)
+                    shortcircuit_if_known(list, JsValue::is_falsy, JsValue::is_nullish)
                 }
                 LogicalOperator::NullishCoalescing => all_if_known(list, JsValue::is_nullish),
             },
@@ -1393,15 +1694,18 @@ impl JsValue {
             JsValue::Alternatives(_, list) => merge_if_known(list, JsValue::is_empty_string),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
-                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_empty_string)
+                    shortcircuit_if_known(list, JsValue::is_truthy, JsValue::is_empty_string)
                 }
                 LogicalOperator::Or => {
-                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_empty_string)
+                    shortcircuit_if_known(list, JsValue::is_falsy, JsValue::is_empty_string)
                 }
                 LogicalOperator::NullishCoalescing => {
-                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_empty_string)
+                    shortcircuit_if_known(list, JsValue::is_not_nullish, JsValue::is_empty_string)
                 }
             },
+            // Booleans are not empty strings
+            JsValue::Not(..) | JsValue::Binary(..) => Some(false),
+            // Objects are not empty strings
             JsValue::Url(..)
             | JsValue::Array { .. }
             | JsValue::Object { .. }
@@ -1426,10 +1730,9 @@ impl JsValue {
     /// don't know. Returns Some if we know if or if not the value is a string.
     pub fn is_string(&self) -> Option<bool> {
         match self {
-            JsValue::Constant(ConstantValue::StrWord(..))
-            | JsValue::Constant(ConstantValue::StrAtom(..))
-            | JsValue::Concat(..) => Some(true),
+            JsValue::Constant(ConstantValue::Str(..)) | JsValue::Concat(..) => Some(true),
 
+            // Objects are not strings
             JsValue::Constant(..)
             | JsValue::Array { .. }
             | JsValue::Object { .. }
@@ -1439,17 +1742,19 @@ impl JsValue {
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_) => Some(false),
 
-            JsValue::Not(..) => Some(false),
+            // Booleans are not strings
+            JsValue::Not(..) | JsValue::Binary(..) => Some(false),
+
             JsValue::Add(_, list) => any_if_known(list, JsValue::is_string),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
-                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_string)
+                    shortcircuit_if_known(list, JsValue::is_truthy, JsValue::is_string)
                 }
                 LogicalOperator::Or => {
-                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_string)
+                    shortcircuit_if_known(list, JsValue::is_falsy, JsValue::is_string)
                 }
                 LogicalOperator::NullishCoalescing => {
-                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_string)
+                    shortcircuit_if_known(list, JsValue::is_not_nullish, JsValue::is_string)
                 }
             },
 
@@ -1598,7 +1903,7 @@ fn any_if_known<T: Copy>(
 
 /// Selects the first element of the list where `use_item` is compile-time true.
 /// For this element returns the result of `item_value`. Otherwise returns None.
-fn shortcircut_if_known<T: Copy>(
+fn shortcircuit_if_known<T: Copy>(
     list: impl IntoIterator<Item = T>,
     use_item: impl Fn(T) -> Option<bool>,
     item_value: impl FnOnce(T) -> Option<bool>,
@@ -1710,6 +2015,14 @@ macro_rules! for_each_children_async {
 
                 $value.update_total_nodes();
                 ($value, modified)
+            }
+            JsValue::Binary(_, box a, _, box b) => {
+                let (v, m1) = $visit_fn(take(a), $($args),+).await?;
+                *a = v;
+                let (v, m2) = $visit_fn(take(b), $($args),+).await?;
+                *b = v;
+                $value.update_total_nodes();
+                ($value, m1 || m2)
             }
             JsValue::Member(_, box obj, box prop) => {
                 let (v, m1) = $visit_fn(take(obj), $($args),+).await?;
@@ -1960,6 +2273,15 @@ impl JsValue {
                 }
                 modified
             }
+            JsValue::Binary(_, a, _, b) => {
+                let m1 = visitor(a);
+                let m2 = visitor(b);
+                let modified = m1 || m2;
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
+            }
             JsValue::Member(_, obj, prop) => {
                 let m1 = visitor(obj);
                 let m2 = visitor(prop);
@@ -2110,6 +2432,10 @@ impl JsValue {
             JsValue::Member(_, obj, prop) => {
                 visitor(obj);
                 visitor(prop);
+            }
+            JsValue::Binary(_, a, _, b) => {
+                visitor(a);
+                visitor(b);
             }
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
@@ -2358,6 +2684,9 @@ impl JsValue {
             (JsValue::Member(lc, lo, lp), JsValue::Member(rc, ro, rp)) => {
                 lc == rc && lo.similar(ro, depth - 1) && lp.similar(rp, depth - 1)
             }
+            (JsValue::Binary(lc, la, lo, lb), JsValue::Binary(rc, ra, ro, rb)) => {
+                lc == rc && lo == ro && la.similar(ra, depth - 1) && lb.similar(rb, depth - 1)
+            }
             (
                 JsValue::Module(ModuleValue {
                     module: l,
@@ -2382,6 +2711,7 @@ impl JsValue {
     /// Hashes the value up to the given depth.
     fn similar_hash<H: std::hash::Hasher>(&self, state: &mut H, depth: usize) {
         if depth == 0 {
+            self.total_nodes().hash(state);
             return;
         }
 
@@ -2433,6 +2763,11 @@ impl JsValue {
             JsValue::Member(_, o, p) => {
                 o.similar_hash(state, depth - 1);
                 p.similar_hash(state, depth - 1);
+            }
+            JsValue::Binary(_, a, o, b) => {
+                a.similar_hash(state, depth - 1);
+                o.hash(state);
+                b.similar_hash(state, depth - 1);
             }
             JsValue::Module(ModuleValue {
                 module: v,
@@ -2504,6 +2839,21 @@ pub enum FreeVarKind {
     Other(JsWord),
 }
 
+impl FreeVarKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            FreeVarKind::Object => "Object",
+            FreeVarKind::Dirname => "__dirname",
+            FreeVarKind::Filename => "__filename",
+            FreeVarKind::Require => "require",
+            FreeVarKind::Define => "define",
+            FreeVarKind::Import => "import",
+            FreeVarKind::NodeProcess => "process",
+            FreeVarKind::Other(v) => v.as_ref(),
+        }
+    }
+}
+
 /// A list of well-known objects that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownObjectKind {
@@ -2520,10 +2870,28 @@ pub enum WellKnownObjectKind {
     OsModule,
     OsModuleDefault,
     NodeProcess,
+    NodeProcessEnv,
     NodePreGyp,
     NodeExpressApp,
     NodeProtobufLoader,
     RequireCache,
+}
+
+impl WellKnownObjectKind {
+    pub fn as_define_name(&self) -> Option<&[&str]> {
+        match self {
+            Self::GlobalObject => Some(&["global"]),
+            Self::PathModule => Some(&["path"]),
+            Self::FsModule => Some(&["fs"]),
+            Self::UrlModule => Some(&["url"]),
+            Self::ChildProcess => Some(&["child_process"]),
+            Self::OsModule => Some(&["os"]),
+            Self::NodeProcess => Some(&["process"]),
+            Self::NodeProcessEnv => Some(&["process", "env"]),
+            Self::RequireCache => Some(&["require", "cache"]),
+            _ => None,
+        }
+    }
 }
 
 /// A list of well-known functions that have special meaning in the analysis.
@@ -2555,6 +2923,18 @@ pub enum WellKnownFunctionKind {
     NodeStrongGlobalizeSetRootDir,
     NodeResolveFrom,
     NodeProtobufLoad,
+}
+
+impl WellKnownFunctionKind {
+    pub fn as_define_name(&self) -> Option<&[&str]> {
+        match self {
+            Self::Import => Some(&["import"]),
+            Self::Require => Some(&["require"]),
+            Self::RequireResolve => Some(&["require", "resolve"]),
+            Self::Define => Some(&["define"]),
+            _ => None,
+        }
+    }
 }
 
 fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
@@ -2642,7 +3022,7 @@ mod tests {
     };
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
-        compile_time_info::CompileTimeInfo,
+        compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -2922,6 +3302,7 @@ mod tests {
                     )),
                     Value::new(EnvironmentIntention::ServerRendering),
                 ),
+                defines: CompileTimeDefinesVc::empty(),
             }
             .cell();
             link(
