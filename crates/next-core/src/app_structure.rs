@@ -17,6 +17,7 @@ use crate::{
     next_config::NextConfigVc,
 };
 
+/// A final route in the app directory.
 #[turbo_tasks::value]
 pub enum AppStructureItem {
     Page {
@@ -39,6 +40,7 @@ impl AppStructureItemVc {
     }
 }
 
+/// A (sub)directory in the app directory with all analyzed routes and folders.
 #[turbo_tasks::value]
 pub struct AppStructure {
     pub directory: FileSystemPathVc,
@@ -48,11 +50,14 @@ pub struct AppStructure {
 
 #[turbo_tasks::value_impl]
 impl AppStructureVc {
+    /// Returns the directory of this structure.
     #[turbo_tasks::function]
     pub async fn directory(self) -> Result<FileSystemPathVc> {
         Ok(self.await?.directory)
     }
 
+    /// Returns a completion that changes when any route in the whole tree
+    /// changes.
     #[turbo_tasks::function]
     pub async fn routes_changed(self) -> Result<CompletionVc> {
         if let Some(item) = self.await?.item {
@@ -70,6 +75,8 @@ pub struct OptionAppStructure(Option<AppStructureVc>);
 
 #[turbo_tasks::value_impl]
 impl OptionAppStructureVc {
+    /// Returns a completion that changes when any route in the whole tree
+    /// changes.
     #[turbo_tasks::function]
     pub async fn routes_changed(self) -> Result<CompletionVc> {
         if let Some(app_structure) = *self.await? {
@@ -78,6 +85,9 @@ impl OptionAppStructureVc {
         Ok(CompletionVc::new())
     }
 }
+
+/// Finds and returns the [AppStructure] of the app directory if enabled and
+/// existing.
 #[turbo_tasks::function]
 pub async fn find_app_structure(
     project_path: FileSystemPathVc,
@@ -109,6 +119,7 @@ pub async fn find_app_structure(
     ))))
 }
 
+/// Parses a directory as app directory and returns the [AppStructure].
 #[turbo_tasks::function]
 pub fn get_app_structure(
     app_dir: FileSystemPathVc,

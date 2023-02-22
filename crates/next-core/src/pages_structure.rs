@@ -8,6 +8,7 @@ use turbopack_dev_server::source::specificity::SpecificityVc;
 
 use crate::{embed_js::wrap_with_next_js_fs, next_config::NextConfigVc};
 
+/// A final route in the pages directory.
 #[turbo_tasks::value]
 pub enum PagesStructureItem {
     Page {
@@ -48,6 +49,8 @@ impl PagesStructureItemVc {
         }
     }
 
+    /// Returns a completion that changes when any route in the whole tree
+    /// changes.
     #[turbo_tasks::function]
     pub async fn routes_changed(self) -> Result<CompletionVc> {
         match *self.await? {
@@ -58,6 +61,8 @@ impl PagesStructureItemVc {
     }
 }
 
+/// A (sub)directory in the pages directory with all analyzed routes and
+/// folders.
 #[turbo_tasks::value]
 pub struct PagesStructure {
     pub directory: FileSystemPathVc,
@@ -67,11 +72,14 @@ pub struct PagesStructure {
 
 #[turbo_tasks::value_impl]
 impl PagesStructureVc {
+    /// Returns the directory of this structure.
     #[turbo_tasks::function]
     pub async fn directory(self) -> Result<FileSystemPathVc> {
         Ok(self.await?.directory)
     }
 
+    /// Returns a completion that changes when any route in the whole tree
+    /// changes.
     #[turbo_tasks::function]
     pub async fn routes_changed(self) -> Result<CompletionVc> {
         for item in self.await?.items.iter() {
@@ -98,6 +106,7 @@ impl OptionPagesStructureVc {
     }
 }
 
+/// Finds and returns the [PagesStructure] of the pages directory if existing.
 #[turbo_tasks::function]
 pub async fn find_pages_structure(
     project_path: FileSystemPathVc,
@@ -125,6 +134,7 @@ pub async fn find_pages_structure(
     ))))
 }
 
+/// Parses a directory as pages directory and returns the [PagesStructure].
 #[turbo_tasks::function]
 pub fn get_pages_structure(
     pages_dir: FileSystemPathVc,

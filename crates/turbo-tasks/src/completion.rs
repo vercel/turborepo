@@ -26,7 +26,7 @@ impl CompletionVc {
 // no #[turbo_tasks::value_impl] to inline new into the caller task
 // this ensures it's re-created on each execution
 impl CompletionVc {
-    /// This is always be a new completion and invalidates the reading task.
+    /// This will always be a new completion and invalidates the reading task.
     pub fn new() -> Self {
         CompletionVc::cell(Completion)
     }
