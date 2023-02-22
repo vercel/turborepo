@@ -240,17 +240,22 @@ type ExpandedOutputs []turbopath.AnchoredSystemPath
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
 func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) (ExpandedOutputs, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
-		return []turbopath.AnchoredSystemPath{}, nil
+		return ExpandedOutputs{}, nil
 	}
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	filesToBeCached, err := globby.GlobAll(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions)
+	filesToBeCached, err := globby.GlobAll(
+		tc.rc.repoRoot.ToStringDuringMigration(),
+		tc.repoRelativeGlobs.Inclusions,
+		tc.repoRelativeGlobs.Exclusions,
+	)
+
 	if err != nil {
-		return []turbopath.AnchoredSystemPath{}, err
+		return ExpandedOutputs{}, err
 	}
 
-	relativePaths := make([]turbopath.AnchoredSystemPath, len(filesToBeCached))
+	relativePaths := make(ExpandedOutputs, len(filesToBeCached))
 
 	for index, value := range filesToBeCached {
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
