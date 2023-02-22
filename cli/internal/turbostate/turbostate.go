@@ -60,6 +60,7 @@ type RunPayload struct {
 	SinglePackage       bool     `json:"single_package"`
 	Tasks               []string `json:"tasks"`
 	PkgInferenceRoot    string   `json:"pkg_inference_root"`
+	LogPrefix           string   `json:"log_prefix"`
 }
 
 // Command consists of the data necessary to run a command.

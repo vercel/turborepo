@@ -2,11 +2,13 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo LDFLAGS: -L${SRCDIR} -lturborepo_ffi
-// #cgo windows LDFLAGS: -lole32 -lbcrypt -lws2_32 -luserenv
+// #cgo darwin LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lz -liconv
+// #cgo linux LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lz
+// #cgo windows LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lole32 -lbcrypt -lws2_32 -luserenv
 import "C"
 
 import (
+	"errors"
 	"reflect"
 	"unsafe"
 
@@ -72,4 +74,67 @@ func GetTurboDataDir() string {
 		panic(err)
 	}
 	return resp.Dir
+}
+
+// Go convention is to use an empty string for an uninitialized or null-valued
+// string. Rust convention is to use an Option<String> for the same purpose, which
+// is encoded on the Go side as *string. This converts between the two.
+func stringToRef(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
+func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+	fromCommitRef := stringToRef(fromCommit)
+	toCommitRef := stringToRef(toCommit)
+	relativeToRef := stringToRef(relativeTo)
+
+	req := ffi_proto.ChangedFilesReq{
+		RepoRoot:         repoRoot,
+		FromCommit:       fromCommitRef,
+		ToCommit:         toCommitRef,
+		IncludeUntracked: includeUntracked,
+		RelativeTo:       relativeToRef,
+	}
+	reqBuf := Marshal(&req)
+
+	respBuf := C.changed_files(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.ChangedFilesResp{}
+	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	return resp.GetFiles().GetFiles(), nil
+}
+
+// PreviousContent returns the content of a file at a previous commit
+func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
+	req := ffi_proto.PreviousContentReq{
+		RepoRoot:   repoRoot,
+		FromCommit: fromCommit,
+		FilePath:   filePath,
+	}
+
+	reqBuf := Marshal(&req)
+	respBuf := C.previous_content(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.PreviousContentResp{}
+	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	content := resp.GetContent()
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	return []byte(content), nil
 }
