@@ -1,5 +1,5 @@
-name: "Turborepo Build Debug"
-description: "Builds debug version of turborepo"
+name: "Setup Turborepo Environment"
+description: "Sets up development environment for turborepo"
 inputs:
   target:
     description: "Compilation target"
@@ -25,4 +25,3 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
-    
