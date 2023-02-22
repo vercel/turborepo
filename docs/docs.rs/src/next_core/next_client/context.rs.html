@@ -267,6 +267,14 @@
 <span id="267">267</span>
 <span id="268">268</span>
 <span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -296,6 +304,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::transforms::get_next_client_transforms_rules;
 <span class="kw">use crate</span>::{
+    babel::maybe_add_babel_loader,
     embed_js::attached_next_js_package_path,
     env::env_for_js,
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
@@ -392,21 +401,28 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.is_found();
 
-    <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>enable_webpack_loaders = WebpackLoadersOptions {
-        extension_to_loaders: options.clone(),
-        loader_runner_package: <span class="prelude-val">Some</span>(get_external_next_compiled_package_mapping(StringVc::cell(
-            <span class="string">&quot;loader-runner&quot;</span>.to_owned(),
-        ))),
-        placeholder_for_future_extensions: (),
-    }
-    .clone_if();
+    <span class="kw">let </span>enable_webpack_loaders = {
+        <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>loaders_options = WebpackLoadersOptions {
+            extension_to_loaders: options.clone(),
+            loader_runner_package: <span class="prelude-val">Some</span>(get_external_next_compiled_package_mapping(
+                StringVc::cell(<span class="string">&quot;loader-runner&quot;</span>.to_owned()),
+            )),
+            placeholder_for_future_extensions: (),
+        }
+        .cell();
+
+        maybe_add_babel_loader(project_path, loaders_options)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.clone_if()
+    };
 
     <span class="kw">let </span>module_options_context = ModuleOptionsContext {
         preset_env_versions: <span class="prelude-val">Some</span>(env),
         execution_context: <span class="prelude-val">Some</span>(execution_context),
         ..Default::default()
     };
+
     <span class="kw">let </span>module_options_context = ModuleOptionsContext {
         <span class="comment">// We don&#39;t need to resolve React Refresh for each module. Instead,
         // we try resolve it once at the root and pass down a context to all

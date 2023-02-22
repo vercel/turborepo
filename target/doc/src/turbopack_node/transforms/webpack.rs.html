@@ -229,7 +229,7 @@
 
 <span class="attr">#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 #[serde(untagged)]
-</span><span class="kw">pub enum </span>WebpackLoaderConfig {
+</span><span class="kw">pub enum </span>WebpackLoaderConfigItem {
     LoaderName(String),
     LoaderNameWithOptions {
         loader: String,
@@ -239,14 +239,14 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-#[turbo_tasks::value(shared)]
-</span><span class="kw">pub struct </span>WebpackLoaderConfigs(Vec&lt;WebpackLoaderConfig&gt;);
+#[turbo_tasks::value(shared, transparent)]
+</span><span class="kw">pub struct </span>WebpackLoaderConfigItems(<span class="kw">pub </span>Vec&lt;WebpackLoaderConfigItem&gt;);
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>WebpackLoaders {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigsVc,
+    loaders: WebpackLoaderConfigItemsVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -255,7 +255,7 @@
     </span><span class="kw">pub fn </span>new(
         evaluate_context: AssetContextVc,
         execution_context: ExecutionContextVc,
-        loaders: WebpackLoaderConfigsVc,
+        loaders: WebpackLoaderConfigItemsVc,
     ) -&gt; <span class="self">Self </span>{
         WebpackLoaders {
             evaluate_context,
@@ -285,7 +285,7 @@
 </span><span class="kw">struct </span>WebpackLoadersProcessedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigsVc,
+    loaders: WebpackLoaderConfigItemsVc,
     source: AssetVc,
 }
 

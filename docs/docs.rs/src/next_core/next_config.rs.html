@@ -600,6 +600,9 @@
 <span id="600">600</span>
 <span id="601">601</span>
 <span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -630,7 +633,7 @@
 <span class="kw">use </span>turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
-    transforms::webpack::{WebpackLoaderConfigs, WebpackLoaderConfigsVc},
+    transforms::webpack::{WebpackLoaderConfigItems, WebpackLoaderConfigItemsVc},
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::embed_js::next_asset;
@@ -935,7 +938,7 @@
 <span class="attr">#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>ExperimentalTurboConfig {
-    <span class="kw">pub </span>loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, WebpackLoaderConfigs&gt;&gt;,
+    <span class="kw">pub </span>loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, WebpackLoaderConfigItems&gt;&gt;,
     <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, JsonValue&gt;&gt;,
 }
 
@@ -1047,7 +1050,7 @@
 
 <span class="attr">#[derive(Default)]
 #[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>WebpackExtensionToLoaders(IndexMap&lt;String, WebpackLoaderConfigsVc&gt;);
+</span><span class="kw">pub struct </span>WebpackExtensionToLoaders(IndexMap&lt;String, WebpackLoaderConfigItemsVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>NextConfigVc {
@@ -1110,7 +1113,10 @@
         };
         <span class="kw">let </span><span class="kw-2">mut </span>extension_to_loaders = IndexMap::new();
         <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbo_loaders {
-            extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
+            extension_to_loaders.insert(
+                ext.clone(),
+                WebpackLoaderConfigItemsVc::cell(loaders.<span class="number">0</span>.clone()),
+            );
         }
         <span class="prelude-val">Ok</span>(WebpackExtensionToLoaders(extension_to_loaders).cell())
     }

@@ -306,6 +306,14 @@
 <span id="306">306</span>
 <span id="307">307</span>
 <span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -332,6 +340,7 @@
     resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
 };
 <span class="kw">use crate</span>::{
+    babel::maybe_add_babel_loader,
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
@@ -494,15 +503,22 @@
         postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
         ..Default::default()
     });
-    <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>enable_webpack_loaders = WebpackLoadersOptions {
-        loader_runner_package: <span class="prelude-val">Some</span>(get_external_next_compiled_package_mapping(StringVc::cell(
-            <span class="string">&quot;loader-runner&quot;</span>.to_owned(),
-        ))),
-        extension_to_loaders: options.clone(),
-        placeholder_for_future_extensions: (),
-    }
-    .clone_if();
+
+    <span class="kw">let </span>enable_webpack_loaders = {
+        <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>loaders_options = WebpackLoadersOptions {
+            extension_to_loaders: options.clone(),
+            loader_runner_package: <span class="prelude-val">Some</span>(get_external_next_compiled_package_mapping(
+                StringVc::cell(<span class="string">&quot;loader-runner&quot;</span>.to_owned()),
+            )),
+            placeholder_for_future_extensions: (),
+        }
+        .cell();
+
+        maybe_add_babel_loader(project_path, loaders_options)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.clone_if()
+    };
 
     <span class="kw">let </span>module_options_context = <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } =&gt; {
