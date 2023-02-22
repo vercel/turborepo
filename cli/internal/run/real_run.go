@@ -89,7 +89,7 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	taskSummaryMap := map[string]*taskSummary{}
+	taskSummaryMap := map[string]taskSummary{}
 
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		// COPY PASTE FROM DRY RUN!
@@ -121,7 +121,7 @@ func RealRun(
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
 
-		ts := &taskSummary{
+		ts := taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,

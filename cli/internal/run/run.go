@@ -345,7 +345,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		Packages:         packagesInScope,
 		GlobalHashInputs: gh,
 		PackageManager:   packageManager,
-		Tasks:            []*taskSummary{},
+		Tasks:            []taskSummary{},
 	}
 
 	// Dry Run

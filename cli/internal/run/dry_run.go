@@ -42,7 +42,7 @@ type dryRunSummary struct {
 	PackageManager   *packagemanager.PackageManager `json:"packageManager"`
 	Packages         []string                       `json:"packages"`
 	ExitCode         int                            `json:"exitCode"`
-	Tasks            []*taskSummary                 `json:"tasks"`
+	Tasks            []taskSummary                  `json:"tasks"`
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
@@ -104,17 +104,8 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(
-	ctx gocontext.Context,
-	engine *core.Engine,
-	g *graph.CompleteGraph,
-	taskHashes *taskhash.Tracker,
-	rs *runSpec,
-	base *cmdutil.CmdBase,
-	turboCache cache.Cache,
-) ([]*taskSummary, error) {
-
-	summaries := []*taskSummary{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
+	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -148,7 +139,7 @@ func executeDryRun(
 			return err
 		}
 
-		summaries = append(summaries, &taskSummary{
+		taskIDs = append(taskIDs, taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -186,7 +177,7 @@ func executeDryRun(
 		return nil, errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return summaries, nil
+	return taskIDs, nil
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
