@@ -220,12 +220,14 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 	}
 
+	grouped := ec.rs.Opts.runOpts.logOrder == "grouped"
+
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
