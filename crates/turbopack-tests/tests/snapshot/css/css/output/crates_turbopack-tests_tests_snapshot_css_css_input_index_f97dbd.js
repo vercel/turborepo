@@ -1,37 +1,31 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_comptime_define_input_index_7c0dc7.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_css_css_input_index_f97dbd.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/comptime/define/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css module)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
-if ("TURBOPACK compile-time truthy", 1) {
-    console.log('DEFINED_VALUE');
-}
-if ("TURBOPACK compile-time truthy", 1) {
-    console.log('DEFINED_VALUE');
-}
-if ("TURBOPACK compile-time truthy", 1) {
-    console.log('A.VERY.LONG.DEFINED.VALUE');
-}
-if ("TURBOPACK compile-time truthy", 1) {
-    console.log('something');
-}
-if ("TURBOPACK compile-time falsy", 0) {
-    "TURBOPACK unreachable";
-}
-var p = process;
-console.log(A.VERY.LONG.DEFINED.VALUE);
-console.log(DEFINED_VALUE);
-console.log(p.env.NODE_ENV);
-if ("TURBOPACK compile-time falsy", 0) {
-    "TURBOPACK unreachable";
-}
-p.env.NODE_ENV == 'production' ? console.log('production') : console.log('development');
-p.env.NODE_ENV != 'production' && console.log('development');
-p.env.NODE_ENV == 'production' && console.log('production');
+__turbopack_export_value__({
+  "another-composed-module-style": "another-composed-module-style__style__9bcf751c" + " " + __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css module)")["foo-module-style"],
+  "composed-module-style": "composed-module-style__style__9bcf751c" + " " + __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css module)")["foo-module-style"],
+  "inner": "inner__style__9bcf751c",
+  "module-style": "module-style__style__9bcf751c",
+});
 
-}.call(this) }),
+})()),
+"[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$node_modules$2f$foo$2f$style$2e$module$2e$css__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css module)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$style$2e$module$2e$css__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css module)");
+"__TURBOPACK__ecmascript__hoisting__location__";
+;
+;
+;
+;
+;
+console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$style$2e$module$2e$css__["default"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$node_modules$2f$foo$2f$style$2e$module$2e$css__["default"]);
+
+})()),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_comptime_define_input_index_282715.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/comptime/define/input/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_css_css_input_index_fe6ad0.js") && loadedChunks.has("output/8697f_foo_style.module.css._.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)");
 }]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -1080,4 +1074,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_comptime_define_input_index_7c0dc7.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_css_css_input_index_f97dbd.js.map

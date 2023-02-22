@@ -1,16 +1,18 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_8879d5.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/79fb1_turbopack-tests_tests_snapshot_imports_resolve_error_cjs_input_index_b13131.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/imports/resolve_error_cjs/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/node_modules/foo/index.js (ecmascript)");
-"__TURBOPACK__ecmascript__hoisting__location__";
-;
-__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__["foo"](true);
+const dne = __turbopack_require__((()=>{
+    const e = new Error("Cannot find module 'does-not-exist/path'");
+    e.code = 'MODULE_NOT_FOUND';
+    throw e;
+})());
+console.log(dne);
 
-})()),
+}.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_67a243.js") && loadedChunks.has("output/d1787_foo_index.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/79fb1_turbopack-tests_tests_snapshot_imports_resolve_error_cjs_input_index_598284.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/resolve_error_cjs/input/index.js (ecmascript)");
 }]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -1059,4 +1061,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_8879d5.js.map
+//# sourceMappingURL=79fb1_turbopack-tests_tests_snapshot_imports_resolve_error_cjs_input_index_b13131.js.map

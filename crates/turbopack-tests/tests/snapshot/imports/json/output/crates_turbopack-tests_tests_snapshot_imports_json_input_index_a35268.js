@@ -1,24 +1,28 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_esm-object_input_index_3e4780.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_imports_json_input_index_a35268.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-object/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)": (() => {{
 
-const __TURBOPACK__import$2e$meta__ = {
-    url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/esm-object/input/mod.mjs"
-};
-"__TURBOPACK__ecmascript__hoisting__location__";
-console.log(__TURBOPACK__import$2e$meta__);
+throw new Error("An error occurred while generating the chunk item [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)\n  at Execution of module_factory failed\n  at Execution of JsonChunkItem::content failed\n  at Unable to make a module from invalid JSON: expected `,` or `}` at line 3 column 26\n  at nested.?\n     1 | {\n     2 |   \"nested\": {\n       |                          v\n     3 +     \"this-is\": \"invalid\" // lint-staged will remove trailing commas, so here's a comment\n       |                          ^\n     4 |   }\n     5 | }\n");
 
-}.call(this) }),
-"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-object/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+}}),
+"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json (json)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$import$2d$meta$2f$esm$2d$object$2f$input$2f$mod$2e$mjs__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-object/input/mod.mjs (ecmascript)");
+__turbopack_export_value__(JSON.parse("{\"name\":\"json-snapshot\"}"));
+})()),
+"[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$imports$2f$json$2f$input$2f$package$2e$json__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/package.json (json)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$imports$2f$json$2f$input$2f$invalid$2e$json__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
+console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$imports$2f$json$2f$input$2f$package$2e$json__["default"].name);
+;
+console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$imports$2f$json$2f$input$2f$invalid$2e$json__["default"]["this-is"]);
 
-}.call(this) }),
+})()),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_esm-object_input_index_682cfc.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-object/input/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_imports_json_input_index_3ed915.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/index.js (ecmascript)");
 }]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -1067,4 +1071,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_import-meta_esm-object_input_index_3e4780.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_imports_json_input_index_a35268.js.map
