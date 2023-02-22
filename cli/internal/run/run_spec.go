@@ -74,4 +74,7 @@ type runOpts struct {
 	graphFile     string
 	noDaemon      bool
 	singlePackage bool
+
+	// logPrefix controls whether we should print a prefix in task logs
+	logPrefix string
 }

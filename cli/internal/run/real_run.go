@@ -151,9 +151,6 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
 	cmdTime := time.Now()
 
-	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
-	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
-
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
@@ -177,6 +174,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil
 	}
+
+	var prefix string
+	var prettyPrefix string
+	if ec.rs.Opts.runOpts.logPrefix == "none" {
+		prefix = ""
+	} else {
+		prefix = packageTask.OutputPrefix(ec.isSinglePackage)
+	}
+
+	prettyPrefix = ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
+
 	// Cache ---------------------------------------------
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
 	// Create a logger for replaying

@@ -27,6 +27,7 @@ use crate::{
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
+    primitives::RawVcSetVc,
     raw_vc::{CellId, RawVc},
     registry,
     task_input::{SharedReference, TaskInput},
@@ -91,11 +92,7 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
         index: CellId,
     ) -> Result<Result<CellContent, EventListener>>;
 
-    fn try_read_task_collectibles(
-        &self,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> RawVcSetVc;
 
     fn emit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
     fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
@@ -111,6 +108,8 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
 
     fn read_current_task_cell(&self, index: CellId) -> Result<CellContent>;
     fn update_current_task_cell(&self, index: CellId, content: CellContent);
+
+    fn connect_task(&self, task: TaskId);
 }
 
 /// The type of stats reporting.
@@ -126,25 +125,55 @@ pub enum StatsType {
 }
 
 pub trait TaskIdProvider {
-    fn get_fresh_task_id(&self) -> TaskId;
-    /// # Safety
-    ///
-    /// It must be ensured that the id is no longer used
-    unsafe fn reuse_task_id(&self, id: TaskId);
+    fn get_fresh_task_id(&self) -> Unused<TaskId>;
+    fn reuse_task_id(&self, id: Unused<TaskId>);
 }
 
 impl TaskIdProvider for IdFactory<TaskId> {
-    fn get_fresh_task_id(&self) -> TaskId {
-        self.get()
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
+        // Safety: This is a fresh id from the factory
+        unsafe { Unused::new_unchecked(self.get()) }
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { self.reuse(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        unsafe { self.reuse(id.into()) }
     }
 }
 
-pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send {
-    fn pin(&self) -> Arc<dyn TurboTasksBackendApi>;
+/// A wrapper around a value that is unused.
+pub struct Unused<T> {
+    inner: T,
+}
+
+impl<T> Unused<T> {
+    /// Creates a new unused value.
+    ///
+    /// # Safety
+    ///
+    /// The wrapped value must not be used.
+    pub unsafe fn new_unchecked(inner: T) -> Self {
+        Self { inner }
+    }
+
+    /// Get the inner value, without consuming the `Unused` wrapper.
+    ///
+    /// # Safety
+    ///
+    /// The user need to make sure that the value stays unused.
+    pub unsafe fn get_unchecked(&self) -> &T {
+        &self.inner
+    }
+
+    /// Unwraps the value, consuming the `Unused` wrapper.
+    pub fn into(self) -> T {
+        self.inner
+    }
+}
+
+pub trait TurboTasksBackendApi<B: Backend + 'static>:
+    TaskIdProvider + TurboTasksCallApi + Sync + Send
+{
+    fn pin(&self) -> Arc<dyn TurboTasksBackendApi<B>>;
 
     fn schedule(&self, task: TaskId);
     fn schedule_backend_background_job(&self, id: BackendJobId);
@@ -161,7 +190,7 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>);
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>);
 
     /// Returns the stats reporting type.
     fn stats_type(&self) -> StatsType;
@@ -169,6 +198,8 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
     fn set_stats_type(&self, stats_type: StatsType);
     /// Returns the duration from the start of the program to the given instant.
     fn program_duration_until(&self, instant: Instant) -> Duration;
+    /// Returns a reference to the backend.
+    fn backend(&self) -> &B;
 }
 
 impl StatsType {
@@ -183,23 +214,23 @@ impl StatsType {
     }
 }
 
-impl TaskIdProvider for &dyn TurboTasksBackendApi {
-    fn get_fresh_task_id(&self) -> TaskId {
+impl<B: Backend + 'static> TaskIdProvider for &dyn TurboTasksBackendApi<B> {
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
         (*self).get_fresh_task_id()
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { (*self).reuse_task_id(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        (*self).reuse_task_id(id)
     }
 }
 
 impl TaskIdProvider for &dyn TaskIdProvider {
-    fn get_fresh_task_id(&self) -> TaskId {
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
         (*self).get_fresh_task_id()
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { (*self).reuse_task_id(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        (*self).reuse_task_id(id)
     }
 }
 
@@ -247,7 +278,7 @@ task_local! {
     static CURRENT_TASK_STATE: RefCell<CurrentTaskState>;
 }
 
-impl<B: Backend> TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasks<B> {
     // TODO better lifetime management for turbo tasks
     // consider using unsafe for the task_local turbo tasks
     // that should be safe as long tasks can't outlife turbo task
@@ -400,18 +431,16 @@ impl<B: Backend> TurboTasks<B> {
                     if this.stopped.load(Ordering::Acquire) {
                         return false;
                     }
-                    if let Some(execution) = this.backend.try_start_task_execution(task_id, &*this)
-                    {
-                        // Setup thread locals
-                        let (result, duration, instant) = CELL_COUNTERS
-                            .scope(Default::default(), async {
-                                let (result, duration, instant) = TimedFuture::new(
-                                    AssertUnwindSafe(execution.future).catch_unwind(),
-                                )
-                                .await;
-                                (result, duration, instant)
-                            })
-                            .await;
+
+                    // Setup thread locals
+                    let execution_future = CELL_COUNTERS.scope(Default::default(), async {
+                        let execution = this.backend.try_start_task_execution(task_id, &*this)?;
+                        Some(
+                            TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
+                                .await,
+                        )
+                    });
+                    if let Some((result, duration, instant)) = execution_future.await {
                         if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
                             println!(
                                 "{} took {}",
@@ -703,7 +732,7 @@ impl<B: Backend> TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
     fn dynamic_call(&self, func: FunctionId, inputs: Vec<TaskInput>) -> RawVc {
         self.dynamic_call(func, inputs)
     }
@@ -745,7 +774,7 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TurboTasksApi for TurboTasks<B> {
+impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn invalidate(&self, task: TaskId) {
         self.backend.invalidate_task(task, self);
     }
@@ -811,12 +840,8 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
             .try_read_own_task_cell_untracked(current_task, index, self)
     }
 
-    fn try_read_task_collectibles(
-        &self,
-        task: TaskId,
-        trait_id: TraitTypeId,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
-        self.backend.try_read_task_collectibles(
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> RawVcSetVc {
+        self.backend.read_task_collectibles(
             task,
             trait_id,
             current_task("reading collectibles"),
@@ -866,11 +891,19 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
             self,
         );
     }
+
+    fn connect_task(&self, task: TaskId) {
+        self.backend
+            .connect_task(task, current_task("connecting task"), self);
+    }
 }
 
-impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
-    fn pin(&self) -> Arc<dyn TurboTasksBackendApi> {
+impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
+    fn pin(&self) -> Arc<dyn TurboTasksBackendApi<B>> {
         self.pin()
+    }
+    fn backend(&self) -> &B {
+        &self.backend
     }
     #[track_caller]
     fn schedule_backend_background_job(&self, id: BackendJobId) {
@@ -937,7 +970,7 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>) {
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>) {
         let result = CURRENT_TASK_STATE.try_with(|cell| {
             let CurrentTaskState {
                 tasks_to_notify, ..
@@ -974,13 +1007,14 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
     }
 }
 
-impl<B: Backend> TaskIdProvider for TurboTasks<B> {
-    fn get_fresh_task_id(&self) -> TaskId {
-        self.task_id_factory.get()
+impl<B: Backend + 'static> TaskIdProvider for TurboTasks<B> {
+    fn get_fresh_task_id(&self) -> Unused<TaskId> {
+        // Safety: This is a fresh id from the factory
+        unsafe { Unused::new_unchecked(self.task_id_factory.get()) }
     }
 
-    unsafe fn reuse_task_id(&self, id: TaskId) {
-        unsafe { self.task_id_factory.reuse(id) }
+    fn reuse_task_id(&self, id: Unused<TaskId>) {
+        unsafe { self.task_id_factory.reuse(id.into()) }
     }
 }
 
@@ -1229,19 +1263,6 @@ pub(crate) async fn read_task_cell_untracked(
 ) -> Result<CellContent> {
     loop {
         match this.try_read_task_cell_untracked(id, index)? {
-            Ok(result) => return Ok(result),
-            Err(listener) => listener.await,
-        }
-    }
-}
-
-pub(crate) async fn read_task_collectibles(
-    this: &dyn TurboTasksApi,
-    id: TaskId,
-    trait_id: TraitTypeId,
-) -> Result<AutoSet<RawVc>> {
-    loop {
-        match this.try_read_task_collectibles(id, trait_id)? {
             Ok(result) => return Ok(result),
             Err(listener) => listener.await,
         }

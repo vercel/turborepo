@@ -70,6 +70,7 @@ use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     code_gen::CodeGenerateable,
     references::analyze_ecmascript_module,
+    transform::remove_shebang,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -98,6 +99,10 @@ pub struct EcmascriptModuleAsset {
     pub compile_time_info: CompileTimeInfoVc,
     pub inner_assets: Option<InnerAssetsVc>,
 }
+
+/// An optional [EcmascriptModuleAsset]
+#[turbo_tasks::value(transparent)]
+pub struct OptionEcmascriptModuleAsset(Option<EcmascriptModuleAssetVc>);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptModuleAssetVc {
@@ -337,6 +342,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                 }
                 program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
                 program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
+
+                // we need to remove any shebang before bundling as it's only valid as the first
+                // line in a js file (not in a chunk item wrapped in the runtime)
+                remove_shebang(&mut program);
             });
 
             let mut bytes: Vec<u8> = vec![];

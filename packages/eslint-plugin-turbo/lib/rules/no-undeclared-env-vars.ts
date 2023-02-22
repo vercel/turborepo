@@ -7,7 +7,7 @@ const meta: Rule.RuleMetaData = {
   type: "problem",
   docs: {
     description:
-      "Do not allow the use of `process.env` without including the env key in turbo.json",
+      "Do not allow the use of `process.env` without including the env key in any turbo.json",
     category: "Configuration Issues",
     recommended: true,
     url: `https://github.com/vercel/turbo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
@@ -18,9 +18,10 @@ const meta: Rule.RuleMetaData = {
       default: {},
       additionalProperties: false,
       properties: {
-        turboConfig: {
+        // override cwd, primarily exposed for easier testing
+        cwd: {
           require: false,
-          type: "object",
+          type: "string",
         },
         allowList: {
           default: [],
@@ -39,7 +40,14 @@ const meta: Rule.RuleMetaData = {
  * Extracted from eslint
  * SPDX-License-Identifier: MIT
  */
-function normalizeCwd(cwd: string | undefined): string | undefined {
+function normalizeCwd(
+  cwd: string | undefined,
+  options: Array<any>
+): string | undefined {
+  if (options?.[0]?.cwd) {
+    return options[0].cwd;
+  }
+
   if (cwd) {
     return cwd;
   }
@@ -51,7 +59,7 @@ function normalizeCwd(cwd: string | undefined): string | undefined {
 }
 
 function create(context: Rule.RuleContext): Rule.RuleListener {
-  const { options } = context;
+  const { options, getPhysicalFilename } = context;
   const allowList: Array<string> = options?.[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
@@ -63,17 +71,33 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     }
   });
 
-  const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
-  const turboConfig = options?.[0]?.turboConfig;
-  const turboVars = getEnvVarDependencies({
-    cwd,
-    turboConfig,
-  });
+  const cwd = normalizeCwd(
+    context.getCwd ? context.getCwd() : undefined,
+    options
+  );
+  const filePath = getPhysicalFilename();
+  const allTurboVars =
+    getEnvVarDependencies({
+      cwd,
+    }) || {};
+
+  const globalTurboVars = allTurboVars["//"];
+
+  // find any workspace configs that match the current file path
+  // find workspace config (if any) that match the current file path
+  const workspaceKey = Object.keys(allTurboVars).find(
+    (workspacePath) => filePath !== "//" && filePath.startsWith(workspacePath)
+  );
+
+  let workspaceTurboVars: Set<string> | null = null;
+  if (workspaceKey) {
+    workspaceTurboVars = allTurboVars[workspaceKey];
+  }
 
   // if this returns null, something went wrong reading from the turbo config
   // (this is different from finding a config with no env vars present, which would
   // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!turboVars) {
+  if (!globalTurboVars) {
     // return of {} bails early from a rule check
     return {};
   }
@@ -81,14 +105,20 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   const checkKey = (node: Node, envKey?: string) => {
     if (
       envKey &&
-      !turboVars.has(envKey) &&
+      !globalTurboVars.has(envKey) &&
       !regexAllowList.some((regex) => regex.test(envKey))
     ) {
-      context.report({
-        node,
-        message: "${{ envKey }} is not listed as a dependency in turbo.json",
-        data: { envKey },
-      });
+      // if we have a workspace config, check that too
+      if (workspaceTurboVars && workspaceTurboVars.has(envKey)) {
+        return {};
+      } else {
+        context.report({
+          node,
+          message:
+            "${{ envKey }} is not listed as a dependency in any turbo.json",
+          data: { envKey },
+        });
+      }
     }
   };
 

@@ -1,5 +1,4 @@
-import findTurboConfig from "./findTurboConfig";
-import type { Schema } from "turbo-types";
+import { getTurboConfigs } from "turbo-utils";
 
 function findDependsOnEnvVars({
   dependencies,
@@ -21,39 +20,56 @@ function findDependsOnEnvVars({
 
 function getEnvVarDependencies({
   cwd,
-  turboConfig,
 }: {
   cwd: string | undefined;
-  turboConfig?: Schema;
-}): Set<string> | null {
-  const turboJsonContent = turboConfig || findTurboConfig({ cwd });
-  if (!turboJsonContent) {
+}): Record<string, Set<string>> | null {
+  const turboConfigs = getTurboConfigs(cwd);
+
+  if (!turboConfigs.length) {
     return null;
   }
-  const {
-    globalDependencies,
-    globalEnv = [],
-    pipeline = {},
-  } = turboJsonContent;
 
-  const allEnvVars: Array<string> = [
-    ...findDependsOnEnvVars({
-      dependencies: globalDependencies,
-    }),
-    ...globalEnv,
-  ];
+  const envVars: Record<string, Set<string>> = {
+    "//": new Set(),
+  };
 
-  Object.values(pipeline).forEach(({ env, dependsOn }) => {
-    if (dependsOn) {
-      allEnvVars.push(...findDependsOnEnvVars({ dependencies: dependsOn }));
+  turboConfigs.forEach((turboConfig) => {
+    const { config, workspacePath, isRootConfig } = turboConfig;
+
+    const key = isRootConfig ? "//" : workspacePath;
+    if (!envVars[key]) {
+      envVars[key] = new Set();
     }
 
-    if (env) {
-      allEnvVars.push(...env);
+    // handle globals
+    if (!("extends" in config)) {
+      const { globalDependencies = [], globalEnv = [] } = config;
+
+      const keys = [
+        ...findDependsOnEnvVars({
+          dependencies: globalDependencies,
+        }),
+        ...globalEnv,
+      ];
+      keys.forEach((k) => envVars[key].add(k));
     }
+
+    // handle pipelines
+    const { pipeline = {} } = config;
+    Object.values(pipeline).forEach(({ env, dependsOn }) => {
+      if (dependsOn) {
+        findDependsOnEnvVars({ dependencies: dependsOn }).forEach((k) =>
+          envVars[key].add(k)
+        );
+      }
+
+      if (env) {
+        env.forEach((k) => envVars[key].add(k));
+      }
+    });
   });
 
-  return new Set(allEnvVars);
+  return envVars;
 }
 
 export default getEnvVarDependencies;
