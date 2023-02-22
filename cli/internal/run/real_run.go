@@ -171,10 +171,14 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	summary.Tasks = taskSummaryMap
+	// We gathered the info as a map, but we want to attach it as an array
+	for _, s := range taskSummaryMap {
+		summary.Tasks = append(summary.Tasks, s)
+	}
+
 	runState.mu.Lock()
 	for taskID, state := range runState.state {
-		t, ok := summary.Tasks[taskID]
+		t, ok := taskSummaryMap[taskID]
 		if ok {
 			t.RunSummary = state
 		}

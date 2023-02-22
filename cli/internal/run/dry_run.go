@@ -42,14 +42,14 @@ type dryRunSummary struct {
 	PackageManager   *packagemanager.PackageManager `json:"packageManager"`
 	Packages         []string                       `json:"packages"`
 	ExitCode         int                            `json:"exitCode"`
-	Tasks            map[string]*taskSummary        `json:"tasks"`
+	Tasks            []*taskSummary                 `json:"tasks"`
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
 // to the internal struct for a single package. It's likely that we can use the
 // same struct for Single Package repos in the future.
 type singlePackageDryRunSummary struct {
-	Tasks map[string]singlePackageTaskSummary `json:"tasks"`
+	Tasks []singlePackageTaskSummary `json:"tasks"`
 }
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -112,9 +112,9 @@ func executeDryRun(
 	rs *runSpec,
 	base *cmdutil.CmdBase,
 	turboCache cache.Cache,
-) (map[string]*taskSummary, error) {
+) ([]*taskSummary, error) {
 
-	taskSummaryMap := map[string]*taskSummary{}
+	summaries := []*taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -148,7 +148,7 @@ func executeDryRun(
 			return err
 		}
 
-		taskSummaryMap[packageTask.TaskID] = &taskSummary{
+		summaries = append(summaries, &taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -163,7 +163,8 @@ func executeDryRun(
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
 			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
 			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
-		}
+		})
+
 		return nil
 	}
 
@@ -185,14 +186,14 @@ func executeDryRun(
 		return nil, errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return taskSummaryMap, nil
+	return summaries, nil
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
-	singlePackageTasks := map[string]singlePackageTaskSummary{}
+	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
 
-	for taskID, taskSummary := range summary.Tasks {
-		singlePackageTasks[taskID] = taskSummary.toSinglePackageTask()
+	for i, ht := range summary.Tasks {
+		singlePackageTasks[i] = ht.toSinglePackageTask()
 	}
 
 	dryRun := &singlePackageDryRunSummary{singlePackageTasks}
