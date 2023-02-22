@@ -21,8 +21,7 @@ use turbo_tasks::{
     ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
-    FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
-    FileSystemPathVc,
+    FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathVc,
 };
 use turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher};
 
@@ -552,7 +551,7 @@ impl IssueSourceVc {
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainAsset {
-    pub path: FileSystemPathReadRef,
+    pub path: String,
     #[turbo_tasks(debug_ignore)]
     pub content: FileContentReadRef,
 }
@@ -568,7 +567,7 @@ impl PlainAssetVc {
         };
 
         Ok(PlainAsset {
-            path: asset.path().await?,
+            path: asset.path().await?.to_string(),
             content,
         }
         .cell())

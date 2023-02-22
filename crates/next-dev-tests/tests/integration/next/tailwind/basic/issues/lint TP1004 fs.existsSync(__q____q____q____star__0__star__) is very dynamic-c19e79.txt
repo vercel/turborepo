@@ -9,20 +9,7 @@ PlainIssue {
     source: Some(
         PlainIssueSource {
             asset: PlainAsset {
-                path: FileSystemPath {
-                    fs: FileSystem(AttachedFileSystem {
-                        root_fs: FileSystem(DiskFileSystem {
-                            name: "project",
-                            root: "WORKSPACE_ROOT",
-                        }),
-                        child_path: "crates/next-dev-tests/tests/integration/next/tailwind/basic/input/[embedded_modules]/@vercel/turbopack-next",
-                        child_fs: FileSystem(DiskFileSystem {
-                            name: "next",
-                            root: "WORKSPACE_ROOT/crates/next-core/js/src",
-                        }),
-                    }),
-                    path: "node_modules/.pnpm/postcss@8.4.20/node_modules/postcss/lib/previous-map.js",
-                },
+                path: "node_modules/.pnpm/postcss@8.4.20/node_modules/postcss/lib/previous-map.js",
             },
             start: SourcePos {
                 line: 87,
