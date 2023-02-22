@@ -27,22 +27,37 @@
 <span id="27">27</span>
 <span id="28">28</span>
 <span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ExecutionContext {
     <span class="kw">pub </span>project_root: FileSystemPathVc,
     <span class="kw">pub </span>intermediate_output_path: FileSystemPathVc,
+    <span class="kw">pub </span>env: ProcessEnvVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ExecutionContextVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(project_root: FileSystemPathVc, intermediate_output_path: FileSystemPathVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        project_root: FileSystemPathVc,
+        intermediate_output_path: FileSystemPathVc,
+        env: ProcessEnvVc,
+    ) -&gt; <span class="self">Self </span>{
         ExecutionContext {
             project_root,
             intermediate_output_path,
+            env,
         }
         .cell()
     }
@@ -53,6 +68,7 @@
         <span class="prelude-val">Ok</span>(ExecutionContextVc::new(
             this.project_root,
             this.intermediate_output_path.join(name),
+            this.env,
         ))
     }
 }

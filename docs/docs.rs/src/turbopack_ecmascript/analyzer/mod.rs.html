@@ -3201,7 +3201,125 @@
 <span id="3201">3201</span>
 <span id="3202">3202</span>
 <span id="3203">3203</span>
+<span id="3204">3204</span>
+<span id="3205">3205</span>
+<span id="3206">3206</span>
+<span id="3207">3207</span>
+<span id="3208">3208</span>
+<span id="3209">3209</span>
+<span id="3210">3210</span>
+<span id="3211">3211</span>
+<span id="3212">3212</span>
+<span id="3213">3213</span>
+<span id="3214">3214</span>
+<span id="3215">3215</span>
+<span id="3216">3216</span>
+<span id="3217">3217</span>
+<span id="3218">3218</span>
+<span id="3219">3219</span>
+<span id="3220">3220</span>
+<span id="3221">3221</span>
+<span id="3222">3222</span>
+<span id="3223">3223</span>
+<span id="3224">3224</span>
+<span id="3225">3225</span>
+<span id="3226">3226</span>
+<span id="3227">3227</span>
+<span id="3228">3228</span>
+<span id="3229">3229</span>
+<span id="3230">3230</span>
+<span id="3231">3231</span>
+<span id="3232">3232</span>
+<span id="3233">3233</span>
+<span id="3234">3234</span>
+<span id="3235">3235</span>
+<span id="3236">3236</span>
+<span id="3237">3237</span>
+<span id="3238">3238</span>
+<span id="3239">3239</span>
+<span id="3240">3240</span>
+<span id="3241">3241</span>
+<span id="3242">3242</span>
+<span id="3243">3243</span>
+<span id="3244">3244</span>
+<span id="3245">3245</span>
+<span id="3246">3246</span>
+<span id="3247">3247</span>
+<span id="3248">3248</span>
+<span id="3249">3249</span>
+<span id="3250">3250</span>
+<span id="3251">3251</span>
+<span id="3252">3252</span>
+<span id="3253">3253</span>
+<span id="3254">3254</span>
+<span id="3255">3255</span>
+<span id="3256">3256</span>
+<span id="3257">3257</span>
+<span id="3258">3258</span>
+<span id="3259">3259</span>
+<span id="3260">3260</span>
+<span id="3261">3261</span>
+<span id="3262">3262</span>
+<span id="3263">3263</span>
+<span id="3264">3264</span>
+<span id="3265">3265</span>
+<span id="3266">3266</span>
+<span id="3267">3267</span>
+<span id="3268">3268</span>
+<span id="3269">3269</span>
+<span id="3270">3270</span>
+<span id="3271">3271</span>
+<span id="3272">3272</span>
+<span id="3273">3273</span>
+<span id="3274">3274</span>
+<span id="3275">3275</span>
+<span id="3276">3276</span>
+<span id="3277">3277</span>
+<span id="3278">3278</span>
+<span id="3279">3279</span>
+<span id="3280">3280</span>
+<span id="3281">3281</span>
+<span id="3282">3282</span>
+<span id="3283">3283</span>
+<span id="3284">3284</span>
+<span id="3285">3285</span>
+<span id="3286">3286</span>
+<span id="3287">3287</span>
+<span id="3288">3288</span>
+<span id="3289">3289</span>
+<span id="3290">3290</span>
+<span id="3291">3291</span>
+<span id="3292">3292</span>
+<span id="3293">3293</span>
+<span id="3294">3294</span>
+<span id="3295">3295</span>
+<span id="3296">3296</span>
+<span id="3297">3297</span>
+<span id="3298">3298</span>
+<span id="3299">3299</span>
+<span id="3300">3300</span>
+<span id="3301">3301</span>
+<span id="3302">3302</span>
+<span id="3303">3303</span>
+<span id="3304">3304</span>
+<span id="3305">3305</span>
+<span id="3306">3306</span>
+<span id="3307">3307</span>
+<span id="3308">3308</span>
+<span id="3309">3309</span>
+<span id="3310">3310</span>
+<span id="3311">3311</span>
+<span id="3312">3312</span>
+<span id="3313">3313</span>
+<span id="3314">3314</span>
+<span id="3315">3315</span>
+<span id="3316">3316</span>
+<span id="3317">3317</span>
+<span id="3318">3318</span>
+<span id="3319">3319</span>
+<span id="3320">3320</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
+    borrow::Cow,
     cmp::Ordering,
     fmt::Display,
     future::Future,
@@ -3221,6 +3339,7 @@
         atoms::{Atom, JsWord},
     },
 };
+<span class="kw">use </span>turbopack_core::compile_time_info::CompileTimeDefineValue;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="self">self</span>::imports::ImportAnnotations;
@@ -3685,6 +3804,15 @@
     }
 }
 
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>CompileTimeDefineValue&gt; <span class="kw">for </span>JsValue {
+    <span class="kw">fn </span>from(v: <span class="kw-2">&amp;</span>CompileTimeDefineValue) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>v {
+            CompileTimeDefineValue::String(s) =&gt; JsValue::Constant(s.as_str().into()),
+            CompileTimeDefineValue::Bool(b) =&gt; JsValue::Constant((<span class="kw-2">*</span>b).into()),
+        }
+    }
+}
+
 <span class="kw">impl </span>Default <span class="kw">for </span>JsValue {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;&quot;</span>)
@@ -3858,15 +3986,15 @@
             JsValue::Array { .. }
             | JsValue::Object { .. }
             | JsValue::Alternatives(..)
-            | JsValue::Function(..) =&gt; JsValueMetaKind::Nested,
+            | JsValue::Function(..)
+            | JsValue::Member(..) =&gt; JsValueMetaKind::Nested,
             JsValue::Concat(..)
             | JsValue::Add(..)
             | JsValue::Not(..)
             | JsValue::Logical(..)
             | JsValue::Binary(..)
             | JsValue::Call(..)
-            | JsValue::MemberCall(..)
-            | JsValue::Member(..) =&gt; JsValueMetaKind::Operation,
+            | JsValue::MemberCall(..) =&gt; JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
             | JsValue::FreeVar(..)
@@ -4499,6 +4627,10 @@
                         <span class="string">&quot;process&quot;</span>,
                         <span class="string">&quot;The Node.js process module: https://nodejs.org/api/process.html&quot;</span>,
                     ),
+                    WellKnownObjectKind::NodeProcessEnv =&gt; (
+                        <span class="string">&quot;process.env&quot;</span>,
+                        <span class="string">&quot;The Node.js process.env property: https://nodejs.org/api/process.html#processenv&quot;</span>,
+                    ),
                     WellKnownObjectKind::NodePreGyp =&gt; (
                         <span class="string">&quot;@mapbox/node-pre-gyp&quot;</span>,
                         <span class="string">&quot;The Node.js @mapbox/node-pre-gyp module: https://github.com/mapbox/node-pre-gyp&quot;</span>,
@@ -4677,6 +4809,77 @@
 
     <span class="kw">pub fn </span>add_unknown_mutations(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.add_alt(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unknown mutation&quot;</span>));
+    }
+}
+
+<span class="comment">// Defineable name management
+</span><span class="kw">impl </span>JsValue {
+    <span class="kw">pub fn </span>get_defineable_name_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            JsValue::FreeVar(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="number">1</span>),
+            JsValue::Member(<span class="kw">_</span>, obj, prop) <span class="kw">if </span>prop.as_str().is_some() =&gt; {
+                <span class="prelude-val">Some</span>(obj.get_defineable_name_len()<span class="question-mark">? </span>+ <span class="number">1</span>)
+            }
+            JsValue::WellKnownObject(obj) =&gt; obj.as_define_name().map(|d| d.len()),
+            JsValue::WellKnownFunction(func) =&gt; func.as_define_name().map(|d| d.len()),
+            JsValue::MemberCall(<span class="kw">_</span>, callee, prop, args)
+                <span class="kw">if </span>args.is_empty() &amp;&amp; prop.as_str().is_some() =&gt;
+            {
+                <span class="prelude-val">Some</span>(callee.get_defineable_name_len()<span class="question-mark">? </span>+ <span class="number">1</span>)
+            }
+
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
+
+    <span class="kw">pub fn </span>iter_defineable_name_rev(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DefineableNameIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+        DefineableNameIter {
+            next: <span class="prelude-val">Some</span>(<span class="self">self</span>),
+            index: <span class="number">0</span>,
+        }
+    }
+}
+
+<span class="kw">pub struct </span>DefineableNameIter&lt;<span class="lifetime">&#39;a</span>&gt; {
+    next: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>JsValue&gt;,
+    index: usize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>DefineableNameIter&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Item = Cow&lt;<span class="lifetime">&#39;a</span>, str&gt;;
+
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">let </span>value = <span class="self">self</span>.next.take()<span class="question-mark">?</span>;
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>value {
+            JsValue::FreeVar(kind) =&gt; kind.as_str().into(),
+            JsValue::Member(<span class="kw">_</span>, obj, prop) =&gt; {
+                <span class="self">self</span>.next = <span class="prelude-val">Some</span>(obj);
+                prop.as_str()<span class="question-mark">?</span>.into()
+            }
+            JsValue::WellKnownObject(obj) =&gt; {
+                <span class="kw">let </span>name = obj.as_define_name()<span class="question-mark">?</span>;
+                <span class="kw">let </span>i = <span class="self">self</span>.index;
+                <span class="self">self</span>.index += <span class="number">1</span>;
+                <span class="kw">if </span><span class="self">self</span>.index &lt; name.len() {
+                    <span class="self">self</span>.next = <span class="prelude-val">Some</span>(value);
+                }
+                name[name.len() - i - <span class="number">1</span>].into()
+            }
+            JsValue::WellKnownFunction(func) =&gt; {
+                <span class="kw">let </span>name = func.as_define_name()<span class="question-mark">?</span>;
+                <span class="kw">let </span>i = <span class="self">self</span>.index;
+                <span class="self">self</span>.index += <span class="number">1</span>;
+                <span class="kw">if </span><span class="self">self</span>.index &lt; name.len() {
+                    <span class="self">self</span>.next = <span class="prelude-val">Some</span>(value);
+                }
+                name[name.len() - i - <span class="number">1</span>].into()
+            }
+            JsValue::MemberCall(<span class="kw">_</span>, callee, prop, args) <span class="kw">if </span>args.is_empty() =&gt; {
+                <span class="self">self</span>.next = <span class="prelude-val">Some</span>(callee);
+                <span class="macro">format!</span>(<span class="string">&quot;{}()&quot;</span>, prop.as_str()<span class="question-mark">?</span>).into()
+            }
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+        })
     }
 }
 
@@ -5987,10 +6190,28 @@
     OsModule,
     OsModuleDefault,
     NodeProcess,
+    NodeProcessEnv,
     NodePreGyp,
     NodeExpressApp,
     NodeProtobufLoader,
     RequireCache,
+}
+
+<span class="kw">impl </span>WellKnownObjectKind {
+    <span class="kw">pub fn </span>as_define_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str]&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::GlobalObject =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;global&quot;</span>]),
+            <span class="self">Self</span>::PathModule =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;path&quot;</span>]),
+            <span class="self">Self</span>::FsModule =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;fs&quot;</span>]),
+            <span class="self">Self</span>::UrlModule =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;url&quot;</span>]),
+            <span class="self">Self</span>::ChildProcess =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;child_process&quot;</span>]),
+            <span class="self">Self</span>::OsModule =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;os&quot;</span>]),
+            <span class="self">Self</span>::NodeProcess =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;process&quot;</span>]),
+            <span class="self">Self</span>::NodeProcessEnv =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;process&quot;</span>, <span class="string">&quot;env&quot;</span>]),
+            <span class="self">Self</span>::RequireCache =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;require&quot;</span>, <span class="string">&quot;cache&quot;</span>]),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
 }
 
 <span class="doccomment">/// A list of well-known functions that have special meaning in the analysis.
@@ -6022,6 +6243,18 @@
     NodeStrongGlobalizeSetRootDir,
     NodeResolveFrom,
     NodeProtobufLoad,
+}
+
+<span class="kw">impl </span>WellKnownFunctionKind {
+    <span class="kw">pub fn </span>as_define_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str]&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Import =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;import&quot;</span>]),
+            <span class="self">Self</span>::Require =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;require&quot;</span>]),
+            <span class="self">Self</span>::RequireResolve =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;require&quot;</span>, <span class="string">&quot;resolve&quot;</span>]),
+            <span class="self">Self</span>::Define =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;define&quot;</span>]),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
 }
 
 <span class="kw">fn </span>is_unresolved(i: <span class="kw-2">&amp;</span>Ident, unresolved_mark: Mark) -&gt; bool {
@@ -6109,7 +6342,7 @@
     };
     <span class="kw">use </span>turbo_tasks::{util::FormatDuration, Value};
     <span class="kw">use </span>turbopack_core::{
-        compile_time_info::CompileTimeInfo,
+        compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -6389,6 +6622,7 @@
                     )),
                     Value::new(EnvironmentIntention::ServerRendering),
                 ),
+                defines: CompileTimeDefinesVc::empty(),
             }
             .cell();
             link(

@@ -42,9 +42,19 @@
 <span id="42">42</span>
 <span id="43">43</span>
 <span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
-    compile_time_info::CompileTimeInfoVc,
+    compile_time_defines,
+    compile_time_info::CompileTimeInfo,
     context::AssetContextVc,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     resolve::options::ImportMapVc,
@@ -62,12 +72,20 @@
 ) -&gt; AssetContextVc {
     ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
-        CompileTimeInfoVc::new(EnvironmentVc::new(
-            Value::new(ExecutionEnvironment::NodeJsBuildTime(
-                NodeJsEnvironment::default().cell(),
-            )),
-            Value::new(EnvironmentIntention::Build),
-        )),
+        CompileTimeInfo {
+            environment: EnvironmentVc::new(
+                Value::new(ExecutionEnvironment::NodeJsBuildTime(
+                    NodeJsEnvironment::default().cell(),
+                )),
+                Value::new(EnvironmentIntention::Build),
+            ),
+            defines: <span class="macro">compile_time_defines!</span>(
+                process.turbopack = <span class="bool-val">true</span>,
+                process.env.NODE_ENV = <span class="string">&quot;development&quot;</span>,
+            )
+            .cell(),
+        }
+        .cell(),
         ModuleOptionsContext {
             enable_typescript_transform: <span class="bool-val">true</span>,
             ..Default::default()

@@ -296,6 +296,16 @@
 <span id="296">296</span>
 <span id="297">297</span>
 <span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -308,7 +318,8 @@
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
 <span class="kw">use </span>turbopack_core::{
-    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     environment::{
         EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc,
         ServerAddrVc,
@@ -435,6 +446,14 @@
     .cell())
 }
 
+<span class="kw">pub fn </span>next_server_defines() -&gt; CompileTimeDefinesVc {
+    <span class="macro">compile_time_defines!</span>(
+        process.turbopack = <span class="bool-val">true</span>,
+        process.env.NODE_ENV = <span class="string">&quot;development&quot;
+    </span>)
+    .cell()
+}
+
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>get_server_compile_time_info(
     ty: Value&lt;ServerContextType&gt;,
@@ -457,6 +476,7 @@
                 ServerContextType::Middleware =&gt; Value::new(EnvironmentIntention::Middleware),
             },
         ),
+        defines: next_server_defines(),
     }
     .cell()
 }

@@ -623,6 +623,10 @@
 <span id="623">623</span>
 <span id="624">624</span>
 <span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -665,7 +669,7 @@
 <span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    compile_time_info::CompileTimeInfo,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueReporter, IssueSeverity, IssueVc},
@@ -881,7 +885,11 @@
         )),
         Value::new(EnvironmentIntention::Api),
     );
-    <span class="kw">let </span>compile_time_info = CompileTimeInfo { environment: env }.cell();
+    <span class="kw">let </span>compile_time_info = CompileTimeInfo {
+        environment: env,
+        defines: CompileTimeDefinesVc::empty(),
+    }
+    .cell();
     <span class="kw">let </span>glob_mappings = <span class="macro">vec!</span>[
         (
             root,

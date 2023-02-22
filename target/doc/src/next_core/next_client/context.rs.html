@@ -257,6 +257,16 @@
 <span id="257">257</span>
 <span id="258">258</span>
 <span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -275,7 +285,8 @@
 };
 <span class="kw">use </span>turbopack_core::{
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
-    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
     resolve::{parse::RequestVc, pattern::Pattern},
@@ -298,6 +309,14 @@
     util::foreign_code_context_condition,
 };
 
+<span class="kw">pub fn </span>next_client_defines() -&gt; CompileTimeDefinesVc {
+    <span class="macro">compile_time_defines!</span>(
+        process.turbopack = <span class="bool-val">true</span>,
+        process.env.NODE_ENV = <span class="string">&quot;development&quot;
+    </span>)
+    .cell()
+}
+
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>get_client_compile_time_info(browserslist_query: <span class="kw-2">&amp;</span>str) -&gt; CompileTimeInfoVc {
     CompileTimeInfo {
@@ -313,6 +332,7 @@
             )),
             Value::new(EnvironmentIntention::Client),
         ),
+        defines: next_client_defines(),
     }
     .cell()
 }

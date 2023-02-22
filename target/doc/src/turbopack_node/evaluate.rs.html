@@ -354,6 +354,35 @@
 <span id="354">354</span>
 <span id="355">355</span>
 <span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
@@ -362,6 +391,7 @@
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
+<span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{
     glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
@@ -402,6 +432,7 @@
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
@@ -457,6 +488,27 @@
     <span class="kw">let </span>(<span class="prelude-val">Some</span>(cwd), <span class="prelude-val">Some</span>(entrypoint)) = (to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">?</span>, to_sys_path(path).<span class="kw">await</span><span class="question-mark">?</span>) <span class="kw">else </span>{
         <span class="macro">panic!</span>(<span class="string">&quot;can only evaluate from a disk filesystem&quot;</span>);
     };
+
+    <span class="kw">let </span>runtime_entries = {
+        <span class="kw">let </span>globals_module = EcmascriptModuleAssetVc::new(
+            SourceAssetVc::new(embed_file_path(<span class="string">&quot;globals.ts&quot;</span>)).into(),
+            context,
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+            context.compile_time_info(),
+        )
+        .as_ecmascript_chunk_placeable();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>entries = <span class="macro">vec!</span>[globals_module];
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(other_entries) = runtime_entries {
+            <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>other_entries.<span class="kw">await</span><span class="question-mark">? </span>{
+                entries.push(<span class="kw-2">*</span>entry)
+            }
+        };
+
+        <span class="prelude-val">Some</span>(EcmascriptChunkPlaceablesVc::cell(entries))
+    };
+
     <span class="kw">let </span>bootstrap = NodeJsBootstrapAsset {
         path,
         chunk_group: ChunkGroupVc::from_chunk(
@@ -467,7 +519,11 @@
     <span class="kw">let </span>pool = NodeJsPool::new(
         cwd,
         entrypoint,
-        HashMap::new(),
+        env.read_all()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
         available_parallelism().map_or(<span class="number">1</span>, |v| v.get()),
         debug,
     );
@@ -503,6 +559,7 @@
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context_path_for_issue: FileSystemPathVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -515,6 +572,7 @@
         context_path,
         module_asset,
         cwd,
+        env,
         context,
         intermediate_output_path,
         runtime_entries,

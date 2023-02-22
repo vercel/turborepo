@@ -906,7 +906,7 @@
     <span class="kw">let </span>env = load_env(project_path);
     <span class="kw">let </span>build_output_root = output_fs.root().join(<span class="string">&quot;.next/build&quot;</span>);
 
-    <span class="kw">let </span>execution_context = ExecutionContextVc::new(project_path, build_output_root);
+    <span class="kw">let </span>execution_context = ExecutionContextVc::new(project_path, build_output_root, env);
 
     <span class="kw">let </span>next_config = load_next_config(execution_context.join(<span class="string">&quot;next_config&quot;</span>));
 

@@ -598,6 +598,8 @@
 <span id="598">598</span>
 <span id="599">599</span>
 <span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1138,6 +1140,7 @@
     <span class="kw">let </span>ExecutionContext {
         project_root,
         intermediate_output_path,
+        env,
     } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
 
@@ -1176,6 +1179,7 @@
         project_root,
         load_next_config_asset,
         project_root,
+        env,
         config_asset.map_or(project_root, |c| c.path()),
         context,
         intermediate_output_path,

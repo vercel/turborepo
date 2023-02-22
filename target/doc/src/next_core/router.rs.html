@@ -338,6 +338,8 @@
 <span id="338">338</span>
 <span id="339">339</span>
 <span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -626,6 +628,7 @@
     <span class="kw">let </span>ExecutionContext {
         project_root,
         intermediate_output_path,
+        env,
     } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>project_path = wrap_with_next_js_fs(project_root);
     <span class="kw">let </span>intermediate_output_path = intermediate_output_path.join(<span class="string">&quot;router&quot;</span>);
@@ -654,6 +657,7 @@
         project_path,
         router_asset,
         project_root,
+        env,
         project_root,
         context,
         intermediate_output_path,

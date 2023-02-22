@@ -2192,6 +2192,16 @@
 <span id="2192">2192</span>
 <span id="2193">2193</span>
 <span id="2194">2194</span>
+<span id="2195">2195</span>
+<span id="2196">2196</span>
+<span id="2197">2197</span>
+<span id="2198">2198</span>
+<span id="2199">2199</span>
+<span id="2200">2200</span>
+<span id="2201">2201</span>
+<span id="2202">2202</span>
+<span id="2203">2203</span>
+<span id="2204">2204</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2204,6 +2214,7 @@
 <span class="kw">pub mod </span>util;
 
 <span class="kw">use </span>std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap},
     future::Future,
     mem::take,
@@ -2287,7 +2298,7 @@
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
         imports::Reexport,
-        ConstantValue, ModuleValue,
+        ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
@@ -3789,6 +3800,20 @@
     v: JsValue,
     compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = v.get_defineable_name_len() {
+        <span class="kw">let </span>compile_time_info = compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>defines = compile_time_info.defines.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>(name, value) <span class="kw">in </span>defines.iter() {
+            <span class="kw">if </span>name.len() != def_name_len {
+                <span class="kw">continue</span>;
+            }
+            <span class="kw">if </span>v.iter_defineable_name_rev()
+                .eq(name.iter().map(Cow::Borrowed).rev())
+            {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>((value.into(), <span class="bool-val">true</span>));
+            }
+        }
+    }
     <span class="kw">let </span>value = <span class="kw">match </span>v {
         JsValue::Call(
             <span class="kw">_</span>,
@@ -3844,7 +3869,7 @@
             FreeVarKind::Import =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
             FreeVarKind::NodeProcess =&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
             FreeVarKind::Object =&gt; JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
-            <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(v)), <span class="string">&quot;unknown global&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>((v, <span class="bool-val">false</span>)),
         },
         JsValue::Module(ModuleValue {
             module: <span class="kw-2">ref </span>name, ..
@@ -3891,11 +3916,6 @@
             <span class="prelude-val">Some</span>(Arc::new(v)),
             <span class="string">&quot;cross function analyzing is not yet supported&quot;</span>,
         ),
-        JsValue::Member(
-            <span class="kw">_</span>,
-            <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-            <span class="kw">box </span>JsValue::Constant(value),
-        ) <span class="kw">if </span>value.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;turbopack&quot;</span>) =&gt; JsValue::Constant(ConstantValue::True),
         <span class="kw">_ </span>=&gt; {
             <span class="kw">let </span>(<span class="kw-2">mut </span>v, <span class="kw-2">mut </span>modified) = replace_well_known(v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
             modified = replace_builtin(<span class="kw-2">&amp;mut </span>v) || modified;

@@ -248,6 +248,8 @@
 <span id="248">248</span>
 <span id="249">249</span>
 <span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
@@ -446,6 +448,7 @@
         <span class="kw">let </span>ExecutionContext {
             project_root,
             intermediate_output_path,
+            env,
         } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>source_content = this.source.content();
         <span class="kw">let </span>AssetContent::File(file) = <span class="kw-2">*</span>source_content.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
@@ -470,6 +473,7 @@
             project_root,
             postcss_executor,
             project_root,
+            env,
             this.source.path(),
             context,
             intermediate_output_path,

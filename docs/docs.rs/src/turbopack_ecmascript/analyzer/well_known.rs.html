@@ -626,6 +626,7 @@
 <span id="626">626</span>
 <span id="627">627</span>
 <span id="628">628</span>
+<span id="629">629</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -662,12 +663,11 @@
             }
             (JsValue::Call(usize, callee, args), <span class="bool-val">false</span>)
         }
-        JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownObject(kind), <span class="kw">box </span>prop) =&gt; (
-            well_known_object_member(kind, prop, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>,
-            <span class="bool-val">true</span>,
-        ),
+        JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownObject(kind), <span class="kw">box </span>prop) =&gt; {
+            well_known_object_member(kind, prop, compile_time_info).<span class="kw">await</span><span class="question-mark">?
+        </span>}
         JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::WellKnownFunction(kind), <span class="kw">box </span>prop) =&gt; {
-            (well_known_function_member(kind, prop), <span class="bool-val">true</span>)
+            well_known_function_member(kind, prop)
         }
         <span class="kw">_ </span>=&gt; (value, <span class="bool-val">false</span>),
     })
@@ -1001,8 +1001,8 @@
     }
 }
 
-<span class="kw">pub fn </span>well_known_function_member(kind: WellKnownFunctionKind, prop: JsValue) -&gt; JsValue {
-    <span class="kw">match </span>(<span class="kw-2">&amp;</span>kind, prop.as_str()) {
+<span class="kw">pub fn </span>well_known_function_member(kind: WellKnownFunctionKind, prop: JsValue) -&gt; (JsValue, bool) {
+    <span class="kw">let </span>new_value = <span class="kw">match </span>(<span class="kw-2">&amp;</span>kind, prop.as_str()) {
         (WellKnownFunctionKind::Require, <span class="prelude-val">Some</span>(<span class="string">&quot;resolve&quot;</span>)) =&gt; {
             JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve)
         }
@@ -1015,22 +1015,23 @@
         (WellKnownFunctionKind::NodeResolveFrom, <span class="prelude-val">Some</span>(<span class="string">&quot;silent&quot;</span>)) =&gt; {
             JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom)
         }
-        <span class="kw">_ </span>=&gt; JsValue::Unknown(
-            <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownFunction(kind),
-                <span class="kw">box </span>prop,
-            ))),
-            <span class="string">&quot;unsupported property on function&quot;</span>,
-        ),
-    }
+        <span class="attr">#[allow(unreachable_patterns)]
+        </span><span class="kw">_ </span>=&gt; {
+            <span class="kw">return </span>(
+                JsValue::member(<span class="kw">box </span>JsValue::WellKnownFunction(kind), <span class="kw">box </span>prop),
+                <span class="bool-val">false</span>,
+            )
+        }
+    };
+    (new_value, <span class="bool-val">true</span>)
 }
 
 <span class="kw">pub async fn </span>well_known_object_member(
     kind: WellKnownObjectKind,
     prop: JsValue,
     compile_time_info: CompileTimeInfoVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>kind {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
+    <span class="kw">let </span>new_value = <span class="kw">match </span>kind {
         WellKnownObjectKind::GlobalObject =&gt; global_object(prop),
         WellKnownObjectKind::PathModule | WellKnownObjectKind::PathModuleDefault =&gt; {
             path_module_member(kind, prop)
@@ -1052,14 +1053,14 @@
         WellKnownObjectKind::NodeExpressApp =&gt; express(prop),
         WellKnownObjectKind::NodeProtobufLoader =&gt; protobuf_loader(prop),
         <span class="attr">#[allow(unreachable_patterns)]
-        </span><span class="kw">_ </span>=&gt; JsValue::Unknown(
-            <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(kind),
-                <span class="kw">box </span>prop,
-            ))),
-            <span class="string">&quot;unsupported object kind&quot;</span>,
-        ),
-    })
+        </span><span class="kw">_ </span>=&gt; {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>((
+                JsValue::member(<span class="kw">box </span>JsValue::WellKnownObject(kind), <span class="kw">box </span>prop),
+                <span class="bool-val">false</span>,
+            ))
+        }
+    };
+    <span class="prelude-val">Ok</span>((new_value, <span class="bool-val">true</span>))
 }
 
 <span class="kw">fn </span>global_object(prop: JsValue) -&gt; JsValue {
@@ -1204,6 +1205,7 @@
             .as_str()
             .into(),
         <span class="prelude-val">Some</span>(<span class="string">&quot;cwd&quot;</span>) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::ProcessCwd),
+        <span class="prelude-val">Some</span>(<span class="string">&quot;env&quot;</span>) =&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcessEnv),
         <span class="kw">_ </span>=&gt; JsValue::Unknown(
             <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
                 <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),

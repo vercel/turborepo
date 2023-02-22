@@ -47,6 +47,11 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
@@ -58,16 +63,16 @@
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>FilterProcessEnv {
     prior: ProcessEnvVc,
-    filter: String,
+    filters: Vec&lt;String&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>FilterProcessEnvVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(prior: ProcessEnvVc, filter: String) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(prior: ProcessEnvVc, filters: Vec&lt;String&gt;) -&gt; <span class="self">Self </span>{
         FilterProcessEnv {
             prior,
-            filter: filter.to_uppercase(),
+            filters: filters.into_iter().map(|f| f.to_uppercase()).collect(),
         }
         .cell()
     }
@@ -80,8 +85,12 @@
         <span class="kw">let </span>prior = <span class="self">self</span>.prior.read_all().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>filtered = IndexMap::new();
         <span class="kw">for </span>(key, value) <span class="kw">in </span><span class="kw-2">&amp;*</span>prior {
-            <span class="kw">if </span>key.to_uppercase().starts_with(<span class="kw-2">&amp;</span><span class="self">self</span>.filter) {
-                filtered.insert(key.clone(), value.clone());
+            <span class="kw">let </span>uppercase = key.to_uppercase();
+            <span class="kw">for </span>filter <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.filters {
+                <span class="kw">if </span>uppercase.starts_with(filter) {
+                    filtered.insert(key.clone(), value.clone());
+                    <span class="kw">break</span>;
+                }
             }
         }
         <span class="prelude-val">Ok</span>(EnvMapVc::cell(filtered))
@@ -89,11 +98,12 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; OptionStringVc {
-        <span class="kw">if </span>name.to_uppercase().starts_with(<span class="kw-2">&amp;</span><span class="self">self</span>.filter) {
-            <span class="self">self</span>.prior.read(name)
-        } <span class="kw">else </span>{
-            OptionStringVc::cell(<span class="prelude-val">None</span>)
+        <span class="kw">for </span>filter <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.filters {
+            <span class="kw">if </span>name.to_uppercase().starts_with(filter) {
+                <span class="kw">return </span><span class="self">self</span>.prior.read(name);
+            }
         }
+        OptionStringVc::cell(<span class="prelude-val">None</span>)
     }
 }
 </code></pre></div>
