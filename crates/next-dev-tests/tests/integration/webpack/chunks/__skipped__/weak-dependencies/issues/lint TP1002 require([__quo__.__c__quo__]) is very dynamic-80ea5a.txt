@@ -1,0 +1,38 @@
+PlainIssue {
+    severity: Warning,
+    context: "[project-with-next]/crates/next-dev-tests/tests/integration/webpack/chunks/__skipped__/weak-dependencies/input/index.js",
+    category: "parse",
+    title: "lint TP1002 require([\"./c\"]) is very dynamic",
+    description: "",
+    detail: "",
+    documentation_link: "",
+    source: Some(
+        PlainIssueSource {
+            asset: PlainAsset {
+                path: FileSystemPath {
+                    fs: FileSystem(AttachedFileSystem {
+                        root_fs: FileSystem(DiskFileSystem {
+                            name: "project",
+                            root: "WORKSPACE_ROOT",
+                        }),
+                        child_path: "crates/next-dev-tests/tests/integration/webpack/chunks/__skipped__/weak-dependencies/input/[embedded_modules]/@vercel/turbopack-next",
+                        child_fs: FileSystem(DiskFileSystem {
+                            name: "next",
+                            root: "WORKSPACE_ROOT/crates/next-core/js/src",
+                        }),
+                    }),
+                    path: "crates/next-dev-tests/tests/integration/webpack/chunks/__skipped__/weak-dependencies/input/index.js",
+                },
+            },
+            start: SourcePos {
+                line: 5,
+                column: 2,
+            },
+            end: SourcePos {
+                line: 5,
+                column: 2,
+            },
+        },
+    ),
+    sub_issues: [],
+}

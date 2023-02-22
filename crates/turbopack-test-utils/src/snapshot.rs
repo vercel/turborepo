@@ -35,9 +35,10 @@ pub async fn snapshot_issues<
 
         let path = issues_path.join(&format!(
             "{}-{}.txt",
-            // We replace "*", "?", and '"' because they're not allowed in filenames on Windows.
             plain_issue
                 .title
+                .replace('/', "__")
+                // We replace "*", "?", and '"' because they're not allowed in filenames on Windows.
                 .replace('*', "__star__")
                 .replace('"', "__quo__")
                 .replace('?', "__q__"),
