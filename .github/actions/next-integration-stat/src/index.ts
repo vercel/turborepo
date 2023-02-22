@@ -3,6 +3,7 @@ import { info, getInput } from "@actions/core";
 const { default: stripAnsi } = require("strip-ansi");
 const { default: nodeFetch } = require("node-fetch");
 const fs = require("fs");
+const path = require("path");
 const semver = require("semver");
 
 /**
@@ -308,9 +309,10 @@ function collectFailedTestResults(
             name: failedTest,
             data: JSON.parse(testData),
           });
-          logLine = failedSplitLogs.shift();
         } catch (_) {
-          console.log(`Failed to parse test data`);
+          console.log(`Failed to parse test data`, { logs });
+        } finally {
+          logLine = failedSplitLogs.shift();
         }
       }
 
@@ -468,18 +470,8 @@ async function getFailedJobResults(
     ref: sha,
   } as any;
 
-  const failedJobResults = fullJobLogsFromWorkflow
-    .filter(({ logs, job }) => {
-      if (
-        !logs.includes(`failed to pass within`) ||
-        !logs.includes("--test output start--")
-      ) {
-        console.log(`Couldn't find failed tests in logs for job `, job.name);
-        return false;
-      }
-      return true;
-    })
-    .reduce((acc, { logs, job }) => {
+  const failedJobResults = fullJobLogsFromWorkflow.reduce(
+    (acc, { logs, job }) => {
       // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
       const splittedLogs = logs
         .split("NEXT_INTEGRATION_TEST: true")
@@ -489,7 +481,9 @@ async function getFailedJobResults(
       const failedTestResultsData = collectFailedTestResults(splittedLogs, job);
 
       return acc.concat(failedTestResultsData);
-    }, [] as Array<FailedJobResult>);
+    },
+    [] as Array<FailedJobResult>
+  );
 
   testResultManifest.result = failedJobResults;
 
@@ -558,6 +552,18 @@ async function getTestResultDiffBase(
     ).data.tree;
   } else {
     console.log("Trying to find latest test results from next.js release");
+    const getVersion = (v: { path?: string }) => {
+      if (v.path) {
+        console.log("Trying to get version from base path", v.path);
+        const base = path.basename(v.path, ".json");
+        const ret = base.split("-").slice(1, 3).join("-");
+        console.log("Found version", ret);
+        return ret;
+      }
+
+      return null;
+    };
+
     const baseTree = testResultsTree
       .filter((tree) => tree.path !== "main")
       .reduce((acc, value) => {
@@ -565,7 +571,14 @@ async function getTestResultDiffBase(
           return value;
         }
 
-        return semver.gt(value.path, acc.path) ? value : acc;
+        const currentVersion = semver.valid(getVersion(value));
+        const accVersion = semver.valid(getVersion(acc));
+
+        if (!currentVersion || !accVersion) {
+          return acc;
+        }
+
+        return semver.gt(currentVersion, accVersion) ? value : acc;
       }, null);
 
     if (!baseTree || !baseTree.sha) {
@@ -920,6 +933,8 @@ async function run() {
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
   const failedTestLists = [];
+  // Collect failed test results for each job. We don't use this actively yet.
+  const perJobFailedLists = {};
 
   // Consturct a comment body to post test report with summary & full details.
   const comments = failedJobResults.result.reduce((acc, value, idx) => {
@@ -947,6 +962,11 @@ async function run() {
     if (!failedTestLists.includes(failedTest)) {
       commentValues.push(`\`${failedTest}\``);
       failedTestLists.push(failedTest);
+
+      if (!perJobFailedLists[value.job]) {
+        perJobFailedLists[value.job] = [];
+      }
+      perJobFailedLists[value.job].push(failedTest);
     }
     commentValues.push(`\n`);
 
