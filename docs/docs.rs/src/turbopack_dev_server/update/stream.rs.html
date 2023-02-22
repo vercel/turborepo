@@ -240,7 +240,7 @@
     <span class="kw">let </span>content = get_content();
 
     <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
-        ResolveSourceRequestResult::Static(static_content) =&gt; {
+        ResolveSourceRequestResult::Static(static_content, <span class="kw">_</span>) =&gt; {
             <span class="kw">let </span>resolved_content = static_content.<span class="kw">await</span><span class="question-mark">?</span>.content;
             <span class="kw">let </span>from = from.get();
             <span class="kw">let </span>update = resolved_content.update(from);
@@ -337,7 +337,7 @@
         <span class="comment">// We can ignore issues reported in content here since [compute_update_stream]
         // will handle them
         </span><span class="kw">let </span>version = <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveSourceRequestResult::Static(static_content) =&gt; {
+            ResolveSourceRequestResult::Static(static_content, <span class="kw">_</span>) =&gt; {
                 static_content.<span class="kw">await</span><span class="question-mark">?</span>.content.version()
             }
             <span class="kw">_ </span>=&gt; NotFoundVersionVc::new().into(),

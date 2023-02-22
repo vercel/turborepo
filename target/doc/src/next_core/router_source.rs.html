@@ -154,6 +154,7 @@
 <span id="154">154</span>
 <span id="155">155</span>
 <span id="156">156</span>
+<span id="157">157</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
@@ -163,7 +164,7 @@
 };
 <span class="kw">use </span>turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
-    ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult, RewriteVc,
+    ContentSourceResultVc, ContentSourceVc, HeaderListVc, NeededData, ProxyResult, RewriteBuilder,
 };
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
@@ -266,11 +267,12 @@
                 .inner
                 .get(path, Value::new(ContentSourceData::default())),
             RouterResult::Rewrite(data) =&gt; {
-                <span class="comment">// TODO: We can&#39;t set response headers on the returned content.
-                </span>ContentSourceResultVc::exact(
-                    ContentSourceContent::Rewrite(RewriteVc::new(data.url.clone(), this.inner))
-                        .cell()
-                        .into(),
+                <span class="kw">let </span><span class="kw-2">mut </span>rewrite = RewriteBuilder::new(data.url.clone()).content_source(this.inner);
+                <span class="kw">if </span>!data.headers.is_empty() {
+                    rewrite = rewrite.response_headers(HeaderListVc::new(data.headers.clone()));
+                }
+                ContentSourceResultVc::exact(
+                    ContentSourceContent::Rewrite(rewrite.build()).cell().into(),
                 )
             }
             RouterResult::FullMiddleware(data) =&gt; ContentSourceResultVc::exact(

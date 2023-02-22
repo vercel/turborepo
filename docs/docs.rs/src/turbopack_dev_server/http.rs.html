@@ -150,6 +150,16 @@
 <span id="150">150</span>
 <span id="151">151</span>
 <span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{StreamExt, TryStreamExt};
 <span class="kw">use </span>hyper::{header::HeaderName, Request, Response};
@@ -170,6 +180,7 @@
         content: FileContentReadRef,
         status_code: u16,
         headers: HeaderListReadRef,
+        header_overwrites: HeaderListReadRef,
     },
     HttpProxy(ProxyResultReadRef),
     NotFound,
@@ -185,13 +196,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;GetFromSourceResultVc&gt; {
     <span class="prelude-val">Ok</span>(
         <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_source_request(source, request, issue_repoter).<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveSourceRequestResult::Static(static_content_vc) =&gt; {
+            ResolveSourceRequestResult::Static(static_content_vc, header_overwrites) =&gt; {
                 <span class="kw">let </span>static_content = static_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>static_content.content.content().<span class="kw">await</span><span class="question-mark">? </span>{
                     GetFromSourceResult::Static {
                         content: file.<span class="kw">await</span><span class="question-mark">?</span>,
                         status_code: static_content.status_code,
                         headers: static_content.headers.<span class="kw">await</span><span class="question-mark">?</span>,
+                        header_overwrites: header_overwrites.<span class="kw">await</span><span class="question-mark">?</span>,
                     }
                 } <span class="kw">else </span>{
                     GetFromSourceResult::NotFound
@@ -221,6 +233,7 @@
             content,
             status_code,
             headers,
+            header_overwrites,
         } =&gt; {
             <span class="kw">if let </span>FileContent::Content(file) = <span class="kw-2">&amp;**</span>content {
                 <span class="kw">let </span><span class="kw-2">mut </span>response = Response::builder().status(<span class="kw-2">*</span>status_code);
@@ -231,6 +244,13 @@
                     header_map.append(
                         HeaderName::try_from(header_name.clone())<span class="question-mark">?</span>,
                         hyper::header::HeaderValue::try_from(header_value.as_str())<span class="question-mark">?</span>,
+                    );
+                }
+
+                <span class="kw">for </span>(header_name, header_value) <span class="kw">in </span>header_overwrites.iter() {
+                    header_map.insert(
+                        HeaderName::try_from(header_name.clone())<span class="question-mark">?</span>,
+                        hyper::header::HeaderValue::try_from(header_value)<span class="question-mark">?</span>,
                     );
                 }
 

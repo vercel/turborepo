@@ -165,6 +165,14 @@
 <span id="165">165</span>
 <span id="166">166</span>
 <span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
@@ -180,7 +188,7 @@
     query::Query,
     request::SourceRequest,
     ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
-    ProxyResultVc, StaticContentVc,
+    HeaderListVc, ProxyResultVc, StaticContentVc,
 };
 <span class="kw">use crate</span>::{
     handle_issues,
@@ -193,7 +201,7 @@
 </span><span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
 </span><span class="kw">pub enum </span>ResolveSourceRequestResult {
     NotFound,
-    Static(StaticContentVc),
+    Static(StaticContentVc, HeaderListVc),
     HttpProxy(ProxyResultVc),
 }
 
@@ -211,6 +219,7 @@
     </span><span class="kw">let </span>original_path = request.uri.path().to_string();
     <span class="kw">let </span><span class="kw-2">mut </span>current_asset_path = urlencoding::decode(<span class="kw-2">&amp;</span>original_path[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
     <span class="kw">let </span><span class="kw-2">mut </span>request_overwrites = (<span class="kw-2">*</span>request).clone();
+    <span class="kw">let </span><span class="kw-2">mut </span>response_header_overwrites = Vec::new();
     <span class="kw">loop </span>{
         <span class="kw">let </span>result = current_source.get(<span class="kw-2">&amp;</span>current_asset_path, Value::new(data));
         handle_issues(
@@ -246,6 +255,9 @@
 
                         current_source = new_source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                         request_overwrites.uri = new_uri;
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.response_headers {
+                            response_header_overwrites.extend(headers.<span class="kw">await</span><span class="question-mark">?</span>.iter().cloned());
+                        }
                         current_asset_path = new_asset_path;
                         data = ContentSourceData::default();
                     } <span class="comment">// _ =&gt; ,
@@ -253,7 +265,11 @@
                         <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell())
                     }
                     ContentSourceContent::Static(static_content) =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::Static(<span class="kw-2">*</span>static_content).cell())
+                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::Static(
+                            <span class="kw-2">*</span>static_content,
+                            HeaderListVc::new(response_header_overwrites),
+                        )
+                        .cell())
                     }
                     ContentSourceContent::HttpProxy(proxy_result) =&gt; {
                         <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::HttpProxy(<span class="kw-2">*</span>proxy_result).cell())
