@@ -15,7 +15,7 @@ To skip unaffected work, ensure that your git history is available and run `npx 
 
 `turbo-ignore` uses a combination of the `--filter` and `--dry=json` flags to find changes from the parent commit to the current commit to identify affected packages. By default, `turbo-ignore` finds the difference for the **build task in the current working directory**, but you can [customize this behavior with flags](#customizing-behavior).
 
-Here's an example of the command that will be built and ran:
+Here's an example of the command that will be built and run:
 
 ```bash
 npx turbo run build --filter=@example/web...[3c8387ffd98b751305fe3f0284befdd00cbd4610] --dry=json
