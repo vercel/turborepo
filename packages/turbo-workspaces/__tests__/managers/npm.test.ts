@@ -6,6 +6,7 @@ import { PackageManager, PackageJson } from "../../src/types";
 import fs from "fs-extra";
 import {
   extendMatrix,
+  generateArgMatrix,
   generateTestMatrix,
   validateWorkspace,
 } from "../test-utils";
@@ -121,7 +122,7 @@ describe("npm", () => {
 
         const read = async () => npm.read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
-          expect(read).rejects.toThrow("Not an npm workspaces project");
+          expect(read).rejects.toThrow("Not an npm project");
           return;
         }
         const project = await npm.read({
@@ -173,32 +174,25 @@ describe("npm", () => {
   });
 
   describe("clean", () => {
-    test.each([
-      [true, true],
-      [false, true],
-      [false, true],
-      [true, false],
-      [false, false],
-    ])("cleans %s npm workspaces", async (interactive, dry) => {
-      const { root } = useFixture({ fixture: "basic" });
-      const project = await npm.read({
-        workspaceRoot: root,
-      });
+    test.each(generateArgMatrix())(
+      "cleans %s npm workspaces",
+      async (interactive, dry) => {
+        const { root } = useFixture({ fixture: "basic" });
+        const project = await npm.read({
+          workspaceRoot: root,
+        });
 
-      await npm.clean({
-        project,
-        logger: new Logger({ interactive, dry }),
-        options: {
-          interactive,
-          dry,
-        },
-      });
+        await npm.clean({
+          project,
+          logger: new Logger({ interactive, dry }),
+          options: {
+            interactive,
+            dry,
+          },
+        });
 
-      if (dry) {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(true);
-      } else {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(false);
+        expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
       }
-    });
+    );
   });
 });

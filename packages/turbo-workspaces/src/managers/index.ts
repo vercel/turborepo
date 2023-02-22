@@ -5,7 +5,7 @@ import { ManagerHandler, PackageManager } from "../types";
 
 const MANAGERS: Record<PackageManager, ManagerHandler> = {
   pnpm,
-  npm,
   yarn,
+  npm,
 };
 export default MANAGERS;

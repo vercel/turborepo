@@ -13,7 +13,7 @@ type InstallType = "dependencies" | "devDependencies";
 
 function getGlobalBinaryPaths(): Record<PackageManager, string | undefined> {
   return {
-    // we run these from the homedir to avoid corepack interference
+    // we run these from a tmpdir to avoid corepack interference
     yarn: exec(`yarn global bin`, { cwd: os.tmpdir() }),
     npm: exec(`npm bin --global`, { cwd: os.tmpdir() }),
     pnpm: exec(`pnpm  bin --global`, { cwd: os.tmpdir() }),

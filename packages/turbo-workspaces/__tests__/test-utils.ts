@@ -65,6 +65,20 @@ export function generateTestMatrix(): Array<
   return matrix;
 }
 
+export function generateArgMatrix() {
+  const interactive = [true, false];
+  const dryRun = [true, false];
+
+  const matrix: Array<[boolean, boolean]> = [];
+  for (const i of interactive) {
+    for (const d of dryRun) {
+      matrix.push([i, d]);
+    }
+  }
+
+  return matrix;
+}
+
 export function generateConvertMatrix() {
   const packageManagers: Array<PackageManager> = ["pnpm", "npm", "yarn"];
   const interactive = [true, false];

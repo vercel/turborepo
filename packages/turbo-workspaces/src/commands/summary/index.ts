@@ -2,15 +2,12 @@ import inquirer from "inquirer";
 import path from "path";
 import { Logger } from "../../logger";
 import chalk from "chalk";
-import { SummaryCommandArgument, SummaryCommandOptions } from "./types";
+import { SummaryCommandArgument } from "./types";
 import { directoryInfo } from "../../utils";
 import getWorkspaceDetails from "../../getWorkspaceDetails";
 import { Workspace } from "../../types";
 
-export default async function summary(
-  directory: SummaryCommandArgument,
-  _: SummaryCommandOptions
-) {
+export default async function summary(directory: SummaryCommandArgument) {
   const logger = new Logger();
   logger.hero();
 

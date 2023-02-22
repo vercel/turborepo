@@ -50,7 +50,15 @@ export default function updateDependencies({
   to: PackageManagerDetails;
   logger: Logger;
   options?: Options;
-}) {
+}): void {
+  // this step isn't required if moving between yarn / npm
+  if (
+    ["yarn", "npm"].includes(to.name) &&
+    ["yarn", "npm"].includes(project.packageManager)
+  ) {
+    return;
+  }
+
   // update all dependencies
   const workspacePackageJson = getPackageJson({
     workspaceRoot: workspace.paths.root,

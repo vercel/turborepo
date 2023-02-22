@@ -5,6 +5,7 @@ import MANAGERS from "../../src/managers";
 import { PackageManager, Workspace } from "../../src/types";
 import {
   extendMatrix,
+  generateArgMatrix,
   generateTestMatrix,
   validateWorkspace,
 } from "../test-utils";
@@ -134,7 +135,7 @@ describe("pnpm", () => {
 
         const read = async () => pnpm.read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
-          expect(read).rejects.toThrow("Not a pnpm workspaces project");
+          expect(read).rejects.toThrow("Not a pnpm project");
           return;
         }
         const project = await pnpm.read({
@@ -162,7 +163,7 @@ describe("pnpm", () => {
     );
   });
 
-  describe.only("convertLock", () => {
+  describe("convertLock", () => {
     test.each<[PackageManager]>([["npm"], ["yarn"], ["pnpm"]])(
       "converts %s workspaces lockfile to pnpm lockfile",
       async (from) => {
@@ -220,32 +221,29 @@ describe("pnpm", () => {
   });
 
   describe("clean", () => {
-    test.each([
-      [true, true],
-      [false, true],
-      [false, true],
-      [true, false],
-      [false, false],
-    ])("cleans %s pnpm workspaces", async (interactive, dry) => {
-      const { root } = useFixture({ fixture: "basic" });
-      const project = await pnpm.read({
-        workspaceRoot: root,
-      });
+    test.each(generateArgMatrix())(
+      "cleans %s pnpm workspaces",
+      async (interactive, dry) => {
+        const { root } = useFixture({ fixture: "basic" });
+        const project = await pnpm.read({
+          workspaceRoot: root,
+        });
 
-      await pnpm.clean({
-        project,
-        logger: new Logger({ interactive, dry }),
-        options: {
-          interactive,
-          dry,
-        },
-      });
+        await pnpm.clean({
+          project,
+          logger: new Logger({ interactive, dry }),
+          options: {
+            interactive,
+            dry,
+          },
+        });
 
-      if (dry) {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(true);
-      } else {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(false);
+        if (dry) {
+          expect(fs.existsSync(project.paths.lockfile)).toEqual(true);
+        } else {
+          expect(fs.existsSync(project.paths.lockfile)).toEqual(false);
+        }
       }
-    });
+    );
   });
 });

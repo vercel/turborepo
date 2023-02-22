@@ -17,15 +17,15 @@ import {
   getPackageJson,
   expandWorkspaces,
   getWorkspacePackageManager,
+  expandPaths,
 } from "../utils";
 
-/*
- Check if a given project using npm workspaces
-
- Verify by checking for the existence of:
-  1. package-lock.json
-  2.
-*/
+/**
+ * Check if a given project is using npm workspaces
+ * Verify by checking for the existence of:
+ *  1. package-lock.json
+ *  2. packageManager field in package.json
+ */
 async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, "package-lock.json");
   const packageManager = getWorkspacePackageManager({
@@ -34,25 +34,23 @@ async function detect(args: DetectArgs): Promise<boolean> {
   return fs.existsSync(lockFile) || packageManager === "npm";
 }
 
-/*
- Read workspace data from npm workspaces into generic format
+/**
+  Read workspace data from npm workspaces into generic format
 */
 async function read(args: ReadArgs): Promise<Project> {
   const isNpm = await detect(args);
   if (!isNpm) {
-    throw new ConvertError("Not an npm workspaces project");
+    throw new ConvertError("Not an npm project");
   }
 
   const packageJson = getPackageJson(args);
   return {
     name: getWorkspaceName(args),
     packageManager: "npm",
-    paths: {
+    paths: expandPaths({
       root: args.workspaceRoot,
-      packageJson: path.join(args.workspaceRoot, "package.json"),
-      lockfile: path.join(args.workspaceRoot, "package-lock.json"),
-      nodeModules: path.join(args.workspaceRoot, "node_modules"),
-    },
+      lockFile: "package-lock.json",
+    }),
     workspaceData: {
       globs: packageJson.workspaces || [],
       workspaces: expandWorkspaces({
@@ -63,14 +61,14 @@ async function read(args: ReadArgs): Promise<Project> {
   };
 }
 
-/*
- Create npm workspaces from generic format
- Creating npm workspaces involves:
-
-  1. Adding the workspaces field in package.json
-  2. Setting the packageManager field in package.json
-  3. Updating all workspace package.json dependencies to ensure correct format
-*/
+/**
+ * Create npm workspaces from generic format
+ *
+ * Creating npm workspaces involves:
+ *  1. Adding the workspaces field in package.json
+ *  2. Setting the packageManager field in package.json
+ *  3. Updating all workspace package.json dependencies to ensure correct format
+ */
 async function create(args: CreateArgs): Promise<void> {
   const { project, options, to, logger } = args;
 
@@ -92,30 +90,28 @@ async function create(args: CreateArgs): Promise<void> {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
 
-  // if we're converting from pnpm, we need to update the workspace package.json files
-  if (project.packageManager === "pnpm") {
-    // root dependencies
-    updateDependencies({
-      workspace: { name: "root", paths: project.paths },
-      project,
-      to,
-      logger,
-      options,
-    });
+  // root dependencies
+  updateDependencies({
+    workspace: { name: "root", paths: project.paths },
+    project,
+    to,
+    logger,
+    options,
+  });
 
-    logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) =>
-      updateDependencies({ workspace, project, to, logger, options })
-    );
-  }
+  // workspace dependencies
+  logger.workspaceHeader();
+  project.workspaceData.workspaces.forEach((workspace) =>
+    updateDependencies({ workspace, project, to, logger, options })
+  );
 }
 
-/*
-Remove npm workspace data
-
-Removing npm workspaces involves:
-  1. Removing the workspaces field from package.json
-*/
+/**
+ * Remove npm workspace data
+ * Removing npm workspaces involves:
+ *  1. Removing the workspaces field from package.json
+ *  2. Removing the node_modules directory
+ */
 async function remove(args: RemoveArgs): Promise<void> {
   const { project, options, to, logger } = args;
 
@@ -138,18 +134,12 @@ async function remove(args: RemoveArgs): Promise<void> {
       try {
         logger.subStep(`removing "node_modules"`);
         await Promise.all(
-          allModulesDirs.map((dir) => fs.rm(dir, { recursive: true }))
+          allModulesDirs.map((dir) =>
+            fs.rm(dir, { recursive: true, force: true })
+          )
         );
       } catch (err) {
-        // only throw here if we find an error other than ENOENT (dir doesn't exist)
-        if (
-          err &&
-          typeof err === "object" &&
-          "code" in err &&
-          err.code !== "ENOENT"
-        ) {
-          throw new ConvertError("Failed to remove node_modules");
-        }
+        throw new ConvertError("Failed to remove node_modules");
       }
     }
   } else {
@@ -157,6 +147,11 @@ async function remove(args: RemoveArgs): Promise<void> {
   }
 }
 
+/**
+ * Clean is called post install, and is used to clean up any files
+ * from this package manager that were needed for install,
+ * but not required after migration
+ */
 async function clean(args: CleanArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -164,16 +159,22 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    fs.removeSync(project.paths.lockfile);
+    fs.rmSync(project.paths.lockfile, { force: true });
   }
 }
 
-// converts existing, non npm lockfile to a npm lockfile
+/**
+ * Attempts to convert an existing, non npm lockfile to an npm lockfile
+ *
+ * If this is not possible, the non npm lockfile is removed
+ */
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project } = args;
+  const { project, options } = args;
 
   // remove the lockfile
-  fs.removeSync(project.paths.lockfile);
+  if (!options?.dry) {
+    fs.rmSync(project.paths.lockfile, { force: true });
+  }
 }
 
 const npm: ManagerHandler = {

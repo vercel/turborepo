@@ -6,6 +6,7 @@ import { PackageJson, PackageManager } from "../../src/types";
 import fs from "fs-extra";
 import {
   extendMatrix,
+  generateArgMatrix,
   generateTestMatrix,
   validateWorkspace,
 } from "../test-utils";
@@ -122,7 +123,7 @@ describe("yarn", () => {
 
         const read = async () => yarn.read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
-          expect(read).rejects.toThrow("Not a yarn workspaces project");
+          expect(read).rejects.toThrow("Not a yarn project");
           return;
         }
         const project = await yarn.read({
@@ -175,32 +176,25 @@ describe("yarn", () => {
   });
 
   describe("clean", () => {
-    test.each([
-      [true, true],
-      [false, true],
-      [false, true],
-      [true, false],
-      [false, false],
-    ])("cleans %s yarn workspaces", async (interactive, dry) => {
-      const { root } = useFixture({ fixture: "basic" });
-      const project = await yarn.read({
-        workspaceRoot: root,
-      });
+    test.each(generateArgMatrix())(
+      "cleans %s yarn workspaces",
+      async (interactive, dry) => {
+        const { root } = useFixture({ fixture: "basic" });
+        const project = await yarn.read({
+          workspaceRoot: root,
+        });
 
-      await yarn.clean({
-        project,
-        logger: new Logger({ interactive, dry }),
-        options: {
-          interactive,
-          dry,
-        },
-      });
+        await yarn.clean({
+          project,
+          logger: new Logger({ interactive, dry }),
+          options: {
+            interactive,
+            dry,
+          },
+        });
 
-      if (dry) {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(true);
-      } else {
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(false);
+        expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
       }
-    });
+    );
   });
 });

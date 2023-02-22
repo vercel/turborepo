@@ -7,11 +7,11 @@ export type PackageManagerAvailable = { available: boolean; version?: string };
 async function getVersion(
   packageManager: string
 ): Promise<PackageManagerAvailable> {
-  // run the check from home to avoid corepack conflicting -
+  // run the check from tmpdir to avoid corepack conflicting -
   // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
   // but we'll keep the behavior for those on older versions)
   const execOptions = {
-    cwd: os.homedir(),
+    cwd: os.tmpdir(),
     env: { COREPACK_ENABLE_STRICT: "0" },
   };
 

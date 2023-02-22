@@ -14,6 +14,7 @@ import {
   ManagerHandler,
 } from "../types";
 import {
+  expandPaths,
   getWorkspaceName,
   expandWorkspaces,
   getPnpmWorkspaces,
@@ -21,7 +22,12 @@ import {
   getWorkspacePackageManager,
 } from "../utils";
 
-// check if a given project using pnpm workspaces
+/**
+ * Check if a given project is using pnpm workspaces
+ * Verify by checking for the existence of:
+ *  1. pnpm-workspace.yaml
+ *  2. pnpm-workspace.yaml
+ */
 async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, "pnpm-lock.yaml");
   const workspaceFile = path.join(args.workspaceRoot, "pnpm-workspace.yaml");
@@ -35,23 +41,23 @@ async function detect(args: DetectArgs): Promise<boolean> {
   );
 }
 
-// read workspace data from pnpm workspaces into generic format
+/**
+  Read workspace data from pnpm workspaces into generic format
+*/
 async function read(args: ReadArgs): Promise<Project> {
   const isPnpm = await detect(args);
   if (!isPnpm) {
-    throw new ConvertError("Not a pnpm workspaces project");
+    throw new ConvertError("Not a pnpm project");
   }
 
   return {
     name: getWorkspaceName(args),
     packageManager: "pnpm",
-    paths: {
+    paths: expandPaths({
       root: args.workspaceRoot,
-      packageJson: path.join(args.workspaceRoot, "package.json"),
-      lockfile: path.join(args.workspaceRoot, "pnpm-lock.yaml"),
-      workspaceConfig: path.join(args.workspaceRoot, "pnpm-workspace.yaml"),
-      nodeModules: path.join(args.workspaceRoot, "node_modules"),
-    },
+      lockFile: "pnpm-lock.yaml",
+      workspaceConfig: "pnpm-workspace.yaml",
+    }),
     workspaceData: {
       globs: getPnpmWorkspaces(args),
       workspaces: expandWorkspaces({
@@ -62,13 +68,14 @@ async function read(args: ReadArgs): Promise<Project> {
   };
 }
 
-/*
- Create pnpm workspaces from generic format
- Creating pnpm workspaces involves:
-
-  1. Adding the workspaces field in package.json
-  2. Setting the packageManager field in package.json
-*/
+/**
+ * Create pnpm workspaces from generic format
+ *
+ * Creating pnpm workspaces involves:
+ *  1. Create pnpm-workspace.yaml
+ *  2. Setting the packageManager field in package.json
+ *  3. Updating all workspace package.json dependencies to ensure correct format
+ */
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
 
@@ -101,19 +108,21 @@ async function create(args: CreateArgs): Promise<void> {
     options,
   });
 
+  // workspace dependencies
   logger.workspaceHeader();
   project.workspaceData.workspaces.forEach((workspace) =>
     updateDependencies({ workspace, project, to, logger, options })
   );
 }
 
-/*
-Remove pnpm workspace data
-
-Cleaning up from pnpm involves:
-  1. Removing the pnpm-workspace.yaml file
-  2. Removing the package-lock.json file
-*/
+/**
+ * Remove pnpm workspace data
+ *
+ * Cleaning up from pnpm involves:
+ *  1. Removing the pnpm-workspace.yaml file
+ *  2. Removing the pnpm-lock.yaml file
+ *  3. Removing the node_modules directory
+ */
 async function remove(args: RemoveArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -121,7 +130,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   if (project.paths.workspaceConfig) {
     logger.subStep(`removing "pnpm-workspace.yaml"`);
     if (!options?.dry) {
-      fs.removeSync(project.paths.workspaceConfig);
+      fs.rmSync(project.paths.workspaceConfig, { force: true });
     }
   }
 
@@ -135,22 +144,21 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) => fs.rm(dir, { recursive: true }))
+        allModulesDirs.map((dir) =>
+          fs.rm(dir, { recursive: true, force: true })
+        )
       );
     } catch (err) {
-      // only throw here if we find an error other than ENOENT (dir doesn't exist)
-      if (
-        err &&
-        typeof err === "object" &&
-        "code" in err &&
-        err.code !== "ENOENT"
-      ) {
-        throw new ConvertError("Failed to remove node_modules");
-      }
+      throw new ConvertError("Failed to remove node_modules");
     }
   }
 }
 
+/**
+ * Clean is called post install, and is used to clean up any files
+ * from this package manager that were needed for install,
+ * but not required after migration
+ */
 async function clean(args: CleanArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -158,11 +166,15 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    fs.removeSync(project.paths.lockfile);
+    fs.rmSync(project.paths.lockfile, { force: true });
   }
 }
 
-// converts existing, non-pnpm lockfile to a pnpm lockfile
+/**
+ * Attempts to convert an existing, non pnpm lockfile to a pnpm lockfile
+ *
+ * If this is not possible, the non pnpm lockfile is removed
+ */
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -181,7 +193,7 @@ async function convertLock(args: ConvertArgs): Promise<void> {
         });
       } catch (err) {
         console.error(project.paths.lockfile, err);
-        fs.removeSync(project.paths.lockfile);
+        fs.rmSync(project.paths.lockfile, { force: true });
       }
     }
   }

@@ -7,22 +7,22 @@ import { summary, convert } from "./commands";
 import cliPkg from "../package.json";
 import { ConvertError } from "./errors";
 
-const codemodCli = new Command();
+const workspacesCli = new Command();
 
-codemodCli
+workspacesCli
   .name("@turbo/workspaces")
   .description("Tools for working with package manager workspaces")
   .version(cliPkg.version, "-v, --version", "output the current version");
 
-// migrate
-codemodCli
+// convert
+workspacesCli
   .command("convert")
   .description("Convert project between workspace managers")
   .argument("[path]", "Project root")
   .argument("[package-manager]", "Package manager to convert to")
   .option(
     "--skip-install",
-    "Install new version of turbo after migration",
+    "Do not run a package manager install after conversion",
     false
   )
   .option("--dry", "Dry run (no changes are made to files)", false)
@@ -33,14 +33,14 @@ codemodCli
   )
   .action(convert);
 
-// transform
-codemodCli
+// summary
+workspacesCli
   .command("summary")
   .description("Display a summary of the specified project")
   .argument("[path]", "Project root")
   .action(summary);
 
-codemodCli.parseAsync().catch((error) => {
+workspacesCli.parseAsync().catch((error) => {
   console.log();
   if (error instanceof ConvertError) {
     console.log(chalk.red(error.message));

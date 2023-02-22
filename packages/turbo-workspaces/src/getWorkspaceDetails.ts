@@ -24,6 +24,6 @@ export default async function getWorkspaceDetails({
   }
 
   throw new ConvertError(
-    "Could not determine workspace manager. Ensure a lockfile is present."
+    "Could not determine workspace manager. Add `packageManager` to `package.json` or ensure a lockfile is present."
   );
 }

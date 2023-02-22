@@ -51,9 +51,7 @@ async function convert({
     await managers[to.name].convertLock({ project, logger, options });
     await install({ project, to, logger, options });
   } else {
-    logger.subStep(
-      chalk.yellow("Skipping install (pass --install to override)")
-    );
+    logger.subStep(chalk.yellow("Skipping install"));
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
