@@ -567,21 +567,170 @@
 <span id="567">567</span>
 <span id="568">568</span>
 <span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
 <span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
 <span class="kw">use </span>std::{
-    collections::VecDeque,
+    collections::HashSet,
     fmt::{Debug, Display},
+    future::Future,
+    marker::PhantomData,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{
+        GraphTraversal, GraphTraversalControlFlow, GraphTraversalResult, ReverseTopological,
+        SkipDuplicates, Visit,
+    },
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
     TryJoinIterExt, ValueToString, ValueToStringVc,
@@ -699,7 +848,8 @@
             [<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.entry],
             SkipDuplicates::new(get_chunk_children),
         )
-        .<span class="kw">await</span><span class="question-mark">?
+        .<span class="kw">await
+        </span>.completed()<span class="question-mark">?
         </span>.into_iter()
         .collect();
 
@@ -931,188 +1081,328 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt;;
 }
 
-<span class="kw">pub async fn </span>chunk_content_split&lt;I: FromChunkableAsset&gt;(
+<span class="kw">pub async fn </span>chunk_content_split&lt;I&gt;(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: <span class="prelude-ty">Option</span>&lt;AssetsVc&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkContentResult&lt;I&gt;&gt; {
-    chunk_content_internal(context, entry, additional_entries, <span class="bool-val">true</span>)
+) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkContentResult&lt;I&gt;&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    chunk_content_internal_parallel(context, entry, additional_entries, <span class="bool-val">true</span>)
         .<span class="kw">await
         </span>.map(|o| o.unwrap())
 }
 
-<span class="kw">pub async fn </span>chunk_content&lt;I: FromChunkableAsset&gt;(
+<span class="kw">pub async fn </span>chunk_content&lt;I&gt;(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: <span class="prelude-ty">Option</span>&lt;AssetsVc&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt; {
-    chunk_content_internal(context, entry, additional_entries, <span class="bool-val">false</span>).<span class="kw">await
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    chunk_content_internal_parallel(context, entry, additional_entries, <span class="bool-val">false</span>).<span class="kw">await
 </span>}
 
-<span class="kw">enum </span>ChunkContentWorkItem {
-    AssetReferences(AssetReferencesVc),
-    ResolveResult {
-        result: ResolveResultVc,
-        reference: AssetReferenceVc,
-        chunking_type: ChunkingType,
-    },
+<span class="attr">#[derive(Eq, PartialEq, Clone, Hash)]
+</span><span class="kw">enum </span>ChunkContentGraphNode&lt;I&gt; {
+    <span class="comment">// Chunk items that are placed into the current chunk
+    </span>ChunkItem(I),
+    <span class="comment">// Chunks that are loaded in parallel to the current chunk
+    </span>Chunk(ChunkVc),
+    <span class="comment">// Chunk groups that are referenced from the current chunk, but
+    // not loaded in parallel
+    </span>AsyncChunkGroup(ChunkGroupVc),
+    ExternalAssetReference(AssetReferenceVc),
 }
 
-<span class="kw">async fn </span>chunk_content_internal&lt;I: FromChunkableAsset&gt;(
-    context: ChunkingContextVc,
+<span class="attr">#[derive(Clone, Copy)]
+</span><span class="kw">struct </span>ChunkContentContext {
+    chunking_context: ChunkingContextVc,
     entry: AssetVc,
-    additional_entries: <span class="prelude-ty">Option</span>&lt;AssetsVc&gt;,
     split: bool,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>chunk_items = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>processed_assets = IndexSet::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>async_chunk_groups = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>external_asset_references = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
+}
 
-    <span class="kw">let </span>chunk_item = I::from_asset(context, entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap();
-    queue.push_back(ChunkContentWorkItem::AssetReferences(
-        chunk_item.references(),
-    ));
-    chunk_items.push(chunk_item);
-    processed_assets.insert((ChunkingType::Placed, entry));
+<span class="kw">async fn </span>reference_to_graph_nodes&lt;I&gt;(
+    context: ChunkContentContext,
+    reference: AssetReferenceVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;)&gt;&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    <span class="kw">let </span><span class="prelude-val">Some</span>(chunkable_asset_reference) = ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(<span class="prelude-val">None</span>, ChunkContentGraphNode::ExternalAssetReference(reference))]);
+    };
 
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_entries) = additional_entries {
-        <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>additional_entries.<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">let </span>chunk_item = I::from_asset(context, <span class="kw-2">*</span>entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap();
-            queue.push_back(ChunkContentWorkItem::AssetReferences(
-                chunk_item.references(),
-            ));
-            chunk_items.push(chunk_item);
-            processed_assets.insert((ChunkingType::Placed, <span class="kw-2">*</span>entry));
+    <span class="kw">let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="kw-2">*</span>chunkable_asset_reference.chunking_type(context.chunking_context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(<span class="prelude-val">None</span>, ChunkContentGraphNode::ExternalAssetReference(reference))]);
+    };
+
+    <span class="kw">let </span>result = reference.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>assets = result.primary.iter().filter_map({
+        |result| {
+            <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = <span class="kw-2">*</span>result {
+                <span class="kw">return </span><span class="prelude-val">Some</span>(asset);
+            }
+            <span class="prelude-val">None
+        </span>}
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>graph_nodes = <span class="macro">vec!</span>[];
+
+    <span class="kw">for </span>asset <span class="kw">in </span>assets {
+        <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(chunkable_asset) =&gt; chunkable_asset,
+            <span class="kw">_ </span>=&gt; {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(
+                    <span class="prelude-val">None</span>,
+                    ChunkContentGraphNode::ExternalAssetReference(reference),
+                )]);
+            }
+        };
+
+        <span class="kw">match </span>chunking_type {
+            ChunkingType::Placed =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) = I::from_asset(context.chunking_context, asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                    graph_nodes.push((
+                        <span class="prelude-val">Some</span>((asset, chunking_type)),
+                        ChunkContentGraphNode::ChunkItem(chunk_item),
+                    ));
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+                        <span class="string">&quot;Asset {} was requested to be placed into the  same chunk, but this \
+                         wasn&#39;t possible&quot;</span>,
+                        asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    </span>));
+                }
+            }
+            ChunkingType::Parallel =&gt; {
+                <span class="kw">let </span>chunk = chunkable_asset.as_chunk(context.chunking_context);
+                graph_nodes.push((
+                    <span class="prelude-val">Some</span>((asset, chunking_type)),
+                    ChunkContentGraphNode::Chunk(chunk),
+                ));
+            }
+            ChunkingType::PlacedOrParallel =&gt; {
+                <span class="comment">// heuristic for being in the same chunk
+                </span><span class="kw">if </span>!context.split
+                    &amp;&amp; <span class="kw-2">*</span>context
+                        .chunking_context
+                        .can_be_in_same_chunk(context.entry, asset)
+                        .<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    <span class="comment">// chunk item, chunk or other asset?
+                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) = I::from_asset(context.chunking_context, asset).<span class="kw">await</span><span class="question-mark">?
+                    </span>{
+                        graph_nodes.push((
+                            <span class="prelude-val">Some</span>((asset, chunking_type)),
+                            ChunkContentGraphNode::ChunkItem(chunk_item),
+                        ));
+                        <span class="kw">continue</span>;
+                    }
+                }
+
+                <span class="kw">let </span>chunk = chunkable_asset.as_chunk(context.chunking_context);
+                graph_nodes.push((
+                    <span class="prelude-val">Some</span>((asset, chunking_type)),
+                    ChunkContentGraphNode::Chunk(chunk),
+                ));
+            }
+            ChunkingType::Separate =&gt; {
+                graph_nodes.push((
+                    <span class="prelude-val">Some</span>((asset, chunking_type)),
+                    ChunkContentGraphNode::AsyncChunkGroup(ChunkGroupVc::from_asset(
+                        chunkable_asset,
+                        context.chunking_context,
+                    )),
+                ));
+            }
+            ChunkingType::SeparateAsync =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(manifest_loader_item) =
+                    I::from_async_asset(context.chunking_context, chunkable_asset).<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    graph_nodes.push((
+                        <span class="prelude-val">Some</span>((asset, chunking_type)),
+                        ChunkContentGraphNode::ChunkItem(manifest_loader_item),
+                    ));
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(
+                        <span class="prelude-val">None</span>,
+                        ChunkContentGraphNode::ExternalAssetReference(reference),
+                    )]);
+                }
+            }
         }
     }
 
-    <span class="lifetime">&#39;outer</span>: <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = queue.pop_front() {
-        <span class="kw">match </span>item {
-            ChunkContentWorkItem::AssetReferences(item) =&gt; {
-                <span class="kw">for </span>r <span class="kw">in </span>item.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(pc) = ChunkableAssetReferenceVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="kw-2">*</span>pc.chunking_type(context).<span class="kw">await</span><span class="question-mark">? </span>{
-                            queue.push_back(ChunkContentWorkItem::ResolveResult {
-                                result: r.resolve_reference(),
-                                reference: <span class="kw-2">*</span>r,
-                                chunking_type,
-                            });
-                            <span class="kw">continue</span>;
-                        }
+    <span class="prelude-val">Ok</span>(graph_nodes)
+}
+
+<span class="kw">async fn </span>chunk_item_to_graph_nodes&lt;I&gt;(
+    context: ChunkContentContext,
+    chunk_item: I,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesChildren&lt;I&gt;&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    <span class="prelude-val">Ok</span>(chunk_item
+        .references()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .map(|reference| reference_to_graph_nodes::&lt;I&gt;(context, <span class="kw-2">*</span>reference))
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .flatten())
+}
+
+<span class="doccomment">/// The maximum number of chunk items that can be in a chunk before we split it
+/// into multiple chunks.
+</span><span class="kw">const </span>MAX_CHUNK_ITEMS_COUNT: usize = <span class="number">5000</span>;
+
+<span class="kw">struct </span>ChunkContentVisit&lt;I&gt; {
+    context: ChunkContentContext,
+    chunk_items_count: usize,
+    processed_assets: HashSet&lt;(ChunkingType, AssetVc)&gt;,
+    _phantom: PhantomData&lt;I&gt;,
+}
+
+<span class="kw">type </span>ChunkItemToGraphNodesChildren&lt;I&gt; =
+    <span class="kw">impl </span>Iterator&lt;Item = (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;)&gt;;
+
+<span class="kw">type </span>ChunkItemToGraphNodesFuture&lt;I&gt; =
+    <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesChildren&lt;I&gt;&gt;&gt;;
+
+<span class="kw">impl</span>&lt;I&gt; Visit&lt;ChunkContentGraphNode&lt;I&gt;, ()&gt; <span class="kw">for </span>ChunkContentVisit&lt;I&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    <span class="kw">type </span>Children = ChunkItemToGraphNodesChildren&lt;I&gt;;
+    <span class="kw">type </span>MapChildren = Vec&lt;ChunkContentGraphNode&lt;I&gt;&gt;;
+    <span class="kw">type </span>Future = ChunkItemToGraphNodesFuture&lt;I&gt;;
+
+    <span class="kw">fn </span>get_children(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        node: <span class="kw-2">&amp;</span>ChunkContentGraphNode&lt;I&gt;,
+    ) -&gt; GraphTraversalControlFlow&lt;<span class="self">Self</span>::Future, ()&gt; {
+        <span class="comment">// TODO(alexkirsz) Right now the output type of the traversal is the same as the
+        // input type. If we can have them be separate types, we wouldn&#39;t need
+        // to call `get_children` on graph nodes that we know not to have any children
+        // (i.e. anything that&#39;s not a chunk item).
+        </span><span class="kw">let </span>ChunkContentGraphNode::ChunkItem(chunk_item) = node <span class="kw">else </span>{
+            <span class="kw">return </span>GraphTraversalControlFlow::Skip;
+        };
+
+        GraphTraversalControlFlow::Continue(chunk_item_to_graph_nodes::&lt;I&gt;(
+            <span class="self">self</span>.context,
+            chunk_item.clone(),
+        ))
+    }
+
+    <span class="kw">fn </span>map_children(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        children: <span class="self">Self</span>::Children,
+    ) -&gt; GraphTraversalControlFlow&lt;<span class="self">Self</span>::MapChildren, ()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>map_children = <span class="macro">vec!</span>[];
+
+        <span class="kw">for </span>(option_key, child) <span class="kw">in </span>children {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>((asset, chunking_type)) = option_key {
+                <span class="kw">if </span><span class="self">self</span>.processed_assets.insert((chunking_type, asset)) {
+                    <span class="kw">if let </span>ChunkContentGraphNode::ChunkItem(<span class="kw">_</span>) = <span class="kw-2">&amp;</span>child {
+                        <span class="self">self</span>.chunk_items_count += <span class="number">1</span>;
                     }
-                    external_asset_references.push(<span class="kw-2">*</span>r);
+                    map_children.push(child);
                 }
+            } <span class="kw">else </span>{
+                map_children.push(child);
             }
-            ChunkContentWorkItem::ResolveResult {
-                result,
-                reference,
-                chunking_type,
-            } =&gt; {
-                <span class="comment">// It&#39;s important to temporary store these results in these variables
-                // so that we can cancel to complete list of assets by that references together
-                // and fallback to an external reference completely
-                // The cancellation is at these &quot;continue &#39;outer;&quot; lines
+        }
 
-                // Chunk items that are placed into the current chunk
-                </span><span class="kw">let </span><span class="kw-2">mut </span>inner_chunk_items = Vec::new();
+        <span class="comment">// Make sure the chunk doesn&#39;t become too large.
+        // This will hurt performance in many aspects.
+        </span><span class="kw">if </span>!<span class="self">self</span>.context.split &amp;&amp; <span class="self">self</span>.chunk_items_count &gt;= MAX_CHUNK_ITEMS_COUNT {
+            <span class="comment">// Chunk is too large, cancel this algorithm and restart with splitting from the
+            // start.
+            </span><span class="kw">return </span>GraphTraversalControlFlow::Abort(());
+        }
 
-                <span class="comment">// Chunks that are loaded in parallel to the current chunk
-                </span><span class="kw">let </span><span class="kw-2">mut </span>inner_chunks = Vec::new();
+        GraphTraversalControlFlow::Continue(map_children)
+    }
+}
 
-                <span class="comment">// Chunk groups that are referenced from the current chunk, but
-                // not loaded in parallel
-                </span><span class="kw">let </span><span class="kw-2">mut </span>inner_chunk_groups = Vec::new();
+<span class="kw">async fn </span>chunk_content_internal_parallel&lt;I&gt;(
+    chunking_context: ChunkingContextVc,
+    entry: AssetVc,
+    additional_entries: <span class="prelude-ty">Option</span>&lt;AssetsVc&gt;,
+    split: bool,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt;
+<span class="kw">where
+    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>processed_assets: HashSet&lt;(ChunkingType, AssetVc)&gt; = HashSet::default();
 
-                <span class="kw">let </span>result = result.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>assets = result.primary.iter().filter_map(|result| {
-                    <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = <span class="kw-2">*</span>result {
-                        <span class="kw">if </span>processed_assets.insert((chunking_type, asset)) {
-                            <span class="kw">return </span><span class="prelude-val">Some</span>(asset);
-                        }
-                    }
-                    <span class="prelude-val">None
-                </span>});
-                <span class="kw">for </span>asset <span class="kw">in </span>assets {
-                    <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="prelude-val">Some</span>(chunkable_asset) =&gt; chunkable_asset,
-                        <span class="kw">_ </span>=&gt; {
-                            external_asset_references.push(reference);
-                            <span class="kw">continue </span><span class="lifetime">&#39;outer</span>;
-                        }
-                    };
+    <span class="kw">let </span>additional_entries = <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_entries) = additional_entries {
+        additional_entries.<span class="kw">await</span><span class="question-mark">?</span>.clone_value().into_iter()
+    } <span class="kw">else </span>{
+        <span class="macro">vec!</span>[].into_iter()
+    };
 
-                    <span class="kw">match </span>chunking_type {
-                        ChunkingType::Placed =&gt; {
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) = I::from_asset(context, asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                                inner_chunk_items.push(chunk_item);
-                            } <span class="kw">else </span>{
-                                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-                                    <span class="string">&quot;Asset {} was requested to be placed into the same chunk, but \
-                                     this wasn&#39;t possible&quot;</span>,
-                                    asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
-                                </span>));
-                            }
-                        }
-                        ChunkingType::Parallel =&gt; {
-                            <span class="kw">let </span>chunk = chunkable_asset.as_chunk(context);
-                            inner_chunks.push(chunk);
-                        }
-                        ChunkingType::PlacedOrParallel =&gt; {
-                            <span class="comment">// heuristic for being in the same chunk
-                            </span><span class="kw">if </span>!split &amp;&amp; <span class="kw-2">*</span>context.can_be_in_same_chunk(entry, asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                                <span class="comment">// chunk item, chunk or other asset?
-                                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) = I::from_asset(context, asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                                    inner_chunk_items.push(chunk_item);
-                                    <span class="kw">continue</span>;
-                                }
-                            }
+    <span class="kw">let </span>entries = [entry].into_iter().chain(additional_entries);
+    <span class="kw">for </span>entry <span class="kw">in </span>entries.clone() {
+        processed_assets.insert((ChunkingType::Placed, entry));
+    }
 
-                            <span class="kw">let </span>chunk = chunkable_asset.as_chunk(context);
-                            inner_chunks.push(chunk);
-                        }
-                        ChunkingType::Separate =&gt; {
-                            inner_chunk_groups
-                                .push(ChunkGroupVc::from_asset(chunkable_asset, context));
-                        }
-                        ChunkingType::SeparateAsync =&gt; {
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) =
-                                I::from_async_asset(context, chunkable_asset).<span class="kw">await</span><span class="question-mark">?
-                            </span>{
-                                inner_chunk_items.push(chunk_item);
-                            } <span class="kw">else </span>{
-                                external_asset_references.push(reference);
-                                <span class="kw">continue </span><span class="lifetime">&#39;outer</span>;
-                            }
-                        }
-                    }
-                }
+    <span class="kw">let </span>root_graph_nodes = entries
+        .map(|entry| <span class="kw">async move </span>{
+            <span class="prelude-val">Ok</span>(ChunkContentGraphNode::ChunkItem(
+                I::from_asset(chunking_context, entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap(),
+            ))
+        })
+        .try_join()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>prev_chunk_items = chunk_items.len();
+    processed_assets.insert((ChunkingType::Placed, entry));
 
-                <span class="kw">for </span>chunk_item <span class="kw">in </span>inner_chunk_items {
-                    queue.push_back(ChunkContentWorkItem::AssetReferences(
-                        chunk_item.references(),
-                    ));
-                    chunk_items.push(chunk_item);
-                }
-                chunks.extend(inner_chunks);
-                async_chunk_groups.extend(inner_chunk_groups);
+    <span class="kw">let </span>context = ChunkContentContext {
+        chunking_context,
+        entry,
+        split,
+    };
 
-                <span class="comment">// Make sure the chunk doesn&#39;t become too large.
-                // This will hurt performance in many aspects.
-                </span><span class="kw">let </span>chunk_items_count = chunk_items.len();
-                <span class="kw">if </span>!split
-                    &amp;&amp; prev_chunk_items != chunk_items_count
-                    &amp;&amp; chunk_items_count &gt; <span class="number">5000
-                    </span>&amp;&amp; prev_chunk_items &gt; <span class="number">1
-                </span>{
-                    <span class="comment">// Chunk is too large, cancel this algorithm and
-                    // restart with splitting from the start
-                    </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
-                }
+    <span class="kw">let </span>visit = ChunkContentVisit {
+        context,
+        chunk_items_count: root_graph_nodes.len(),
+        processed_assets,
+        _phantom: PhantomData,
+    };
+
+    <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) =
+        GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(root_graph_nodes, visit).<span class="kw">await else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+
+    <span class="kw">let </span>graph_nodes: Vec&lt;<span class="kw">_</span>&gt; = traversal_result<span class="question-mark">?</span>.into_iter().collect();
+
+    <span class="kw">let </span><span class="kw-2">mut </span>chunk_items = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>async_chunk_groups = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>external_asset_references = Vec::new();
+
+    <span class="kw">for </span>graph_node <span class="kw">in </span>graph_nodes {
+        <span class="kw">match </span>graph_node {
+            ChunkContentGraphNode::ChunkItem(chunk_item) =&gt; {
+                chunk_items.push(chunk_item);
+            }
+            ChunkContentGraphNode::Chunk(chunk) =&gt; {
+                chunks.push(chunk);
+            }
+            ChunkContentGraphNode::AsyncChunkGroup(async_chunk_group) =&gt; {
+                async_chunk_groups.push(async_chunk_group);
+            }
+            ChunkContentGraphNode::ExternalAssetReference(reference) =&gt; {
+                external_asset_references.push(reference);
             }
         }
     }

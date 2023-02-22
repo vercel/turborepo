@@ -201,6 +201,7 @@
 <span id="201">201</span>
 <span id="202">202</span>
 <span id="203">203</span>
+<span id="204">204</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>mime::{APPLICATION_JAVASCRIPT_UTF_8, APPLICATION_JSON};
@@ -268,7 +269,8 @@
             this.page_roots.iter().copied(),
             get_content_source_children,
         )
-        .<span class="kw">await</span><span class="question-mark">?
+        .<span class="kw">await
+        </span>.completed()<span class="question-mark">?
         </span>.into_iter()
         .map(content_source_to_pathname)
         .try_join()

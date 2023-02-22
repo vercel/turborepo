@@ -8,14 +8,16 @@
 <span id="8">8</span>
 <span id="9">9</span>
 <span id="10">10</span>
+<span id="11">11</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>get_children;
 <span class="kw">mod </span>graph_store;
 <span class="kw">mod </span>graph_traversal;
 <span class="kw">mod </span>non_deterministic;
 <span class="kw">mod </span>reverse_topological;
+<span class="kw">mod </span>with_future;
 
-<span class="kw">pub use </span>get_children::{GetChildren, SkipDuplicates};
-<span class="kw">pub use </span>graph_traversal::GraphTraversal;
+<span class="kw">pub use </span>get_children::{SkipDuplicates, Visit};
+<span class="kw">pub use </span>graph_traversal::{GraphTraversal, GraphTraversalControlFlow, GraphTraversalResult};
 <span class="kw">pub use </span>non_deterministic::NonDeterministic;
 <span class="kw">pub use </span>reverse_topological::ReverseTopological;
 </code></pre></div>

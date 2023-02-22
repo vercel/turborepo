@@ -107,6 +107,7 @@
 <span id="107">107</span>
 <span id="108">108</span>
 <span id="109">109</span>
+<span id="110">110</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::future::{Future, IntoFuture};
 
 <span class="kw">use </span>anyhow::Result;
@@ -114,60 +115,64 @@
     future::{join_all, JoinAll},
     FutureExt,
 };
+<span class="kw">use </span>pin_project_lite::pin_project;
 
-<span class="doccomment">/// Future for the [JoinIterExt::join] method.
-</span><span class="kw">pub struct </span>Join&lt;F&gt;
-<span class="kw">where
-    </span>F: Future,
-{
-    inner: JoinAll&lt;F&gt;,
+<span class="macro">pin_project! </span>{
+    <span class="doccomment">/// Future for the [JoinIterExt::join] method.
+    </span><span class="kw">pub struct </span>Join&lt;F&gt;
+    <span class="kw">where
+        </span>F: Future,
+    {
+        <span class="attr">#[pin]
+        </span>inner: JoinAll&lt;F&gt;,
+    }
 }
 
 <span class="kw">impl</span>&lt;T, F&gt; Future <span class="kw">for </span>Join&lt;F&gt;
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = T&gt;,
+    </span>F: Future&lt;Output = T&gt;,
 {
     <span class="kw">type </span>Output = Vec&lt;T&gt;;
 
     <span class="kw">fn </span>poll(
-        <span class="kw-2">mut </span><span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        <span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; std::task::Poll&lt;<span class="self">Self</span>::Output&gt; {
-        <span class="self">self</span>.inner.poll_unpin(cx)
+        <span class="self">self</span>.project().inner.poll(cx)
     }
 }
 
 <span class="kw">pub trait </span>JoinIterExt&lt;T, F&gt;: Iterator
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = T&gt;,
+    </span>F: Future&lt;Output = T&gt;,
 {
     <span class="doccomment">/// Returns a future that resolves to a vector of the outputs of the futures
     /// in the iterator.
     </span><span class="kw">fn </span>join(<span class="self">self</span>) -&gt; Join&lt;F&gt;;
 }
 
-<span class="doccomment">/// Future for the [TryJoinIterExt::try_join] method.
-</span><span class="kw">pub struct </span>TryJoin&lt;F&gt;
-<span class="kw">where
-    </span>F: Future,
-{
-    inner: JoinAll&lt;F&gt;,
+<span class="macro">pin_project! </span>{
+    <span class="doccomment">/// Future for the [TryJoinIterExt::try_join] method.
+    </span><span class="kw">pub struct </span>TryJoin&lt;F&gt;
+    <span class="kw">where
+        </span>F: Future,
+    {
+        <span class="attr">#[pin]
+        </span>inner: JoinAll&lt;F&gt;,
+    }
 }
 
 <span class="kw">impl</span>&lt;T, F&gt; Future <span class="kw">for </span>TryJoin&lt;F&gt;
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
+    </span>F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
 {
     <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;Vec&lt;T&gt;&gt;;
 
     <span class="kw">fn </span>poll(
-        <span class="kw-2">mut </span><span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        <span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; std::task::Poll&lt;<span class="self">Self</span>::Output&gt; {
-        <span class="kw">match </span><span class="self">self</span>.inner.poll_unpin(cx) {
+        <span class="kw">match </span><span class="self">self</span>.project().inner.poll_unpin(cx) {
             std::task::Poll::Ready(res) =&gt; {
                 std::task::Poll::Ready(res.into_iter().collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;())
             }
@@ -178,8 +183,7 @@
 
 <span class="kw">pub trait </span>TryJoinIterExt&lt;T, F&gt;: Iterator
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
+    </span>F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
 {
     <span class="doccomment">/// Returns a future that resolves to a vector of the outputs of the futures
     /// in the iterator, or to an error if one of the futures fail.
@@ -191,8 +195,7 @@
 
 <span class="kw">impl</span>&lt;T, F, IF, It&gt; JoinIterExt&lt;T, F&gt; <span class="kw">for </span>It
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = T&gt;,
+    </span>F: Future&lt;Output = T&gt;,
     IF: IntoFuture&lt;Output = T, IntoFuture = F&gt;,
     It: Iterator&lt;Item = IF&gt;,
 {
@@ -205,8 +208,7 @@
 
 <span class="kw">impl</span>&lt;T, F, IF, It&gt; TryJoinIterExt&lt;T, F&gt; <span class="kw">for </span>It
 <span class="kw">where
-    </span>T: Unpin,
-    F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
+    </span>F: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
     IF: IntoFuture&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;, IntoFuture = F&gt;,
     It: Iterator&lt;Item = IF&gt;,
 {
