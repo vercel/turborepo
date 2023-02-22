@@ -194,7 +194,9 @@ pub async fn get_next_server_import_map(
             import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
         }
-        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } => {
+        ServerContextType::AppSSR { .. }
+        | ServerContextType::AppRSC { .. }
+        | ServerContextType::AppRoute { .. } => {
             for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
                 import_map.insert_wildcard_alias(
@@ -315,7 +317,9 @@ pub async fn insert_next_server_special_aliases(
             );
         }
         ServerContextType::PagesData { .. } => {}
-        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } => {
+        ServerContextType::AppSSR { app_dir }
+        | ServerContextType::AppRSC { app_dir }
+        | ServerContextType::AppRoute { app_dir } => {
             import_map.insert_exact_alias(
                 "react",
                 request_to_import_mapping(app_dir, "next/dist/compiled/react"),
