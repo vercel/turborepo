@@ -1,4 +1,4 @@
-use std::mem::ManuallyDrop;
+use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -42,4 +42,65 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 
     let dir = dirs.data_dir().to_string_lossy().to_string();
     proto::TurboDataDirResp { dir }.into()
+}
+
+#[no_mangle]
+pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
+    let req: proto::ChangedFilesReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::ChangedFilesResp {
+                response: Some(proto::changed_files_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+
+    let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
+    let response = match turborepo_scm::git::changed_files(
+        req.repo_root.into(),
+        commit_range,
+        req.include_untracked,
+        req.relative_to.as_deref(),
+    ) {
+        Ok(files) => {
+            let files: Vec<_> = files.into_iter().collect();
+            proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files })
+        }
+        Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
+    };
+
+    let resp = proto::ChangedFilesResp {
+        response: Some(response),
+    };
+    resp.into()
+}
+
+#[no_mangle]
+pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
+    let req: proto::PreviousContentReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::PreviousContentResp {
+                response: Some(proto::previous_content_resp::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            return resp.into();
+        }
+    };
+
+    let response = match turborepo_scm::git::previous_content(
+        req.repo_root.into(),
+        &req.from_commit,
+        PathBuf::from(req.file_path),
+    ) {
+        Ok(content) => proto::previous_content_resp::Response::Content(content),
+        Err(err) => proto::previous_content_resp::Response::Error(err.to_string()),
+    };
+
+    let resp = proto::PreviousContentResp {
+        response: Some(response),
+    };
+    resp.into()
 }

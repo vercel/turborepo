@@ -1,0 +1,26 @@
+{
+  "$schema": "./public/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "env": [
+        "SENTRY_DSN",
+        "TURBOREPO_SFDC_CAMPAIGN_ID",
+        "TRAY_URL",
+        "CONVERTKIT_API_KEY",
+        "CONVERTKIT_API_SECRET"
+      ],
+      "outputs": [".next/**"],
+      "dependsOn": ["^build", "rss", "schema"]
+    },
+    "dev": {
+      "dependsOn": ["schema"]
+    },
+    "schema": {
+      "outputs": ["public/schema.json"]
+    },
+    "rss": {
+      "outputs": ["public/feed.xml"]
+    }
+  }
+}

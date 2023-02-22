@@ -141,12 +141,17 @@ jobs:
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
           chmod a+x cli/dist-linux-arm64/turbo
           chmod a+x cli/dist-linux-arm64/go-turbo
+
+          # rust doesn't have a toolchain for arm + windows + gnu, so we just use the exe from the amd64 build
+          # and rely on windows' arm JITer to do the work for us. this is because the go exe cannot be build w/ msvc
+          cp -r go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-arm64
+          chmod a+x cli/dist-windows-arm64/turbo.exe
+          chmod a+x cli/dist-windows-arm64/go-turbo.exe
+
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
           chmod a+x cli/dist-windows-amd64/turbo.exe
           chmod a+x cli/dist-windows-amd64/go-turbo.exe
-          mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_arm64/bin/* cli/dist-windows-arm64
-          chmod a+x cli/dist-windows-arm64/turbo.exe
-          chmod a+x cli/dist-windows-arm64/go-turbo.exe
+
           mv go-artifacts/turbo-go-darwin-${{ inputs.release_branch }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
           chmod a+x cli/dist-darwin-amd64/turbo
           chmod a+x cli/dist-darwin-amd64/go-turbo
