@@ -38,7 +38,7 @@ const missingTaskLabel = "<NONEXISTENT>"
 // if the --dry flag had not been passed
 type dryRunSummary struct {
 	TurboVersion     string                         `json:"turboVersion"`
-	GlobalHashInputs *GlobalTracker                 `json:"globalHashInputs"`
+	GlobalHashInputs *GlobalHashInputs              `json:"globalHashInputs"`
 	PackageManager   *packagemanager.PackageManager `json:"packageManager"`
 	Packages         []string                       `json:"packages"`
 	ExitCode         int                            `json:"exitCode"`

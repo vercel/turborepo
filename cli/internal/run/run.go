@@ -239,7 +239,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			}
 		}
 	}
-	gh, err := NewGlobalTracker(
+
+	ghInputs, err := NewGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
 		pipeline,
@@ -255,7 +256,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	globalHash, err := gh.calculateGlobalHash()
+	globalHash, err := ghInputs.calculateGlobalHash()
 	if err != nil {
 		return fmt.Errorf("error building global hash: %v", err)
 	}
@@ -343,7 +344,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	summary := &dryRunSummary{
 		TurboVersion:     r.base.TurboVersion,
 		Packages:         packagesInScope,
-		GlobalHashInputs: gh,
+		GlobalHashInputs: ghInputs,
 		PackageManager:   packageManager,
 		Tasks:            []taskSummary{},
 	}

@@ -24,7 +24,7 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-type GlobalTracker struct {
+type GlobalHashInputs struct {
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
 	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
 	HashedSortedEnvPairs []string                              `json:"hashedSortedEnvPairs"`
@@ -32,29 +32,15 @@ type GlobalTracker struct {
 	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
 }
 
-type GlobalHashInputs struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	hashedSortedEnvPairs []string
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-}
-
-func (th *GlobalTracker) calculateGlobalHash() (string, error) {
-	globalHash, err := fs.HashObject(&GlobalHashInputs{
-		globalFileHashMap:    th.GlobalFileHashMap,
-		rootExternalDepsHash: th.RootExternalDepsHash,
-		hashedSortedEnvPairs: th.HashedSortedEnvPairs,
-		globalCacheKey:       th.GlobalCacheKey,
-		pipeline:             th.Pipeline,
-	})
+func (gt *GlobalHashInputs) calculateGlobalHash() (string, error) {
+	globalHash, err := fs.HashObject(gt)
 	if err != nil {
 		return "", fmt.Errorf("error hashing global dependencies %w", err)
 	}
 	return globalHash, nil
 }
 
-func NewGlobalTracker(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (*GlobalTracker, error) {
+func NewGlobalHashInputs(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (*GlobalHashInputs, error) {
 	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
@@ -74,12 +60,12 @@ func NewGlobalTracker(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return &GlobalTracker{}, err
+			return &GlobalHashInputs{}, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return &GlobalTracker{}, err
+			return &GlobalHashInputs{}, err
 		}
 
 		for _, val := range f {
@@ -112,9 +98,9 @@ func NewGlobalTracker(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return &GlobalTracker{}, fmt.Errorf("error hashing files: %w", err)
+		return &GlobalHashInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}
-	return &GlobalTracker{
+	return &GlobalHashInputs{
 		GlobalFileHashMap:    globalFileHashMap,
 		RootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		HashedSortedEnvPairs: globalHashableEnvPairs,
