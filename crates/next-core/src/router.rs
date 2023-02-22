@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use serde::Deserialize;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    Value,
+    CompletionVc, Value,
 };
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, to_sys_path, File, FileSystemPathVc,
@@ -281,10 +281,12 @@ pub async fn route(
     request: RouterRequestVc,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
+    routes_changed: CompletionVc,
 ) -> Result<RouterResultVc> {
     let ExecutionContext {
         project_root,
         intermediate_output_path,
+        env,
     } = *execution_context.await?;
     let project_path = wrap_with_next_js_fs(project_root);
     let intermediate_output_path = intermediate_output_path.join("router");
@@ -313,6 +315,7 @@ pub async fn route(
         project_path,
         router_asset,
         project_root,
+        env,
         project_root,
         context,
         intermediate_output_path,
@@ -321,6 +324,7 @@ pub async fn route(
             JsonValueVc::cell(request),
             JsonValueVc::cell(dir.to_string_lossy().into()),
         ],
+        routes_changed,
         false,
     )
     .await?;

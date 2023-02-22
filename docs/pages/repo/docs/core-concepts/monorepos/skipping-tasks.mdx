@@ -1,0 +1,66 @@
+---
+title: Skipping tasks
+description: Never do the same work twice.
+---
+
+import Callout from '../../../../../components/Callout'
+
+# Skipping Tasks
+
+[Build caching](/repo/docs/core-concepts/caching) can dramatically speed up your tasks - but you can do even better by using `npx turbo-ignore`. If your workspace is unaffected by your code changes, you can completely skip executing a task altogether.
+
+Let's say you want to skip the unit tests for your `web` workspace when there aren't any changes to your `web` application (or its package dependencies). If you are already using [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching), you will probably get a cache hit, but you would still spend time provisioning the CI container, installing `npm` dependencies, and other things that can take a while.
+
+Ideally, we would do a quick check to see if any of that work needs to happen in the first place.
+
+After we've checked out the repo, but **before** any other work, we can take a few seconds to check that our `web` tests have changed since the parent commit.
+
+```bash
+npx turbo-ignore web --task=test
+```
+
+This command will:
+
+1. Filter for the `web` workspace.
+2. Create the `dry` output for your `test` task compared to your parent commit.
+3. Parse the output to determine which packages have changed.
+4. Exit with a `1` code if changes are detected. Otherwise, exits with a `0`.
+
+While you may have been able to hit a `>>> FULL TURBO` cache for this task, we just saved time with all of the other setup tasks required to run your CI.
+
+## Using `turbo-ignore`
+
+To skip unaffected work, first ensure that your git history is available on the machine. Then, run `npx turbo-ignore`.
+
+`turbo-ignore` uses a combination of the `--filter` and `--dry=json` flags to find changes from the parent commit to the current commit to identify affected packages. By default, `turbo-ignore` finds the difference for the **build task in the current working directory**, but you can [customize this behavior with flags](#customizing-behavior).
+
+Here's an example of the command that will be built and run:
+
+```bash
+npx turbo run build --filter=@example/web...3c8387ffd98b751305fe3f0284befdd00cbd4610 --dry=json
+```
+
+Note that a dry run does not _execute_ the build task. Instead, it checks your packages to see if your code changes will affect your build (or other task) in only a few seconds.
+
+If `turbo-ignore` finds that the task can be skipped, it will exit the process with a `0` code. If changes have been found, the process will exit with `1`.
+
+<Callout type="info">On Vercel, the previously deployed SHA will be used instead of the parent commit.</Callout>
+
+## Customizing behavior
+
+To specify a workspace, you can add it to your command like:
+
+```
+npx turbo-ignore web
+```
+
+where `web` is your workspace's name.
+
+If you'd like to change more of the default behavior, there are a few flags available:
+
+- `--task`: Specifies the task for the command that `turbo-ignore` will invoke. Defaults to `build`.
+- `--fallback`: Specify a ref/head to compare against. Defaults to `HEAD^`.
+
+## Using `turbo-ignore` on Vercel
+
+To use `npx turbo-ignore` on Vercel, you can use the [Ignored Build Step](https://vercel.com/docs/concepts/projects/overview#ignored-build-step) feature. Vercel will automatically infer the correct arguments to successfully run `turbo-ignore`.
