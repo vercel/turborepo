@@ -37,7 +37,7 @@ const missingTaskLabel = "<NONEXISTENT>"
 type dryRunSummary struct {
 	GlobalHashSummary *globalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
-	Tasks             []taskSummary      `json:"tasks"`
+	Tasks             []*taskSummary     `json:"tasks"`
 }
 
 type globalHashSummary struct {
@@ -103,13 +103,13 @@ func DryRun(
 	// We walk the graph with no concurrency.
 	// Populating the cache state is parallelizable.
 	// Do this _after_ walking the graph.
-	withCacheState, err := checkCacheState(turboCache, taskSummaries)
+	err = populateCacheState(turboCache, taskSummaries)
 	if err != nil {
 		return err
 	}
 
 	// Assign the Task Summaries to the main summary
-	summary.Tasks = withCacheState
+	summary.Tasks = taskSummaries
 
 	// Render the dry run as json
 	if dryRunJSON {
@@ -129,8 +129,8 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]taskSummary, error) {
-	taskIDs := []taskSummary{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]*taskSummary, error) {
+	taskIDs := []*taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -160,7 +160,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		taskIDs = append(taskIDs, taskSummary{
+		taskIDs = append(taskIDs, &taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -200,7 +200,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	return taskIDs, nil
 }
 
-func checkCacheState(turboCache cache.Cache, taskSummaries []taskSummary) ([]taskSummary, error) {
+func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) error {
+	// We make at most 8 requests at a time for cache state.
 	maxParallelRequests := 8
 	taskCount := len(taskSummaries)
 
@@ -219,9 +220,9 @@ func checkCacheState(turboCache cache.Cache, taskSummaries []taskSummary) ([]tas
 		go func() {
 			defer wg.Done()
 			for index := range queue {
-				task := &taskSummaries[index]
+				task := taskSummaries[index]
 				itemStatus, err := turboCache.Exists(task.Hash)
-				task.CacheState = itemStatus // TODO(mehulkar): Move this to PackageTask
+				task.CacheState = itemStatus
 				returnErr = err
 			}
 		}()
@@ -233,7 +234,7 @@ func checkCacheState(turboCache cache.Cache, taskSummaries []taskSummary) ([]tas
 	close(queue)
 	wg.Wait()
 
-	return taskSummaries, returnErr
+	return returnErr
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
