@@ -105,6 +105,7 @@ impl NodeJsPoolProcess {
         let port = listener.local_addr().context("getting port")?.port();
         let mut cmd = Command::new("node");
         cmd.current_dir(cwd);
+        cmd.arg("--async-stack-traces");
         if debug {
             cmd.arg("--inspect-brk");
         }
