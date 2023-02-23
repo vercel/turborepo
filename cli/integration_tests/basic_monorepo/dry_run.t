@@ -44,10 +44,6 @@ Check my-app#build output
   {
     "globalFileHashMap": {},
     "rootExternalDepsHash": "ccab0b28617f1f56",
-    "hashedSortedEnvPairs": [
-      "SOME_ENV_VAR=",
-      "VERCEL_ANALYTICS_ID="
-    ],
     "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
     "pipeline": {
       "build": {

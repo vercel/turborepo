@@ -42,7 +42,6 @@ type dryRunSummary struct {
 type globalHashSummary struct {
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
 	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
-	HashedSortedEnvPairs []string                              `json:"hashedSortedEnvPairs"`
 	GlobalCacheKey       string                                `json:"globalCacheKey"`
 	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
 }
@@ -54,10 +53,10 @@ func newGlobalHashSummary(ghInputs struct {
 	globalCacheKey       string
 	pipeline             fs.PristinePipeline
 }) *globalHashSummary {
+	// TODO(mehulkar): Add ghInputs.hashedSortedEnvPairs in here, but redact the values
 	return &globalHashSummary{
 		GlobalFileHashMap:    ghInputs.globalFileHashMap,
 		RootExternalDepsHash: ghInputs.rootExternalDepsHash,
-		HashedSortedEnvPairs: ghInputs.hashedSortedEnvPairs,
 		GlobalCacheKey:       ghInputs.globalCacheKey,
 		Pipeline:             ghInputs.pipeline,
 	}
