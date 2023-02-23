@@ -100,6 +100,11 @@ impl AbsoluteSystemPathBuf {
         Ok(Self(Utf8PathBuf::try_from(std::env::current_dir()?)?))
     }
 
+    #[cfg(test)]
+    pub unsafe fn new_unchecked(unchecked_path: impl Into<PathBuf>) -> Self {
+        AbsoluteSystemPathBuf(unchecked_path.into())
+    }
+
     /// Anchors `path` at `self`.
     ///
     /// # Arguments
@@ -174,10 +179,10 @@ impl AbsoluteSystemPathBuf {
         self.0.components()
     }
 
-    pub fn parent(&self) -> Option<Self> {
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
         self.0
             .parent()
-            .map(|p| AbsoluteSystemPathBuf(p.to_path_buf()))
+            .map(|p| AbsoluteSystemPath::new_unchecked(p))
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {
@@ -236,10 +241,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
-    }
-
-    pub fn open(&self) -> Result<fs::File, PathError> {
-        Ok(fs::File::open(&self.0)?)
     }
 
     pub fn to_realpath(&self) -> Result<Self, PathError> {

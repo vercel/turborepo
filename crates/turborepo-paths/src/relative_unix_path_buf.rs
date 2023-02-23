@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     fmt,
     fmt::{Debug, Display, Formatter},
+    io::Write,
     ops::Deref,
 };
 
@@ -12,7 +13,7 @@ pub struct RelativeUnixPathBuf(pub(crate) String);
 
 impl Display for RelativeUnixPathBuf {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -23,6 +24,14 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotRelative(path_string));
         }
         Ok(Self(path_string))
+    }
+
+    pub(crate) fn new_unchecked(path: impl Into<String>) -> Self {
+        Self(path.into())
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
     }
 
     pub fn as_str(&self) -> &str {
@@ -96,12 +105,6 @@ impl Deref for RelativeUnixPathBuf {
 
     fn deref(&self) -> &Self::Target {
         self.borrow()
-    }
-}
-
-impl Debug for RelativeUnixPathBuf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }
 

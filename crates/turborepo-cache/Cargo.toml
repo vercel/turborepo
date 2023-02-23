@@ -13,6 +13,7 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 
 [dependencies]
 base64 = "0.21.0"
@@ -21,11 +22,14 @@ chrono = { workspace = true }
 dunce = { workspace = true }
 lazy_static = { workspace = true }
 os_str_bytes = "6.5.0"
+path-clean = { workspace = true }
+petgraph = "0.6.3"
 ring = "0.16.20"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tar = "0.4.38"
 thiserror = { workspace = true }
+tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
 zstd = "0.12.3"

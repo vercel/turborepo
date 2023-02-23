@@ -6,7 +6,7 @@ use std::os::unix::fs::symlink as symlink_dir;
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     fmt, fs,
-    fs::{File, Metadata},
+    fs::{File, Metadata, OpenOptions},
     io,
     path::Path,
 };
@@ -16,6 +16,7 @@ use path_clean::PathClean;
 
 use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError, RelativeUnixPath};
 
+#[derive(Debug)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -109,7 +110,7 @@ impl AbsoluteSystemPath {
     }
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
-        self.0.ancestors().map(Self::new_unchecked)
+        self.0.ancestors().map(|a| Self::new_unchecked(a))
     }
 
     // intended for joining literals or obviously single-token strings
@@ -160,10 +161,6 @@ impl AbsoluteSystemPath {
         } else {
             Ok(())
         }
-    }
-
-    pub fn open(&self) -> Result<File, io::Error> {
-        File::open(self.0.as_std_path())
     }
 
     pub fn symlink_to_file<P: AsRef<str>>(&self, to: P) -> Result<(), PathError> {
@@ -248,6 +245,24 @@ impl AbsoluteSystemPath {
         let other = other.collapse();
         let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
         rel.components().next() != Some(Utf8Component::ParentDir)
+    }
+
+    /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
+    /// help with performance. Also sets Unix file permissions.
+    pub fn open(&self) -> Result<File, io::Error> {
+        let mut options = OpenOptions::new();
+        options.read(true);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            use crate::FILE_FLAG_SEQUENTIAL_SCAN;
+
+            options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
+        }
+
+        options.open(&self.0)
     }
 }
 

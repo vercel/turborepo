@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     fmt,
     path::{Path, PathBuf},
 };
@@ -6,7 +7,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPath, PathError, RelativeUnixPathBuf};
+use crate::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -21,6 +22,18 @@ impl TryFrom<&str> for AnchoredSystemPathBuf {
         }
 
         Ok(AnchoredSystemPathBuf(path.into()))
+    }
+}
+
+impl Borrow<AnchoredSystemPath> for AnchoredSystemPathBuf {
+    fn borrow(&self) -> &AnchoredSystemPath {
+        unsafe { AnchoredSystemPath::new_unchecked(self.0.as_path()) }
+    }
+}
+
+impl AsRef<AnchoredSystemPath> for AnchoredSystemPathBuf {
+    fn as_ref(&self) -> &AnchoredSystemPath {
+        self.borrow()
     }
 }
 
@@ -118,6 +131,14 @@ impl AnchoredSystemPathBuf {
         self.0.as_str()
     }
 
+    pub unsafe fn new_unchecked(path: impl Into<Utf8PathBuf>) -> Self {
+        AnchoredSystemPathBuf(path.into())
+    }
+
+    pub fn as_path(&self) -> &Path {
+        self.0.as_std_path()
+    }
+
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
         #[cfg(unix)]
         {
@@ -134,6 +155,10 @@ impl AnchoredSystemPathBuf {
     pub fn components(&self) -> Utf8Components {
         self.0.components()
     }
+
+    pub fn push(&mut self, path: impl AsRef<Utf8Path>) {
+        self.0.push(path.as_ref());
+    }
 }
 
 impl From<AnchoredSystemPathBuf> for PathBuf {
@@ -144,6 +169,12 @@ impl From<AnchoredSystemPathBuf> for PathBuf {
 
 impl AsRef<Utf8Path> for AnchoredSystemPathBuf {
     fn as_ref(&self) -> &Utf8Path {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<Path> for AnchoredSystemPathBuf {
+    fn as_ref(&self) -> &Path {
         self.0.as_ref()
     }
 }
