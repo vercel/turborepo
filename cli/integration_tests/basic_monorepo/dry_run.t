@@ -38,8 +38,45 @@ Check my-app#build output
     Dependendents          =                                                                                                        
     ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
+# Save JSON to tmp file so we don't need to keep re-running the build
+  $ ${TURBO} run build --dry=json > tmp.log
+  
+  $ cat tmp.log | jq .globalHashSummary
+  {
+    "globalFileHashMap": {},
+    "rootExternalDepsHash": "ccab0b28617f1f56",
+    "hashedSortedEnvPairs": [
+      "SOME_ENV_VAR=",
+      "VERCEL_ANALYTICS_ID="
+    ],
+    "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+    "pipeline": {
+      "build": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
+      "my-app#build": {
+        "outputs": [
+          "apple.json",
+          "banana.txt"
+        ],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      }
+    }
+  }
+
 # Validate output of my-app#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
+  $ cat tmp.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {
     "taskId": "my-app#build",
     "task": "build",
@@ -74,7 +111,7 @@ Check my-app#build output
   }
 
 # Validate output of util#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
+  $ cat tmp.log | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
   {
     "taskId": "util#build",
     "task": "build",
