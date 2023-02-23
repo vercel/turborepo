@@ -43,6 +43,7 @@
 <span id="43">43</span>
 <span id="44">44</span>
 <span id="45">45</span>
+<span id="46">46</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack::module_options::ModuleRule;
 <span class="kw">use </span>turbopack_ecmascript::NextJsPageExportFilter;
@@ -76,6 +77,7 @@
         }
         ServerContextType::AppSSR { .. } =&gt; (<span class="bool-val">false</span>, <span class="prelude-val">None</span>),
         ServerContextType::AppRSC { .. } =&gt; (<span class="bool-val">true</span>, <span class="prelude-val">None</span>),
+        ServerContextType::AppRoute { .. } =&gt; (<span class="bool-val">false</span>, <span class="prelude-val">None</span>),
         ServerContextType::Middleware { .. } =&gt; (<span class="bool-val">false</span>, <span class="prelude-val">None</span>),
     };
 

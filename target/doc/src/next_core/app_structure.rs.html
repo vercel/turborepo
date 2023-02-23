@@ -325,6 +325,45 @@
 <span id="325">325</span>
 <span id="326">326</span>
 <span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -354,6 +393,12 @@
         specificity: SpecificityVc,
         page: FileSystemPathVc,
     },
+    Route {
+        segment: LayoutSegmentVc,
+        url: FileSystemPathVc,
+        specificity: SpecificityVc,
+        route: FileSystemPathVc,
+    },
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -362,6 +407,7 @@
     </span><span class="kw">pub async fn </span>routes_changed(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">? </span>{
             AppStructureItem::Page { url, .. } =&gt; url.<span class="kw">await</span><span class="question-mark">?</span>,
+            AppStructureItem::Route { url, .. } =&gt; url.<span class="kw">await</span><span class="question-mark">?</span>,
         };
         <span class="prelude-val">Ok</span>(CompletionVc::new())
     }
@@ -479,6 +525,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AppStructureVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>layouts = layouts;
     <span class="kw">let </span><span class="kw-2">mut </span>page = <span class="prelude-val">None</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>route = <span class="prelude-val">None</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>files = HashMap::new();
 
     <span class="kw">let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>input_dir.read_dir().<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
@@ -498,6 +545,9 @@
                     <span class="string">&quot;page&quot; </span>=&gt; {
                         page = <span class="prelude-val">Some</span>(file);
                     }
+                    <span class="string">&quot;route&quot; </span>=&gt; {
+                        route = <span class="prelude-val">Some</span>(file);
+                    }
                     <span class="string">&quot;layout&quot; </span>| <span class="string">&quot;error&quot; </span>| <span class="string">&quot;loading&quot; </span>| <span class="string">&quot;template&quot; </span>| <span class="string">&quot;not-found&quot; </span>| <span class="string">&quot;head&quot; </span>=&gt; {
                         files.insert(name.to_string(), file);
                     }
@@ -510,6 +560,23 @@
     }
 
     <span class="kw">let </span>layout = files.get(<span class="string">&quot;layout&quot;</span>);
+
+    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(route_path)) = (page, route) {
+        AppStructureIssue {
+            severity: IssueSeverity::Error.into(),
+            path: route_path,
+            message: StringVc::cell(
+                <span class="string">&quot;It&#39;s not possible to have a page and a route in the same directory. The route \
+                 will be ignored in favor of the page.&quot;
+                    </span>.to_string(),
+            ),
+        }
+        .cell()
+        .as_issue()
+        .emit();
+
+        route = <span class="prelude-val">None</span>;
+    }
 
     <span class="comment">// If a page exists but no layout exists, create a basic root layout
     // in `app/layout.js` or `app/layout.tsx`.
@@ -589,21 +656,32 @@
                 new_url,
                 layouts,
                 page_extensions,
-            )
-            .into(),
+            ),
         ));
     }
 
-    <span class="kw">let </span>item = page.map(|page| {
-        AppStructureItem::Page {
-            page,
-            segment,
-            segments: layouts,
-            url,
-            specificity,
-        }
-        .cell()
-    });
+    <span class="kw">let </span>item = page
+        .map(|page| {
+            AppStructureItem::Page {
+                page,
+                segment,
+                segments: layouts,
+                url,
+                specificity,
+            }
+            .cell()
+        })
+        .or_else(|| {
+            route.map(|route| {
+                AppStructureItem::Route {
+                    route,
+                    segment,
+                    url,
+                    specificity,
+                }
+                .cell()
+            })
+        });
 
     <span class="comment">// Ensure deterministic order since read_dir is not deterministic
     </span>children.sort_by_key(|(k, <span class="kw">_</span>)| <span class="kw-2">*</span>k);

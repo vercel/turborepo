@@ -505,6 +505,21 @@
 <span id="505">505</span>
 <span id="506">506</span>
 <span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -686,6 +701,12 @@
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
+    import_map.insert_exact_alias(
+        <span class="string">&quot;@opentelemetry/api&quot;</span>,
+        <span class="comment">// TODO(WEB-625) this actually need to prefer the local version of @opentelemetry/api
+        </span>ImportMapping::External(<span class="prelude-val">Some</span>(<span class="string">&quot;next/dist/compiled/@opentelemetry/api&quot;</span>.to_string())).into(),
+    );
+
     <span class="kw">let </span>ty = ty.into_value();
 
     insert_next_server_special_aliases(<span class="kw-2">&amp;mut </span>import_map, ty).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -701,7 +722,9 @@
             import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
         }
-        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } =&gt; {
+        ServerContextType::AppSSR { .. }
+        | ServerContextType::AppRSC { .. }
+        | ServerContextType::AppRoute { .. } =&gt; {
             <span class="kw">for </span>external <span class="kw">in </span>next_config.server_component_externals().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(<span class="prelude-val">None</span>).into());
                 import_map.insert_wildcard_alias(
@@ -709,6 +732,11 @@
                     ImportMapping::External(<span class="prelude-val">None</span>).into(),
                 );
             }
+            <span class="comment">// The sandbox can&#39;t be bundled and needs to be external
+            </span>import_map.insert_exact_alias(
+                <span class="string">&quot;next/dist/server/web/sandbox&quot;</span>,
+                ImportMapping::External(<span class="prelude-val">None</span>).into(),
+            );
         }
         ServerContextType::Middleware =&gt; {}
     }
@@ -822,7 +850,9 @@
             );
         }
         ServerContextType::PagesData { .. } =&gt; {}
-        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } =&gt; {
+        ServerContextType::AppSSR { app_dir }
+        | ServerContextType::AppRSC { app_dir }
+        | ServerContextType::AppRoute { app_dir } =&gt; {
             import_map.insert_exact_alias(
                 <span class="string">&quot;react&quot;</span>,
                 request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react&quot;</span>),

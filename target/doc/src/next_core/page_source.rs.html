@@ -701,6 +701,7 @@
 <span id="701">701</span>
 <span id="702">702</span>
 <span id="703">703</span>
+<span id="704">704</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
@@ -857,6 +858,7 @@
         edge_resolve_options_context,
         output_path,
         base_path: project_path,
+        bootstrap_file: next_js_file(<span class="string">&quot;entry/edge-bootstrap.ts&quot;</span>),
     }
     .cell()
     .into();
@@ -1048,8 +1050,8 @@
             project_path,
             specificity,
             server_root,
-            pathname,
             route_matcher.into(),
+            pathname,
             SsrEntry {
                 context: server_context,
                 entry_asset: page_asset,
