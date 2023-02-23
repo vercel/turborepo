@@ -10,11 +10,7 @@ use turbopack_core::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
         ModuleIdVc,
     },
-    reference::{
-        AssetReference, AssetReferenceVc, AssetReferences, AssetReferencesVc, SingleAssetReference,
-        SingleAssetReferenceVc,
-    },
-    resolve::{ResolveResult, ResolveResultVc},
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::VersionedContentVc,
 };
 
