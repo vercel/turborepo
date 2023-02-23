@@ -10,7 +10,10 @@ use turbopack_core::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
         ModuleIdVc,
     },
-    reference::AssetReferencesVc,
+    reference::{
+        AssetReference, AssetReferenceVc, AssetReferences, AssetReferencesVc, SingleAssetReference,
+    },
+    resolve::{ResolveResult, ResolveResultVc},
     version::VersionedContentVc,
 };
 
@@ -293,6 +296,7 @@ impl Analyzer<'_> {
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
     module: EcmascriptModuleAssetVc,
+    chunk_id: u32,
 }
 
 #[turbo_tasks::value_impl]
@@ -324,10 +328,13 @@ impl ChunkableAsset for EcmascriptModulePartAsset {
 
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartChunkItem {
+    full_module: EcmascriptModuleAssetVc,
+
     module: EcmascriptModulePartAssetVc,
     context: ChunkingContextVc,
 
-    item_id: ItemId,
+    chunk_id: u32,
+    deps: Vec<u32>,
 }
 
 #[turbo_tasks::value_impl]
@@ -335,9 +342,9 @@ impl ValueToString for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "{} (ecmascript) -> {:?}",
+            "{} (ecmascript) -> chunk {}",
             self.module.await?.source.path().to_string().await?,
-            self.item_id
+            self.chunk_id
         )))
     }
 }
@@ -359,5 +366,21 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {}
+    async fn references(&self) -> AssetReferencesVc {
+        let assets = self
+            .deps
+            .iter()
+            .map(|&chunk_id| {
+                SingleAssetReference::new(
+                    EcmascriptModulePartAsset {
+                        module: self.full_module.clone(),
+                        chunk_id,
+                    }
+                    .into(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        AssetReferences::new(assets)
+    }
 }
