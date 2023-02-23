@@ -330,8 +330,9 @@ impl ValueToString for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "{} (ecmascript)",
-            self.module.await?.source.path().to_string().await?
+            "{} (ecmascript) -> {:?}",
+            self.module.await?.source.path().to_string().await?,
+            self.item_id
         )))
     }
 }
