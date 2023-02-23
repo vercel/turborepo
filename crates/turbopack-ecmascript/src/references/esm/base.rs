@@ -95,6 +95,8 @@ pub struct EsmAssetReference {
     pub origin: ResolveOriginVc,
     pub request: RequestVc,
     pub annotations: ImportAnnotations,
+
+    pub export_name: Option<StringVc>,
 }
 
 impl EsmAssetReference {
