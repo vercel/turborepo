@@ -1,7 +1,7 @@
 declare const PAGE: string;
 
 import { adapter, enhanceGlobals } from "next/dist/server/web/adapter";
-import { getHandle } from "next/dist/build/webpack/loaders/next-edge-app-route-loader/handle.js";
+import { getHandle } from "next/dist/build/webpack/loaders/next-edge-app-route-loader/handle";
 
 import { staticGenerationAsyncStorage } from "next/dist/client/components/static-generation-async-storage";
 import * as serverHooks from "next/dist/client/components/hooks-server-context";

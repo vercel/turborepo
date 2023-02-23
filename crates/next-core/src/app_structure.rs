@@ -200,7 +200,9 @@ async fn get_app_structure_for_directory(
             severity: IssueSeverity::Error.into(),
             path: route_path,
             message: StringVc::cell(
-                "It's not possible to have a page and a route in the same directory.".to_string(),
+                "It's not possible to have a page and a route in the same directory. The route \
+                 will be ignored in favor of the page."
+                    .to_string(),
             ),
         }
         .cell()

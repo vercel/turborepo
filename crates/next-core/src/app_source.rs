@@ -487,6 +487,7 @@ async fn create_app_source_for_directory(
     Ok(CombinedContentSource { sources }.cell().into())
 }
 
+/// The renderer for pages in app directory
 #[turbo_tasks::value]
 struct AppRenderer {
     context_ssr: AssetContextVc,
@@ -669,7 +670,7 @@ impl NodeEntry for AppRenderer {
     }
 }
 
-/// The node.js renderer for SSR of pages.
+/// The node.js renderer api routes in the app directory
 #[turbo_tasks::value]
 struct AppRoute {
     context: AssetContextVc,

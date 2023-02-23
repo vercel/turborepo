@@ -13,6 +13,8 @@ import type { Params } from "next/dist/shared/lib/router/utils/route-matcher";
 import { FetchEventResult } from "next/dist/server/web/types";
 import { getCloneableBody } from "next/dist/server/body-streams";
 
+// This is an adapted version of a similar function in next-dev-server.
+// TODO exposes this method from next.js instead
 export async function runEdgeFunction({
   edgeInfo,
   outputDir,
@@ -55,10 +57,7 @@ export async function runEdgeFunction({
     );
   }
 
-  // The sandbox can't be bundled and need to be external
-  const { run } = __turbopack_external_require__(
-    "next/dist/server/web/sandbox"
-  );
+  const { run } = require("next/dist/server/web/sandbox");
   const result = (await run({
     distDir: join(process.cwd(), ".next/server", outputDir),
     name: edgeInfo.name,

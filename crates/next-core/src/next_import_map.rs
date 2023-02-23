@@ -204,6 +204,11 @@ pub async fn get_next_server_import_map(
                     ImportMapping::External(None).into(),
                 );
             }
+            // The sandbox can't be bundled and needs to be external
+            import_map.insert_exact_alias(
+                "next/dist/server/web/sandbox",
+                ImportMapping::External(None).into(),
+            );
         }
         ServerContextType::Middleware => {}
     }
