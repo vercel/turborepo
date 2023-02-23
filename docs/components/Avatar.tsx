@@ -8,10 +8,10 @@ export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => (
         src={picture}
         height={32}
         width={32}
-        loading="eager"
         title={name}
         className="w-full rounded-full"
         alt={name}
+        priority
       />
     </div>
     <dl className="ml-2 text-sm font-medium leading-4 text-left whitespace-no-wrap">
