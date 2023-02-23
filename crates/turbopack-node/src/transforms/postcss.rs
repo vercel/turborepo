@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    TryJoinIterExt, Value,
+    CompletionVc, TryJoinIterExt, Value,
 };
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, File, FileContent, FileSystemEntryType,
@@ -196,6 +196,7 @@ impl PostCssTransformedAssetVc {
         let ExecutionContext {
             project_root,
             intermediate_output_path,
+            env,
         } = *this.execution_context.await?;
         let source_content = this.source.content();
         let AssetContent::File(file) = *source_content.await? else {
@@ -220,6 +221,7 @@ impl PostCssTransformedAssetVc {
             project_root,
             postcss_executor,
             project_root,
+            env,
             this.source.path(),
             context,
             intermediate_output_path,
@@ -228,6 +230,7 @@ impl PostCssTransformedAssetVc {
                 JsonValueVc::cell(content.into()),
                 JsonValueVc::cell(css_path.into()),
             ],
+            CompletionVc::immutable(),
             /* debug */ false,
         )
         .await?;
