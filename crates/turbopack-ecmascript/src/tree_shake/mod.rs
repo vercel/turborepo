@@ -12,6 +12,7 @@ use turbopack_core::{
     },
     reference::{
         AssetReference, AssetReferenceVc, AssetReferences, AssetReferencesVc, SingleAssetReference,
+        SingleAssetReferenceVc,
     },
     resolve::{ResolveResult, ResolveResultVc},
     version::VersionedContentVc,
@@ -371,16 +372,18 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
             .deps
             .iter()
             .map(|&chunk_id| {
-                SingleAssetReference::new(
-                    EcmascriptModulePartAsset {
+                SingleAssetReferenceVc::new(
+                    EcmascriptModulePartAssetVc::cell(EcmascriptModulePartAsset {
                         module: self.full_module.clone(),
                         chunk_id,
-                    }
-                    .into(),
+                    })
+                    .as_asset(),
+                    StringVc::cell("ecmascript module part".to_string()),
                 )
+                .as_asset_reference()
             })
             .collect::<Vec<_>>();
 
-        AssetReferences::new(assets)
+        AssetReferencesVc::cell(assets)
     }
 }
