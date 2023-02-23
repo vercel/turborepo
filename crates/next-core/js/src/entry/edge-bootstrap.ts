@@ -4,7 +4,7 @@ import { adapter, enhanceGlobals } from "next/dist/server/web/adapter";
 
 enhanceGlobals();
 
-var mod = require(".");
+var mod = require("ENTRY");
 var handler = mod.middleware || mod.default;
 
 if (typeof handler !== "function") {

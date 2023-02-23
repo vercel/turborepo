@@ -11,7 +11,8 @@ import { requestAsyncStorage } from "next/dist/client/components/request-async-s
 
 enhanceGlobals();
 
-import * as handlers from ".";
+// @ts-expect-error ENTRY is set from rust code
+import * as handlers from "ENTRY";
 const mod = {
   handlers,
   resolvedPagePath: `app/${PAGE}`,
