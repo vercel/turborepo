@@ -5,7 +5,7 @@ use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
-    Value,
+    CompletionVc, Value,
 };
 use turbo_tasks_env::EnvMapVc;
 use turbo_tasks_fs::json::parse_json_rope_with_source_context;
@@ -28,7 +28,7 @@ use turbopack_ecmascript::{
 use turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
-    transforms::webpack::{WebpackLoaderConfigs, WebpackLoaderConfigsVc},
+    transforms::webpack::{WebpackLoaderConfigItems, WebpackLoaderConfigItemsVc},
 };
 
 use crate::embed_js::next_asset;
@@ -333,7 +333,7 @@ pub enum RemotePatternProtocal {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalTurboConfig {
-    pub loaders: Option<IndexMap<String, WebpackLoaderConfigs>>,
+    pub loaders: Option<IndexMap<String, WebpackLoaderConfigItems>>,
     pub resolve_alias: Option<IndexMap<String, JsonValue>>,
 }
 
@@ -445,7 +445,7 @@ pub enum RemoveConsoleConfig {
 
 #[derive(Default)]
 #[turbo_tasks::value(transparent)]
-pub struct WebpackExtensionToLoaders(IndexMap<String, WebpackLoaderConfigsVc>);
+pub struct WebpackExtensionToLoaders(IndexMap<String, WebpackLoaderConfigItemsVc>);
 
 #[turbo_tasks::value_impl]
 impl NextConfigVc {
@@ -508,7 +508,10 @@ impl NextConfigVc {
         };
         let mut extension_to_loaders = IndexMap::new();
         for (ext, loaders) in turbo_loaders {
-            extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
+            extension_to_loaders.insert(
+                ext.clone(),
+                WebpackLoaderConfigItemsVc::cell(loaders.0.clone()),
+            );
         }
         Ok(WebpackExtensionToLoaders(extension_to_loaders).cell())
     }
@@ -538,6 +541,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     let ExecutionContext {
         project_root,
         intermediate_output_path,
+        env,
     } = *execution_context.await?;
     let mut import_map = ImportMap::default();
 
@@ -576,11 +580,13 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         project_root,
         load_next_config_asset,
         project_root,
+        env,
         config_asset.map_or(project_root, |c| c.path()),
         context,
         intermediate_output_path,
         runtime_entries,
         vec![],
+        CompletionVc::immutable(),
         /* debug */ false,
     )
     .await?;

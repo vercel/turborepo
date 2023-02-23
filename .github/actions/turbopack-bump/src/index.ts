@@ -51,6 +51,7 @@ async function run() {
 
   core.setOutput("new_tag", nextTag);
   await createTag(octokit, nextTag, commitSha);
+  core.notice(`New tag is ${nextTag}`);
 
   // TODO: generate real release notes
   core.setOutput(
