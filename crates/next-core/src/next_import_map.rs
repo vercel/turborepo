@@ -386,6 +386,12 @@ pub async fn insert_next_shared_aliases(
         .cell(),
     );
 
+    import_map.insert_exact_alias(
+        "@opentelemetry/api",
+        // TODO this actually need to prefer the local version of @opentelemetry/api
+        ImportMapping::External(Some("next/dist/compiled/@opentelemetry/api".to_string())).into(),
+    );
+
     Ok(())
 }
 
