@@ -13,7 +13,7 @@ Check my-app#build output
   my-app#build
     Task                   = build                                                                                                                           
     Package                = my-app                                                                                                                          
-    Hash                   = 7438505b97329a3d                                                                                                                
+    Hash                   = 08776936c58c1941                                                                                                                
     Cached (Local)         = false                                                                                                                           
     Cached (Remote)        = false                                                                                                                           
     Directory              = apps/my-app                                                                                                                     
@@ -27,7 +27,7 @@ Check my-app#build output
   util#build
     Task                   = build                                                                                                  
     Package                = util                                                                                                   
-    Hash                   = 6dec18f9f767112f                                                                                       
+    Hash                   = c154ed553992ff52                                                                                       
     Cached (Local)         = false                                                                                                  
     Cached (Remote)        = false                                                                                                  
     Directory              = packages/util                                                                                          
@@ -40,7 +40,6 @@ Check my-app#build output
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmp.log
-  
   $ cat tmp.log | jq .globalHashSummary
   {
     "globalFileHashMap": {},
@@ -81,7 +80,7 @@ Check my-app#build output
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "7438505b97329a3d",
+    "hash": "08776936c58c1941",
     "cacheState": {
       "local": false,
       "remote": false
@@ -116,7 +115,7 @@ Check my-app#build output
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "6dec18f9f767112f",
+    "hash": "c154ed553992ff52",
     "cacheState": {
       "local": false,
       "remote": false
