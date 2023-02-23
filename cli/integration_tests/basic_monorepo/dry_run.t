@@ -39,10 +39,13 @@ Check my-app#build output
     ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
 # Save JSON to tmp file so we don't need to keep re-running the build
-  $ ${TURBO} run build --dry=json > tmp.log
-  $ cat tmp.log | jq .globalHashSummary
+  $ ${TURBO} run build --dry=json > tmpjson.log
+
+  $ cat tmpjson.log | jq .globalHashSummary
   {
-    "globalFileHashMap": {},
+    "globalFileHashMap": {
+      "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
+    },
     "rootExternalDepsHash": "ccab0b28617f1f56",
     "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
     "pipeline": {
@@ -71,7 +74,7 @@ Check my-app#build output
   }
 
 # Validate output of my-app#build task
-  $ cat tmp.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
+  $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {
     "taskId": "my-app#build",
     "task": "build",
@@ -106,7 +109,7 @@ Check my-app#build output
   }
 
 # Validate output of util#build task
-  $ cat tmp.log | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
+  $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
   {
     "taskId": "util#build",
     "task": "build",
