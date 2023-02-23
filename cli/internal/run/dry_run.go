@@ -22,6 +22,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -33,8 +34,33 @@ const missingTaskLabel = "<NONEXISTENT>"
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	Packages []string      `json:"packages"`
-	Tasks    []taskSummary `json:"tasks"`
+	GlobalHashSummary *globalHashSummary `json:"globalHashSummary"`
+	Packages          []string           `json:"packages"`
+	Tasks             []taskSummary      `json:"tasks"`
+}
+
+type globalHashSummary struct {
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
+	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
+	HashedSortedEnvPairs []string                              `json:"hashedSortedEnvPairs"`
+	GlobalCacheKey       string                                `json:"globalCacheKey"`
+	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
+}
+
+func newGlobalHashSummary(ghInputs struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs []string
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+}) *globalHashSummary {
+	return &globalHashSummary{
+		GlobalFileHashMap:    ghInputs.globalFileHashMap,
+		RootExternalDepsHash: ghInputs.rootExternalDepsHash,
+		HashedSortedEnvPairs: ghInputs.hashedSortedEnvPairs,
+		GlobalCacheKey:       ghInputs.globalCacheKey,
+		Pipeline:             ghInputs.pipeline,
+	}
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
