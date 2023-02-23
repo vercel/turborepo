@@ -227,7 +227,7 @@ async fn config_assets(
             project_path.join("middleware_config.js"),
             File::from(format!(
                 "export default {};",
-                json!({ "matcher": &*config.await?.matcher })
+                json!({ "matcher": &config.await?.matcher })
             ))
             .into(),
         )
