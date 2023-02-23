@@ -177,11 +177,12 @@ app again. Without a Workspace-specific task, you might configure your root
 }
 ```
 
-This works, but it's important to understand that the `my-sveltekit-app#build`
-completely ovewrites `build` for the Sveltekit app. Any other config (such as
-`outputMode`) in the `build` task would need to be duplicated. With Workspace
-Configurations, you don't need to duplicate any configuration. Just override
-what needs to be changed.
+In this example, `my-sveltekit-app#build` completely overwrites `build` for the
+Sveltekit app, so `outputMode` and `inputs` also need to be duplicated.
+
+With Workspace Configurations, `outputMode` and `inputs` are inherited, so
+you don't need to duplicate them. You only need to override `outputs`
+`my-sveltekit-app` config.
 
 <Callout type="info">
   Although there are no plans to remove Workspace-specific task configurations,
