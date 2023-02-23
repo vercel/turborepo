@@ -256,15 +256,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	globalHash, err := fs.HashObject(globalHashable)
-
-	if err != nil {
+	if globalHash, err := fs.HashObject(globalHashable); err != nil {
+		r.base.Logger.Debug("global hash", "value", globalHash)
+		g.GlobalHash = globalHash
+	} else {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
 
-	g.GlobalHash = globalHash
-
-	r.base.Logger.Debug("global hash", "value", globalHash)
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	rs := &runSpec{
