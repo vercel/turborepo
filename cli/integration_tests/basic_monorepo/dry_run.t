@@ -13,7 +13,7 @@ Check my-app#build output
   my-app#build
     Task                   = build                                                                                                                           
     Package                = my-app                                                                                                                          
-    Hash                   = 08776936c58c1941                                                                                                                
+    Hash                   = 8888a278aaecb070                                                                                                                
     Cached (Local)         = false                                                                                                                           
     Cached (Remote)        = false                                                                                                                           
     Directory              = apps/my-app                                                                                                                     
@@ -27,7 +27,7 @@ Check my-app#build output
   util#build
     Task                   = build                                                                                                  
     Package                = util                                                                                                   
-    Hash                   = c154ed553992ff52                                                                                       
+    Hash                   = d09a52ea72495c87                                                                                       
     Cached (Local)         = false                                                                                                  
     Cached (Remote)        = false                                                                                                  
     Directory              = packages/util                                                                                          
@@ -79,7 +79,7 @@ Check my-app#build output
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "08776936c58c1941",
+    "hash": "8888a278aaecb070",
     "cacheState": {
       "local": false,
       "remote": false
@@ -114,7 +114,7 @@ Check my-app#build output
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "c154ed553992ff52",
+    "hash": "d09a52ea72495c87",
     "cacheState": {
       "local": false,
       "remote": false
