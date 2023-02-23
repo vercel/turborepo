@@ -30,6 +30,7 @@ import (
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
 // the DryRunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
+const missingFrameworkLabel = "<FRAMEWORK NOT DETECTED>"
 
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
@@ -137,6 +138,11 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			command = packageTask.Command
 		}
 
+		framework := missingFrameworkLabel
+		if taskHashes.PackageTaskFramework[packageTask.TaskID] != "" {
+			framework = taskHashes.PackageTaskFramework[packageTask.TaskID]
+		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
@@ -167,6 +173,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
+			Framework:              framework,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
@@ -302,12 +309,14 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
 		}
 
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Framework\t=\t%s\t${RESET}", task.Framework))
 		if err := w.Flush(); err != nil {
 			return err
 		}
@@ -339,6 +348,7 @@ type taskSummary struct {
 	Dependencies           []string           `json:"dependencies"`
 	Dependents             []string           `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Framework              string             `json:"framework"`
 }
 
 type singlePackageTaskSummary struct {
@@ -352,6 +362,7 @@ type singlePackageTaskSummary struct {
 	Dependencies           []string           `json:"dependencies"`
 	Dependents             []string           `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Framework              string             `json:"framework"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {

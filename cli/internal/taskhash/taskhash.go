@@ -30,23 +30,25 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode            string
-	globalHash          string
-	pipeline            fs.Pipeline
-	workspaceInfos      graph.WorkspaceInfos
-	mu                  sync.RWMutex
-	packageInputsHashes packageFileHashes
-	packageTaskHashes   map[string]string // taskID -> hash
+	rootNode             string
+	globalHash           string
+	pipeline             fs.Pipeline
+	workspaceInfos       graph.WorkspaceInfos
+	mu                   sync.RWMutex
+	packageInputsHashes  packageFileHashes
+	packageTaskHashes    map[string]string // taskID -> hash
+	PackageTaskFramework map[string]string
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
-		rootNode:          rootNode,
-		globalHash:        globalHash,
-		pipeline:          pipeline,
-		workspaceInfos:    workspaceInfos,
-		packageTaskHashes: make(map[string]string),
+		rootNode:             rootNode,
+		globalHash:           globalHash,
+		pipeline:             pipeline,
+		workspaceInfos:       workspaceInfos,
+		packageTaskHashes:    make(map[string]string),
+		PackageTaskFramework: make(map[string]string),
 	}
 }
 
@@ -313,6 +315,9 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	}
 	th.mu.Lock()
 	th.packageTaskHashes[packageTask.TaskID] = hash
+	if framework != nil {
+		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
+	}
 	th.mu.Unlock()
 	return hash, nil
 }
