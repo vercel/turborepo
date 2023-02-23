@@ -1,9 +1,13 @@
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
-use turbopack_core::{asset::Asset, chunk::ChunkableAsset};
+use turbopack_core::{
+    asset::Asset,
+    chunk::{ChunkItem, ChunkableAsset},
+};
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
+use crate::chunk::EcmascriptChunkItem;
 
 mod graph;
 pub mod merge;
