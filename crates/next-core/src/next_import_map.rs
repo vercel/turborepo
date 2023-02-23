@@ -179,6 +179,12 @@ pub async fn get_next_server_import_map(
     )
     .await?;
 
+    import_map.insert_exact_alias(
+        "@opentelemetry/api",
+        // TODO(WEB-625) this actually need to prefer the local version of @opentelemetry/api
+        ImportMapping::External(Some("next/dist/compiled/@opentelemetry/api".to_string())).into(),
+    );
+
     let ty = ty.into_value();
 
     insert_next_server_special_aliases(&mut import_map, ty).await?;
@@ -384,12 +390,6 @@ pub async fn insert_next_shared_aliases(
             Some(get_swc_helpers_package(project_path)),
         )
         .cell(),
-    );
-
-    import_map.insert_exact_alias(
-        "@opentelemetry/api",
-        // TODO this actually need to prefer the local version of @opentelemetry/api
-        ImportMapping::External(Some("next/dist/compiled/@opentelemetry/api".to_string())).into(),
     );
 
     Ok(())
