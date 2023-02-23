@@ -1,6 +1,7 @@
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -13,7 +14,10 @@ use turbopack_core::{
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
-use crate::chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc};
+use crate::{
+    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc},
+    EcmascriptModuleAssetVc,
+};
 
 mod graph;
 pub mod merge;
@@ -286,7 +290,9 @@ impl Analyzer<'_> {
 }
 
 #[turbo_tasks::value]
-pub struct EcmascriptModulePartAsset {}
+pub struct EcmascriptModulePartAsset {
+    module: EcmascriptModuleAssetVc,
+}
 
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptModulePartAsset {
@@ -314,7 +320,21 @@ impl ChunkableAsset for EcmascriptModulePartAsset {
 }
 
 #[turbo_tasks::value]
-pub struct EcmascriptModulePartChunkItem {}
+pub struct EcmascriptModulePartChunkItem {
+    module: EcmascriptModulePartAssetVc,
+    item_id: ItemId,
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for EcmascriptModulePartChunkItem {
+    #[turbo_tasks::function]
+    async fn to_string(&self) -> Result<StringVc> {
+        Ok(StringVc::cell(format!(
+            "{} (ecmascript)",
+            self.module.await?.source.path().to_string().await?
+        )))
+    }
+}
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
