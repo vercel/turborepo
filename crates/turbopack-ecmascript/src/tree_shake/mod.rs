@@ -349,6 +349,11 @@ impl ValueToString for EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.module.path()
+    }
+
+    #[turbo_tasks::function]
     fn content(&self) -> EcmascriptChunkItemContentVc {}
 
     #[turbo_tasks::function]
