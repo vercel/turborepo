@@ -1,7 +1,7 @@
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
-use turbopack_core::asset::Asset;
+use turbopack_core::{asset::Asset, chunk::ChunkableAsset};
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 
@@ -296,3 +296,15 @@ impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     fn versioned_content(&self) -> VersionedContentVc {}
 }
+
+#[turbo_tasks::value_impl]
+impl ChunkableAsset for EcmascriptModulePartAsset {}
+
+#[turbo_tasks::value]
+pub struct EcmascriptModulePartChunkItem {}
+
+#[turbo_tasks::value_impl]
+impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {}
+
+#[turbo_tasks::value_impl]
+impl ChunkItem for EcmascriptModulePartChunkItem {}
