@@ -240,6 +240,23 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		}
 	}
 
+	fileCount := 0
+	for range summary.GlobalHashSummary.GlobalFileHashMap {
+		fileCount = fileCount + 1
+	}
+	w1 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	ui.Output("")
+	ui.Info(util.Sprintf("${CYAN}${BOLD}Global Hash Inputs${RESET}"))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
+	if bytes, err := json.Marshal(summary.GlobalHashSummary.Pipeline); err == nil {
+		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
+	}
+	if err := w1.Flush(); err != nil {
+		return err
+	}
+
 	ui.Output("")
 	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
 
