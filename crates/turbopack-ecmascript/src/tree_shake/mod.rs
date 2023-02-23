@@ -344,7 +344,7 @@ impl ValueToString for EcmascriptModulePartChunkItem {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "{} (ecmascript) -> chunk {}",
-            self.module.await?.source.path().to_string().await?,
+            self.full_module.await?.source.path().to_string().await?,
             self.chunk_id
         )))
     }
