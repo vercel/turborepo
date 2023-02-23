@@ -275,6 +275,7 @@
 <span id="275">275</span>
 <span id="276">276</span>
 <span id="277">277</span>
+<span id="278">278</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -321,7 +322,8 @@
 <span class="kw">pub fn </span>next_client_defines() -&gt; CompileTimeDefinesVc {
     <span class="macro">compile_time_defines!</span>(
         process.turbopack = <span class="bool-val">true</span>,
-        process.env.NODE_ENV = <span class="string">&quot;development&quot;
+        process.env.NODE_ENV = <span class="string">&quot;development&quot;</span>,
+        process.env.__NEXT_CLIENT_ROUTER_FILTER_ENABLED = <span class="bool-val">false
     </span>)
     .cell()
 }

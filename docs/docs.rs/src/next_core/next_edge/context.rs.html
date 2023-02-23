@@ -68,6 +68,7 @@
 <span id="68">68</span>
 <span id="69">69</span>
 <span id="70">70</span>
+<span id="71">71</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -89,7 +90,8 @@
 <span class="kw">pub fn </span>next_edge_defines() -&gt; CompileTimeDefinesVc {
     <span class="macro">compile_time_defines!</span>(
         process.turbopack = <span class="bool-val">true</span>,
-        process.env.NODE_ENV = <span class="string">&quot;development&quot;
+        process.env.NODE_ENV = <span class="string">&quot;development&quot;</span>,
+        process.env.__NEXT_CLIENT_ROUTER_FILTER_ENABLED = <span class="bool-val">false
     </span>)
     .cell()
 }
