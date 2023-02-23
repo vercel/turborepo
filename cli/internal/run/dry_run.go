@@ -103,8 +103,7 @@ func DryRun(
 	// We walk the graph with no concurrency.
 	// Populating the cache state is parallelizable.
 	// Do this _after_ walking the graph.
-	err = populateCacheState(turboCache, taskSummaries)
-	if err != nil {
+	if err := populateCacheState(turboCache, taskSummaries); err != nil {
 		return err
 	}
 
@@ -223,7 +222,9 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) er
 				task := taskSummaries[index]
 				itemStatus, err := turboCache.Exists(task.Hash)
 				task.CacheState = itemStatus
-				returnErr = err
+				if err != nil {
+					returnErr = err
+				}
 			}
 		}()
 	}
