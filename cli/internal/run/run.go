@@ -240,7 +240,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	ghInputs, err := NewGlobalHashInputs(
+	globalHashable, err := calculateGlobalHash(
 		r.base.RepoRoot,
 		rootPackageJSON,
 		pipeline,
@@ -256,11 +256,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	globalHash, err := ghInputs.calculateGlobalHash()
-	if err != nil {
-		return fmt.Errorf("error building global hash: %v", err)
+	if globalHash, err := fs.HashObject(globalHashable); err == nil {
+		r.base.Logger.Debug("global hash", "value", globalHash)
+		g.GlobalHash = globalHash
+	} else {
+		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
-	r.base.Logger.Debug("global hash", "value", globalHash)
+
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	rs := &runSpec{
@@ -342,11 +344,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// the tasks that we expect to run based on the user command.
 	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := &dryRunSummary{
-		TurboVersion:     r.base.TurboVersion,
-		Packages:         packagesInScope,
-		GlobalHashInputs: ghInputs,
-		PackageManager:   packageManager,
-		Tasks:            []taskSummary{},
+		TurboVersion:      r.base.TurboVersion,
+		Packages:          packagesInScope,
+		GlobalHashSummary: newGlobalHashSummary(globalHashable),
+		PackageManager:    packageManager,
+		Tasks:             []taskSummary{},
 	}
 
 	// Dry Run

@@ -114,7 +114,8 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await?;
+            .await?
+            .error_for_status()?;
 
         response.json().await.map_err(|err| {
             anyhow!(
@@ -138,7 +139,8 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await?;
+            .await?
+            .error_for_status()?;
 
         response.json().await.map_err(|err| {
             anyhow!(
@@ -151,17 +153,16 @@ impl APIClient {
     }
 
     pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
-        let response = {
-            let request_builder = self
-                .client
-                .get(self.make_url("/v2/team"))
-                .query(&[("teamId", team_id)])
-                .header("User-Agent", USER_AGENT.clone())
-                .header("Content-Type", "application/json")
-                .header("Authorization", format!("Bearer {}", token));
-            request_builder.send()
-        }
-        .await?;
+        let response = self
+            .client
+            .get(self.make_url("/v2/team"))
+            .query(&[("teamId", team_id)])
+            .header("User-Agent", USER_AGENT.clone())
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await?
+            .error_for_status()?;
 
         response.json().await.map_err(|err| {
             anyhow!(
@@ -197,7 +198,8 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await?;
+            .await?
+            .error_for_status()?;
 
         response.json().await.map_err(|err| {
             anyhow!(
@@ -220,7 +222,8 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await?;
+            .await?
+            .error_for_status()?;
 
         let verification_response: VerificationResponse = response.json().await.map_err(|err| {
             anyhow!(

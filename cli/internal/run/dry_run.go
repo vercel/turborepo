@@ -37,12 +37,35 @@ const missingTaskLabel = "<NONEXISTENT>"
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	TurboVersion     string                         `json:"turboVersion"`
-	GlobalHashInputs *GlobalHashInputs              `json:"globalHashInputs"`
-	PackageManager   *packagemanager.PackageManager `json:"packageManager"`
-	Packages         []string                       `json:"packages"`
-	ExitCode         int                            `json:"exitCode"`
-	Tasks            []taskSummary                  `json:"tasks"`
+	TurboVersion      string                         `json:"turboVersion"`
+	GlobalHashSummary *globalHashSummary             `json:"globalHashSummary"`
+	PackageManager    *packagemanager.PackageManager `json:"packageManager"`
+	Packages          []string                       `json:"packages"`
+	ExitCode          int                            `json:"exitCode"`
+	Tasks             []taskSummary                  `json:"tasks"`
+}
+
+type globalHashSummary struct {
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
+	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
+	GlobalCacheKey       string                                `json:"globalCacheKey"`
+	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
+}
+
+func newGlobalHashSummary(ghInputs struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs []string
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+}) *globalHashSummary {
+	// TODO(mehulkar): Add ghInputs.hashedSortedEnvPairs in here, but redact the values
+	return &globalHashSummary{
+		GlobalFileHashMap:    ghInputs.globalFileHashMap,
+		RootExternalDepsHash: ghInputs.rootExternalDepsHash,
+		GlobalCacheKey:       ghInputs.globalCacheKey,
+		Pipeline:             ghInputs.pipeline,
+	}
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
@@ -220,6 +243,23 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		if err := p.Flush(); err != nil {
 			return err
 		}
+	}
+
+	fileCount := 0
+	for range summary.GlobalHashSummary.GlobalFileHashMap {
+		fileCount = fileCount + 1
+	}
+	w1 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	ui.Output("")
+	ui.Info(util.Sprintf("${CYAN}${BOLD}Global Hash Inputs${RESET}"))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
+	if bytes, err := json.Marshal(summary.GlobalHashSummary.Pipeline); err == nil {
+		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
+	}
+	if err := w1.Flush(); err != nil {
+		return err
 	}
 
 	ui.Output("")

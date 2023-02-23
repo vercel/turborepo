@@ -24,23 +24,13 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-type GlobalHashInputs struct {
-	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
-	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
-	HashedSortedEnvPairs []string                              `json:"hashedSortedEnvPairs"`
-	GlobalCacheKey       string                                `json:"globalCacheKey"`
-	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
-}
-
-func (gt *GlobalHashInputs) calculateGlobalHash() (string, error) {
-	globalHash, err := fs.HashObject(gt)
-	if err != nil {
-		return "", fmt.Errorf("error hashing global dependencies %w", err)
-	}
-	return globalHash, nil
-}
-
-func NewGlobalHashInputs(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (*GlobalHashInputs, error) {
+func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs []string
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+}, error) {
 	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
@@ -60,12 +50,24 @@ func NewGlobalHashInputs(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return &GlobalHashInputs{}, err
+			return struct {
+				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+				rootExternalDepsHash string
+				hashedSortedEnvPairs []string
+				globalCacheKey       string
+				pipeline             fs.PristinePipeline
+			}{}, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return &GlobalHashInputs{}, err
+			return struct {
+				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+				rootExternalDepsHash string
+				hashedSortedEnvPairs []string
+				globalCacheKey       string
+				pipeline             fs.PristinePipeline
+			}{}, err
 		}
 
 		for _, val := range f {
@@ -98,15 +100,30 @@ func NewGlobalHashInputs(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return &GlobalHashInputs{}, fmt.Errorf("error hashing files: %w", err)
+		return struct {
+			globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+			rootExternalDepsHash string
+			hashedSortedEnvPairs []string
+			globalCacheKey       string
+			pipeline             fs.PristinePipeline
+		}{}, fmt.Errorf("error hashing files: %w", err)
 	}
-	return &GlobalHashInputs{
-		GlobalFileHashMap:    globalFileHashMap,
-		RootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
-		HashedSortedEnvPairs: globalHashableEnvPairs,
-		GlobalCacheKey:       _globalCacheKey,
-		Pipeline:             pipeline.Pristine(),
-	}, nil
+
+	globalHashable := struct {
+		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+		rootExternalDepsHash string
+		hashedSortedEnvPairs []string
+		globalCacheKey       string
+		pipeline             fs.PristinePipeline
+	}{
+		globalFileHashMap:    globalFileHashMap,
+		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
+		hashedSortedEnvPairs: globalHashableEnvPairs,
+		globalCacheKey:       _globalCacheKey,
+		pipeline:             pipeline.Pristine(),
+	}
+
+	return globalHashable, nil
 }
 
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and
