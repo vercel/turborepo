@@ -325,6 +325,8 @@ impl ChunkableAsset for EcmascriptModulePartAsset {
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartChunkItem {
     module: EcmascriptModulePartAssetVc,
+    context: ChunkingContextVc,
+
     item_id: ItemId,
 }
 
@@ -346,7 +348,9 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     fn content(&self) -> EcmascriptChunkItemContentVc {}
 
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {}
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.context
+    }
 
     #[turbo_tasks::function]
     fn id(&self) -> ModuleIdVc {}
