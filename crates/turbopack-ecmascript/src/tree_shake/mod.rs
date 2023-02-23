@@ -8,7 +8,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
-        ModuleIdVc,
+        ModuleId, ModuleIdVc,
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::VersionedContentVc,
@@ -362,7 +362,9 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn id(&self) -> ModuleIdVc {}
+    fn id(&self) -> ModuleIdVc {
+        ModuleId::Number(self.chunk_id).into()
+    }
 }
 
 #[turbo_tasks::value_impl]
