@@ -11,6 +11,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
 import "next/dist/server/node-polyfill-fetch.js";
 
 import middlewareChunkGroup from "MIDDLEWARE_CHUNK_GROUP";
+import middlewareConfig from "MIDDLEWARE_CONFIG";
 
 type RouterRequest = {
   method: string;
@@ -83,7 +84,10 @@ async function getResolveRoute(
     env: [],
     assets: [],
   };
-  return await makeResolver(dir, nextConfig, edgeInfo);
+  return await makeResolver(dir, nextConfig, {
+    edgeInfo,
+    config: middlewareConfig,
+  });
 }
 
 export default async function route(
