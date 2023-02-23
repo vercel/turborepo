@@ -1,22 +1,24 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/a587c_tests_snapshot_styled_components_styled_components_input_index_b4ee41.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_821998.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/styled_components/styled_components/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f$styled$2d$components$2f$index$2e$js__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/node_modules/styled-components/index.js (ecmascript)");
+const __TURBOPACK__import$2e$meta__ = {
+    url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs"
+};
+"__TURBOPACK__ecmascript__hoisting__location__";
+__TURBOPACK__import$2e$meta__.foo = 1;
+
+}.call(this) }),
+"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$import$2d$meta$2f$esm$2d$mutable$2f$input$2f$mod$2e$mjs__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
-const MyButton = __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$node_modules$2f$styled$2d$components$2f$index$2e$js__["default"].button.withConfig({
-    displayName: "MyButton",
-    componentId: "sc-39afcc54-0"
-})`
-  background: blue;
-`;
-console.log(MyButton);
 
-})()),
+}.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/63a02_styled-components_index.js") && loadedChunks.has("output/a587c_tests_snapshot_styled_components_styled_components_input_index_1dfb88.js"))) return true;
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/styled_components/styled_components/input/index.js (ecmascript)");
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_4daf2f.js"))) return true;
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/index.js (ecmascript)");
 }]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -1065,4 +1067,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=a587c_tests_snapshot_styled_components_styled_components_input_index_b4ee41.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_821998.js.map
