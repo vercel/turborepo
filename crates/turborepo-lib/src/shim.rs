@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, PackageManager, Payload};
+use crate::{cli, get_version, turbo_json::TurboJson, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 // all arguments that result in a stdout that much be directly parsable and
@@ -239,8 +239,7 @@ impl RepoState {
         // that contains a `turbo.json` file.
         let root_path = current_dir
             .ancestors()
-            .filter(|p| fs::metadata(p.join(TURBO_JSON)).is_ok())
-            .last();
+            .find(|p| TurboJson::open(p.join(TURBO_JSON)).map_or(false, |t| t.no_extends()));
 
         // If that directory exists, then we figure out if there are workspaces defined
         // in it NOTE: This may change with multiple `turbo.json` files
