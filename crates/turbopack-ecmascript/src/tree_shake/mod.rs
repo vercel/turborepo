@@ -1,13 +1,19 @@
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::Asset,
-    chunk::{ChunkItem, ChunkableAsset},
+    asset::{Asset, AssetContentVc, AssetVc},
+    chunk::{
+        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
+        ModuleIdVc,
+    },
+    reference::AssetReferencesVc,
+    version::VersionedContentVc,
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
-use crate::chunk::EcmascriptChunkItem;
+use crate::chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc};
 
 mod graph;
 pub mod merge;
@@ -302,13 +308,28 @@ impl Asset for EcmascriptModulePartAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for EcmascriptModulePartAsset {}
+impl ChunkableAsset for EcmascriptModulePartAsset {
+    #[turbo_tasks::function]
+    fn as_chunk(&self, context: ChunkingContextVc) -> ChunkVc {}
+}
 
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartChunkItem {}
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {}
+impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
+    #[turbo_tasks::function]
+    fn content(&self) -> EcmascriptChunkItemContentVc {}
+
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {}
+
+    #[turbo_tasks::function]
+    fn id(&self) -> ModuleIdVc {}
+}
 
 #[turbo_tasks::value_impl]
-impl ChunkItem for EcmascriptModulePartChunkItem {}
+impl ChunkItem for EcmascriptModulePartChunkItem {
+    #[turbo_tasks::function]
+    fn references(&self) -> AssetReferencesVc {}
+}
