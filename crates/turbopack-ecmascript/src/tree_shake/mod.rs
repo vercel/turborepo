@@ -1,6 +1,7 @@
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
+use turbopack_core::asset::Asset;
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 
@@ -272,4 +273,26 @@ impl Analyzer<'_> {
             }
         }
     }
+}
+
+#[turbo_tasks::value]
+pub struct EcmascriptModulePartAsset {}
+
+#[turbo_tasks::value_impl]
+impl Asset for EcmascriptModulePartAsset {
+    #[turbo_tasks::function]
+    fn path(&self) -> FileSystemPathVc {}
+
+    #[turbo_tasks::function]
+    fn content(&self) -> AssetContentVc {
+        todo!()
+    }
+
+    #[turbo_tasks::function]
+    fn references(&self) -> AssetReferencesVc {
+        todo!()
+    }
+
+    #[turbo_tasks::function]
+    fn versioned_content(&self) -> VersionedContentVc {}
 }
