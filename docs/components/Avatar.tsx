@@ -8,7 +8,6 @@ export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => (
         src={picture}
         height={32}
         width={32}
-        loading="lazy"
         title={name}
         className="w-full rounded-full"
         alt={name}
