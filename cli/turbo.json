@@ -2,20 +2,46 @@
   "$schema": "../docs/public/schema.json",
   "extends": ["//"],
   "pipeline": {
-    "build": {
-      "outputs": ["turbo", "turbo.exe"]
+    "test:go": {
+      "dependsOn": ["build"]
     },
-
+    "test:rust": {
+      "dependsOn": ["build"]
+    },
+    "build": {
+      "inputs": [
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "scripts/e2e/e2e.ts",
+        "../crates/**/*.rs",
+        "../crates/**/Cargo.toml"
+      ],
+      "outputs": ["turbo", "turbo.exe", "../target/**/*"]
+    },
+    "lint:rust": {
+      "inputs": ["../crates/**/*.rs"]
+    },
+    "lint": {
+      "dependsOn": ["lint:rust"]
+    },
+    "test": {
+      "dependsOn": ["test:go", "test:rust", "lint:rust", "e2e"]
+    },
+    "ci": {
+      "dependsOn": ["test", "integration-tests"]
+    },
     "e2e": {
-      "outputs": [],
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
+      "dependsOn": ["build"],
+      "outputs": []
     },
     "e2e-prebuilt": {
       "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
     },
     "integration-tests": {
       "inputs": ["integration_tests/**"],
-      "env": ["GO_TAG"]
+      "env": ["GO_TAG"],
+      "dependsOn": ["build"]
     }
   }
 }

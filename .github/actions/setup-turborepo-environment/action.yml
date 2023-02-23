@@ -7,6 +7,9 @@ inputs:
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
+  rust-components:
+    description: "Comma-separated list of components to be additionally installed"
+    required: false
 runs:
   using: "composite"
   steps:
@@ -25,3 +28,4 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
+        components: ${{ inputs.rust-components }}

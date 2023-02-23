@@ -5,12 +5,15 @@
   "scripts": {
     "clean": "make clean",
     "build": "make",
-    "test": "make test-go",
+    "test:go": "make test-go",
     "e2e": "make e2e",
     "e2e-prebuilt": "make e2e-prebuilt",
     "format": "make fmt-go",
     "lint": "make lint-go",
-    "integration-tests": "make integration-tests-serial"
+    "integration-tests": "make integration-tests-serial",
+    "test:rust": "cargo tr-test",
+    "lint:go": "make lint-go",
+    "lint:rust": "cargo clippy -p turbo -p turborepo-ffi"
   },
   "devDependencies": {
     "copy-template-dir": "^1.4.0",
