@@ -1,3 +1,4 @@
+use anyhow::Result;
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
@@ -297,7 +298,9 @@ pub struct EcmascriptModulePartAsset {
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {}
+    fn path(&self) -> FileSystemPathVc {
+        self.module.path()
+    }
 
     #[turbo_tasks::function]
     fn content(&self) -> AssetContentVc {
