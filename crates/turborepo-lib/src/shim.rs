@@ -239,7 +239,8 @@ impl RepoState {
         // that contains a `turbo.json` file.
         let root_path = current_dir
             .ancestors()
-            .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
+            .filter(|p| fs::metadata(p.join(TURBO_JSON)).is_ok())
+            .last();
 
         // If that directory exists, then we figure out if there are workspaces defined
         // in it NOTE: This may change with multiple `turbo.json` files
