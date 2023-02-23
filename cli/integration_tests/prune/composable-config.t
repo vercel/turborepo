@@ -3,12 +3,12 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Make sure that the internal util package is part of the prune output
-  $ ${TURBO} prune --scope=docs --out-dir ../out
+  $ ${TURBO} prune --scope=docs
   Generating pruned monorepo for docs in .*\/out (re)
    - Added docs
    - Added shared
    - Added util
-  $ cd ../out && ${TURBO} run new-task
+  $ cd out && ${TURBO} run new-task
    WARNING  cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo
   \xe2\x80\xa2 Packages in scope: docs, shared, util (esc)
   \xe2\x80\xa2 Running new-task in 3 packages (esc)
