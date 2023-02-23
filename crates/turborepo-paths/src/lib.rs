@@ -28,7 +28,10 @@
 /// should be considered unsafe
 mod absolute_system_path;
 mod absolute_system_path_buf;
+mod anchored_system_path;
 mod anchored_system_path_buf;
+mod anchored_unix_path_buf;
+mod anchored_unix_tar_path_buf;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 
@@ -39,7 +42,10 @@ use std::{
 
 pub use absolute_system_path::AbsoluteSystemPath;
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
+pub use anchored_system_path::AnchoredSystemPath;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
+pub use anchored_unix_path_buf::AnchoredUnixPathBuf;
+pub use anchored_unix_tar_path_buf::AnchoredUnixTarPathBuf;
 use path_slash::{PathBufExt, PathExt};
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
@@ -62,6 +68,8 @@ pub enum PathError {
     IO(#[from] io::Error),
     #[error("{0} is not a prefix for {1}")]
     PrefixError(String, String),
+    #[error("Could not convert Unix path to system path: {0}")]
+    FailedToConvertToSystem(#[from] bstr::Utf8Error),
 }
 
 impl From<std::string::FromUtf8Error> for PathError {
@@ -115,3 +123,7 @@ impl IntoUnix for &Path {
         ))
     }
 }
+
+// Lets windows know that we're going to be reading this file sequentially
+#[cfg(windows)]
+pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;

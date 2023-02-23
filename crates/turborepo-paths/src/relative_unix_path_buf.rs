@@ -17,11 +17,17 @@ impl RelativeUnixPathBuf {
     }
 
     pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self
-            .0
+        self.0
             .to_str()
-            .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))?;
-        Ok(s)
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))
+    }
+
+    pub unsafe fn unchecked_new(path: impl Into<Vec<u8>>) -> Self {
+        Self(BString::new(path.into()))
+    }
+
+    pub fn into_inner(self) -> BString {
+        self.0
     }
 
     // write_escaped_bytes writes this path to the given writer in the form
@@ -98,7 +104,7 @@ impl Debug for RelativeUnixPathBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.as_str() {
             Ok(s) => write!(f, "{}", s),
-            Err(_) => write!(f, "Non-utf8 {:?}", self.0),
+            Err(s) => write!(f, "Non-utf8 {:?}", s),
         }
     }
 }

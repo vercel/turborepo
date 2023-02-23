@@ -7,7 +7,7 @@ use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     borrow::Cow,
     fmt, fs,
-    fs::Metadata,
+    fs::{File, Metadata, OpenOptions},
     io,
     path::{Components, Path, PathBuf},
 };
@@ -16,9 +16,11 @@ use path_clean::PathClean;
 use path_slash::CowExt;
 
 use crate::{
-    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath,
+    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError,
+    RelativeUnixPath,
 };
 
+#[derive(Debug)]
 pub struct AbsoluteSystemPath(Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -101,8 +103,8 @@ impl AbsoluteSystemPath {
         }
     }
 
-    pub(crate) fn new_unchecked(path: &Path) -> &Self {
-        unsafe { &*(path as *const Path as *const Self) }
+    pub unsafe fn new_unchecked(path: &Path) -> &Self {
+        &*(path as *const Path as *const Self)
     }
 
     pub fn as_path(&self) -> &Path {
@@ -110,7 +112,9 @@ impl AbsoluteSystemPath {
     }
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
-        self.0.ancestors().map(Self::new_unchecked)
+        self.0
+            .ancestors()
+            .map(|a| unsafe { Self::new_unchecked(a) })
     }
 
     // intended for joining literals or obviously single-token strings
@@ -165,8 +169,8 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
-    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
-        let path = self.0.join(path.as_path());
+    pub fn resolve(&self, path: impl AsRef<AnchoredSystemPath>) -> AbsoluteSystemPathBuf {
+        let path = self.0.join(path.as_ref());
         AbsoluteSystemPathBuf(path)
     }
 
@@ -192,6 +196,24 @@ impl AbsoluteSystemPath {
 
     pub fn components(&self) -> Components<'_> {
         self.0.components()
+    }
+
+    /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
+    /// help with performance. Also sets Unix file permissions.
+    pub fn open(&self) -> Result<File, io::Error> {
+        let mut options = OpenOptions::new();
+        options.read(true);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            use crate::FILE_FLAG_SEQUENTIAL_SCAN;
+
+            options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
+        }
+
+        options.open(&self.0)
     }
 }
 
