@@ -1048,7 +1048,10 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Format check
-        run: pnpm -- turbo run check:fmt
+        # This is the syntax for running the `//#lint` task specifically in turbo.json
+        # It runs the taplo check on taplo.toml, and prettier check across the whole repo.
+        # TODO: run prettier in individual workspaces instead of globally.
+        run: pnpm -- turbo run lint --filter=//
 
   final:
     name: Ok
