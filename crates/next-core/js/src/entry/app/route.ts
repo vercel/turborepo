@@ -7,8 +7,7 @@ import { join } from "path";
 
 import "next/dist/server/node-polyfill-fetch.js";
 
-("TURBOPACK { transition: next-route }");
-import chunkGroup from ".";
+import chunkGroup from "ROUTE_CHUNK_GROUP";
 
 import {
   NodeNextRequest,

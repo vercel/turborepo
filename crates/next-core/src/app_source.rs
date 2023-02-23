@@ -17,6 +17,8 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, ServerAddrVc},
+    reference_type::{EntryReferenceSubType, ReferenceType},
+    source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_dev_server::{
@@ -27,7 +29,7 @@ use turbopack_dev_server::{
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_js,
-    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
@@ -702,13 +704,18 @@ impl AppRouteVc {
         .css_chunk_root_path(this.server_root.join("_next/static/chunks"))
         .build();
 
+        let entry = this.context.with_transition("next-route").process(
+            SourceAssetVc::new(this.entry_path).into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::AppRoute)),
+        );
         Ok(NodeRenderingEntry {
-            module: EcmascriptModuleAssetVc::new(
+            module: EcmascriptModuleAssetVc::new_with_inner_assets(
                 virtual_asset.into(),
                 this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
                 this.context.compile_time_info(),
+                InnerAssetsVc::cell(HashMap::from([("ROUTE_CHUNK_GROUP".to_string(), entry)])),
             ),
             chunking_context,
             intermediate_output_path: this.intermediate_output_path,
