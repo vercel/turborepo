@@ -13,7 +13,7 @@ require (
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
 	github.com/fsnotify/fsevents v0.1.1
-	github.com/fsnotify/fsnotify v1.5.4
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gobwas/glob v0.2.3
 	github.com/google/chrometracing v0.0.0-20210413150014-55fded0163e7
 	github.com/google/uuid v1.3.0
@@ -41,7 +41,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/yookoala/realpath v1.0.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+	golang.org/x/sys v0.5.0
 	google.golang.org/grpc v1.46.2
 	google.golang.org/protobuf v1.28.0
 	gotest.tools/v3 v3.3.0
