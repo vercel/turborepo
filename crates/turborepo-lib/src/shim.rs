@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, turbo_json::TurboJson, PackageManager, Payload};
+use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 // all arguments that result in a stdout that much be directly parsable and
@@ -235,36 +235,7 @@ impl RepoState {
     ///
     /// returns: Result<RepoState, Error>
     pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor
-        // that contains a `turbo.json` file.
-        let root_path = current_dir
-            .ancestors()
-            .find(|p| TurboJson::open(p.join(TURBO_JSON)).map_or(false, |t| t.no_extends()));
-
-        // If that directory exists, then we figure out if there are workspaces defined
-        // in it NOTE: This may change with multiple `turbo.json` files
-        if let Some(root_path) = root_path {
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
-                || npm.get_workspace_globs(root_path).is_ok();
-
-            let mode = if is_workspace {
-                RepoMode::MultiPackage
-            } else {
-                RepoMode::SinglePackage
-            };
-
-            let local_turbo_state = LocalTurboState::infer(root_path);
-
-            return Ok(Self {
-                root: root_path.to_path_buf(),
-                mode,
-                local_turbo_state,
-            });
-        }
-
-        // What we look for next is a directory that contains a `package.json`.
+        // What we look for first are all directories that contain a `package.json`.
         let potential_roots = current_dir
             .ancestors()
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
