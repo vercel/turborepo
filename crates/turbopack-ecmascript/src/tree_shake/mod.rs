@@ -16,7 +16,10 @@ use turbopack_core::{
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc},
+    chunk::{
+        EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
+        EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+    },
     EcmascriptModuleAssetVc,
 };
 
@@ -320,7 +323,12 @@ impl Asset for EcmascriptModulePartAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
-    fn as_chunk(&self, context: ChunkingContextVc) -> ChunkVc {}
+    async fn as_chunk(&self, context: ChunkingContextVc) -> ChunkVc {
+        let main_entries =
+            EcmascriptChunkPlaceablesVc::cell(vec![self.module.as_ecmascript_chunk_placeable()]);
+
+        EcmascriptChunkVc::new_normalized(context, main_entries, None, None).as_chunk()
+    }
 }
 
 #[turbo_tasks::value]
