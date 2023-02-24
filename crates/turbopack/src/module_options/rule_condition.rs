@@ -2,11 +2,9 @@ use anyhow::Result;
 use async_recursion::async_recursion;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
-use turbo_tasks_fs::FileSystemPathReadRef;
+use turbo_tasks_fs::{FileSystemPath, FileSystemPathReadRef};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    reference_type::ReferenceType,
-    virtual_asset::VirtualAssetVc,
+    asset::AssetVc, reference_type::ReferenceType, virtual_asset::VirtualAssetVc,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
@@ -41,12 +39,16 @@ impl ModuleRuleCondition {
 
 impl ModuleRuleCondition {
     #[async_recursion]
-    pub async fn matches(&self, source: AssetVc, reference_type: &ReferenceType) -> Result<bool> {
-        let path = &*source.path().await?;
+    pub async fn matches(
+        &self,
+        source: AssetVc,
+        path: &FileSystemPath,
+        reference_type: &ReferenceType,
+    ) -> Result<bool> {
         Ok(match self {
             ModuleRuleCondition::All(conditions) => {
                 for condition in conditions {
-                    if !condition.matches(source, reference_type).await? {
+                    if !condition.matches(source, path, reference_type).await? {
                         return Ok(false);
                     }
                 }
@@ -54,14 +56,14 @@ impl ModuleRuleCondition {
             }
             ModuleRuleCondition::Any(conditions) => {
                 for condition in conditions {
-                    if condition.matches(source, reference_type).await? {
+                    if condition.matches(source, path, reference_type).await? {
                         return Ok(true);
                     }
                 }
                 return Ok(false);
             }
             ModuleRuleCondition::Not(condition) => {
-                !condition.matches(source, reference_type).await?
+                !condition.matches(source, path, reference_type).await?
             }
             ModuleRuleCondition::ResourcePathEquals(other) => path == &**other,
             ModuleRuleCondition::ResourcePathEndsWith(end) => path.path.ends_with(end),

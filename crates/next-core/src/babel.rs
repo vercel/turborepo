@@ -75,7 +75,7 @@ pub async fn maybe_add_babel_loader(
 
             if !has_babel_loader {
                 if !has_emitted_babel_resolve_issue
-                    && !*(is_babel_loader_available(project_root).await?)
+                    && !*is_babel_loader_available(project_root).await?
                 {
                     BabelIssue {
                         path: project_root,
