@@ -707,9 +707,26 @@ mod test {
             RopeElem::Shared(value.data)
         }
     }
-    impl From<Vec<RopeElem>> for InnerRope {
-        fn from(value: Vec<RopeElem>) -> Self {
-            InnerRope::from(value.into_boxed_slice())
+    impl Rope {
+        fn new(value: Vec<RopeElem>) -> Self {
+            let data = InnerRope::from(value.into_boxed_slice());
+            Rope {
+                length: data.len(),
+                data,
+            }
+        }
+    }
+    impl InnerRope {
+        fn len(&self) -> usize {
+            self.iter().map(|v| v.len()).sum()
+        }
+    }
+    impl RopeElem {
+        fn len(&self) -> usize {
+            match self {
+                RopeElem::Local(b) => b.len(),
+                RopeElem::Shared(r) => r.len(),
+            }
         }
     }
 
@@ -799,60 +816,32 @@ mod test {
     #[test]
     fn value_equality_shared_1() {
         let shared = Rope::from("def");
-        let a = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), shared.clone().into(), "ghi".into()]),
-        };
-
-        let b = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), shared.into(), "ghi".into()]),
-        };
+        let a = Rope::new(vec!["abc".into(), shared.clone().into(), "ghi".into()]);
+        let b = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
 
         assert_eq!(a, b);
     }
 
     #[test]
     fn value_equality_shared_2() {
-        let a = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), vec!["def".into()].into(), "ghi".into()]),
-        };
-
-        let b = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), vec!["def".into()].into(), "ghi".into()]),
-        };
+        let a = Rope::new(vec!["abc".into(), vec!["def".into()].into(), "ghi".into()]);
+        let b = Rope::new(vec!["abc".into(), vec!["def".into()].into(), "ghi".into()]);
 
         assert_eq!(a, b);
     }
 
     #[test]
     fn value_equality_splits_1() {
-        let a = Rope {
-            length: 3,
-            data: InnerRope::from(vec!["a".into(), "aa".into()]),
-        };
-
-        let b = Rope {
-            length: 3,
-            data: InnerRope::from(vec!["aa".into(), "a".into()]),
-        };
+        let a = Rope::new(vec!["a".into(), "aa".into()]);
+        let b = Rope::new(vec!["aa".into(), "a".into()]);
 
         assert_eq!(a, b);
     }
 
     #[test]
     fn value_equality_splits_2() {
-        let a = Rope {
-            length: 3,
-            data: InnerRope::from(vec![vec!["a".into()].into(), "aa".into()]),
-        };
-
-        let b = Rope {
-            length: 3,
-            data: InnerRope::from(vec![vec!["aa".into()].into(), "a".into()]),
-        };
+        let a = Rope::new(vec![vec!["a".into()].into(), "aa".into()]);
+        let b = Rope::new(vec![vec!["aa".into()].into(), "a".into()]);
 
         assert_eq!(a, b);
     }
@@ -860,30 +849,16 @@ mod test {
     #[test]
     fn value_inequality_shared_1() {
         let shared = Rope::from("def");
-        let a = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["aaa".into(), shared.clone().into(), "ghi".into()]),
-        };
-
-        let b = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["bbb".into(), shared.into(), "ghi".into()]),
-        };
+        let a = Rope::new(vec!["aaa".into(), shared.clone().into(), "ghi".into()]);
+        let b = Rope::new(vec!["bbb".into(), shared.into(), "ghi".into()]);
 
         assert_ne!(a, b);
     }
 
     #[test]
     fn value_inequality_shared_2() {
-        let a = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), vec!["ddd".into()].into(), "ghi".into()]),
-        };
-
-        let b = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), vec!["eee".into()].into(), "ghi".into()]),
-        };
+        let a = Rope::new(vec!["abc".into(), vec!["ddd".into()].into(), "ghi".into()]);
+        let b = Rope::new(vec!["abc".into(), vec!["eee".into()].into(), "ghi".into()]);
 
         assert_ne!(a, b);
     }
@@ -891,15 +866,8 @@ mod test {
     #[test]
     fn value_inequality_shared_3() {
         let shared = Rope::from("def");
-        let a = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), shared.clone().into(), "ggg".into()]),
-        };
-
-        let b = Rope {
-            length: 9,
-            data: InnerRope::from(vec!["abc".into(), shared.into(), "hhh".into()]),
-        };
+        let a = Rope::new(vec!["abc".into(), shared.clone().into(), "ggg".into()]);
+        let b = Rope::new(vec!["abc".into(), shared.into(), "hhh".into()]);
 
         assert_ne!(a, b);
     }
