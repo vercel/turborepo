@@ -18,6 +18,10 @@ on:
         default: "main"
       force_post_to_slack:
         type: boolean
+      # Skip posting to slack regardless of the conditions.
+      skip_post_to_slack:
+        type: boolean
+        default: false
 
 jobs:
   # First, build next-dev and Next.js both to execute across tests.
@@ -235,6 +239,7 @@ jobs:
           diff_base: ${{ inputs.diff_base }}
         env:
           NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.force_post_to_slack }}"
+          NEXT_TURBO_FORCE_SKIP_SLACK_UPDATE: "${{ inputs.skip_post_to_slack }}"
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
