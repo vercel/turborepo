@@ -98,6 +98,7 @@ jobs:
             !crates/turborepo/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
+            !crates/turborepo-scm/**
             !crates/turbo-updater/**
             !**.md
             !**.mdx
@@ -112,6 +113,7 @@ jobs:
             crates/turborepo/**
             crates/turborepo-lib/**
             crates/turborepo-ffi/**
+            crates/turborepo-scm/**
             crates/turbo-updater/**
             .cargo/**
             rust-toolchain
@@ -229,7 +231,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/build-debug-turborepo
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -250,10 +252,10 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/build-debug-turborepo
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Cache Prysk
         id: cache-prysk
@@ -283,14 +285,14 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/build-debug-turborepo
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
         # Turbo has already been built in previous step, no need to rebuild
-        run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
+        run: pnpm -- turbo run e2e-prebuilt --filter=cli
 
   go_examples:
     name: Go Cli Examples
@@ -355,8 +357,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Build Turborepo
-        uses: ./.github/actions/build-debug-turborepo
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -570,7 +571,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib --features rustls-tls
+          cargo test -p turborepo-lib -p turborepo-scm --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -603,12 +604,12 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -667,13 +668,13 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
       - name: Run nextest
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]
@@ -1041,13 +1042,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: ./.github/actions/build-debug-turborepo
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Format check
-        run: pnpm -- turbo run check:fmt
+        # This is the syntax for running the `//#lint` task specifically in turbo.json
+        # It runs the taplo check on taplo.toml, and prettier check across the whole repo.
+        # TODO: run prettier in individual workspaces instead of globally.
+        run: pnpm -- turbo run lint --filter=//
 
   final:
     name: Ok

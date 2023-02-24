@@ -68,6 +68,7 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 
 func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	runPayload := args.Command.Run
+
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
 	scope.OptsFromArgs(&opts.scopeOpts, args)
@@ -76,6 +77,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
+	opts.runOpts.logPrefix = runPayload.LogPrefix
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -239,7 +241,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	globalHash, err := calculateGlobalHash(
+	globalHashable, err := calculateGlobalHash(
 		r.base.RepoRoot,
 		rootPackageJSON,
 		pipeline,
@@ -251,12 +253,17 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		os.Environ(),
 	)
 
-	g.GlobalHash = globalHash
-
 	if err != nil {
+		return fmt.Errorf("failed to collect global hash inputs: %v", err)
+	}
+
+	if globalHash, err := fs.HashObject(globalHashable); err == nil {
+		r.base.Logger.Debug("global hash", "value", globalHash)
+		g.GlobalHash = globalHash
+	} else {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
-	r.base.Logger.Debug("global hash", "value", globalHash)
+
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	rs := &runSpec{
@@ -340,8 +347,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		// the tasks that we expect to run based on the user command.
 		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 		summary := &dryRunSummary{
-			Packages: packagesInScope,
-			Tasks:    []taskSummary{},
+			Packages:          packagesInScope,
+			GlobalHashSummary: newGlobalHashSummary(globalHashable),
+			Tasks:             []taskSummary{},
 		}
 
 		return DryRun(

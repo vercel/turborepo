@@ -49,7 +49,7 @@ cd <repository root>/apps/docs
 turbo build
 ```
 
-is equivalent to the [filtering syntax](../core-concepts/monorepos/filtering):
+is equivalent to the [filtering syntax](../docs/core-concepts/monorepos/filtering):
 
 ```bash
 cd <repository root>
@@ -59,7 +59,7 @@ turbo build --filter=docs
 ## Install Per Repository
 
 You may wish to pin the version of Turborepo used within a repository, especially [if you are
-collaborating with other developers](../core-concepts/remote-caching). In that case, add `turbo` as a dev dependency at the root
+collaborating with other developers](../docs/core-concepts/remote-caching). In that case, add `turbo` as a dev dependency at the root
 of the repository:
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">

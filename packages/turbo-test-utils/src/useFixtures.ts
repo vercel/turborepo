@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs-extra";
+import yaml from "js-yaml";
 
 export default function setupTestFixtures({
   directory,
@@ -23,7 +24,8 @@ export default function setupTestFixtures({
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
-    const testDirectory = path.join(parentDirectory, uuidv4());
+    const directoryName = uuidv4();
+    const testDirectory = path.join(parentDirectory, directoryName);
     if (!fs.existsSync(testDirectory)) {
       fs.mkdirSync(testDirectory, { recursive: true });
     }
@@ -37,24 +39,28 @@ export default function setupTestFixtures({
       recursive: true,
     });
 
-    // helpers
-    const read = (filename: string) => {
-      try {
-        return fs.readFileSync(path.join(testDirectory, filename), "utf8");
-      } catch (e) {
-        return undefined;
-      }
+    const readGenerator = (method: (filePath: string) => unknown) => {
+      return <T>(filename: string) => {
+        const filePath = path.isAbsolute(filename)
+          ? filename
+          : path.join(testDirectory, filename);
+        try {
+          return method(filePath) as T;
+        } catch (e) {
+          return undefined;
+        }
+      };
     };
 
-    const readJson = (filename: string) => {
-      try {
-        return fs.readJSONSync(path.join(testDirectory, filename), "utf8");
-      } catch (e) {
-        return undefined;
-      }
-    };
+    const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
+    const readJson = readGenerator((filePath) =>
+      fs.readJSONSync(filePath, "utf8")
+    );
+    const readYaml = readGenerator((filePath) =>
+      yaml.load(fs.readFileSync(filePath, "utf8"))
+    );
 
-    return { root: testDirectory, read, readJson };
+    return { root: testDirectory, read, readJson, readYaml, directoryName };
   };
 
   return { useFixture };
