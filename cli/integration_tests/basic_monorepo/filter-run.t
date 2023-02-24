@@ -3,9 +3,6 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 # Running with --filter works and exits with success
-  $ git branch
-  * main
-
   $ ${TURBO} run build --filter="[main]"
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
@@ -20,9 +17,6 @@ Setup
 
 # with unstaged changes
   $ echo "new file contents" >> bar.txt
-  $ git branch
-  * main
-
   $ ${TURBO} run build --filter="[main]"
   \xe2\x80\xa2 Packages in scope: // (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
