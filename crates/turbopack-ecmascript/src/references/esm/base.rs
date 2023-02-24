@@ -90,13 +90,19 @@ impl ReferencedAssetVc {
 }
 
 #[turbo_tasks::value]
+pub enum ModulePart {
+    ModuleEvaluation,
+    Export(StringVc),
+}
+
+#[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct EsmAssetReference {
     pub origin: ResolveOriginVc,
     pub request: RequestVc,
     pub annotations: ImportAnnotations,
 
-    pub export_name: Option<StringVc>,
+    pub export_name: Option<ModulePartVc>,
 }
 
 impl EsmAssetReference {
@@ -125,11 +131,13 @@ impl EsmAssetReferenceVc {
         origin: ResolveOriginVc,
         request: RequestVc,
         annotations: Value<ImportAnnotations>,
+        export_name: Option<ModulePartVc>,
     ) -> Self {
         Self::cell(EsmAssetReference {
             origin,
             request,
             annotations: annotations.into_value(),
+            export_name,
         })
     }
 }
