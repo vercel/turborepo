@@ -24,7 +24,13 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (string, error) {
+func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs []string
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+}, error) {
 	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
@@ -44,12 +50,24 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return "", err
+			return struct {
+				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+				rootExternalDepsHash string
+				hashedSortedEnvPairs []string
+				globalCacheKey       string
+				pipeline             fs.PristinePipeline
+			}{}, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return "", err
+			return struct {
+				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+				rootExternalDepsHash string
+				hashedSortedEnvPairs []string
+				globalCacheKey       string
+				pipeline             fs.PristinePipeline
+			}{}, err
 		}
 
 		for _, val := range f {
@@ -82,7 +100,13 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return "", fmt.Errorf("error hashing files: %w", err)
+		return struct {
+			globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+			rootExternalDepsHash string
+			hashedSortedEnvPairs []string
+			globalCacheKey       string
+			pipeline             fs.PristinePipeline
+		}{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
 	globalHashable := struct {
@@ -99,11 +123,7 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		pipeline:             pipeline.Pristine(),
 	}
 
-	globalHash, err := fs.HashObject(globalHashable)
-	if err != nil {
-		return "", fmt.Errorf("error hashing global dependencies %w", err)
-	}
-	return globalHash, nil
+	return globalHashable, nil
 }
 
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and

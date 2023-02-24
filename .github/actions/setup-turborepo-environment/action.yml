@@ -1,5 +1,5 @@
-name: "Turborepo Build Debug"
-description: "Builds debug version of turborepo"
+name: "Setup Turborepo Environment"
+description: "Sets up development environment for turborepo"
 inputs:
   target:
     description: "Compilation target"
@@ -25,19 +25,3 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
-
-    - name: Build Turborepo
-      working-directory: ./cli
-      shell: bash
-      run: |
-        make turbo
-
-    - name: Strip Turborepo binary
-      if: ${{ inputs.target == 'windows' }}
-      shell: bash
-      run: strip target/debug/turbo.exe
-
-    - name: Strip Turborepo binary
-      if: ${{ inputs.target != 'windows' }}
-      shell: bash
-      run: strip target/debug/turbo

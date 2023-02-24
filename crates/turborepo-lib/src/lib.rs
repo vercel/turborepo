@@ -5,6 +5,7 @@ mod config;
 mod package_manager;
 mod retry;
 mod shim;
+mod turbo_json;
 mod ui;
 
 use anyhow::Result;
