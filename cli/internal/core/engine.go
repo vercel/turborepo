@@ -192,7 +192,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				return err
 			}
 
-			// If we found a task definition, remove it from the msising list
+			// If we found a task definition, remove it from the missing list
 			if foundTask != nil {
 				// delete taskName if it was found
 				missing.Delete(taskName)
