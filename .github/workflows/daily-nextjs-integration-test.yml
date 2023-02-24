@@ -20,6 +20,7 @@ jobs:
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
       diff_base: "none"
+      version: "canary"
       force_post_to_slack: ${{ inputs.force_post_to_slack || false }}
 
   # Upload test results to branch.
