@@ -41,7 +41,7 @@ use turbo_tasks::{
     primitives::BoolVc,
     NothingVc, RawVc, ReadRef, State, TransientInstance, TransientValue, TurboTasks,
 };
-use turbo_tasks_fs::{util::sys_to_unix, DiskFileSystemVc, FileSystem};
+use turbo_tasks_fs::{DiskFileSystemVc, FileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbo_tasks_testing::retry::retry_async;
 use turbopack_core::issue::{CapturedIssues, IssueReporter, IssueReporterVc, PlainIssueReadRef};
@@ -190,8 +190,8 @@ async fn run_test(resource: &str) -> JestRunResult {
     let tt = TurboTasks::new(MemoryBackend::default());
     let server = NextDevServerBuilder::new(
         tt.clone(),
-        sys_to_unix(&project_dir.to_string_lossy()).to_string(),
-        sys_to_unix(&workspace_root.to_string_lossy()).to_string(),
+        project_dir.to_string_lossy().to_string(),
+        workspace_root.to_string_lossy().to_string(),
     )
     .entry_request(EntryRequest::Module(
         "@turbo/pack-test-harness".to_string(),

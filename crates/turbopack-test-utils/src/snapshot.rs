@@ -51,7 +51,9 @@ pub async fn snapshot_issues<
         // for everyone.
         let content = debug_string
             .as_str()
-            .replace(workspace_root, "WORKSPACE_ROOT");
+            .replace(workspace_root, "WORKSPACE_ROOT")
+            // Normalize syspaths from Windows. These appear in stack traces.
+            .replace("\\\\", "/");
         let asset = File::from(content).into();
 
         diff(path, asset).await?;
