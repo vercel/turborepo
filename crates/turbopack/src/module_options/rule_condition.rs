@@ -52,7 +52,7 @@ impl ModuleRuleCondition {
                         return Ok(false);
                     }
                 }
-                return Ok(true);
+                true
             }
             ModuleRuleCondition::Any(conditions) => {
                 for condition in conditions {
@@ -60,7 +60,7 @@ impl ModuleRuleCondition {
                         return Ok(true);
                     }
                 }
-                return Ok(false);
+                false
             }
             ModuleRuleCondition::Not(condition) => {
                 !condition.matches(source, path, reference_type).await?
