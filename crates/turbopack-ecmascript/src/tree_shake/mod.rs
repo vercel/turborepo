@@ -17,8 +17,9 @@ use turbopack_core::{
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
     chunk::{
-        EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+        EcmascriptChunkContent, EcmascriptChunkContentVc, EcmascriptChunkItem,
+        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     },
     EcmascriptModuleAssetVc,
 };
@@ -317,7 +318,9 @@ impl Asset for EcmascriptModulePartAsset {
     }
 
     #[turbo_tasks::function]
-    fn versioned_content(&self) -> VersionedContentVc {}
+    fn versioned_content(&self) -> VersionedContentVc {
+        self.module.versioned_content()
+    }
 }
 
 #[turbo_tasks::value_impl]
