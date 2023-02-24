@@ -524,11 +524,15 @@ pub fn run() -> Result<Payload> {
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
+        debug!("Repository Root: {}", repo_state.root.to_string_lossy());
         return cli::run(Some(repo_state));
     }
 
     match RepoState::infer(&args.cwd) {
-        Ok(repo_state) => repo_state.run_correct_turbo(args),
+        Ok(repo_state) => {
+            debug!("Repository Root: {}", repo_state.root.to_string_lossy());
+            repo_state.run_correct_turbo(args)
+        }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
