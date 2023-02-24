@@ -18,8 +18,8 @@ use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
     chunk::{
         EcmascriptChunkContent, EcmascriptChunkContentVc, EcmascriptChunkItem,
-        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
+        EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     },
     EcmascriptModuleAssetVc,
 };
@@ -365,7 +365,13 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn content(&self) -> EcmascriptChunkItemContentVc {}
+    fn content(&self) -> EcmascriptChunkItemContentVc {
+        EcmascriptChunkItemContent {
+            inner_code: format!("__turbopack_export_value__({{ wip: true }});",).into(),
+            ..Default::default()
+        }
+        .cell()
+    }
 
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
