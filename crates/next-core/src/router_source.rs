@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, CompletionVc, Value};
 use turbopack_core::{
@@ -108,18 +108,9 @@ impl ContentSource for NextRouterContentSource {
             this.server_addr,
             this.routes_changed,
         );
-        let Ok(res) = res.await else {
-            return Ok(this
-                .inner
-                .get(path, Value::new(ContentSourceData::default())));
-        };
 
-        Ok(match &*res {
-            RouterResult::Error => {
-                // TODO: emit error
-                this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
-            }
+        Ok(match &*res.await? {
+            RouterResult::Error => bail!("error during Next.js routing"),
             RouterResult::None => this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())),
