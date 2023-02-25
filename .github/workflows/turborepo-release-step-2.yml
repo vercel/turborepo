@@ -10,7 +10,7 @@ on:
         description: "Staging branch to run release from"
 
 jobs:
-  smoke-test:
+  smoke-test-with-examples:
     strategy:
       fail-false: false
       matrix:
@@ -104,7 +104,7 @@ jobs:
         run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   darwin:
-    needs: [smoke-test]
+    needs: [smoke-test-with-examples]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -134,7 +134,7 @@ jobs:
 
   # compiles linux and windows in a container
   cross:
-    needs: [smoke-test]
+    needs: [smoke-test-with-examples]
     runs-on: ubuntu-latest
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
