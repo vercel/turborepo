@@ -287,15 +287,15 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		g.GlobalHash,
 		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
-		g.WorkspaceInfos,
 	)
 
 	// CalculateFileHashes assigns PackageInputsExpandedHashes as a side-effect
 	err = taskHashTracker.CalculateFileHashes(
 		engine.TaskGraph.Vertices(),
 		rs.Opts.runOpts.concurrency,
+		g.WorkspaceInfos,
+		g.TaskDefinitions,
 		r.base.RepoRoot,
-		g,
 	)
 
 	if err != nil {

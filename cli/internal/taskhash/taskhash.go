@@ -15,7 +15,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -34,19 +33,17 @@ type Tracker struct {
 	rootNode            string
 	globalHash          string
 	pipeline            fs.Pipeline
-	workspaceInfos      workspace.Catalog
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
 	packageTaskHashes   map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos workspace.Catalog) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
 		pipeline:          pipeline,
-		workspaceInfos:    workspaceInfos,
 		packageTaskHashes: make(map[string]string),
 	}
 }
@@ -163,8 +160,9 @@ type packageFileHashes map[packageFileHashKey]string
 func (th *Tracker) CalculateFileHashes(
 	allTasks []dag.Vertex,
 	workerCount int,
+	workspaceInfos workspace.Catalog,
+	taskDefinitions map[string]*fs.TaskDefinition,
 	repoRoot turbopath.AbsoluteSystemPath,
-	completeGraph *graph.CompleteGraph,
 ) error {
 	hashTasks := make(util.Set)
 
@@ -181,7 +179,7 @@ func (th *Tracker) CalculateFileHashes(
 			continue
 		}
 
-		taskDefinition, ok := completeGraph.TaskDefinitions[taskID]
+		taskDefinition, ok := taskDefinitions[taskID]
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
@@ -201,7 +199,7 @@ func (th *Tracker) CalculateFileHashes(
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
 			for packageFileSpec := range hashQueue {
-				pkg, ok := th.workspaceInfos.PackageJSONs[packageFileSpec.pkg]
+				pkg, ok := workspaceInfos.PackageJSONs[packageFileSpec.pkg]
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
