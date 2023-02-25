@@ -287,9 +287,10 @@ fn edge_transition_map(
         edge_compile_time_info,
         edge_chunking_context,
         edge_resolve_options_context,
-        output_path,
+        output_path: output_path.root(),
         base_path: project_path,
         bootstrap_file: next_js_file("entry/edge-bootstrap.ts"),
+        entry_name: "middleware".to_string(),
     }
     .cell()
     .into();
