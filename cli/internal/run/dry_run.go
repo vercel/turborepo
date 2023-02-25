@@ -77,7 +77,7 @@ func DryRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	tracker *taskhash.Tracker,
+	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
 	summary *dryRunSummary,
@@ -91,7 +91,7 @@ func DryRun(
 		ctx,
 		engine,
 		g,
-		tracker,
+		taskHashTracker,
 		rs,
 		base,
 		turboCache,
@@ -122,13 +122,14 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
 	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}
