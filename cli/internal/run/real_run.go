@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -88,10 +89,13 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	var logMutex sync.Mutex
+	fmt.Println("new mutex")
+
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		return ec.exec(ctx, packageTask, deps, &logMutex)
 	}
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
@@ -148,7 +152,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set, logMutex *sync.Mutex) error {
 	cmdTime := time.Now()
 
 	progressLogger := ec.logger.Named("")
@@ -233,9 +237,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped, logMutex)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped, logMutex)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded

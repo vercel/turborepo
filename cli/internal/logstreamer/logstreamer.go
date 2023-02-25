@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 )
 
 type Logstreamer struct {
@@ -29,9 +30,11 @@ type Logstreamer struct {
 	colorReset string
 
 	grouped bool
+
+	logMutex *sync.Mutex
 }
 
-func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool) *Logstreamer {
+func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool, mutex *sync.Mutex) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
 		buf:        bytes.NewBuffer([]byte("")),
@@ -42,6 +45,7 @@ func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool
 		colorFail:  "",
 		colorReset: "",
 		grouped:    grouped,
+		logMutex:   mutex,
 	}
 
 	if strings.HasPrefix(os.Getenv("TERM"), "xterm") {
@@ -91,6 +95,7 @@ func (l *Logstreamer) Flush() error {
 }
 
 func (l *Logstreamer) OutputLines() error {
+	l.logMutex.Lock()
 	for {
 		line, err := l.buf.ReadString('\n')
 
@@ -102,6 +107,7 @@ func (l *Logstreamer) OutputLines() error {
 				//  Close() or Flush() have to be used to flush out
 				//  the last remaining line if it does not end with a newline
 				if _, err := l.buf.WriteString(line); err != nil {
+					l.logMutex.Unlock()
 					return err
 				}
 			}
@@ -112,9 +118,11 @@ func (l *Logstreamer) OutputLines() error {
 		}
 
 		if err != nil {
+			l.logMutex.Unlock()
 			return err
 		}
 	}
+	l.logMutex.Unlock()
 
 	return nil
 }
