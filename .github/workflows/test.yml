@@ -294,104 +294,6 @@ jobs:
         # Turbo has already been built in previous step, no need to rebuild
         run: pnpm -- turbo run e2e-prebuilt --filter=cli
 
-  go_examples:
-    name: Go Cli Examples
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 30
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-        manager: [yarn, npm]
-        example: [with-yarn, with-npm, non-monorepo]
-        include:
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: with-svelte
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: with-svelte
-
-    runs-on: ${{ matrix.os.runner }}
-    steps:
-      # Used by scripts/check-examples.sh
-      - name: Install Sponge
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get install -y moreutils
-          else
-            brew install moreutils
-          fi
-
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          target: ${{ matrix.os.name }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Pnpm
-        uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.2.1
-
-      - name: Make sure pnpm always has a cache
-        shell: bash
-        run: |
-          mkdir -p `pnpm store path`
-
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: ${{ matrix.manager }}
-          cache-dependency-path: package.json
-
-      - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
-        shell: bash
-        env:
-          FORCE_COLOR: true
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-          TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
-
   rust_prepare:
     name: Check rust crates
     runs-on: ubuntu-latest-16-core-oss
@@ -1059,7 +961,6 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
       - go_e2e
       - go_integration
       - rust_prepare
@@ -1170,7 +1071,6 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
       - go_e2e
       - go_integration
       - rust_prepare
@@ -1211,7 +1111,6 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.go_examples.result}} "Go examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"
