@@ -29,6 +29,7 @@
       "dependsOn": ["^build"]
     },
     "//#run-example": {
+      "dependsOn": ["cli#build"],
       "inputs": [
         "examples/**/*.ts",
         "examples/**/*.tsx",
