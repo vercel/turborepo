@@ -1,8 +1,10 @@
+mod berry;
 mod error;
 mod npm;
 
 use std::collections::{HashMap, HashSet};
 
+pub use berry::*;
 pub use error::Error;
 pub use npm::*;
 
