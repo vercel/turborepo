@@ -7,9 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/doublestar"
-	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 type SelectedPackages struct {
@@ -36,7 +36,7 @@ type PackageInference struct {
 
 type Resolver struct {
 	Graph                  *dag.AcyclicGraph
-	WorkspaceInfos         graph.WorkspaceInfos
+	WorkspaceInfos         workspace.Catalog
 	Cwd                    turbopath.AbsoluteSystemPath
 	Inference              *PackageInference
 	PackagesChangedInRange PackagesChangedInRange

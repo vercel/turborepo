@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -226,7 +227,7 @@ func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, e
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))

@@ -21,6 +21,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -33,14 +34,14 @@ type Tracker struct {
 	rootNode            string
 	globalHash          string
 	pipeline            fs.Pipeline
-	workspaceInfos      graph.WorkspaceInfos
+	workspaceInfos      workspace.Catalog
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
 	packageTaskHashes   map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos workspace.Catalog) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
