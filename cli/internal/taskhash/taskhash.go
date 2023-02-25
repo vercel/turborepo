@@ -49,26 +49,27 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 	}
 }
 
-// packageFileSpec defines a combination of a package and optional set of input globs
-type packageFileSpec struct {
+// PackageFileSpec defines a combination of a package and optional set of input globs
+type PackageFileSpec struct {
 	pkg    string
 	inputs []string
 }
 
-func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
-	return packageFileSpec{
+// SpecFromPackageTask returns a struct for the given packageTask with just a couple fields
+func SpecFromPackageTask(packageTask *nodes.PackageTask) PackageFileSpec {
+	return PackageFileSpec{
 		pkg:    packageTask.PackageName,
 		inputs: packageTask.TaskDefinition.Inputs,
 	}
 }
 
-// packageFileHashKey is a hashable representation of a packageFileSpec.
-type packageFileHashKey string
+// PackageFileHashKey is a hashable representation of a PackageFileSpec.
+type PackageFileHashKey string
 
-// hashes the inputs for a packageTask
-func (pfs packageFileSpec) ToKey() packageFileHashKey {
+// ToKey hashes the inputs for a packageTask
+func (pfs PackageFileSpec) ToKey() PackageFileHashKey {
 	sort.Strings(pfs.inputs)
-	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
+	return PackageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
 }
 
 func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
@@ -158,7 +159,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 
 // packageFileHashes is a map from a package and optional input globs to the hash of
 // the matched files in the package.
-type packageFileHashes map[packageFileHashKey]string
+type packageFileHashes map[PackageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
@@ -189,7 +190,7 @@ func (th *Tracker) CalculateFileHashes(
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
 
-		pfs := &packageFileSpec{
+		pfs := &PackageFileSpec{
 			pkg:    pkgName,
 			inputs: taskDefinition.Inputs,
 		}
@@ -204,10 +205,10 @@ func (th *Tracker) CalculateFileHashes(
 
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
-			for packageFileSpec := range hashQueue {
-				pkg, ok := workspaceInfos.PackageJSONs[packageFileSpec.pkg]
+			for PackageFileSpec := range hashQueue {
+				pkg, ok := workspaceInfos.PackageJSONs[PackageFileSpec.pkg]
 				if !ok {
-					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
+					return fmt.Errorf("cannot find package %v", PackageFileSpec.pkg)
 				}
 				hashObject := PackageFileSpec.getHashObject(pkg, repoRoot)
 				hash, err := PackageFileSpec.hash(hashObject)
@@ -215,7 +216,7 @@ func (th *Tracker) CalculateFileHashes(
 					return err
 				}
 				th.mu.Lock()
-				pfsKey := packageFileSpec.ToKey()
+				pfsKey := PackageFileSpec.ToKey()
 				hashes[pfsKey] = hash
 				hashObjects[pfsKey] = hashObject
 				th.mu.Unlock()
@@ -224,7 +225,7 @@ func (th *Tracker) CalculateFileHashes(
 		})
 	}
 	for ht := range hashTasks {
-		hashQueue <- ht.(*packageFileSpec)
+		hashQueue <- ht.(*PackageFileSpec)
 	}
 	close(hashQueue)
 	err := hashErrs.Wait()
@@ -280,7 +281,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
-	pfs := specFromPackageTask(packageTask)
+	pfs := SpecFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
 	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]

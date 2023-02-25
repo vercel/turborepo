@@ -22,32 +22,34 @@ Setup
     Root pipeline              = {"build":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"my-app#build":{"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
-  $ cat tmp-3.txt | grep "my-app#build" -A 12
+  $ cat tmp-3.txt | grep "my-app#build" -A 13
   my-app#build
-    Task                   = build                                                                                                                           
-    Package                = my-app                                                                                                                          
-    Hash                   = 8888a278aaecb070                                                                                                                
-    Cached (Local)         = false                                                                                                                           
-    Cached (Remote)        = false                                                                                                                           
-    Directory              = apps/my-app                                                                                                                     
-    Command                = echo 'building'                                                                                                                 
-    Outputs                = apple.json, banana.txt                                                                                                          
-    Log File               = apps/my-app/.turbo/turbo-build.log                                                                                              
-    Dependencies           =                                                                                                                                 
-    Dependendents          =                                                                                                                                 
-    ResolvedTaskDefinition = {"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Task                    = build                                                                                                                           
+    Package                 = my-app                                                                                                                          
+    Hash                    = 8888a278aaecb070                                                                                                                
+    Cached (Local)          = false                                                                                                                           
+    Cached (Remote)         = false                                                                                                                           
+    Directory               = apps/my-app                                                                                                                     
+    Command                 = echo 'building'                                                                                                                 
+    Outputs                 = apple.json, banana.txt                                                                                                          
+    Log File                = apps/my-app/.turbo/turbo-build.log                                                                                              
+    Dependencies            =                                                                                                                                 
+    Dependendents           =                                                                                                                                 
+    Inputs Files Considered = 1                                                                                                                               
+    ResolvedTaskDefinition  = {"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
-  $ cat tmp-3.txt | grep "util#build" -A 12
+  $ cat tmp-3.txt | grep "util#build" -A 13
   util#build
-    Task                   = build                                                                                                  
-    Package                = util                                                                                                   
-    Hash                   = d09a52ea72495c87                                                                                       
-    Cached (Local)         = false                                                                                                  
-    Cached (Remote)        = false                                                                                                  
-    Directory              = packages/util                                                                                          
-    Command                = echo 'building'                                                                                        
-    Outputs                =                                                                                                        
-    Log File               = packages/util/.turbo/turbo-build.log                                                                   
-    Dependencies           =                                                                                                        
-    Dependendents          =                                                                                                        
-    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Task                    = build                                                                                                  
+    Package                 = util                                                                                                   
+    Hash                    = d09a52ea72495c87                                                                                       
+    Cached (Local)          = false                                                                                                  
+    Cached (Remote)         = false                                                                                                  
+    Directory               = packages/util                                                                                          
+    Command                 = echo 'building'                                                                                        
+    Outputs                 =                                                                                                        
+    Log File                = packages/util/.turbo/turbo-build.log                                                                   
+    Dependencies            =                                                                                                        
+    Dependendents           =                                                                                                        
+    Inputs Files Considered = 1                                                                                                      
+    ResolvedTaskDefinition  = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 

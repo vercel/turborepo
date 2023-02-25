@@ -9,6 +9,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -34,6 +35,8 @@ type CompleteGraph struct {
 	// Map of TaskDefinitions by taskID
 	TaskDefinitions map[string]*fs.TaskDefinition
 	RepoRoot        turbopath.AbsoluteSystemPath
+
+	TaskHashTracker *taskhash.Tracker
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
@@ -61,7 +64,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			TaskDefinition:  taskDefinition,
 			Outputs:         taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
+			ExpandedInputs:  make(map[turbopath.AnchoredUnixPath]string),
 		}
+
+		pfs := taskhash.SpecFromPackageTask(packageTask)
+		expandedInputs := g.TaskHashTracker.PackageInputsExpandedHashes[pfs.ToKey()]
+		packageTask.ExpandedInputs = expandedInputs
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd

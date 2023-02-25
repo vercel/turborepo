@@ -169,6 +169,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
+			ExpandedInputs:         packageTask.ExpandedInputs,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
@@ -304,6 +305,12 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspa
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+
+		count := 0
+		for range task.ExpandedInputs {
+			count = count + 1
+		}
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", count))
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
@@ -328,32 +335,34 @@ func commandLooksLikeTurbo(command string) bool {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID                 string             `json:"taskId"`
-	Task                   string             `json:"task"`
-	Package                string             `json:"package"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dir                    string             `json:"directory"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	TaskID                 string                                `json:"taskId"`
+	Task                   string                                `json:"task"`
+	Package                string                                `json:"package"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dir                    string                                `json:"directory"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 }
 
 type singlePackageTaskSummary struct {
-	Task                   string             `json:"task"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Task                   string                                `json:"task"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -376,5 +385,6 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependencies:           dependencies,
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
+		ExpandedInputs:         ht.ExpandedInputs,
 	}
 }
