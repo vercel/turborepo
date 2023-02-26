@@ -45,7 +45,7 @@ impl EsmAsyncAssetReferenceVc {
 impl AssetReference for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.origin, self.request)
+        esm_resolve(self.origin, self.request, None)
     }
 }
 
@@ -78,8 +78,8 @@ impl CodeGenerateable for EsmAsyncAssetReference {
         let pm = PatternMappingVc::resolve_request(
             self.request,
             self.origin,
-            context.into(),
-            esm_resolve(self.origin, self.request),
+            context,
+            esm_resolve(self.origin, self.request, None),
             Value::new(EsmAsync),
         )
         .await?;

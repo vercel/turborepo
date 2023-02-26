@@ -17,6 +17,8 @@ use turbopack_core::{
     },
 };
 
+use crate::references::ModulePartVc;
+
 #[turbo_tasks::function]
 pub async fn apply_esm_specific_options(options: ResolveOptionsVc) -> Result<ResolveOptionsVc> {
     let mut options: ResolveOptions = options.await?.clone_value();
@@ -48,7 +50,11 @@ pub async fn apply_cjs_specific_options(options: ResolveOptionsVc) -> Result<Res
 }
 
 #[turbo_tasks::function]
-pub async fn esm_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<ResolveResultVc> {
+pub async fn esm_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+    part: Option<ModulePartVc>,
+) -> Result<ResolveResultVc> {
     // TODO pass EcmaScriptModulesReferenceSubType
     let ty = Value::new(ReferenceType::EcmaScriptModules(
         EcmaScriptModulesReferenceSubType::Undefined,

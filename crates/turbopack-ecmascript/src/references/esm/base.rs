@@ -118,7 +118,7 @@ impl EsmAssetReferenceVc {
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
         Ok(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request),
+            esm_resolve(this.get_origin(), this.request, this.export_name),
             this.request,
         ))
     }
@@ -143,7 +143,7 @@ impl EsmAssetReferenceVc {
 impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.get_origin(), self.request)
+        esm_resolve(self.get_origin(), self.request, self.export_name)
     }
 }
 
