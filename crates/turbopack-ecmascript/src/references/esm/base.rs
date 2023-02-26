@@ -5,7 +5,10 @@ use swc_core::{
     ecma::ast::{Expr, ExprStmt, Ident, Lit, Module, ModuleItem, Program, Script, Stmt},
     quote,
 };
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    primitives::{StringVc, StringsVc},
+    Value, ValueToString, ValueToStringVc,
+};
 use turbopack_core::{
     asset::Asset,
     chunk::{
@@ -92,7 +95,7 @@ impl ReferencedAssetVc {
 #[turbo_tasks::value]
 pub enum ModulePart {
     ModuleEvaluation,
-    Export(StringVc),
+    Export(StringsVc),
 }
 
 #[turbo_tasks::value]
