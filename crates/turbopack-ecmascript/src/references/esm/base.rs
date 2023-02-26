@@ -5,10 +5,7 @@ use swc_core::{
     ecma::ast::{Expr, ExprStmt, Ident, Lit, Module, ModuleItem, Program, Script, Stmt},
     quote,
 };
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    Value, ValueToString, ValueToStringVc,
-};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
     chunk::{
@@ -24,7 +21,10 @@ use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
-    references::util::{request_to_string, throw_module_not_found_expr},
+    references::{
+        util::{request_to_string, throw_module_not_found_expr},
+        ModulePartVc,
+    },
     resolve::esm_resolve,
 };
 
@@ -90,12 +90,6 @@ impl ReferencedAssetVc {
         }
         Ok(ReferencedAssetVc::cell(ReferencedAsset::None))
     }
-}
-
-#[turbo_tasks::value]
-pub enum ModulePart {
-    ModuleEvaluation,
-    Export(StringsVc),
 }
 
 #[turbo_tasks::value]

@@ -103,11 +103,7 @@ use crate::{
         cjs::{
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
-        esm::{
-            base::{ModulePart, ModulePartVc},
-            module_id::EsmModuleIdAssetReferenceVc,
-            EsmBindingVc, EsmExportsVc,
-        },
+        esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
     typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
@@ -120,6 +116,12 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub exports: EcmascriptExportsVc,
     /// `true` when the analysis was successful.
     pub successful: bool,
+}
+
+#[turbo_tasks::value]
+pub enum ModulePart {
+    ModuleEvaluation,
+    Export(StringsVc),
 }
 
 /// A temporary analysis result builder to pass around, to be turned into an
