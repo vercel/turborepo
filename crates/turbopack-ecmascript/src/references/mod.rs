@@ -319,15 +319,24 @@ pub(crate) async fn analyze_ecmascript_module(
                     origin,
                     RequestVc::parse(Value::new(src.to_string().into())),
                     Value::new(annotations.clone()),
-                    if symbols.is_empty() {
-                        None
-                    } else {
-                        Some(
-                            ModulePart::Export(StringsVc::cell(
-                                symbols.iter().map(|v| v.to_string()).collect(),
-                            ))
-                            .cell(),
-                        )
+                    match symbols {
+                        Some(symbols) => {
+                            if symbols.is_empty() {
+                                // Import for side effects
+                                Some(ModulePart::ModuleEvaluation.cell())
+                            } else {
+                                Some(
+                                    ModulePart::Export(StringsVc::cell(
+                                        symbols.iter().map(|v| v.to_string()).collect(),
+                                    ))
+                                    .cell(),
+                                )
+                            }
+                        }
+                        None => {
+                            // Namespace import
+                            None
+                        }
                     },
                 );
                 import_references.push(r);

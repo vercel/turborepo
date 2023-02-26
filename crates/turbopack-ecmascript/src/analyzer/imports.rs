@@ -95,7 +95,9 @@ pub(crate) struct ImportMap {
     reexports: Vec<(usize, Reexport)>,
 
     /// Ordered list of (module path, imported symbols, annotations)
-    references: IndexSet<(JsWord, Vec<JsWord>, ImportAnnotations)>,
+    ///
+    /// imported symbols is `None` when it's a namespace import.
+    references: IndexSet<(JsWord, Option<Vec<JsWord>>, ImportAnnotations)>,
 
     /// True, when the module has exports
     has_exports: bool,
@@ -138,7 +140,9 @@ impl ImportMap {
         None
     }
 
-    pub fn references(&self) -> impl Iterator<Item = (&JsWord, &Vec<JsWord>, &ImportAnnotations)> {
+    pub fn references(
+        &self,
+    ) -> impl Iterator<Item = (&JsWord, &Option<Vec<JsWord>>, &ImportAnnotations)> {
         self.references.iter().map(|(m, s, a)| (m, s, a))
     }
 
@@ -165,7 +169,11 @@ struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    fn ensure_reference(&mut self, module_path: JsWord, imported_symbols: Vec<JsWord>) -> usize {
+    fn ensure_reference(
+        &mut self,
+        module_path: JsWord,
+        imported_symbols: Option<Vec<JsWord>>,
+    ) -> usize {
         let tuple = (
             module_path,
             imported_symbols,
@@ -224,7 +232,32 @@ impl Visit for Analyzer<'_> {
     }
 
     fn visit_import_decl(&mut self, import: &ImportDecl) {
-        let i = self.ensure_reference(import.src.value.clone());
+        let symbols = if import
+            .specifiers
+            .iter()
+            .any(|s| matches!(s, ImportSpecifier::Namespace(..)))
+        {
+            None
+        } else {
+            Some(
+                import
+                    .specifiers
+                    .iter()
+                    .map(|s| match s {
+                        ImportSpecifier::Named(ImportNamedSpecifier {
+                            local, imported, ..
+                        }) => match imported {
+                            Some(imported) => orig_name(imported),
+                            _ => local.sym.clone(),
+                        },
+                        ImportSpecifier::Default(s) => js_word!("default"),
+                        ImportSpecifier::Namespace(..) => unreachable!(),
+                    })
+                    .collect(),
+            )
+        };
+
+        let i = self.ensure_reference(import.src.value.clone(), symbols);
         for s in &import.specifiers {
             let (local, orig_sym) = match s {
                 ImportSpecifier::Named(ImportNamedSpecifier {
@@ -246,14 +279,39 @@ impl Visit for Analyzer<'_> {
 
     fn visit_export_all(&mut self, export: &ExportAll) {
         self.data.has_exports = true;
-        let i = self.ensure_reference(export.src.value.clone());
+        let i = self.ensure_reference(export.src.value.clone(), None);
         self.data.reexports.push((i, Reexport::Star));
     }
 
     fn visit_named_export(&mut self, export: &NamedExport) {
         self.data.has_exports = true;
         if let Some(ref src) = export.src {
-            let i = self.ensure_reference(src.value.clone());
+            let symbols = if export
+                .specifiers
+                .iter()
+                .any(|s| matches!(s, ExportSpecifier::Namespace(..)))
+            {
+                None
+            } else {
+                Some(
+                    export
+                        .specifiers
+                        .iter()
+                        .map(|s| match s {
+                            ExportSpecifier::Named(ExportNamedSpecifier {
+                                orig, exported, ..
+                            }) => match exported {
+                                Some(exported) => orig_name(exported),
+                                _ => orig_name(orig),
+                            },
+                            ExportSpecifier::Default(..) => js_word!("default"),
+                            ExportSpecifier::Namespace(..) => unreachable!(),
+                        })
+                        .collect(),
+                )
+            };
+
+            let i = self.ensure_reference(src.value.clone(), symbols);
             for spec in export.specifiers.iter() {
                 match spec {
                     ExportSpecifier::Namespace(n) => {
