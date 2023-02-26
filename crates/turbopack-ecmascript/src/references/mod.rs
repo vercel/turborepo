@@ -314,9 +314,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            for (src, annotations) in eval_context.imports.references() {
-                let symbols = eval_context.imports.imported_symbols(src);
-
+            for (src, symbols, annotations) in eval_context.imports.references() {
                 let r = EsmAssetReferenceVc::new(
                     origin,
                     RequestVc::parse(Value::new(src.to_string().into())),

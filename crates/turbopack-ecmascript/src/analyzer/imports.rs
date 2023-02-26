@@ -94,10 +94,8 @@ pub(crate) struct ImportMap {
     /// List of (index in references, imported symbol, exported symbol)
     reexports: Vec<(usize, Reexport)>,
 
-    /// Ordered list of (module path, annotations)
-    references: IndexSet<(JsWord, ImportAnnotations)>,
-
-    imported_symbols: IndexMap<JsWord, Vec<JsWord>>,
+    /// Ordered list of (module path, imported symbols, annotations)
+    references: IndexSet<(JsWord, Vec<JsWord>, ImportAnnotations)>,
 
     /// True, when the module has exports
     has_exports: bool,
@@ -110,7 +108,7 @@ impl ImportMap {
 
     pub fn get_import(&self, id: &Id) -> Option<JsValue> {
         if let Some((i, i_sym)) = self.imports.get(id) {
-            let (i_src, annotations) = &self.references[*i];
+            let (i_src, _, annotations) = &self.references[*i];
             return Some(JsValue::member(
                 box JsValue::Module(ModuleValue {
                     module: i_src.clone(),
@@ -120,7 +118,7 @@ impl ImportMap {
             ));
         }
         if let Some(i) = self.namespace_imports.get(id) {
-            let (i_src, annotations) = &self.references[*i];
+            let (i_src, _, annotations) = &self.references[*i];
             return Some(JsValue::Module(ModuleValue {
                 module: i_src.clone(),
                 annotations: annotations.clone(),
@@ -140,19 +138,12 @@ impl ImportMap {
         None
     }
 
-    pub fn references(&self) -> impl Iterator<Item = (&JsWord, &ImportAnnotations)> {
-        self.references.iter().map(|(m, a)| (m, a))
+    pub fn references(&self) -> impl Iterator<Item = (&JsWord, &Vec<JsWord>, &ImportAnnotations)> {
+        self.references.iter().map(|(m, s, a)| (m, s, a))
     }
 
     pub fn reexports(&self) -> impl Iterator<Item = (usize, &Reexport)> {
         self.reexports.iter().map(|(i, r)| (*i, r))
-    }
-
-    pub fn imported_symbols(&self, module_path: &JsWord) -> &[JsWord] {
-        self.imported_symbols
-            .get(module_path)
-            .map(|v| &**v)
-            .unwrap_or(&[])
     }
 
     /// Analyze ES import
@@ -174,8 +165,12 @@ struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    fn ensure_reference(&mut self, module_path: JsWord) -> usize {
-        let tuple = (module_path, take(&mut self.current_annotations));
+    fn ensure_reference(&mut self, module_path: JsWord, imported_symbols: Vec<JsWord>) -> usize {
+        let tuple = (
+            module_path,
+            imported_symbols,
+            take(&mut self.current_annotations),
+        );
         if let Some(i) = self.data.references.get_index_of(&tuple) {
             i
         } else {
