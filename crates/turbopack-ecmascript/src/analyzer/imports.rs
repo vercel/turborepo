@@ -97,6 +97,8 @@ pub(crate) struct ImportMap {
     /// Ordered list of (module path, annotations)
     references: IndexSet<(JsWord, ImportAnnotations)>,
 
+    imported_symbols: IndexMap<JsWord, Vec<JsWord>>,
+
     /// True, when the module has exports
     has_exports: bool,
 }
@@ -144,6 +146,13 @@ impl ImportMap {
 
     pub fn reexports(&self) -> impl Iterator<Item = (usize, &Reexport)> {
         self.reexports.iter().map(|(i, r)| (*i, r))
+    }
+
+    pub fn imported_symbols(&self, module_path: &JsWord) -> &[JsWord] {
+        self.imported_symbols
+            .get(module_path)
+            .map(|v| &**v)
+            .unwrap_or(&[])
     }
 
     /// Analyze ES import

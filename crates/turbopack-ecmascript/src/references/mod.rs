@@ -35,7 +35,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{TryJoinIterExt, Value};
+use turbo_tasks::{primitives::StringsVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -103,7 +103,11 @@ use crate::{
         cjs::{
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
-        esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
+        esm::{
+            base::{ModulePart, ModulePartVc},
+            module_id::EsmModuleIdAssetReferenceVc,
+            EsmBindingVc, EsmExportsVc,
+        },
     },
     typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
@@ -309,10 +313,22 @@ pub(crate) async fn analyze_ecmascript_module(
             });
 
             for (src, annotations) in eval_context.imports.references() {
+                let symbols = eval_context.imports.imported_symbols(src);
+
                 let r = EsmAssetReferenceVc::new(
                     origin,
                     RequestVc::parse(Value::new(src.to_string().into())),
                     Value::new(annotations.clone()),
+                    if symbols.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            ModulePart::Export(StringsVc::cell(
+                                symbols.iter().map(|v| v.to_string()).collect(),
+                            ))
+                            .cell(),
+                        )
+                    },
                 );
                 import_references.push(r);
             }
