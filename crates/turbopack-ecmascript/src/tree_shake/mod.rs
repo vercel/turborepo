@@ -405,6 +405,8 @@ impl ChunkableAsset for EcmascriptModulePartAsset {
 pub struct EcmascriptModulePartChunkItem {
     full_module: EcmascriptModuleAssetVc,
 
+    split_data: SplitResultVc,
+
     module: EcmascriptModulePartAssetVc,
     context: ChunkingContextVc,
 
@@ -433,6 +435,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 
     #[turbo_tasks::function]
     fn content(&self) -> EcmascriptChunkItemContentVc {
+        // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
         EcmascriptChunkItemContent {
             inner_code: format!("__turbopack_export_value__({{ wip: true }});",).into(),
             ..Default::default()
