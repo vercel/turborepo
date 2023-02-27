@@ -319,20 +319,16 @@ pub(crate) async fn analyze_ecmascript_module(
                         );
                         import_references.push(r);
 
-                        if symbols.is_empty() {
-                            // Import for side effects
-                        } else {
-                            for symbol in symbols {
-                                let r = EsmAssetReferenceVc::new(
-                                    origin,
-                                    RequestVc::parse(Value::new(src.to_string().into())),
-                                    Value::new(annotations.clone()),
-                                    Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
-                                        symbol.to_string(),
-                                    )))),
-                                );
-                                import_references.push(r);
-                            }
+                        for symbol in symbols {
+                            let r = EsmAssetReferenceVc::new(
+                                origin,
+                                RequestVc::parse(Value::new(src.to_string().into())),
+                                Value::new(annotations.clone()),
+                                Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
+                                    symbol.to_string(),
+                                )))),
+                            );
+                            import_references.push(r);
                         }
                     }
                     None => {
