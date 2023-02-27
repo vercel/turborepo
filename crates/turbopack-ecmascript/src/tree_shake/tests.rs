@@ -4,7 +4,7 @@ use anyhow::Error;
 use swc_core::{
     common::SourceMap,
     ecma::{
-        ast::{EsVersion, Expr, ExprStmt, Id, Lit, Module, ModuleItem, Stmt},
+        ast::{EsVersion, Id, Module},
         atoms::JsWord,
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
