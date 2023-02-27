@@ -122,16 +122,13 @@ async fn apply_module_type(
                 context.compile_time_info(),
             );
 
-            match reference_type.into_value() {
-                ReferenceType::EcmaScriptModules(
-                    EcmaScriptModulesReferenceSubType::ModulePart(part),
-                ) => {
-                    let part = part.await?;
-
-                    return Ok(EcmascriptModulePartAssetVc::from_splitted(base, part));
-                }
-
-                _ => {}
+            if let ReferenceType::EcmaScriptModules(
+                EcmaScriptModulesReferenceSubType::ModulePart(part),
+            ) = reference_type.into_value()
+            {
+                return Ok(EcmascriptModulePartAssetVc::from_splitted(base, part)
+                    .await?
+                    .into());
             }
 
             base.into()
