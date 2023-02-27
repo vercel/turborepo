@@ -10,27 +10,32 @@
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
 /examples @vercel/turbo-oss
-/shim @vercel/turbo-oss
 /docs/pages/repo @vercel/turbo-oss
 .github/workflows/pr-go-*.yml @vercel/turbo-oss
 .github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
 /version.txt @vercel/turbo-oss
 .github/turborepo-release.yml @vercel/turbo-oss
 
-# Nobody owns this file, so nobody should get tagged on changes
+# Nobody owns these files, so nobody should get tagged on changes
 Cargo.lock
+pnpm-lock.yaml
 
 # Turbopack-specific things
 /.config/nextest.toml
 /docs/pages/pack @vercel/web-tooling
 /xtask @vercel/web-tooling
 .github/release.yml @vercel/web-tooling
+.github/workflows/on-nextjs-release-publish.yml @vercel/web-tooling
+.github/workflows/setup-nextjs-build.yml @vercel/web-tooling
+.github/workflows/daily-nextjs-integration-test.yml @vercel/web-tooling
 
 # crates in alphabetical order
 /crates @vercel/web-tooling
 # overrides for crates that are owned by turbo-oss
 /crates/turborepo @vercel/turbo-oss
+/crates/turborepo-ffi @vercel/turbo-oss
 /crates/turborepo-lib @vercel/turbo-oss
+/crates/turborepo-scm @vercel/turbo-oss
 /crates/turbo-updater @vercel/turbo-oss
 
 # packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages

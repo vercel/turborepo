@@ -18,6 +18,10 @@ on:
         default: "main"
       force_post_to_slack:
         type: boolean
+      # Skip posting to slack regardless of the conditions.
+      skip_post_to_slack:
+        type: boolean
+        default: false
 
 jobs:
   # First, build next-dev and Next.js both to execute across tests.
@@ -65,7 +69,7 @@ jobs:
       # Sets `NEXT_TEST_SKIP_RETRY_MANIFEST`, `NEXT_TEST_CONTINUE_ON_ERROR` to continue on error but do not retry on the known failed tests.
       # Do not set --timings flag
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=40000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/4 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/4 -c 1 >> /proc/1/fd/1"
         name: Run test/development
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
@@ -105,7 +109,7 @@ jobs:
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
         name: Run test/e2e (dev)
         continue-on-error: true
         env:
@@ -143,7 +147,7 @@ jobs:
       # TODO: This test currently seems to load wasm/swc and does not load the next-dev binary.
       # Temporary disabled until figure out details.
       #- run: |
-      #    docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && curl -s https://install-node.vercel.app/v16 | FORCE=1 bash && npm i -g pnpm@${PNPM_VERSION} > /dev/null && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_TEST_JOB=1 NEXT_TEST_CNA=1 xvfb-run node run-tests.js test/integration/create-next-app/index.test.ts test/integration/create-next-app/templates.test.ts -c 1 >> /proc/1/fd/1"
+      #    docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && curl -s https://install-node.vercel.app/v16 | FORCE=1 bash && npm i -g pnpm@${PNPM_VERSION} > /dev/null && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_CNA=1 xvfb-run node run-tests.js test/integration/create-next-app/index.test.ts test/integration/create-next-app/templates.test.ts -c 1 >> /proc/1/fd/1"
       #  name: Run test/e2e (create-next-app)
       #  continue-on-error: true
       #  env:
@@ -210,7 +214,7 @@ jobs:
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/25 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/25 -c 1 >> /proc/1/fd/1"
         name: Test Integration
         continue-on-error: true
         env:
@@ -235,6 +239,7 @@ jobs:
           diff_base: ${{ inputs.diff_base }}
         env:
           NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.force_post_to_slack }}"
+          NEXT_TURBO_FORCE_SKIP_SLACK_UPDATE: "${{ inputs.skip_post_to_slack }}"
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
