@@ -21,6 +21,7 @@ const cwd = process.cwd();
       (name) => !name.startsWith(".")
     );
 
+    let successfulPlatforms = [];
     await Promise.all(
       platforms.map(async (platform) => {
         await publishSema.acquire();
@@ -54,6 +55,7 @@ const cwd = process.cwd();
             ],
             { stdio: "inherit" }
           );
+          successfulPlatforms.push(platform);
         } catch (err) {
           // don't block publishing other versions on single platform error
           console.error(`Failed to publish`, platform, err);
@@ -65,6 +67,7 @@ const cwd = process.cwd();
             )
           ) {
             console.error("Ignoring already published error", platform, err);
+            successfulPlatforms.push(platform);
           } else {
             // throw err
           }
@@ -130,7 +133,7 @@ const cwd = process.cwd();
     let nextRsPkg = JSON.parse(
       await readFile(path.join(nextRsPath, "package.json"))
     );
-    for (let platform of platforms) {
+    for (let platform of successfulPlatforms) {
       let optionalDependencies = nextRsPkg.optionalDependencies || {};
       optionalDependencies["@next/rs-" + platform] = version;
       nextRsPkg.optionalDependencies = optionalDependencies;
