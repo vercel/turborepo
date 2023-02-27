@@ -53,7 +53,7 @@ struct VarState {
 }
 
 impl Analyzer<'_> {
-    pub fn analyze(module: &Module) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
+    pub(super) fn analyze(module: &Module) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(module);
 

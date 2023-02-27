@@ -27,7 +27,7 @@ use super::{
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(super) struct ItemId {
+pub(crate) struct ItemId {
     /// The index of the module item in the module.
     pub index: usize,
     pub kind: ItemIdKind,
@@ -51,7 +51,7 @@ impl fmt::Debug for ItemId {
 ///
 /// becomes [ItemIdKind::ImportOfModule] and [ItemIdKind::ImportBinding].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(super) enum ItemIdKind {
+pub(crate) enum ItemIdKind {
     ///
     Normal,
 
@@ -67,7 +67,7 @@ pub(super) enum ItemIdKind {
 
 /// Data about a module item
 #[derive(Debug)]
-pub(super) struct ItemData {
+pub(crate) struct ItemData {
     /// If the module item is hoisted?
     pub is_hoisted: bool,
 
