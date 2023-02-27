@@ -3,6 +3,7 @@ package prune
 import (
 	"bufio"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -209,7 +210,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	}
 
 	turboJSON, err := fs.LoadTurboConfig(p.base.RepoRoot, rootPackageJSON, false)
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return errors.Wrap(err, "failed to read turbo.json")
 	}
 	if turboJSON != nil {
