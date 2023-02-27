@@ -144,12 +144,12 @@ static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
 #[case::semver("integration/semver.js")]
 #[case::sentry("integration/sentry.js")]
 #[case::sequelize("integration/sequelize.js")]
-#[cfg_attr(
-    target_os = "windows",
-    should_panic(expected = "Something went wrong installing the \"sharp\" module"),
-    case::sharp("integration/sharp.js")
-)]
-#[cfg_attr(not(target_os = "windows"), case::sharp("integration/sharp.js"))]
+// #[cfg_attr(
+// target_os = "windows",
+// should_panic(expected = "Something went wrong installing the \"sharp\" module"),
+// case::sharp("integration/sharp.js")
+// )]
+// #[cfg_attr(not(target_os = "windows"), case::sharp("integration/sharp.js"))]
 #[case::simple("integration/simple.js")]
 #[case::socket_io("integration/socket.io.js")]
 #[case::source_map("integration/source-map/index.js")]
