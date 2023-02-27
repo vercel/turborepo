@@ -41,7 +41,7 @@ Both `apps/web` and `packages/shared` have their own test suite. Their `package.
     </Tab>
 </Tabs>
 
-Inside the root `turbo.json`, we recommend setting up a `test` task in your [pipeline](/repo/docs/core-concepts/monorepos/running-tasks):
+Inside the root `turbo.json`, add a `test` task to your [pipeline](/repo/docs/core-concepts/monorepos/running-tasks):
 
 ```json filename="turbo.json"
 {
@@ -53,13 +53,13 @@ Inside the root `turbo.json`, we recommend setting up a `test` task in your [pip
 
 Now, you can run `turbo test` and have Turborepo test the entire repository.
 
-Because of Turborepo's [caching](/repo/docs/core-concepts/caching), this also means that only repositories that have changed files will be tested - resulting in a lot of time saved.
+Because of Turborepo's [caching](/repo/docs/core-concepts/caching), this also means that only workspaces that have changed files will be tested - resulting in a lot of time saved.
 
 ## Running tests in watch mode
 
-When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/repo/docs/core-concepts/caching) with Turborepo.
+When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache the results](/repo/docs/core-concepts/caching) with Turborepo.
 
-But when you run your tests in watched mode, the process never exits. This makes a watch task more like a [development task](/repo/docs/handbook/dev).
+But when you run your tests in watch mode the process never exits. This makes a watch task more like a [development task](/repo/docs/handbook/dev).
 
 Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
 
@@ -88,22 +88,17 @@ Here's an example:
     </Tab>
 </Tabs>
 
+Next, you would specify both tasks inside of your `turbo.json` file:
+
 ```json filename="turbo.json"
 {
   "pipeline": {
     "test": {},
     "test:watch": {
-      "cache": false
+      "persistent": true
     }
   }
 }
 ```
 
-```json filename="package.json"
-{
-  "scripts": {
-    "test": "turbo run test",
-    "test:watch": "turbo run test:watch"
-  }
-}
-```
+And finally you would run the task using `turbo test:watch`.

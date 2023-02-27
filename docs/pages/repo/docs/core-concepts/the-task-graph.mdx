@@ -1,0 +1,37 @@
+import Flow from '../../../../components/flowchart/Flow'
+
+---
+
+title: The Task Graph
+description: Turborepo builds and maintains an orderly graph of tasks .
+
+---
+
+# The Task Graph
+
+Underneath the hood Turborepo identifies the set of work that must be done and the order in which it must happen. Learning how to think about the world as a series of tasks that have dependencies enables you to optimize your code tremendously.
+
+As an example of the power and complexity of the system let's review a few different testing workflows and how you would define them to optimize your build times.
+
+## Unit Testing - Single Package
+
+The primary hallmark of unit tests is that they happen at the smallest possible level. In a unit test you can imagine that it's entirely possible that the complexity is low enough that you would not need to run a build in order to
+
+<Flow />
+
+```js filename="left-pad.js"
+
+```
+
+```js filename="left-pad.test.js"
+
+```
+
+```jsonc filename="turbo.json"
+{
+  "pipeline": {
+    "build": {},
+    "test": {}
+  }
+}
+```

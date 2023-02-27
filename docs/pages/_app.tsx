@@ -1,5 +1,7 @@
 import "../styles.css";
 import "../custom.css";
+import "reactflow/dist/base.css";
+import "../components/flowchart/index.css";
 
 import { SSRProvider } from "@react-aria/ssr";
 import type { AppProps } from "next/app";
