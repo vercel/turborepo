@@ -9,20 +9,18 @@
     "e2e": {
       "outputs": [],
       "inputs": [
-        "cli/**/*.go",
-        "cli/go.mod",
-        "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts",
-        "shim/**/*.rs"
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "scripts/e2e/e2e.ts"
       ]
     },
     "e2e-prebuilt": {
       "inputs": [
-        "cli/**/*.go",
-        "cli/go.mod",
-        "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts",
-        "shim/**/*.rs"
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "scripts/e2e/e2e.ts"
       ]
     },
     "integration-tests": {}
