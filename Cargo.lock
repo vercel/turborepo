@@ -3807,7 +3807,6 @@ dependencies = [
  "mime",
  "next-core",
  "next-dev",
- "once_cell",
  "owo-colors",
  "parking_lot",
  "rand",
@@ -3827,6 +3826,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-node",
+ "turbopack-test-utils",
  "url",
  "webbrowser 0.7.1",
 ]
@@ -7985,6 +7985,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-test-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "similar",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+]
+
+[[package]]
 name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
@@ -7993,18 +8007,17 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "similar",
  "test-generator",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
  "turbopack-env",
+ "turbopack-test-utils",
 ]
 
 [[package]]
