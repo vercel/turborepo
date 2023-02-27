@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -26,7 +26,8 @@
     "release": "pnpm build && pnpm publish",
     "test": "jest",
     "build": "tsup",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint": "eslint lib/**/*.ts"
   },
   "devDependencies": {
     "@types/eslint": "^8.4.5",
@@ -38,6 +39,7 @@
     "ts-jest": "^27.1.1",
     "tsconfig": "workspace:*",
     "tsup": "^6.2.0",
+    "turbo-test-utils": "workspace:*",
     "turbo-types": "workspace:*",
     "turbo-utils": "workspace:*",
     "typescript": "^4.7.4"
