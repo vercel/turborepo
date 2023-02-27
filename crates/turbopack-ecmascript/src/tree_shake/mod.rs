@@ -11,6 +11,7 @@ use turbopack_core::{
         ModuleId, ModuleIdVc,
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
+    resolve::ModulePartVc,
     version::VersionedContentVc,
 };
 
@@ -298,6 +299,12 @@ impl Analyzer<'_> {
 pub struct EcmascriptModulePartAsset {
     module: EcmascriptModuleAssetVc,
     chunk_id: u32,
+}
+
+impl EcmascriptModulePartAssetVc {
+    pub async fn new(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Self {
+        EcmascriptModulePartAsset {}.cell()
+    }
 }
 
 #[turbo_tasks::value_impl]
