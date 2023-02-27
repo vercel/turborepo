@@ -1286,7 +1286,7 @@ pub async fn handle_resolve_error(
 #[turbo_tasks::value]
 pub enum ModulePart {
     ModuleEvaluation,
-    Export(StringsVc),
+    Export(StringVc),
 }
 
 impl ModulePart {
