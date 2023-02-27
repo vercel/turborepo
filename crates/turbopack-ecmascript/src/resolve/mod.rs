@@ -13,11 +13,9 @@ use turbopack_core::{
         options::{ConditionValue, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc},
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
-        resolve, ResolveResultVc,
+        resolve, ModulePartVc, ResolveResultVc,
     },
 };
-
-use crate::references::ModulePartVc;
 
 #[turbo_tasks::function]
 pub async fn apply_esm_specific_options(options: ResolveOptionsVc) -> Result<ResolveOptionsVc> {

@@ -1282,3 +1282,15 @@ pub async fn handle_resolve_error(
         }
     })
 }
+
+#[turbo_tasks::value]
+pub enum ModulePart {
+    ModuleEvaluation,
+    Export(StringsVc),
+}
+
+impl ModulePart {
+    pub fn new(part: ModulePart) -> ModulePartVc {
+        part.cell()
+    }
+}

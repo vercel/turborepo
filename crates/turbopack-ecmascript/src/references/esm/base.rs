@@ -13,7 +13,10 @@ use turbopack_core::{
         ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, ModulePartVc, PrimaryResolveResult,
+        ResolveResultVc,
+    },
 };
 
 use crate::{
@@ -21,10 +24,7 @@ use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
-    references::{
-        util::{request_to_string, throw_module_not_found_expr},
-        ModulePartVc,
-    },
+    references::util::{request_to_string, throw_module_not_found_expr},
     resolve::esm_resolve,
 };
 

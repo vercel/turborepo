@@ -48,7 +48,7 @@ use turbopack_core::{
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePart, PrimaryResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -116,12 +116,6 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub exports: EcmascriptExportsVc,
     /// `true` when the analysis was successful.
     pub successful: bool,
-}
-
-#[turbo_tasks::value]
-pub enum ModulePart {
-    ModuleEvaluation,
-    Export(StringsVc),
 }
 
 /// A temporary analysis result builder to pass around, to be turned into an
@@ -323,14 +317,11 @@ pub(crate) async fn analyze_ecmascript_module(
                         Some(symbols) => {
                             if symbols.is_empty() {
                                 // Import for side effects
-                                Some(ModulePart::ModuleEvaluation.cell())
+                                Some(ModulePart::new(ModulePart::ModuleEvaluation))
                             } else {
-                                Some(
-                                    ModulePart::Export(StringsVc::cell(
-                                        symbols.iter().map(|v| v.to_string()).collect(),
-                                    ))
-                                    .cell(),
-                                )
+                                Some(ModulePart::new(ModulePart::Export(StringsVc::cell(
+                                    symbols.iter().map(|v| v.to_string()).collect(),
+                                ))))
                             }
                         }
                         None => {
