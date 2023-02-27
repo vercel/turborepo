@@ -103,9 +103,7 @@ func DryRun(
 	// We walk the graph with no concurrency.
 	// Populating the cache state is parallelizable.
 	// Do this _after_ walking the graph.
-	if err := populateCacheState(turboCache, taskSummaries); err != nil {
-		return err
-	}
+	populateCacheState(turboCache, taskSummaries)
 
 	// Assign the Task Summaries to the main summary
 	summary.Tasks = taskSummaries
@@ -199,7 +197,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	return taskIDs, nil
 }
 
-func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) error {
+func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) {
 	// We make at most 8 requests at a time for cache state.
 	maxParallelRequests := 8
 	taskCount := len(taskSummaries)
@@ -211,8 +209,6 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) er
 
 	queue := make(chan int, taskCount)
 
-	var returnErr error
-
 	wg := &sync.WaitGroup{}
 	for i := 0; i < parallelRequestCount; i++ {
 		wg.Add(1)
@@ -220,11 +216,8 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) er
 			defer wg.Done()
 			for index := range queue {
 				task := taskSummaries[index]
-				itemStatus, err := turboCache.Exists(task.Hash)
+				itemStatus := turboCache.Exists(task.Hash)
 				task.CacheState = itemStatus
-				if err != nil {
-					returnErr = err
-				}
 			}
 		}()
 	}
@@ -234,8 +227,6 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) er
 	}
 	close(queue)
 	wg.Wait()
-
-	return returnErr
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
