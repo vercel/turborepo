@@ -369,6 +369,7 @@ importers:
       ts-jest: ^27.1.1
       tsconfig: workspace:*
       tsup: ^6.2.0
+      turbo-test-utils: workspace:*
       turbo-types: workspace:*
       turbo-utils: workspace:*
       typescript: ^4.7.4
@@ -384,6 +385,7 @@ importers:
       ts-jest: 27.1.5_vwbkq6iekkdgzr33wjcnr3wuaq
       tsconfig: link:../tsconfig
       tsup: 6.2.3_typescript@4.7.4
+      turbo-test-utils: link:../turbo-test-utils
       turbo-types: link:../turbo-types
       turbo-utils: link:../turbo-utils
       typescript: 4.7.4
@@ -497,6 +499,7 @@ importers:
       fs-extra: ^11.1.0
       jest: ^27.4.3
       js-yaml: ^4.1.0
+      json5: ^2.2.3
       ts-jest: ^27.1.1
       tsconfig: workspace:*
       typescript: ^4.7.4
@@ -504,6 +507,7 @@ importers:
     dependencies:
       fs-extra: 11.1.0
       js-yaml: 4.1.0
+      json5: 2.2.3
       uuid: 9.0.0
     devDependencies:
       '@types/fs-extra': 9.0.13
@@ -564,7 +568,7 @@ importers:
       globby: 11.1.0
       jest: ^27.4.3
       js-yaml: ^4.1.0
-      json5: ^2.2.1
+      json5: ^2.2.3
       ts-jest: ^27.1.1
       tsconfig: workspace:*
       tsup: ^5.12.1
@@ -8150,7 +8154,7 @@ packages:
       '@babel/plugin-syntax-jsx': 7.18.6_@babel+core@7.20.12
       '@babel/plugin-syntax-typescript': 7.20.0_@babel+core@7.20.12
       '@babel/traverse': 7.20.12
-      '@babel/types': 7.20.7
+      '@babel/types': 7.21.0
       '@jest/expect-utils': 29.4.1
       '@jest/transform': 29.4.1
       '@jest/types': 29.4.1
@@ -8374,6 +8378,7 @@ packages:
     resolution: {integrity: sha512-1hqLFMSrGHRHxav9q9gNjJ5EXznIxGVO09xQRrwplcS8qs28pZ8s8hupZAmqDwZUmVZ2Qb2jnyPOWcDH8m8dlA==}
     engines: {node: '>=6'}
     hasBin: true
+    dev: true
 
   /json5/2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
@@ -12330,7 +12335,7 @@ packages:
       '@types/json-schema': 7.0.11
       commander: 9.5.0
       glob: 8.0.3
-      json5: 2.2.1
+      json5: 2.2.3
       normalize-path: 3.0.0
       safe-stable-stringify: 2.4.0
       typescript: 4.8.4
