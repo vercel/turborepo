@@ -115,7 +115,7 @@ func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
 		},
 		OutputColor: cli.UiColorNone,
 		InfoColor:   cli.UiColorNone,
-		WarnColor:   cli.UiColorYellow,
+		WarnColor:   cli.UiColor{Code: int(color.FgYellow), Bold: false},
 		ErrorColor:  cli.UiColorRed,
 	}
 }

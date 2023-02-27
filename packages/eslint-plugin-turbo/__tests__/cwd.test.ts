@@ -25,7 +25,7 @@ describe("eslint settings check", () => {
       cwd,
       encoding: "utf8",
     });
-    const configJson = JSON.parse(configString);
+    const configJson = JSON5.parse(configString);
 
     expect(configJson.settings).toEqual({
       turbo: { envVars: ["CI", "UNORDERED"] },
@@ -38,7 +38,7 @@ describe("eslint settings check", () => {
       cwd,
       encoding: "utf8",
     });
-    const configJson = JSON.parse(configString);
+    const configJson = JSON5.parse(configString);
 
     expect(configJson.settings).toEqual({
       turbo: { envVars: ["CI", "UNORDERED"] },
@@ -82,13 +82,13 @@ describe("eslint cache is busted", () => {
     try {
       execSync(`eslint --format=json child.js`, { cwd, encoding: "utf8" });
     } catch (error: any) {
-      const outputJson = JSON.parse(error.stdout);
+      const outputJson = JSON5.parse(error.stdout);
       expect(outputJson).toMatchObject([
         {
           messages: [
             {
               message:
-                "$NONEXISTENT is not listed as a dependency in turbo.json",
+                "$NONEXISTENT is not listed as a dependency in any turbo.json",
             },
           ],
         },
@@ -105,7 +105,7 @@ describe("eslint cache is busted", () => {
       cwd,
       encoding: "utf8",
     });
-    const outputJson = JSON.parse(output);
+    const outputJson = JSON5.parse(output);
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);
   });
 });

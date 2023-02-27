@@ -177,11 +177,12 @@ function collectFailedTestResults(
       return true;
     })
     .map((logs) => {
-      let failedSplitLogs = logs.split(`failed to pass within`);
+      const failedSplitLogs = logs.split(`failed to pass within`);
+      let logLine = failedSplitLogs.shift();
       const ret = [];
 
-      while (!!failedSplitLogs && failedSplitLogs.length >= 1) {
-        let failedTest = failedSplitLogs.shift();
+      while (logLine) {
+        let failedTest = logLine;
         // Look for the failed test file name
         failedTest = failedTest?.includes("test/")
           ? failedTest?.split("\n").pop()?.trim()
@@ -201,6 +202,7 @@ function collectFailedTestResults(
             name: failedTest,
             data: JSON.parse(testData),
           });
+          logLine = failedSplitLogs.shift();
         } catch (_) {
           console.log(`Failed to parse test data`);
         }
@@ -420,17 +422,32 @@ async function getTestResultDiffBase(
 
   // If base is main, get the tree under `test-results/main`
   // Otherwise iterate over all the trees under `test-results` then find latest next.js release
-  let baseTree:
+  let testResultJsonTree:
     | Awaited<
         ReturnType<Awaited<Octokit["rest"]["git"]["getTree"]>>
-      >["data"]["tree"][number]
+      >["data"]["tree"]
     | undefined;
+
   if (shouldDiffWithMain) {
     console.log("Trying to find latest test results from main branch");
-    baseTree = testResultsTree.find((tree) => tree.path === "main");
+    const baseTree = testResultsTree.find((tree) => tree.path === "main");
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // Now tree should point the list of .json for the actual test results
+    testResultJsonTree = (
+      await octokit.rest.git.getTree({
+        ...context.repo,
+        tree_sha: baseTree.sha,
+      })
+    ).data.tree;
   } else {
     console.log("Trying to find latest test results from next.js release");
-    baseTree = testResultsTree
+    const baseTree = testResultsTree
       .filter((tree) => tree.path !== "main")
       .reduce((acc, value) => {
         if (!acc) {
@@ -438,23 +455,17 @@ async function getTestResultDiffBase(
         }
 
         return semver.gt(value.path, acc.path) ? value : acc;
-      }, null as any as typeof baseTree);
+      }, null);
+
+    if (!baseTree || !baseTree.sha) {
+      console.log("There is no base to compare test results against");
+      return null;
+    }
+    console.log("Found base tree", baseTree);
+
+    // If the results is for the release, no need to traverse down the tree
+    testResultJsonTree = [baseTree];
   }
-
-  if (!baseTree || !baseTree.sha) {
-    console.log("There is no base to compare test results against");
-    return null;
-  }
-
-  console.log("Found base tree", baseTree);
-
-  // Now tree should point the list of .json for the actual test results
-  const testResultJsonTree = (
-    await octokit.rest.git.getTree({
-      ...context.repo,
-      tree_sha: baseTree.sha,
-    })
-  ).data.tree;
 
   if (!testResultJsonTree) {
     console.log("There is no test results stored in the base yet");
@@ -557,11 +568,22 @@ function getTestSummary(
     }
   );
 
-  console.log("Current test summary", {
-    currentTestFailedCaseCount,
-    currentTestFailedSuiteCount,
-    currentTestFailedNames,
-  });
+  console.log(
+    "Current test summary",
+    JSON.stringify(
+      {
+        currentTestFailedSuiteCount,
+        currentTestPassedSuiteCount,
+        currentTestTotalSuiteCount,
+        currentTestFailedCaseCount,
+        currentTestPassedCaseCount,
+        currentTestTotalCaseCount,
+        currentTestFailedNames,
+      },
+      null,
+      2
+    )
+  );
 
   if (!baseResults) {
     console.log("There's no base to compare");
@@ -607,11 +629,22 @@ function getTestSummary(
     }
   );
 
-  console.log("Base test summary", {
-    baseTestFailedSuiteCount,
-    baseTestFailedCaseCount,
-    baseTestFailedNames,
-  });
+  console.log(
+    "Base test summary",
+    JSON.stringify(
+      {
+        baseTestFailedSuiteCount,
+        baseTestPassedSuiteCount,
+        baseTestTotalSuiteCount,
+        baseTestFailedCaseCount,
+        baseTestPassedCaseCount,
+        baseTestTotalCaseCount,
+        baseTestFailedNames,
+      },
+      null,
+      2
+    )
+  );
 
   let testSuiteDiff = ":zero:";
   const suiteCountDiff = baseTestFailedSuiteCount - currentTestFailedSuiteCount;
@@ -652,17 +685,24 @@ function getTestSummary(
     (name) => !baseTestFailedNames.includes(name)
   );
 
+  /*
+  //NOTE: upstream test can be flaky, so this can appear intermittently
+  //even if there aren't actual fix. To avoid confusion, do not display this
+  //for now.
   if (fixedTests.length > 0) {
     ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
       .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
-  }
+  }*/
 
   if (newFailedTests.length > 0) {
     ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
       .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
   }
+
+  console.log("Newly failed tests", JSON.stringify(newFailedTests, null, 2));
+  console.log("Fixed tests", JSON.stringify(fixedTests, null, 2));
 
   // Store a json payload to share via slackapi/slack-github-action into Slack channel
   if (shouldShareTestSummaryToSlack) {
@@ -773,6 +813,8 @@ async function run() {
 
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
+  const failedTestLists = [];
+
   // Consturct a comment body to post test report with summary & full details.
   const comments = failedJobResults.result.reduce((acc, value, idx) => {
     const { name: failedTest, data: testData } = value;
@@ -796,30 +838,34 @@ async function run() {
       groupedFails[ancestorKey].push(fail);
     }
 
-    commentValues.push(`\`${failedTest}\``);
-
-    for (const group of Object.keys(groupedFails).sort()) {
-      const fails = groupedFails[group];
-      commentValues.push(`\n`);
-      fails.forEach((fail) => {
-        commentValues.push(`- ${group} > ${fail.title}`);
-      });
+    if (!failedTestLists.includes(failedTest)) {
+      commentValues.push(`\`${failedTest}\``);
+      failedTestLists.push(failedTest);
     }
-
-    const strippedResultMessage =
-      resultMessage.length >= 50000
-        ? resultMessage.substring(0, 50000) +
-          `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
-        : resultMessage;
-    if (resultMessage.length >= 50000) {
-      console.log(
-        "Test result messages are too long, comment will post stripped."
-      );
-    }
-
     commentValues.push(`\n`);
 
+    // Currently there are too many test failures to post since it creates several comments.
+    // Only expands if explicitly requested in the option.
     if (shouldExpandResultMessages) {
+      for (const group of Object.keys(groupedFails).sort()) {
+        const fails = groupedFails[group];
+        commentValues.push(`\n`);
+        fails.forEach((fail) => {
+          commentValues.push(`- ${group} > ${fail.title}`);
+        });
+      }
+
+      const strippedResultMessage =
+        resultMessage.length >= 50000
+          ? resultMessage.substring(0, 50000) +
+            `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
+          : resultMessage;
+      if (resultMessage.length >= 50000) {
+        console.log(
+          "Test result messages are too long, comment will post stripped."
+        );
+      }
+
       commentValues.push(`<details>`);
       commentValues.push(`<summary>Expand output</summary>`);
       commentValues.push(strippedResultMessage);
@@ -864,6 +910,16 @@ async function run() {
   const isMultipleComments = comments.length > 1;
 
   try {
+    // Store the list of failed test paths to a file
+    fs.writeFileSync(
+      "./failed-test-path-list.json",
+      JSON.stringify(
+        failedTestLists.filter((x) => x.length > 5),
+        null,
+        2
+      )
+    );
+
     if (!prNumber) {
       return;
     }
