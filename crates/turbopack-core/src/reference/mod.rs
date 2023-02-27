@@ -130,7 +130,7 @@ pub async fn all_assets(asset: AssetVc) -> Result<AssetsVc> {
     while let Some((parent, references)) = queue.pop_front() {
         IssueVc::attach_context(
             parent.ident().path(),
-            "expanding references of asset".to_string(),
+            "expanding references of asset",
             references,
         )
         .await?;

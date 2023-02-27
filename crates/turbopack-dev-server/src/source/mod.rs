@@ -2,6 +2,7 @@ pub mod asset_graph;
 pub mod combined;
 pub mod conditional;
 pub mod headers;
+pub mod issue_context;
 pub mod lazy_instantiated;
 pub mod query;
 pub mod request;

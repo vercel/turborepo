@@ -22,6 +22,7 @@ use turbopack_dev_server::{
     source::{
         asset_graph::AssetGraphContentSourceVc,
         combined::{CombinedContentSource, CombinedContentSourceVc},
+        issue_context::IssueContextSourceVc,
         specificity::SpecificityVc,
         ContentSourceData, ContentSourceVc, NoContentSourceVc,
     },
@@ -277,17 +278,33 @@ pub async fn create_page_source(
     let fallback_source =
         AssetGraphContentSourceVc::new_eager(server_root, fallback_page.as_asset());
 
-    Ok(CombinedContentSource {
+    let source = CombinedContentSource {
         sources: vec![
             // Match _next/404 first to ensure rewrites work properly.
-            force_not_found_source,
+            IssueContextSourceVc::new_context(
+                pages_dir,
+                "Next.js pages directory not found",
+                force_not_found_source,
+            )
+            .into(),
             page_source,
-            fallback_source.into(),
-            fallback_not_found_source,
+            IssueContextSourceVc::new_context(
+                pages_dir,
+                "Next.js pages directory fallback",
+                fallback_source.into(),
+            )
+            .into(),
+            IssueContextSourceVc::new_context(
+                pages_dir,
+                "Next.js pages directory not found fallback",
+                fallback_not_found_source,
+            )
+            .into(),
         ],
     }
     .cell()
-    .into())
+    .into();
+    Ok(source)
 }
 
 /// Handles a single page file in the pages directory
@@ -555,13 +572,15 @@ async fn create_page_source_for_directory(
     let mut sources = vec![];
 
     for item in items.iter() {
-        match *item.await? {
+        let source = match *item.await? {
             PagesStructureItem::Page {
                 page,
                 specificity,
                 url,
-            } => {
-                sources.push(create_page_source_for_file(
+            } => IssueContextSourceVc::new_context(
+                page,
+                "Next.js pages directory",
+                create_page_source_for_file(
                     project_path,
                     env,
                     server_context,
@@ -577,14 +596,17 @@ async fn create_page_source_for_directory(
                     false,
                     output_root,
                     output_root,
-                ));
-            }
+                ),
+            )
+            .into(),
             PagesStructureItem::Api {
                 api,
                 specificity,
                 url,
-            } => {
-                sources.push(create_page_source_for_file(
+            } => IssueContextSourceVc::new_context(
+                api,
+                "Next.js pages api directory",
+                create_page_source_for_file(
                     project_path,
                     env,
                     server_context,
@@ -600,9 +622,11 @@ async fn create_page_source_for_directory(
                     true,
                     output_root,
                     output_root,
-                ));
-            }
-        }
+                ),
+            )
+            .into(),
+        };
+        sources.push(source);
     }
 
     for child in children.iter() {
