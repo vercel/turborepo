@@ -18,7 +18,7 @@ pub(crate) mod references;
 pub mod resolve;
 pub(crate) mod special_cases;
 pub(crate) mod transform;
-mod tree_shake;
+pub mod tree_shake;
 pub mod typescript;
 pub mod utils;
 pub mod webpack;
