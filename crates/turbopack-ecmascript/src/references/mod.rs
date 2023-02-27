@@ -35,7 +35,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{primitives::StringsVc, TryJoinIterExt, Value};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -48,7 +48,7 @@ use turbopack_core::{
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, ModulePart, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePart, ModulePartVc, PrimaryResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -309,28 +309,44 @@ pub(crate) async fn analyze_ecmascript_module(
             });
 
             for (src, symbols, annotations) in eval_context.imports.references() {
-                let r = EsmAssetReferenceVc::new(
-                    origin,
-                    RequestVc::parse(Value::new(src.to_string().into())),
-                    Value::new(annotations.clone()),
-                    match symbols {
-                        Some(symbols) => {
-                            if symbols.is_empty() {
-                                // Import for side effects
-                                Some(ModulePart::new(ModulePart::ModuleEvaluation))
-                            } else {
-                                Some(ModulePart::new(ModulePart::Export(StringsVc::cell(
-                                    symbols.iter().map(|v| v.to_string()).collect(),
-                                ))))
+                match symbols {
+                    Some(symbols) => {
+                        let r = EsmAssetReferenceVc::new(
+                            origin,
+                            RequestVc::parse(Value::new(src.to_string().into())),
+                            Value::new(annotations.clone()),
+                            Some(ModulePartVc::new(ModulePart::ModuleEvaluation)),
+                        );
+                        import_references.push(r);
+
+                        if symbols.is_empty() {
+                            // Import for side effects
+                        } else {
+                            for symbol in symbols {
+                                let r = EsmAssetReferenceVc::new(
+                                    origin,
+                                    RequestVc::parse(Value::new(src.to_string().into())),
+                                    Value::new(annotations.clone()),
+                                    Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
+                                        symbol.to_string(),
+                                    )))),
+                                );
+                                import_references.push(r);
                             }
                         }
-                        None => {
-                            // Namespace import
-                            None
-                        }
-                    },
-                );
-                import_references.push(r);
+                    }
+                    None => {
+                        // Namespace import
+
+                        let r = EsmAssetReferenceVc::new(
+                            origin,
+                            RequestVc::parse(Value::new(src.to_string().into())),
+                            Value::new(annotations.clone()),
+                            None,
+                        );
+                        import_references.push(r);
+                    }
+                }
             }
             for r in import_references.iter_mut() {
                 // Resolving these references here avoids many resolve wrapper tasks when

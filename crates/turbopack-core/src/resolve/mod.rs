@@ -1289,9 +1289,8 @@ pub enum ModulePart {
     Export(StringVc),
 }
 
-impl ModulePart {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new(part: ModulePart) -> ModulePartVc {
+impl ModulePartVc {
+    pub fn new(part: ModulePart) -> Self {
         part.cell()
     }
 }

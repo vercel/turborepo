@@ -128,7 +128,7 @@ async fn apply_module_type(
                 ) => {
                     let part = part.await?;
 
-                    return Ok(EcmascriptModulePartAssetVc::new(base, part));
+                    return Ok(EcmascriptModulePartAssetVc::split(base, part));
                 }
 
                 _ => {}

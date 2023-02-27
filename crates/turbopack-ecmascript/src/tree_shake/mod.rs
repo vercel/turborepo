@@ -11,16 +11,15 @@ use turbopack_core::{
         ModuleId, ModuleIdVc,
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    resolve::ModulePartVc,
+    resolve::{ModulePart, ModulePartVc},
     version::VersionedContentVc,
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
     chunk::{
-        EcmascriptChunkContent, EcmascriptChunkContentVc, EcmascriptChunkItem,
-        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     },
     EcmascriptModuleAssetVc,
 };
@@ -53,7 +52,7 @@ struct VarState {
 }
 
 impl Analyzer<'_> {
-    pub fn analyze(module: &Module) -> DepGraph {
+    pub fn analyze(module: &Module) -> (DepGraph, FxHashMap<ItemId, ItemData>) {
         let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(module);
 
@@ -74,7 +73,7 @@ impl Analyzer<'_> {
 
         analyzer.handle_exports(module);
 
-        g
+        (g, items)
     }
 
     /// Phase 1: Hoisted Variables and Bindings
@@ -301,9 +300,46 @@ pub struct EcmascriptModulePartAsset {
     chunk_id: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Key {
+    ModuleEvaluation,
+    Export(String),
+}
+
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+struct SplitResult {
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    data: FxHashMap<Key, u32>,
+}
+
+impl PartialEq for SplitResult {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+}
+
+/// For caching
+#[turbo_tasks::function]
+async fn split(module: EcmascriptModuleAssetVc) -> SplitResultVc {
+    let parsed = module.parse().await.unwrap();
+}
+
 impl EcmascriptModulePartAssetVc {
-    pub async fn new(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Self {
-        EcmascriptModulePartAsset {}.cell()
+    pub async fn from_splitted(
+        module: EcmascriptModuleAssetVc,
+        part: ModulePartVc,
+    ) -> Result<Self> {
+        let result = split(module).await?;
+        let part = part.await?;
+
+        let key = match &*part {
+            ModulePart::ModuleEvaluation => Key::ModuleEvaluation,
+            ModulePart::Export(export) => Key::Export(export.await?.to_string()),
+        };
+
+        let chunk_id = result.data[&key];
+
+        Ok(EcmascriptModulePartAsset { module, chunk_id }.cell())
     }
 }
 
