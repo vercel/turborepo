@@ -15,6 +15,7 @@
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
   },
+  "module": "dist/index.mjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -33,12 +34,12 @@
     "globby": "11.1.0",
     "jest": "^27.4.3",
     "js-yaml": "^4.1.0",
-    "json5": "^2.2.1",
+    "json5": "^2.2.3",
     "ts-jest": "^27.1.1",
     "tsconfig": "workspace:*",
     "tsup": "^5.12.1",
-    "turbo-types": "workspace:*",
     "turbo-test-utils": "workspace:*",
+    "turbo-types": "workspace:*",
     "typescript": "^4.7.4"
   }
 }

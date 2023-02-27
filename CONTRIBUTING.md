@@ -190,6 +190,18 @@ when building Turbopack. To do so, add a `--exclude turbopack-foo`
 flag to the build command. Search through `test.yml` and add this
 flag to all cargo commands that already exclude `turborepo-lib`.
 
+Finally, the crate must be added to the Turborepo section of CODEOWNERS:
+
+```diff
+# overrides for crates that are owned by turbo-oss
+  /crates/turborepo @vercel/turbo-oss
+  /crates/turborepo-ffi @vercel/turbo-oss
++ /crates/turborepo-foo @vercel/turbo-oss
+  /crates/turborepo-lib @vercel/turbo-oss
+  /crates/turborepo-scm @vercel/turbo-oss
+  /crates/turbo-updater @vercel/turbo-oss
+```
+
 ## Contributing to Turbopack
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
