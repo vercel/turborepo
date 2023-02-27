@@ -798,7 +798,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
     <span class="kw">let </span><span class="kw-2">mut </span>current_module_type = <span class="prelude-val">None</span>;
     <span class="kw">for </span>rule <span class="kw">in </span>options.<span class="kw">await</span><span class="question-mark">?</span>.rules.iter() {
-        <span class="kw">if </span>rule.matches(<span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type) {
+        <span class="kw">if </span>rule.matches(source, <span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">for </span>effect <span class="kw">in </span>rule.effects() {
                 <span class="kw">match </span>effect {
                     ModuleRuleEffect::SourceTransforms(transforms) =&gt; {

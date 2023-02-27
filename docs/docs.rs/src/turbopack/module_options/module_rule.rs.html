@@ -53,11 +53,20 @@
 <span id="53">53</span>
 <span id="54">54</span>
 <span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPath;
-<span class="kw">use </span>turbopack_core::{reference_type::ReferenceType, source_transform::SourceTransformsVc};
+<span class="kw">use </span>turbopack_core::{
+    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
+};
 <span class="kw">use </span>turbopack_css::CssInputTransformsVc;
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransformsVc;
 
@@ -78,9 +87,14 @@
         <span class="self">self</span>.effects.iter()
     }
 
-    <span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>FileSystemPath, reference_type: <span class="kw-2">&amp;</span>ReferenceType) -&gt; bool {
-        <span class="self">self</span>.condition.matches(path, reference_type)
-    }
+    <span class="kw">pub async fn </span>matches(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        source: AssetVc,
+        path: <span class="kw-2">&amp;</span>FileSystemPath,
+        reference_type: <span class="kw-2">&amp;</span>ReferenceType,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="self">self</span>.condition.matches(source, path, reference_type).<span class="kw">await
+    </span>}
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
