@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::resolve::ModulePartVc;
+
 // These enums list well-known types, which we use internally. Plugins might add
 // custom types too.
 
@@ -17,6 +19,7 @@ pub enum CommonJsReferenceSubType {
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmaScriptModulesReferenceSubType {
     Custom(u8),
+    ModulePart(ModulePartVc),
     Undefined,
 }
 
