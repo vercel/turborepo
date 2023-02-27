@@ -313,6 +313,7 @@
 <span id="313">313</span>
 <span id="314">314</span>
 <span id="315">315</span>
+<span id="316">316</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Debug, Display};
 
 <span class="kw">use </span>auto_hash_map::{AutoMap, AutoSet};
@@ -329,7 +330,8 @@
 ///
 /// We don&#39;t use `StringVc` directly because we don&#39;t want the `Debug`/`Display`
 /// representations to be escaped.
-</span><span class="attr">#[turbo_tasks::value]
+</span><span class="attr">#[derive(Clone)]
+#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ValueDebugString(String);
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>ValueDebugString {

@@ -140,7 +140,45 @@
 <span id="140">140</span>
 <span id="141">141</span>
 <span id="142">142</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, mem::take};
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    fmt::Debug,
+    mem::take,
+    ops::{Deref, DerefMut},
+};
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>parking_lot::{Mutex, MutexGuard};
@@ -159,6 +197,7 @@
 
 <span class="kw">pub struct </span>StateRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     inner: MutexGuard&lt;<span class="lifetime">&#39;a</span>, StateInner&lt;T&gt;&gt;,
+    mutated: bool,
 }
 
 <span class="kw">impl</span>&lt;T: Debug&gt; Debug <span class="kw">for </span>State&lt;T&gt; {
@@ -189,7 +228,7 @@
 }
 <span class="kw">impl</span>&lt;T&gt; Eq <span class="kw">for </span>State&lt;T&gt; {}
 
-<span class="kw">impl</span>&lt;T: Serialize&gt; Serialize <span class="kw">for </span>State&lt;T&gt; {
+<span class="kw">impl</span>&lt;T&gt; Serialize <span class="kw">for </span>State&lt;T&gt; {
     <span class="kw">fn </span>serialize&lt;S: serde::Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
         <span class="comment">// For this to work at all we need to do more. Changing the the state need to
         // invalidate the serialization of the task that contains the state. So we
@@ -199,7 +238,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>, T: Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>State&lt;T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>, T&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>State&lt;T&gt; {
     <span class="kw">fn </span>deserialize&lt;D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;(_deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;State serialization is not implemented yet&quot;</span>);
     }
@@ -232,7 +271,19 @@
         <span class="kw">let </span>invalidator = get_invalidator();
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.lock();
         inner.invalidators.insert(invalidator);
-        StateRef { inner }
+        StateRef {
+            inner,
+            mutated: <span class="bool-val">false</span>,
+        }
+    }
+
+    <span class="doccomment">/// Gets the current value of the state. Untracked.
+    </span><span class="kw">pub fn </span>get_untracked(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateRef&lt;<span class="lifetime">&#39;_</span>, T&gt; {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.lock();
+        StateRef {
+            inner,
+            mutated: <span class="bool-val">false</span>,
+        }
     }
 
     <span class="doccomment">/// Sets the current state without comparing it with the old value. This
@@ -275,11 +326,28 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; std::ops::Deref <span class="kw">for </span>StateRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; Deref <span class="kw">for </span>StateRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     <span class="kw">type </span>Target = T;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.value
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; DerefMut <span class="kw">for </span>StateRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
+        <span class="self">self</span>.mutated = <span class="bool-val">true</span>;
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner.value
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; Drop <span class="kw">for </span>StateRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">if </span><span class="self">self</span>.mutated {
+            <span class="kw">for </span>invalidator <span class="kw">in </span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.inner.invalidators) {
+                invalidator.invalidate();
+            }
+        }
     }
 }
 </code></pre></div>

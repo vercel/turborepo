@@ -603,6 +603,14 @@
 <span id="603">603</span>
 <span id="604">604</span>
 <span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -613,7 +621,7 @@
     CompletionVc, Value,
 };
 <span class="kw">use </span>turbo_tasks_env::EnvMapVc;
-<span class="kw">use </span>turbo_tasks_fs::json::parse_json_rope_with_source_context;
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileSystemPathVc};
 <span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
@@ -1207,6 +1215,14 @@
             <span class="macro">unimplemented!</span>(<span class="string">&quot;Stream not supported now&quot;</span>);
         }
     }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>has_next_config(context: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+    <span class="prelude-val">Ok</span>(BoolVc::cell(!<span class="macro">matches!</span>(
+        <span class="kw-2">*</span>find_context_file(context, next_configs()).<span class="kw">await</span><span class="question-mark">?</span>,
+        FindContextFileResult::NotFound(<span class="kw">_</span>)
+    )))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

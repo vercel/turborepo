@@ -854,12 +854,12 @@
         </span>.strongly_consistent()
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    issue_reporter.report_issues(
+    <span class="kw">let </span>has_fatal = issue_reporter.report_issues(
         TransientInstance::new(issues.clone()),
         TransientValue::new(source.into()),
     );
 
-    <span class="kw">if </span>issues.has_fatal().<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">if </span><span class="kw-2">*</span>has_fatal.<span class="kw">await</span><span class="question-mark">? </span>{
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Fatal issue(s) occurred&quot;</span>))
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(())

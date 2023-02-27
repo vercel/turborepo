@@ -653,6 +653,12 @@
 <span id="653">653</span>
 <span id="654">654</span>
 <span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -666,7 +672,8 @@
 <span class="kw">use </span>crossterm::style::{StyledContent, Stylize};
 <span class="kw">use </span>owo_colors::{OwoColorize <span class="kw">as _</span>, Style};
 <span class="kw">use </span>turbo_tasks::{
-    RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, ValueToString,
+    primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
+    ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     attach::AttachedFileSystemVc,
@@ -1088,7 +1095,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         issues: TransientInstance&lt;ReadRef&lt;CapturedIssues&gt;&gt;,
         source: TransientValue&lt;RawVc&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
         <span class="kw">let </span>issues = <span class="kw-2">&amp;*</span>issues;
         <span class="kw">let </span>LogOptions {
             <span class="kw-2">ref </span>current_dir,
@@ -1120,12 +1127,17 @@
             .unwrap()
             .new_ids(source.into_value(), issue_ids);
 
+        <span class="kw">let </span><span class="kw-2">mut </span>has_fatal = <span class="bool-val">false</span>;
         <span class="kw">for </span>(plain_issue, path, context, id) <span class="kw">in </span>issues {
             <span class="kw">if </span>!new_ids.remove(<span class="kw-2">&amp;</span>id) {
                 <span class="kw">continue</span>;
             }
 
             <span class="kw">let </span>severity = plain_issue.severity;
+            <span class="kw">if </span>severity == IssueSeverity::Fatal {
+                has_fatal = <span class="bool-val">true</span>;
+            }
+
             <span class="kw">let </span>context_path = make_relative_to_cwd(context, current_dir).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>category = <span class="kw-2">&amp;</span>plain_issue.category;
             <span class="kw">let </span>title = <span class="kw-2">&amp;</span>plain_issue.title;
@@ -1261,7 +1273,7 @@
             }
         }
 
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(BoolVc::cell(has_fatal))
     }
 }
 

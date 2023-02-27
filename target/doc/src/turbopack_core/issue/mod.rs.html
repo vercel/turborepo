@@ -585,14 +585,6 @@
 <span id="585">585</span>
 <span id="586">586</span>
 <span id="587">587</span>
-<span id="588">588</span>
-<span id="589">589</span>
-<span id="590">590</span>
-<span id="591">591</span>
-<span id="592">592</span>
-<span id="593">593</span>
-<span id="594">594</span>
-<span id="595">595</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>analyze;
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">pub mod </span>package_json;
@@ -616,8 +608,7 @@
     ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
-    FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
-    FileSystemPathVc,
+    FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathVc,
 };
 <span class="kw">use </span>turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher};
 
@@ -936,21 +927,6 @@
     </span>processing_path: ItemIssueProcessingPathVc,
 }
 
-<span class="kw">impl </span>CapturedIssues {
-    <span class="kw">pub async fn </span>has_fatal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>has_fatal = <span class="bool-val">false</span>;
-
-        <span class="kw">for </span>issue <span class="kw">in </span><span class="self">self</span>.issues.iter() {
-            <span class="kw">let </span>severity = <span class="kw-2">*</span>issue.severity().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if </span>severity == IssueSeverity::Fatal {
-                has_fatal = <span class="bool-val">true</span>;
-                <span class="kw">break</span>;
-            }
-        }
-        <span class="prelude-val">Ok</span>(has_fatal)
-    }
-}
-
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CapturedIssuesVc {
     <span class="attr">#[turbo_tasks::function]
@@ -1066,24 +1042,24 @@
     <span class="kw">pub </span>sub_issues: Vec&lt;PlainIssueReadRef&gt;,
 }
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>PlainIssueVc {
+<span class="kw">impl </span>PlainIssue {
     <span class="doccomment">/// We need deduplicate issues that can come from unique paths, but
     /// represent the same underlying problem. Eg, a parse error for a file
     /// that is compiled in both client and server contexts.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>internal_hash(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
-        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">pub fn </span>internal_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.severity);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.context);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.category);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.title);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.description);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.detail);
-        hasher.write_ref(<span class="kw-2">&amp;</span>this.documentation_link);
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.severity);
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.context);
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.category);
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.title);
+        hasher.write_ref(
+            <span class="comment">// Normalize syspaths from Windows. These appear in stack traces.
+            </span><span class="kw-2">&amp;</span><span class="self">self</span>.description.replace(<span class="string">&quot;\\&quot;</span>, <span class="string">&quot;/&quot;</span>),
+        );
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.detail);
+        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.documentation_link);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">&amp;</span>this.source {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">&amp;</span><span class="self">self</span>.source {
             hasher.write_value(<span class="number">1_u8</span>);
             <span class="comment">// I&#39;m assuming we don&#39;t need to hash the contents. Not 100% correct, but
             // probably 99%.
@@ -1093,7 +1069,15 @@
             hasher.write_value(<span class="number">0_u8</span>);
         }
 
-        <span class="prelude-val">Ok</span>(U64Vc::cell(hasher.finish()))
+        hasher.finish()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>PlainIssueVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>internal_hash(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
+        <span class="prelude-val">Ok</span>(U64Vc::cell(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.internal_hash()))
     }
 }
 
@@ -1157,7 +1141,7 @@
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
 #[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>PlainAsset {
-    <span class="kw">pub </span>path: FileSystemPathReadRef,
+    <span class="kw">pub </span>path: String,
     <span class="attr">#[turbo_tasks(debug_ignore)]
     </span><span class="kw">pub </span>content: FileContentReadRef,
 }
@@ -1173,7 +1157,7 @@
         };
 
         <span class="prelude-val">Ok</span>(PlainAsset {
-            path: asset.path().<span class="kw">await</span><span class="question-mark">?</span>,
+            path: asset.path().<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
             content,
         }
         .cell())
@@ -1186,7 +1170,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         issues: TransientInstance&lt;ReadRef&lt;CapturedIssues&gt;&gt;,
         source: TransientValue&lt;RawVc&gt;,
-    );
+    ) -&gt; BoolVc;
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

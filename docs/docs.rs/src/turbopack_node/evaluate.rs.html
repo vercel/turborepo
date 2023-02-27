@@ -383,9 +383,17 @@
 <span id="383">383</span>
 <span id="384">384</span>
 <span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
@@ -611,6 +619,7 @@
                 EvaluationIssue {
                     error,
                     context_path: context_path_for_issue,
+                    cwd,
                 }
                 .cell()
                 .as_issue()
@@ -664,6 +673,7 @@
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>EvaluationIssue {
     <span class="kw">pub </span>context_path: FileSystemPathVc,
+    <span class="kw">pub </span>cwd: FileSystemPathVc,
     <span class="kw">pub </span>error: StructuredError,
 }
 
@@ -686,8 +696,14 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="kw">let </span>cwd = to_sys_path(<span class="self">self</span>.cwd.root())
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.context(<span class="string">&quot;Must have path on disk&quot;</span>)<span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(StringVc::cell(
-            <span class="self">self</span>.error.print(Default::default(), <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="self">self</span>.error
+                .print(Default::default(), <span class="kw-2">&amp;</span>cwd.to_string_lossy())
+                .<span class="kw">await</span><span class="question-mark">?</span>,
         ))
     }
 }

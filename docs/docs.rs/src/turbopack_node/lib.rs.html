@@ -342,7 +342,6 @@
 <span id="342">342</span>
 <span id="343">343</span>
 <span id="344">344</span>
-<span id="345">345</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -609,18 +608,17 @@
 }
 
 <span class="kw">impl </span>StructuredError {
-    <span class="kw">async fn </span>print(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        assets: HashMap&lt;String, SourceMapVc&gt;,
-        root: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">async fn </span>print(<span class="kw-2">&amp;</span><span class="self">self</span>, assets: HashMap&lt;String, SourceMapVc&gt;, root: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>message = String::new();
 
         <span class="macro">writeln!</span>(message, <span class="string">&quot;{}: {}&quot;</span>, <span class="self">self</span>.name, <span class="self">self</span>.message)<span class="question-mark">?</span>;
 
         <span class="kw">for </span>frame <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.stack {
             <span class="kw">if let </span><span class="prelude-val">Some</span>((line, column)) = frame.get_pos() {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = root.as_ref().and_then(|r| frame.file.strip_prefix(r)) {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = frame.file.strip_prefix(
+                    <span class="comment">// Add a trailing slash so paths don&#39;t lead with `/`.
+                    </span><span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, root, std::path::MAIN_SEPARATOR),
+                ) {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(map) = assets.get(path) {
                         <span class="kw">let </span>trace = SourceMapTraceVc::new(<span class="kw-2">*</span>map, line, column, frame.name.clone())
                             .trace()
@@ -678,7 +676,7 @@
         .flatten()
         .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-    error.print(assets, <span class="prelude-val">Some</span>(root)).<span class="kw">await
+    error.print(assets, <span class="kw-2">&amp;</span>root).<span class="kw">await
 </span>}
 
 <span class="kw">pub fn </span>register() {

@@ -159,6 +159,16 @@
 <span id="159">159</span>
 <span id="160">160</span>
 <span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, Value};
@@ -173,7 +183,7 @@
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use crate</span>::{
-    next_config::NextConfigVc,
+    next_config::{has_next_config, NextConfigVc},
     router::{route, RouterRequest, RouterResult},
 };
 
@@ -234,6 +244,16 @@
         data: Value&lt;ContentSourceData&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// The next-dev server can currently run against projects as simple as
+        // `index.js`. If this isn&#39;t a Next.js project, don&#39;t try to use the Next.js
+        // router.
+        </span><span class="kw">let </span>project_root = this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>.project_root;
+        <span class="kw">if </span>!(<span class="kw-2">*</span>has_next_config(project_root).<span class="kw">await</span><span class="question-mark">?</span>) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(this
+                .inner
+                .get(path, Value::new(ContentSourceData::default())));
+        }
 
         <span class="kw">let </span>ContentSourceData {
             method: <span class="prelude-val">Some</span>(method),
