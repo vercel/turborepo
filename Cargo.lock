@@ -263,6 +263,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b015a331cc64ebd1774ba119538573603427eaace0a1950c423ab971f903796"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "async-std"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7717,6 +7728,7 @@ name = "turbopack"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "criterion 0.3.6",
  "difference",
  "futures",
