@@ -18,9 +18,23 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
 
-```sh
-npx create-turbo@latest
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dlx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+</Tabs>
 
 You can also clone a Turborepo starter repository to get a head start on your monorepo. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turbo/tree/main/examples).
 
@@ -38,9 +52,23 @@ During this tutorial, some lines of code are omitted from the code samples. For 
 
 First, run:
 
-```sh
-npx create-turbo@latest
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dlx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+</Tabs>
 
 This installs the [`create-turbo`](https://www.npmjs.com/package/create-turbo) CLI, and runs it. You'll be asked several questions:
 
@@ -88,13 +116,35 @@ Next, open `./apps/web/package.json`. You'll notice that this package's name is 
 
 You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
 
-```json filename="apps/web/package.json"
-{
-  "dependencies": {
-    "ui": "workspace:*"
-  }
-}
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
 
 This means that our **web app depends on our local `ui` package**.
 
@@ -177,13 +227,35 @@ Here, we specify three files to be exported, inside `files`. Packages which depe
 
 For instance, `packages/ui` depends on `tsconfig`:
 
-```json filename="packages/ui/package.json"
-{
-  "devDependencies": {
-    "tsconfig": "workspace:*"
-  }
-}
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
 
 And inside its `tsconfig.json` file, it imports it using `extends`:
 
