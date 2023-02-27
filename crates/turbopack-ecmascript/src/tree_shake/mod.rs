@@ -1,7 +1,7 @@
 use anyhow::Result;
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
-use swc_core::ecma::ast::{Id, Module};
+use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -21,6 +21,7 @@ use crate::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     },
+    parse::ParseResult,
     EcmascriptModuleAssetVc,
 };
 
@@ -310,6 +311,9 @@ enum Key {
 struct SplitResult {
     #[turbo_tasks(debug_ignore, trace_ignore)]
     data: FxHashMap<Key, u32>,
+
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    modules: Vec<Module>,
 }
 
 impl PartialEq for SplitResult {
@@ -320,8 +324,28 @@ impl PartialEq for SplitResult {
 
 /// For caching
 #[turbo_tasks::function]
-async fn split(module: EcmascriptModuleAssetVc) -> SplitResultVc {
-    let parsed = module.parse().await.unwrap();
+async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
+    let path = asset.as_asset().path().await.unwrap();
+    let parsed = asset.parse().await.unwrap();
+
+    match &*parsed {
+        ParseResult::Ok { program, .. } => {
+            if let Program::Module(module) = program {
+                let (mut dep_graph, items) = Analyzer::analyze(module);
+
+                dep_graph.handle_weak(true);
+
+                let (data, modules) = dep_graph.split_module(&path.path.clone().into(), &items);
+
+                SplitResult { data, modules }.cell()
+            } else {
+                todo!("handle non-module")
+            }
+        }
+        _ => {
+            todo!("handle parse error")
+        }
+    }
 }
 
 impl EcmascriptModulePartAssetVc {

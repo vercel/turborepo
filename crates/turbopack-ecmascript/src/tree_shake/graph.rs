@@ -20,7 +20,10 @@ use swc_core::{
     },
 };
 
-use super::util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested};
+use super::{
+    util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},
+    Key,
+};
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -100,6 +103,8 @@ pub(super) struct ItemData {
     pub side_effects: bool,
 
     pub content: ModuleItem,
+
+    pub export: Option<Id>,
 }
 
 impl Default for ItemData {
@@ -114,6 +119,7 @@ impl Default for ItemData {
             side_effects: Default::default(),
             content: ModuleItem::dummy(),
             pure: Default::default(),
+            export: Default::default(),
         }
     }
 }
@@ -203,8 +209,9 @@ impl DepGraph {
         &self,
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
-    ) -> Vec<Module> {
+    ) -> (FxHashMap<Key, u32>, Vec<Module>) {
         let groups = self.finalize(data);
+        let mut exports = FxHashMap::default();
 
         let mut modules = vec![];
 
@@ -231,6 +238,14 @@ impl DepGraph {
             for item in group {
                 if let ItemIdKind::Export(id) = &item.kind {
                     required_vars.insert(id);
+                }
+
+                if let Some(export) = &data[item].export {
+                    exports.insert(Key::Export(export.0.to_string()), ix as u32);
+                }
+
+                if item.kind == ItemIdKind::ModuleEvaluation {
+                    exports.insert(Key::ModuleEvaluation, ix as u32);
                 }
             }
 
@@ -319,7 +334,7 @@ impl DepGraph {
             modules.push(chunk);
         }
 
-        modules
+        (exports, modules)
     }
 
     pub(super) fn finalize(
@@ -728,13 +743,13 @@ impl DepGraph {
             };
             ids.push(id.clone());
             items.insert(
-                id,
+                id.clone(),
                 ItemData {
                     content: ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(NamedExport {
                         span: DUMMY_SP,
                         specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
                             span: DUMMY_SP,
-                            orig: ModuleExportName::Ident(export.into()),
+                            orig: ModuleExportName::Ident(export.clone().into()),
                             // TODO
                             exported: None,
                             is_type_only: false,
@@ -743,6 +758,7 @@ impl DepGraph {
                         type_only: false,
                         asserts: None,
                     })),
+                    export: Some(export.clone()),
                     ..Default::default()
                 },
             );
