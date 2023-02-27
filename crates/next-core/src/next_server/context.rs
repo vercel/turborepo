@@ -3,11 +3,15 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
-    module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
+    module_options::{
+        ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions,
+        WebpackLoadersOptions,
+    },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
 use turbopack_core::{
-    compile_time_info::{CompileTimeInfo, CompileTimeInfoVc},
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     environment::{
         EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc,
         ServerAddrVc,
@@ -20,7 +24,8 @@ use super::{
     resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
 };
 use crate::{
-    next_build::get_postcss_package_mapping,
+    babel::maybe_add_babel_loader,
+    next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
     util::foreign_code_context_condition,
@@ -33,6 +38,7 @@ pub enum ServerContextType {
     PagesData { pages_dir: FileSystemPathVc },
     AppSSR { app_dir: FileSystemPathVc },
     AppRSC { app_dir: FileSystemPathVc },
+    AppRoute { app_dir: FileSystemPathVc },
     Middleware,
 }
 
@@ -112,6 +118,24 @@ pub async fn get_server_resolve_options_context(
                 ..resolve_options_context
             }
         }
+        ServerContextType::AppRoute { .. } => {
+            let resolve_options_context = ResolveOptionsContext {
+                enable_node_modules: true,
+                module: true,
+                custom_conditions: vec!["development".to_string()],
+                import_map: Some(next_server_import_map),
+                ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: true,
+                enable_react: true,
+                rules: vec![(
+                    foreign_code_context_condition,
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
+            }
+        }
         ServerContextType::Middleware => {
             let resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: true,
@@ -134,6 +158,15 @@ pub async fn get_server_resolve_options_context(
     .cell())
 }
 
+pub fn next_server_defines() -> CompileTimeDefinesVc {
+    compile_time_defines!(
+        process.turbopack = true,
+        process.env.NODE_ENV = "development",
+        process.env.__NEXT_CLIENT_ROUTER_FILTER_ENABLED = false
+    )
+    .cell()
+}
+
 #[turbo_tasks::function]
 pub fn get_server_compile_time_info(
     ty: Value<ServerContextType>,
@@ -153,9 +186,11 @@ pub fn get_server_compile_time_info(
                 ServerContextType::AppRSC { .. } => {
                     Value::new(EnvironmentIntention::ServerRendering)
                 }
+                ServerContextType::AppRoute { .. } => Value::new(EnvironmentIntention::Api),
                 ServerContextType::Middleware => Value::new(EnvironmentIntention::Middleware),
             },
         ),
+        defines: next_server_defines(),
     }
     .cell()
 }
@@ -173,7 +208,22 @@ pub async fn get_server_module_options_context(
         postcss_package: Some(get_postcss_package_mapping(project_path)),
         ..Default::default()
     });
-    let enable_webpack_loaders = next_config.webpack_loaders_options().await?.clone_if();
+
+    let enable_webpack_loaders = {
+        let options = &*next_config.webpack_loaders_options().await?;
+        let loaders_options = WebpackLoadersOptions {
+            extension_to_loaders: options.clone(),
+            loader_runner_package: Some(get_external_next_compiled_package_mapping(
+                StringVc::cell("loader-runner".to_owned()),
+            )),
+            placeholder_for_future_extensions: (),
+        }
+        .cell();
+
+        maybe_add_babel_loader(project_path, loaders_options)
+            .await?
+            .clone_if()
+    };
 
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
@@ -224,6 +274,23 @@ pub async fn get_server_module_options_context(
             };
             ModuleOptionsContext {
                 enable_jsx: true,
+                enable_postcss_transform,
+                enable_webpack_loaders,
+                enable_typescript_transform: true,
+                rules: vec![(
+                    foreign_code_context_condition,
+                    module_options_context.clone().cell(),
+                )],
+                custom_rules,
+                ..module_options_context
+            }
+        }
+        ServerContextType::AppRoute { .. } => {
+            let module_options_context = ModuleOptionsContext {
+                execution_context: Some(execution_context),
+                ..Default::default()
+            };
+            ModuleOptionsContext {
                 enable_postcss_transform,
                 enable_webpack_loaders,
                 enable_typescript_transform: true,

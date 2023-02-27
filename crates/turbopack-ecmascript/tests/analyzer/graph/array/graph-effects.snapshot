@@ -1,8 +1,8 @@
 [
     Member {
-        obj: Array(
-            3,
-            [
+        obj: Array {
+            total_nodes: 3,
+            items: [
                 Constant(
                     Num(
                         ConstantNumber(
@@ -11,12 +11,15 @@
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('foo' type=inline),
+                    Str(
+                        Word(
+                            Atom('foo' type=inline),
+                        ),
                     ),
                 ),
             ],
-        ),
+            mutable: true,
+        },
         prop: Member(
             3,
             FreeVar(
@@ -25,8 +28,10 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('index' type=inline),
+                Str(
+                    Word(
+                        Atom('index' type=inline),
+                    ),
                 ),
             ),
         ),
@@ -74,8 +79,10 @@
             ),
         ),
         prop: Constant(
-            StrWord(
-                Atom('index' type=inline),
+            Str(
+                Word(
+                    Atom('index' type=inline),
+                ),
             ),
         ),
         ast_path: [
@@ -142,8 +149,10 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('index' type=inline),
+                Str(
+                    Word(
+                        Atom('index' type=inline),
+                    ),
                 ),
             ),
         ),
@@ -191,8 +200,10 @@
             ),
         ),
         prop: Constant(
-            StrWord(
-                Atom('index' type=inline),
+            Str(
+                Word(
+                    Atom('index' type=inline),
+                ),
             ),
         ),
         ast_path: [

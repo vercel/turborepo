@@ -6,6 +6,10 @@ on:
   schedule:
     - cron: "0 8 * * *"
   workflow_dispatch:
+    inputs:
+      force_post_to_slack:
+        description: Post test results to Slack
+        type: boolean
 
 jobs:
   # Trigger actual next.js integration tests.
@@ -15,4 +19,38 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
-      force_post_to_slack: true
+      diff_base: "none"
+      force_post_to_slack: ${{ inputs.force_post_to_slack || false }}
+
+  # Upload test results to branch.
+  upload_test_results:
+    name: Upload test results
+    needs: [next_js_integration]
+    uses: ./.github/workflows/upload-nextjs-integration-test-results.yml
+    with:
+      is_main_branch: true
+
+  post_to_slack:
+    needs: [next_js_integration]
+    name: Post results to Slack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download summary.md artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: test-results
+      - name: Check if summary file was generated
+        id: summary_check
+        run: |
+          if stat slack-payload.json; then
+            echo "should_continue=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_continue=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Send test data to Slack workflow
+        if: steps.summary_check.outputs.should_continue == 'true'
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload-file-path: "./slack-payload.json"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}

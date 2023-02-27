@@ -17,6 +17,10 @@
 /version.txt @vercel/turbo-oss
 .github/turborepo-release.yml @vercel/turbo-oss
 
+# Nobody owns these files, so nobody should get tagged on changes
+Cargo.lock
+pnpm-lock.yaml
+
 # Turbopack-specific things
 /.config/nextest.toml
 /docs/pages/pack @vercel/web-tooling

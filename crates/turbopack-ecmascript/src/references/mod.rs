@@ -10,6 +10,7 @@ pub mod unreachable;
 pub mod util;
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap},
     future::Future,
     mem::take,
@@ -93,7 +94,7 @@ use crate::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
         imports::Reexport,
-        ConstantValue, ModuleValue,
+        ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
@@ -1011,13 +1012,13 @@ pub(crate) async fn analyze_ecmascript_module(
                     JsValue::WellKnownFunction(WellKnownFunctionKind::NodeProtobufLoad) => {
                         let args = linked_args(args).await?;
                         if args.len() == 2 {
-                            if let Some(JsValue::Object(_, parts)) = args.get(1) {
+                            if let Some(JsValue::Object { parts, .. }) = args.get(1) {
                                 for dir in parts
                                     .iter()
                                     .filter_map(|object_part| {
                                         if let ObjectPart::KeyValue(
                                             JsValue::Constant(key),
-                                            JsValue::Array(_, dirs),
+                                            JsValue::Array { items: dirs, .. },
                                         ) = object_part
                                         {
                                             if key.as_str() == Some("includeDirs") {
@@ -1279,13 +1280,21 @@ pub(crate) async fn analyze_ecmascript_module(
                                 let mut obj = link_value(obj).await?;
                                 let prop = link_value(prop).await?;
 
-                                if let JsValue::Array(_, ref mut values) = obj {
+                                if let JsValue::Array {
+                                    items: ref mut values,
+                                    mutable,
+                                    ..
+                                } = obj
+                                {
                                     if matches!(prop.as_str(), Some("map" | "forEach" | "filter")) {
                                         if let [EffectArg::Closure(value, block)] = &mut args[..] {
                                             *value = link_value(take(value)).await?;
                                             if let JsValue::Function(_, func_ident, _) = value {
-                                                let closure_arg =
+                                                let mut closure_arg =
                                                     JsValue::alternatives(take(values));
+                                                if mutable {
+                                                    closure_arg.add_unknown_mutations();
+                                                }
                                                 fun_args_values
                                                     .get_mut()
                                                     .insert(*func_ident, vec![closure_arg]);
@@ -1407,7 +1416,7 @@ fn analyze_amd_define(
     args: Vec<JsValue>,
 ) {
     match &args[..] {
-        [JsValue::Constant(id), JsValue::Array(_, deps), _] if id.as_str().is_some() => {
+        [JsValue::Constant(id), JsValue::Array { items: deps, .. }, _] if id.as_str().is_some() => {
             analyze_amd_define_with_deps(
                 analysis,
                 origin,
@@ -1418,7 +1427,7 @@ fn analyze_amd_define(
                 deps,
             );
         }
-        [JsValue::Array(_, deps), _] => {
+        [JsValue::Array { items: deps, .. }, _] => {
             analyze_amd_define_with_deps(analysis, origin, handler, span, ast_path, None, deps);
         }
         [JsValue::Constant(id), JsValue::Function(..)] if id.as_str().is_some() => {
@@ -1457,7 +1466,7 @@ fn analyze_amd_define(
                 AmdDefineFactoryType::Function,
             ));
         }
-        [JsValue::Object(..)] => {
+        [JsValue::Object { .. }] => {
             analysis.add_code_gen(AmdDefineWithDependenciesCodeGenVc::new(
                 vec![],
                 origin,
@@ -1587,6 +1596,20 @@ async fn value_visitor_inner(
     v: JsValue,
     compile_time_info: CompileTimeInfoVc,
 ) -> Result<(JsValue, bool)> {
+    if let Some(def_name_len) = v.get_defineable_name_len() {
+        let compile_time_info = compile_time_info.await?;
+        let defines = compile_time_info.defines.await?;
+        for (name, value) in defines.iter() {
+            if name.len() != def_name_len {
+                continue;
+            }
+            if v.iter_defineable_name_rev()
+                .eq(name.iter().map(Cow::Borrowed).rev())
+            {
+                return Ok((value.into(), true));
+            }
+        }
+    }
     let value = match v {
         JsValue::Call(
             _,
@@ -1642,7 +1665,7 @@ async fn value_visitor_inner(
             FreeVarKind::Import => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
             FreeVarKind::NodeProcess => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
             FreeVarKind::Object => JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
-            _ => JsValue::Unknown(Some(Arc::new(v)), "unknown global"),
+            _ => return Ok((v, false)),
         },
         JsValue::Module(ModuleValue {
             module: ref name, ..
@@ -1689,11 +1712,6 @@ async fn value_visitor_inner(
             Some(Arc::new(v)),
             "cross function analyzing is not yet supported",
         ),
-        JsValue::Member(
-            _,
-            box JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-            box JsValue::Constant(value),
-        ) if value.as_str() == Some("turbopack") => JsValue::Constant(ConstantValue::True),
         _ => {
             let (mut v, mut modified) = replace_well_known(v, compile_time_info).await?;
             modified = replace_builtin(&mut v) || modified;

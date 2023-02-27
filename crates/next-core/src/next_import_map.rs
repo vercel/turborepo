@@ -1,14 +1,20 @@
 use std::collections::{BTreeMap, HashMap};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-use turbopack_core::resolve::{
-    options::{
-        ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
-        ResolvedMapVc,
+use turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
+use turbopack_core::{
+    asset::Asset,
+    resolve::{
+        options::{
+            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc,
+            ResolveOptionsVc, ResolvedMap, ResolvedMapVc,
+        },
+        parse::RequestVc,
+        pattern::Pattern,
+        resolve, AliasPattern, ExportsValue, ResolveAliasMapVc,
     },
-    AliasPattern, ExportsValue, ResolveAliasMapVc,
 };
 
 use crate::{
@@ -173,6 +179,12 @@ pub async fn get_next_server_import_map(
     )
     .await?;
 
+    import_map.insert_exact_alias(
+        "@opentelemetry/api",
+        // TODO(WEB-625) this actually need to prefer the local version of @opentelemetry/api
+        ImportMapping::External(Some("next/dist/compiled/@opentelemetry/api".to_string())).into(),
+    );
+
     let ty = ty.into_value();
 
     insert_next_server_special_aliases(&mut import_map, ty).await?;
@@ -188,7 +200,9 @@ pub async fn get_next_server_import_map(
             import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
         }
-        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } => {
+        ServerContextType::AppSSR { .. }
+        | ServerContextType::AppRSC { .. }
+        | ServerContextType::AppRoute { .. } => {
             for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
                 import_map.insert_wildcard_alias(
@@ -196,6 +210,11 @@ pub async fn get_next_server_import_map(
                     ImportMapping::External(None).into(),
                 );
             }
+            // The sandbox can't be bundled and needs to be external
+            import_map.insert_exact_alias(
+                "next/dist/server/web/sandbox",
+                ImportMapping::External(None).into(),
+            );
         }
         ServerContextType::Middleware => {}
     }
@@ -309,7 +328,9 @@ pub async fn insert_next_server_special_aliases(
             );
         }
         ServerContextType::PagesData { .. } => {}
-        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } => {
+        ServerContextType::AppSSR { app_dir }
+        | ServerContextType::AppRSC { app_dir }
+        | ServerContextType::AppRoute { app_dir } => {
             import_map.insert_exact_alias(
                 "react",
                 request_to_import_mapping(app_dir, "next/dist/compiled/react"),
@@ -371,7 +392,58 @@ pub async fn insert_next_shared_aliases(
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
+    import_map.insert_wildcard_alias(
+        "@swc/helpers/",
+        ImportMapping::PrimaryAlternative(
+            "./*".to_string(),
+            Some(get_swc_helpers_package(project_path)),
+        )
+        .cell(),
+    );
+
     Ok(())
+}
+
+#[turbo_tasks::function]
+fn package_lookup_resolve_options(project_root: FileSystemPathVc) -> ResolveOptionsVc {
+    resolve_options(
+        project_root,
+        ResolveOptionsContext {
+            enable_node_modules: true,
+            enable_node_native_modules: true,
+            custom_conditions: vec!["development".to_string()],
+            ..Default::default()
+        }
+        .cell(),
+    )
+}
+
+#[turbo_tasks::function]
+pub async fn get_next_package(project_root: FileSystemPathVc) -> Result<FileSystemPathVc> {
+    let result = resolve(
+        project_root,
+        RequestVc::parse(Value::new(Pattern::Constant(
+            "next/package.json".to_string(),
+        ))),
+        package_lookup_resolve_options(project_root),
+    );
+    let assets = result.primary_assets().await?;
+    let asset = assets.first().context("Next.js package not found")?;
+    Ok(asset.path().parent())
+}
+
+#[turbo_tasks::function]
+pub async fn get_swc_helpers_package(project_root: FileSystemPathVc) -> Result<FileSystemPathVc> {
+    let result = resolve(
+        get_next_package(project_root),
+        RequestVc::parse(Value::new(Pattern::Constant(
+            "@swc/helpers/package.json".to_string(),
+        ))),
+        package_lookup_resolve_options(project_root),
+    );
+    let assets = result.primary_assets().await?;
+    let asset = assets.first().context("Next.js package not found")?;
+    Ok(asset.path().parent())
 }
 
 pub async fn insert_alias_option<const N: usize>(

@@ -2,18 +2,31 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
 
-Check my-app#build output
-  $ ${TURBO} run build --dry | grep "Packages in Scope" -A 4
+# Run the build task with --dry flag and cut up the logs into separate files by empty lines
+# https://stackoverflow.com/a/33297878/986415
+  $ ${TURBO} run build --dry |  awk -v RS= '{print > ("tmp-" NR ".txt")}'
+
+# The first part of the file is Packages in Scope
+  $ cat tmp-1.txt
   Packages in Scope
   Name   Path          
   my-app apps/my-app   
   util   packages/util 
-  
-  $ ${TURBO} run build --dry | grep "my-app#build" -A 12
+
+# Part 2 of the logs are Global Hash INputs
+  $ cat tmp-2.txt
+  Global Hash Inputs
+    Global Files               = 1
+    External Dependencies Hash = ccab0b28617f1f56
+    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
+    Root pipeline              = {"build":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"my-app#build":{"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
+
+# Part 3 are Tasks to Run, and we have to validate each task separately
+  $ cat tmp-3.txt | grep "my-app#build" -A 12
   my-app#build
     Task                   = build                                                                                                                           
     Package                = my-app                                                                                                                          
-    Hash                   = 7438505b97329a3d                                                                                                                
+    Hash                   = 8888a278aaecb070                                                                                                                
     Cached (Local)         = false                                                                                                                           
     Cached (Remote)        = false                                                                                                                           
     Directory              = apps/my-app                                                                                                                     
@@ -23,11 +36,12 @@ Check my-app#build output
     Dependencies           =                                                                                                                                 
     Dependendents          =                                                                                                                                 
     ResolvedTaskDefinition = {"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-  $ ${TURBO} run build --dry | grep "util#build" -A 12
+
+  $ cat tmp-3.txt | grep "util#build" -A 12
   util#build
     Task                   = build                                                                                                  
     Package                = util                                                                                                   
-    Hash                   = 6dec18f9f767112f                                                                                       
+    Hash                   = d09a52ea72495c87                                                                                       
     Cached (Local)         = false                                                                                                  
     Cached (Remote)        = false                                                                                                  
     Directory              = packages/util                                                                                          
@@ -38,13 +52,48 @@ Check my-app#build output
     Dependendents          =                                                                                                        
     ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
+# Save JSON to tmp file so we don't need to keep re-running the build
+  $ ${TURBO} run build --dry=json > tmpjson.log
+
+  $ cat tmpjson.log | jq .globalHashSummary
+  {
+    "globalFileHashMap": {
+      "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
+    },
+    "rootExternalDepsHash": "ccab0b28617f1f56",
+    "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+    "pipeline": {
+      "build": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
+      "my-app#build": {
+        "outputs": [
+          "apple.json",
+          "banana.txt"
+        ],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      }
+    }
+  }
+
 # Validate output of my-app#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
+  $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "7438505b97329a3d",
+    "hash": "8888a278aaecb070",
     "cacheState": {
       "local": false,
       "remote": false
@@ -74,12 +123,12 @@ Check my-app#build output
   }
 
 # Validate output of util#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
+  $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
   {
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "6dec18f9f767112f",
+    "hash": "d09a52ea72495c87",
     "cacheState": {
       "local": false,
       "remote": false
