@@ -446,7 +446,6 @@
 <span id="446">446</span>
 <span id="447">447</span>
 <span id="448">448</span>
-<span id="449">449</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -460,8 +459,7 @@
     ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
 };
 
-<span class="kw">use super</span>::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
-<span class="kw">use </span><span class="kw">crate</span>::chunk::EcmascriptChunkEvaluate;
+<span class="kw">use super</span>::{evaluate::EcmascriptChunkEvaluate, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptChunkOptimizer(ChunkingContextVc);
