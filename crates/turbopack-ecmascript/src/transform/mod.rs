@@ -15,6 +15,7 @@ use swc_core::{
         preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
+            proposal::decorators,
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
@@ -80,6 +81,9 @@ pub enum EcmascriptInputTransform {
     StyledComponents,
     StyledJsx,
     TypeScript,
+    // Apply ecma decorators transform. This is not part of Typescript transform, even though
+    // decorators can be ts-specific (legacy decorartors) since there's ecma decorators for js.
+    Decorators,
 }
 
 #[turbo_tasks::value(transparent, serialization = "auto_for_input")]
@@ -202,6 +206,40 @@ impl EcmascriptInputTransform {
                     FileName::Anon,
                 ));
             }
+            EcmascriptInputTransform::Decorators => {
+                // TODO: Currently this only supports legacy decorators from tsconfig / jsconfig
+                // options.
+                if let Some(tsconfig) = tsconfig {
+                    // Selectively picks up tsconfig.json values to construct
+                    // swc transform's stripconfig. It doesn't account .swcrc config currently.
+                    for (value, _) in tsconfig {
+                        let value = &*value.await?;
+                        if let FileJsonContent::Content(value) = value {
+                            let legacy_decorators = value["compilerOptions"]
+                                ["experimentalDecorators"]
+                                .as_bool()
+                                .unwrap_or(false);
+
+                            if legacy_decorators {
+                                // TODO: `fn decorators` does not support visitMut yet
+                                let p =
+                                    std::mem::replace(program, Program::Module(Module::dummy()));
+                                *program = p.fold_with(&mut chain!(
+                                    decorators(decorators::Config {
+                                        legacy: true,
+                                        emit_metadata: true,
+                                        use_define_for_class_fields: value["compilerOptions"]
+                                            ["useDefineForClassFields"]
+                                            .as_bool()
+                                            .unwrap_or(false),
+                                    }),
+                                    inject_helpers(unresolved_mark),
+                                ));
+                            }
+                        }
+                    }
+                };
+            }
             EcmascriptInputTransform::TypeScript => {
                 use swc_core::ecma::transforms::typescript::{strip_with_config, Config};
 
@@ -210,8 +248,6 @@ impl EcmascriptInputTransform {
                         ..Default::default()
                     };
 
-                    // Selectively picks up tsconfig.json values to construct
-                    // swc transform's stripconfig. It doesn't account .swcrc config currently.
                     for (value, _) in tsconfig {
                         let value = &*value.await?;
                         if let FileJsonContent::Content(value) = value {
