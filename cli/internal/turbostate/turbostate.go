@@ -93,8 +93,6 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-// var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
-
 // GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
 func (a ParsedArgsFromRust) GetColor() bool {
 	return a.Color

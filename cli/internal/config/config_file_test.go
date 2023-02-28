@@ -9,6 +9,8 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+var _ CLIConfigProvider = (*turbostate.ParsedArgsFromRust)(nil)
+
 func TestReadRepoConfigWhenMissing(t *testing.T) {
 	testDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("config.json")
 	args := turbostate.ParsedArgsFromRust{
