@@ -305,12 +305,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspa
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
-
-		count := 0
-		for range task.ExpandedInputs {
-			count = count + 1
-		}
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", count))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
