@@ -70,7 +70,6 @@ export function transformer({
   });
 
   // find and migrate any workspace configs
-  // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
     const { config, turboConfigPath } = workspaceConfig;
