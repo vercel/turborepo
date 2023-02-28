@@ -176,17 +176,17 @@ func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase,
 	}
 
 	// Primacy: Arg > Env
-	val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
-	if ok {
-		number, err := strconv.ParseUint(val, 10, 64)
-		if err == nil {
-			h.clientOpts.Timeout = number
-		}
-	}
-
 	timeout, err := cliConfig.GetRemoteCacheTimeout()
 	if err == nil {
 		h.clientOpts.Timeout = timeout
+	} else {
+		val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
+		if ok {
+			number, err := strconv.ParseUint(val, 10, 64)
+			if err == nil {
+				h.clientOpts.Timeout = number
+			}
+		}
 	}
 
 	apiClient := client.NewClient(
