@@ -20,10 +20,12 @@ use swc_core::{
     },
 };
 use turbo_tasks::{primitives::U64Vc, Value, ValueToString};
-use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
+use turbo_tasks_fs::{FileContent, FileJsonContentVc, FileSystemPath, FileSystemPathVc};
 use turbo_tasks_hash::{DeterministicHasher, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
+    resolve::{find_context_file, node::node_cjs_resolve_options, FindContextFileResult},
+    source_asset::SourceAssetVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -32,6 +34,7 @@ use super::EcmascriptModuleAssetType;
 use crate::{
     analyzer::graph::EvalContext,
     transform::{EcmascriptInputTransformsVc, TransformContext},
+    typescript::resolve::{read_tsconfigs, tsconfig},
     utils::WrapFuture,
     EcmascriptInputTransform,
 };
@@ -135,6 +138,23 @@ pub async fn parse(
     let fs_path = &*source.path().await?;
     let file_path_hash = *hash_file_path(source.path()).await? as u128;
     let ty = ty.into_value();
+    let tsconfig = if let EcmascriptModuleAssetType::Ecmascript = &ty {
+        None
+    } else {
+        let tsconfig = find_context_file(source.path(), tsconfig());
+        match *tsconfig.await? {
+            FindContextFileResult::Found(path, _) => Some(
+                read_tsconfigs(
+                    path.read(),
+                    SourceAssetVc::new(path).into(),
+                    node_cjs_resolve_options(path.root()),
+                )
+                .await?,
+            ),
+            FindContextFileResult::NotFound(_) => None,
+        }
+    };
+
     Ok(match &*content.await? {
         AssetContent::File(file) => match &*file.await? {
             FileContent::NotFound => ParseResult::NotFound.cell(),
@@ -148,6 +168,7 @@ pub async fn parse(
                         source,
                         ty,
                         transforms,
+                        tsconfig,
                     )
                     .await
                     {
@@ -175,6 +196,7 @@ async fn parse_content(
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
     transforms: &[EcmascriptInputTransform],
+    tsconfig: Option<Vec<(FileJsonContentVc, AssetVc)>>,
 ) -> Result<ParseResultVc> {
     let source_map: Arc<SourceMap> = Default::default();
     let handler = Handler::with_emitter(
@@ -281,6 +303,7 @@ async fn parse_content(
                 file_path_str: &fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
+                tsconfig: &tsconfig,
             };
             for transform in transforms.iter() {
                 transform.apply(&mut parsed_program, &context).await?;
