@@ -345,10 +345,15 @@ async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
 
                 dep_graph.handle_weak(true);
 
-                let (data, modules) =
+                let (data, deps, modules) =
                     dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-                SplitResult { data, modules }.cell()
+                SplitResult {
+                    data,
+                    deps,
+                    modules,
+                }
+                .cell()
             } else {
                 todo!("handle non-module")
             }

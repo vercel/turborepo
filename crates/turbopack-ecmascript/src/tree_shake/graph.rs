@@ -209,9 +209,10 @@ impl DepGraph {
         &self,
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
-    ) -> (FxHashMap<Key, u32>, Vec<Module>) {
+    ) -> (FxHashMap<Key, u32>, FxHashMap<u32, Vec<u32>>, Vec<Module>) {
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
+        let mut chunk_deps = FxHashMap::<_, Vec<_>>::default();
 
         let mut modules = vec![];
 
@@ -256,6 +257,7 @@ impl DepGraph {
                 let mut specifiers = vec![];
 
                 let deps = groups.graph_ix.get_index(dep as usize).unwrap();
+
                 for dep in deps {
                     let data = data.get(dep).unwrap();
 
@@ -270,6 +272,8 @@ impl DepGraph {
                         }
                     }
                 }
+
+                chunk_deps.entry(ix as u32).or_default().push(dep);
 
                 chunk
                     .body
@@ -334,7 +338,7 @@ impl DepGraph {
             modules.push(chunk);
         }
 
-        (exports, modules)
+        (exports, chunk_deps, modules)
     }
 
     pub(super) fn finalize(
