@@ -733,6 +733,7 @@
 <span id="733">733</span>
 <span id="734">734</span>
 <span id="735">735</span>
+<span id="736">736</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -937,6 +938,7 @@
         output_path,
         base_path: app_dir,
         bootstrap_file: next_js_file(<span class="string">&quot;entry/app/route-bootstrap.ts&quot;</span>),
+        entry_name: <span class="string">&quot;edge&quot;</span>.to_string(),
     }
     .cell()
     .into()

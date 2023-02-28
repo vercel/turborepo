@@ -702,6 +702,7 @@
 <span id="702">702</span>
 <span id="703">703</span>
 <span id="704">704</span>
+<span id="705">705</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
@@ -859,6 +860,7 @@
         output_path,
         base_path: project_path,
         bootstrap_file: next_js_file(<span class="string">&quot;entry/edge-bootstrap.ts&quot;</span>),
+        entry_name: <span class="string">&quot;edge&quot;</span>.to_string(),
     }
     .cell()
     .into();

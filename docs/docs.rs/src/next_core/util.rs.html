@@ -247,6 +247,51 @@
 <span id="247">247</span>
 <span id="248">248</span>
 <span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>swc_core::ecma::ast::Program;
@@ -338,6 +383,17 @@
 #[derive(Default)]
 </span><span class="kw">pub struct </span>NextSourceConfig {
     <span class="kw">pub </span>runtime: NextRuntime,
+
+    <span class="doccomment">/// Middleware router matchers
+    </span><span class="kw">pub </span>matcher: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>NextSourceConfigVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
+        NextSourceConfig::default().cell()
+    }
 }
 
 <span class="doccomment">/// An issue that occurred while resolving the React Refresh runtime module.
@@ -428,7 +484,7 @@
             }
         }
     }
-    <span class="prelude-val">Ok</span>(NextSourceConfig::default().cell())
+    <span class="prelude-val">Ok</span>(NextSourceConfigVc::default())
 }
 
 <span class="kw">fn </span>parse_config_from_js_value(module_asset: AssetVc, value: <span class="kw-2">&amp;</span>JsValue) -&gt; NextSourceConfig {
@@ -477,6 +533,40 @@
                                     value,
                                 );
                             }
+                        }
+                        <span class="kw">if </span>key == <span class="string">&quot;matcher&quot; </span>{
+                            <span class="kw">let </span><span class="kw-2">mut </span>matchers = <span class="macro">vec!</span>[];
+                            <span class="kw">match </span>value {
+                                JsValue::Constant(matcher) =&gt; {
+                                    <span class="kw">if let </span><span class="prelude-val">Some</span>(matcher) = matcher.as_str() {
+                                        matchers.push(matcher.to_string());
+                                    } <span class="kw">else </span>{
+                                        invalid_config(
+                                            <span class="string">&quot;The matcher property must be a string or array of \
+                                             strings&quot;</span>,
+                                            value,
+                                        );
+                                    }
+                                }
+                                JsValue::Array { items, .. } =&gt; {
+                                    <span class="kw">for </span>item <span class="kw">in </span>items {
+                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(matcher) = item.as_str() {
+                                            matchers.push(matcher.to_string());
+                                        } <span class="kw">else </span>{
+                                            invalid_config(
+                                                <span class="string">&quot;The matcher property must be a string or array \
+                                                 of strings&quot;</span>,
+                                                value,
+                                            );
+                                        }
+                                    }
+                                }
+                                <span class="kw">_ </span>=&gt; invalid_config(
+                                    <span class="string">&quot;The matcher property must be a string or array of strings&quot;</span>,
+                                    value,
+                                ),
+                            }
+                            config.matcher = <span class="prelude-val">Some</span>(matchers);
                         }
                     } <span class="kw">else </span>{
                         invalid_config(

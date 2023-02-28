@@ -109,6 +109,13 @@
 <span id="109">109</span>
 <span id="110">110</span>
 <span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -140,6 +147,7 @@
     <span class="kw">pub </span>output_path: FileSystemPathVc,
     <span class="kw">pub </span>base_path: FileSystemPathVc,
     <span class="kw">pub </span>bootstrap_file: FileContentVc,
+    <span class="kw">pub </span>entry_name: String,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -192,8 +200,14 @@
         } <span class="kw">else </span>{
             path
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>new_content =
-            RopeBuilder::from(<span class="macro">format!</span>(<span class="string">&quot;const PAGE = {};\n&quot;</span>, stringify_js(path)).into_bytes());
+        <span class="kw">let </span><span class="kw-2">mut </span>new_content = RopeBuilder::from(
+            <span class="macro">format!</span>(
+                <span class="string">&quot;const NAME={};\nconst PAGE = {};\n&quot;</span>,
+                stringify_js(<span class="kw-2">&amp;</span><span class="self">self</span>.entry_name),
+                stringify_js(path)
+            )
+            .into_bytes(),
+        );
         new_content.concat(base.content());
         <span class="kw">let </span>file = File::from(new_content.build());
         <span class="kw">let </span>virtual_asset = VirtualAssetVc::new(
