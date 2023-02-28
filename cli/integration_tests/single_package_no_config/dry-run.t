@@ -24,6 +24,7 @@ Check
     Dependendents           =                                                                                                         
     Inputs Files Considered = 3                                                                                                       
     ResolvedTaskDefinition  = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework               = <NO FRAMEWORK DETECTED>                                                                                 
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -54,7 +55,8 @@ Check
           ".gitignore": "38548b0538f2fc563d6bacf70dd42798c6fd9a35",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
           "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
-        }
+        },
+        "framework": "\u003cNO FRAMEWORK DETECTED\u003e"
       }
     ]
   }
