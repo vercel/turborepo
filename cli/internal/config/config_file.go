@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -11,56 +10,16 @@ import (
 )
 
 // CLIConfigProvider is an interface for providing configuration values from the CLI
-// It can be implemented by either a pflag.FlagSet struct or a turbostate.Args struct.
+// It is implemented by a turbostate.Args struct.
 type CLIConfigProvider interface {
 	GetColor() bool
 	GetNoColor() bool
 	GetLogin() (string, error)
 	GetAPI() (string, error)
+	GetRemoteCacheTimeout() (uint64, error)
 	GetTeam() (string, error)
 	GetToken() (string, error)
 	GetCwd() (string, error)
-}
-
-// FlagSet is a wrapper so that the CLIConfigProvider interface can be implemented
-// on pflag.FlagSet.
-type FlagSet struct {
-	*pflag.FlagSet
-}
-
-// GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetColor() bool {
-	return p.Changed("color")
-}
-
-// GetNoColor returns the value of the `no-color` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetNoColor() bool {
-	return p.Changed("no-color")
-}
-
-// GetLogin returns the value of the `login` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetLogin() (string, error) {
-	return p.GetString("login")
-}
-
-// GetAPI returns the value of the `api` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetAPI() (string, error) {
-	return p.GetString("api")
-}
-
-// GetTeam returns the value of the `team` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetTeam() (string, error) {
-	return p.GetString("team")
-}
-
-// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetToken() (string, error) {
-	return p.GetString("token")
-}
-
-// GetCwd returns the value of the `cwd` flag. Used to implement CLIConfigProvider interface.
-func (p FlagSet) GetCwd() (string, error) {
-	return p.GetString("cwd")
 }
 
 // RepoConfig is a configuration object for the logged-in turborepo.com user
@@ -174,11 +133,6 @@ func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 	}, nil
 }
 
-// AddUserConfigFlags adds per-user configuration item flags to the given flagset
-func AddUserConfigFlags(flags *pflag.FlagSet) {
-	flags.String("token", "", "Set the auth token for API calls")
-}
-
 // DefaultUserConfigPath returns the default platform-dependent place that
 // we store the user-specific configuration.
 func DefaultUserConfigPath() turbopath.AbsoluteSystemPath {
@@ -242,13 +196,6 @@ func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigPr
 		repoViper: repoViper,
 		path:      path,
 	}, nil
-}
-
-// AddRepoConfigFlags adds per-repository configuration items to the given flagset
-func AddRepoConfigFlags(flags *pflag.FlagSet) {
-	flags.String("team", "", "Set the team slug for API calls")
-	flags.String("api", "", "Override the endpoint for API calls")
-	flags.String("login", "", "Override the login endpoint")
 }
 
 // GetRepoConfigPath reads the user-specific configuration values

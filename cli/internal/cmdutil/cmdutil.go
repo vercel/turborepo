@@ -14,7 +14,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -123,15 +122,6 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 	}), nil
 }
 
-// AddFlags adds common flags for all turbo commands to the given flagset and binds
-// them to this instance of Helper
-func (h *Helper) addFlags(flags *pflag.FlagSet) {
-	flags.CountVarP(&h.verbosity, "verbosity", "v", "verbosity")
-	client.AddFlags(&h.clientOpts, flags)
-	config.AddRepoConfigFlags(flags)
-	config.AddUserConfigFlags(flags)
-}
-
 // NewHelper returns a new helper instance to hold configuration values for the root
 // turbo command.
 func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper {
@@ -185,12 +175,18 @@ func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error
 		}
 	}
 
+	// Primacy: Arg > Env
 	val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
 	if ok {
 		number, err := strconv.ParseUint(val, 10, 64)
 		if err == nil {
 			h.clientOpts.Timeout = number
 		}
+	}
+
+	timeout, err := cliConfig.GetRemoteCacheTimeout()
+	if err == nil {
+		h.clientOpts.Timeout = timeout
 	}
 
 	apiClient := client.NewClient(

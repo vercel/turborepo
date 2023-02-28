@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"gotest.tools/v3/assert"
@@ -24,9 +23,7 @@ func TestTokenEnvVar(t *testing.T) {
 			args := turbostate.ParsedArgsFromRust{
 				CWD: "",
 			}
-			flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 			h := NewHelper("test-version", args)
-			h.addFlags(flags)
 			h.UserConfigPath = userConfigPath
 
 			expectedToken := expectedPrefix + v
@@ -54,9 +51,7 @@ func TestRemoteCacheTimeoutEnvVar(t *testing.T) {
 		args := turbostate.ParsedArgsFromRust{
 			CWD: "",
 		}
-		flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 		h := NewHelper("test-version", args)
-		h.addFlags(flags)
 
 		err := os.Setenv(key, expectedTimeout)
 		if err != nil {
@@ -72,16 +67,11 @@ func TestRemoteCacheTimeoutEnvVar(t *testing.T) {
 }
 
 func TestRemoteCacheTimeoutFlag(t *testing.T) {
-	expectedTimeout := "599"
-
 	args := turbostate.ParsedArgsFromRust{
-		CWD: "",
+		CWD:                "",
+		RemoteCacheTimeout: 599,
 	}
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 	h := NewHelper("test-version", args)
-	h.addFlags(flags)
-
-	assert.NilError(t, flags.Set("remote-cache-timeout", expectedTimeout), "flags.Set")
 
 	base, err := h.GetCmdBase(args)
 	if err != nil {
@@ -93,21 +83,17 @@ func TestRemoteCacheTimeoutFlag(t *testing.T) {
 
 func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
 	key := "TURBO_REMOTE_CACHE_TIMEOUT"
-	value := "600"
-	flagValue := "599"
+	value := "2"
 
 	t.Run(key, func(t *testing.T) {
 		t.Cleanup(func() {
 			_ = os.Unsetenv(key)
 		})
 		args := turbostate.ParsedArgsFromRust{
-			CWD: "",
+			CWD:                "",
+			RemoteCacheTimeout: 1,
 		}
-		flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
 		h := NewHelper("test-version", args)
-		h.addFlags(flags)
-
-		assert.NilError(t, flags.Set("remote-cache-timeout", flagValue), "flags.Set")
 
 		err := os.Setenv(key, value)
 		if err != nil {
@@ -118,6 +104,6 @@ func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get command base %v", err)
 		}
-		assert.Equal(t, base.APIClient.HttpClient.HTTPClient.Timeout, time.Duration(599)*time.Second)
+		assert.Equal(t, base.APIClient.HttpClient.HTTPClient.Timeout, time.Duration(1)*time.Second)
 	})
 }

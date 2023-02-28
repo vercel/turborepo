@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"gotest.tools/v3/assert"
 )
 
 func TestReadRepoConfigWhenMissing(t *testing.T) {
 	testDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddRepoConfigFlags(flags)
+	args := turbostate.ParsedArgsFromRust{
+		CWD: "",
+	}
 
-	config, err := ReadRepoConfigFile(testDir, FlagSet{FlagSet: flags})
+	config, err := ReadRepoConfigFile(testDir, args)
 	if err != nil {
 		t.Errorf("got error reading non-existent config file: %v, want <nil>", err)
 	}
@@ -25,18 +26,20 @@ func TestReadRepoConfigWhenMissing(t *testing.T) {
 
 func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddRepoConfigFlags(flags)
+
+	slug := "my-team-slug"
+	apiURL := "http://my-login-url"
+	args := turbostate.ParsedArgsFromRust{
+		CWD:  "",
+		Team: slug,
+		API:  apiURL,
+	}
 
 	teamID := "some-id"
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamId":"%v"}`, teamID)), 0644), "WriteFile")
-	slug := "my-team-slug"
-	assert.NilError(t, flags.Set("team", slug), "flags.Set")
-	apiURL := "http://my-login-url"
-	assert.NilError(t, flags.Set("api", apiURL), "flags.Set")
 
-	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
+	config, err := ReadRepoConfigFile(testConfigFile, args)
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
@@ -54,15 +57,16 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddRepoConfigFlags(flags)
+	args := turbostate.ParsedArgsFromRust{
+		CWD: "",
+	}
 
 	expectedTeam := "my-team"
 
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
+	config, err := ReadRepoConfigFile(testConfigFile, args)
 	if err != nil {
 		t.Errorf("ReadRepoConfigFile err got %v, want <nil>", err)
 	}
@@ -79,22 +83,23 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 func TestWriteRepoConfig(t *testing.T) {
 	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	testConfigFile := repoRoot.UntypedJoin(".turbo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddRepoConfigFlags(flags)
+	args := turbostate.ParsedArgsFromRust{
+		CWD: "",
+	}
 
 	expectedTeam := "my-team"
 
 	assert.NilError(t, testConfigFile.EnsureDir(), "EnsureDir")
 	assert.NilError(t, testConfigFile.WriteFile([]byte(fmt.Sprintf(`{"teamSlug":"%v"}`, expectedTeam)), 0644), "WriteFile")
 
-	initial, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
+	initial, err := ReadRepoConfigFile(testConfigFile, args)
 	assert.NilError(t, err, "GetRepoConfig")
 	// setting the teamID should clear the slug, since it may have been from an old team
 	expectedTeamID := "my-team-id"
 	err = initial.SetTeamID(expectedTeamID)
 	assert.NilError(t, err, "SetTeamID")
 
-	config, err := ReadRepoConfigFile(testConfigFile, FlagSet{FlagSet: flags})
+	config, err := ReadRepoConfigFile(testConfigFile, args)
 	if err != nil {
 		t.Errorf("ReadRepoConfig err got %v, want <nil>", err)
 	}
@@ -110,10 +115,12 @@ func TestWriteRepoConfig(t *testing.T) {
 
 func TestWriteUserConfig(t *testing.T) {
 	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddUserConfigFlags(flags)
+	args := turbostate.ParsedArgsFromRust{
+		CWD: "",
+	}
+
 	// Non-existent config file should get empty values
-	userConfig, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
+	userConfig, err := ReadUserConfigFile(configPath, args)
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, userConfig.Token(), "")
 	assert.Equal(t, userConfig.path, configPath)
@@ -122,7 +129,7 @@ func TestWriteUserConfig(t *testing.T) {
 	err = userConfig.SetToken(expectedToken)
 	assert.NilError(t, err, "SetToken")
 
-	config, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
+	config, err := ReadUserConfigFile(configPath, args)
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, config.Token(), expectedToken)
 
@@ -130,7 +137,7 @@ func TestWriteUserConfig(t *testing.T) {
 	assert.NilError(t, err, "deleteConfigFile")
 	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
 
-	final, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
+	final, err := ReadUserConfigFile(configPath, args)
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, final.Token(), "")
 	assert.Equal(t, configPath.FileExists(), false, "config file should be deleted")
@@ -138,11 +145,12 @@ func TestWriteUserConfig(t *testing.T) {
 
 func TestUserConfigFlags(t *testing.T) {
 	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-	AddUserConfigFlags(flags)
+	args := turbostate.ParsedArgsFromRust{
+		CWD:   "",
+		Token: "my-token",
+	}
 
-	assert.NilError(t, flags.Set("token", "my-token"), "set flag")
-	userConfig, err := ReadUserConfigFile(configPath, FlagSet{FlagSet: flags})
+	userConfig, err := ReadUserConfigFile(configPath, args)
 	assert.NilError(t, err, "readUserConfigFile")
 	assert.Equal(t, userConfig.Token(), "my-token")
 	assert.Equal(t, userConfig.path, configPath)

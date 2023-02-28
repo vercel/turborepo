@@ -3,7 +3,9 @@
 // to Go via a JSON payload.
 package turbostate
 
-import "github.com/vercel/turbo/cli/internal/config"
+import (
+	"fmt"
+)
 
 // RepoState is the state for repository. Consists of the root for the repo
 // along with the mode (single package or multi package)
@@ -91,7 +93,7 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
+// var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
 
 // GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
 func (a ParsedArgsFromRust) GetColor() bool {
@@ -126,4 +128,13 @@ func (a ParsedArgsFromRust) GetToken() (string, error) {
 // GetCwd returns the value of the `cwd` flag. Used to implement CLIConfigProvider interface.
 func (a ParsedArgsFromRust) GetCwd() (string, error) {
 	return a.CWD, nil
+}
+
+// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag. Used to implement CLIConfigProvider interface.
+func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
+	if a.RemoteCacheTimeout != 0 {
+		return a.RemoteCacheTimeout, nil
+	} else {
+		return 0, fmt.Errorf("No remote cache timeout provided.")
+	}
 }
