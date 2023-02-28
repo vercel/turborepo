@@ -266,11 +266,13 @@ jobs:
 
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli
+        env:
+          GO_TAG: go
 
       - name: Integration Tests (with Rust FFI)
         run: pnpm -- turbo run integration-tests --filter=cli
         env:
-          GO_TAGS: rust
+          GO_TAG: rust
 
   go_e2e:
     name: Go E2E Tests
