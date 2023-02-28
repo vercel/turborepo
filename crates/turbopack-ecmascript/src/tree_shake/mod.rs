@@ -18,7 +18,8 @@ use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
-        EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkVc, EcmascriptExportsVc,
     },
     parse::ParseResult,
     EcmascriptModuleAssetVc,
@@ -399,13 +400,31 @@ impl Asset for EcmascriptModulePartAsset {
 }
 
 #[turbo_tasks::value_impl]
+impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self_vc: EcmascriptModulePartAssetVc,
+        context: ChunkingContextVc,
+    ) -> EcmascriptChunkItemVc {
+        EcmascriptModulePartChunkItem {
+            module: self_vc,
+            context,
+        }
+        .cell()
+        .into()
+    }
+
+    #[turbo_tasks::function]
+    async fn get_exports(self_vc: EcmascriptModuleAssetVc) -> Result<EcmascriptExportsVc> {
+        Ok(self_vc.analyze().await?.exports)
+    }
+}
+
+#[turbo_tasks::value_impl]
 impl ChunkableAsset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
-    async fn as_chunk(&self, context: ChunkingContextVc) -> ChunkVc {
-        let main_entries =
-            EcmascriptChunkPlaceablesVc::cell(vec![self.module.as_ecmascript_chunk_placeable()]);
-
-        EcmascriptChunkVc::new_normalized(context, main_entries, None, None).as_chunk()
+    async fn as_chunk(self_vc: EcmascriptModulePartAssetVc, context: ChunkingContextVc) -> ChunkVc {
+        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
     }
 }
 
