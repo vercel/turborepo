@@ -1,0 +1,25 @@
+[package]
+name = "turborepo-paths"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+allocative = "0.2.0"
+anyhow = "1.0.69"
+assert_matches = "1.5.0"
+common-path = "1.0.0"
+compact_str = "0.7.0"
+derivative = "2.2.0"
+derive_more = "0.99.17"
+dunce = "1.0.3"
+gazebo = "0.8.1"
+itertools = "0.10.5"
+memchr = "2.5.0"
+ref-cast = "1.0.14"
+relative-path = "1.7.3"
+serde = { version = "1.0.152", features = ["derive"] }
+smallvec = "1.10.0"
+tempfile = "3.4.0"
+thiserror = "1.0.38"
