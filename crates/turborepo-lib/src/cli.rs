@@ -95,7 +95,7 @@ pub struct Args {
     pub preflight: bool,
     /// Set a timeout for all HTTP requests.
     #[clap(long, global = true, value_parser)]
-    pub remote_cache_timeout: Option<u64>,
+    pub remote_cache_timeout: u64,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
     pub team: Option<String>,

@@ -264,9 +264,9 @@ impl APIClient {
         false
     }
 
-    pub fn new(base_url: impl AsRef<str>) -> Result<Self> {
+    pub fn new(base_url: impl AsRef<str>, timeout: u64) -> Result<Self> {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(20))
+            .timeout(std::time::Duration::from_secs(timeout))
             .build()?;
 
         Ok(APIClient {

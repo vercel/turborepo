@@ -108,6 +108,7 @@ impl CommandBase {
     pub fn api_client(&mut self) -> Result<APIClient> {
         let repo_config = self.repo_config()?;
         let api_url = repo_config.api_url();
-        APIClient::new(api_url)
+        let timeout = self.args.remote_cache_timeout;
+        APIClient::new(api_url, timeout)
     }
 }
