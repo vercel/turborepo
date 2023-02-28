@@ -17,6 +17,7 @@ pub use node_entry::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
+use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -188,6 +189,7 @@ async fn separate_assets(
 #[turbo_tasks::function]
 pub async fn get_renderer_pool(
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -220,7 +222,18 @@ pub async fn get_renderer_pool(
         bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.fs().to_string().await?);
     };
 
-    Ok(NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4, debug).cell())
+    Ok(NodeJsPool::new(
+        cwd,
+        entrypoint,
+        env.read_all()
+            .await?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        4,
+        debug,
+    )
+    .cell())
 }
 
 /// Converts a module graph into node.js executable assets
