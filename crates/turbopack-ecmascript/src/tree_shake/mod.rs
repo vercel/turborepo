@@ -298,6 +298,7 @@ impl Analyzer<'_> {
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
     full_module: EcmascriptModuleAssetVc,
+    split_data: SplitResultVc,
     chunk_id: u32,
 }
 
@@ -360,7 +361,8 @@ impl EcmascriptModulePartAssetVc {
         module: EcmascriptModuleAssetVc,
         part: ModulePartVc,
     ) -> Result<Self> {
-        let result = split(module).await?;
+        let split_data = split(module);
+        let result = split_data.await?;
         let part = part.await?;
 
         let key = match &*part {
@@ -376,6 +378,7 @@ impl EcmascriptModulePartAssetVc {
         Ok(EcmascriptModulePartAsset {
             full_module: module,
             chunk_id,
+            split_data,
         }
         .cell())
     }
@@ -402,13 +405,18 @@ impl Asset for EcmascriptModulePartAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self_vc: EcmascriptModulePartAssetVc,
         context: ChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
+        let s = self_vc.await.unwrap();
+
         EcmascriptModulePartChunkItem {
             module: self_vc,
             context,
+            chunk_id: s.chunk_id,
+            full_module: s.full_module,
+            split_data: s.split_data,
         }
         .cell()
         .into()
@@ -493,6 +501,7 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
                     EcmascriptModulePartAssetVc::cell(EcmascriptModulePartAsset {
                         full_module: self.full_module.clone(),
                         chunk_id,
+                        split_data: self.split_data.clone(),
                     })
                     .as_asset(),
                     StringVc::cell("ecmascript module part".to_string()),
