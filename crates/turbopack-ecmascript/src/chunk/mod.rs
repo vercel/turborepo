@@ -19,15 +19,18 @@ use turbo_tasks::{
     primitives::{StringReadRef, StringVc, UsizeVc},
     TryJoinIterExt, ValueToString, ValueToStringVc,
 };
-use turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
-use turbo_tasks_hash::{encode_hex, DeterministicHasher, Xxh3Hash64Hasher};
+use turbo_tasks_fs::{
+    FileSystemPathOptionVc,
+};
+
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkReferenceVc, ChunkVc, ChunkingContext,
+        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContext,
         ChunkingContextVc,
     },
+    ident::{AssetIdent, AssetIdentVc, AssetParam},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -299,80 +302,64 @@ impl EcmascriptChunkVc {
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptChunk {
     #[turbo_tasks::function]
-    async fn path(self_vc: EcmascriptChunkVc) -> Result<FileSystemPathVc> {
+    async fn ident(self_vc: EcmascriptChunkVc) -> Result<AssetIdentVc> {
         let this = self_vc.await?;
 
-        // All information that makes the chunk unique need to be encoded in the path.
-        // As we can't make the path that long, we split info into "hashed info" and
-        // "named info". All hashed info is hashed and that hash is appended to
-        // the named info. Together they will make up the path.
-        let mut hasher = Xxh3Hash64Hasher::new();
-        let mut need_hash = false;
+        // All information that makes the chunk unique need to be encoded in the params.
+        let mut params = Vec::new();
 
-        // evalute only contributes to the hashed info
-        if let Some(evaluate) = this.evaluate {
-            let evaluate = evaluate.content(this.context, self_vc).await?;
-            let ecma_chunks_server_paths = &evaluate.ecma_chunks_server_paths;
-            hasher.write_usize(ecma_chunks_server_paths.len());
-            for path in ecma_chunks_server_paths.iter() {
-                hasher.write_ref(path);
-                need_hash = true;
-            }
-            let other_chunks_server_paths = &evaluate.other_chunks_server_paths;
-            hasher.write_usize(other_chunks_server_paths.len());
-            for path in other_chunks_server_paths.iter() {
-                hasher.write_ref(path);
-                need_hash = true;
-            }
-            let entry_modules_ids = &evaluate.entry_modules_ids;
-            hasher.write_usize(entry_modules_ids.len());
-            for id in entry_modules_ids.iter() {
-                hasher.write_value(id.await?);
-                need_hash = true;
-            }
-        }
+        // All main entries are included
         let main_entries = this.main_entries.await?;
-        // If there is only a single entry we can used that for the named info.
-        // If there are multiple entries we hash them and use the common parent as named
-        // info.
-        let mut path = if main_entries.len() == 1 {
-            let main_entry = main_entries.iter().next().unwrap();
-            main_entry.path()
+        let main_entry_key = StringVc::cell(String::new());
+        for entry in main_entries.iter() {
+            params.push(AssetParam::Asset(main_entry_key, entry.ident()))
+        }
+
+        // The primary name of the chunk is the only entry or the common parent of all
+        // entries.
+        let path = if let [AssetParam::Asset(_, ident)] = &params[..] {
+            ident.path()
+        } else if let &Some(common_parent) = &*self_vc.common_parent().await? {
+            common_parent
+        } else if let AssetParam::Asset(_, ident) = params[0] {
+            ident.path()
         } else {
-            hasher.write_usize(main_entries.len());
-            for entry in &main_entries {
-                let path = entry.path().to_string().await?;
-                hasher.write_value(path);
-                need_hash = true;
-            }
-            if let &Some(common_parent) = &*self_vc.common_parent().await? {
-                common_parent
-            } else {
-                let main_entry = main_entries
-                    .iter()
-                    .next()
-                    .ok_or_else(|| anyhow!("chunk must have at least one entry"))?;
-                main_entry.path()
-            }
+            unreachable!()
         };
+
+        // All omit entries are included
         if let Some(omit_entries) = this.omit_entries {
             let omit_entries = omit_entries.await?;
-            hasher.write_usize(omit_entries.len());
-            for omit_entry in &omit_entries {
-                let path = omit_entry.path().to_string().await?;
-                hasher.write_value(path);
+            let omit_entry_key = StringVc::cell("omit".to_string());
+            for entry in omit_entries.iter() {
+                params.push(AssetParam::Asset(omit_entry_key, entry.ident()))
             }
-            need_hash = true;
         }
 
-        if need_hash {
-            let hash = hasher.finish();
-            let hash = encode_hex(hash);
-            let truncated_hash = &hash[..6];
-            path = path.append_to_stem(&format!("_{}", truncated_hash))
+        // Evaluate info is included
+        if let Some(evaluate) = this.evaluate {
+            let evaluate = evaluate.content(this.context, self_vc).await?;
+            for path in evaluate.ecma_chunks_server_paths.iter() {
+                params.push(AssetParam::Modifier(StringVc::cell(path.clone())));
+            }
+            for path in evaluate.other_chunks_server_paths.iter() {
+                params.push(AssetParam::Modifier(StringVc::cell(path.clone())));
+            }
+            for id in evaluate.entry_modules_ids.iter() {
+                params.push(AssetParam::Modifier(id.to_string()));
+            }
         }
 
-        Ok(this.context.chunk_path(path, ".js"))
+        // Simplify when it's only a single main entry without extra info
+        let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
+            ident
+        } else {
+            AssetIdent { path, params }.cell()
+        };
+
+        Ok(AssetIdentVc::from_path(
+            this.context.chunk_path(ident, ".js"),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -439,7 +426,7 @@ impl Introspectable for EcmascriptChunk {
         details += "Chunk items:\n\n";
         for chunk in chunk_items.iter() {
             for item in chunk.await?.iter() {
-                writeln!(details, "- {}", item.to_string().await?)?;
+                writeln!(details, "- {}", item.ident().to_string().await?)?;
             }
         }
         details += "\nContent:\n\n";

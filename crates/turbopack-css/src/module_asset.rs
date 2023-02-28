@@ -17,6 +17,7 @@ use turbopack_core::{
         ChunkingTypeOptionVc,
     },
     context::AssetContextVc,
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
@@ -46,6 +47,11 @@ use crate::{
     CssModuleAssetVc,
 };
 
+#[turbo_tasks::function]
+fn modifier() -> StringVc {
+    StringVc::cell("css module".to_string())
+}
+
 #[turbo_tasks::value]
 #[derive(Clone)]
 pub struct ModuleCssModuleAsset {
@@ -65,8 +71,8 @@ impl ModuleCssModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for ModuleCssModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.inner.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.inner.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -239,18 +245,12 @@ struct ModuleChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for ModuleChunkItem {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "{} (css module)",
-            self.module.path().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for ModuleChunkItem {
+    #[turbo_tasks::function]
+    fn ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
         // The proxy reference must come first so it is processed before other potential
@@ -275,11 +275,6 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
-    }
-
-    #[turbo_tasks::function]
-    fn related_path(&self) -> FileSystemPathVc {
-        self.module.path()
     }
 
     #[turbo_tasks::function]
@@ -419,8 +414,8 @@ struct CssProxyModuleAsset {
 #[turbo_tasks::value_impl]
 impl Asset for CssProxyModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.module.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.module.ident()
     }
 
     #[turbo_tasks::function]
@@ -484,15 +479,12 @@ struct CssProxyModuleChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for CssProxyModuleChunkItem {
-    #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        self.module.as_chunk_item(self.context).to_string()
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for CssProxyModuleChunkItem {
+    #[turbo_tasks::function]
+    fn ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         self.module.references()

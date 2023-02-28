@@ -8,6 +8,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -97,11 +98,12 @@ impl PageLoaderAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for PageLoaderAsset {
     #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
-        Ok(self
-            .server_root
-            .join("_next/static/chunks/pages")
-            .join(&get_asset_path_from_route(&self.pathname.await?, ".js")))
+    async fn ident(&self) -> Result<AssetIdentVc> {
+        Ok(AssetIdentVc::from_path(
+            self.server_root
+                .join("_next/static/chunks/pages")
+                .join(&get_asset_path_from_route(&self.pathname.await?, ".js")),
+        ))
     }
 
     #[turbo_tasks::function]

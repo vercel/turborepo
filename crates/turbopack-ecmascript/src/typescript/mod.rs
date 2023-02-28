@@ -4,9 +4,10 @@ pub mod resolve;
 use anyhow::Result;
 use serde_json::Value as JsonValue;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbo_tasks_fs::{DirectoryContent, FileSystemPathVc};
+use turbo_tasks_fs::DirectoryContent;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
@@ -36,8 +37,8 @@ impl TsConfigModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for TsConfigModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident()
     }
 
     #[turbo_tasks::function]

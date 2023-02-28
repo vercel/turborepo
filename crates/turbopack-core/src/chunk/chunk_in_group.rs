@@ -1,11 +1,11 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
 
 use super::{Chunk, ChunkVc, ParallelChunkReferenceVc};
 use crate::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ParallelChunkReference,
+    ident::AssetIdentVc,
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -42,8 +42,8 @@ impl Chunk for ChunkInGroup {}
 #[turbo_tasks::value_impl]
 impl Asset for ChunkInGroup {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.inner.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.inner.ident()
     }
 
     #[turbo_tasks::function]

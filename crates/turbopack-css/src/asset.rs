@@ -13,6 +13,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -35,6 +36,11 @@ use crate::{
     transform::CssInputTransformsVc,
     CssModuleAssetType,
 };
+
+#[turbo_tasks::function]
+fn modifier() -> StringVc {
+    StringVc::cell("css".to_string())
+}
 
 #[turbo_tasks::value]
 #[derive(Clone)]
@@ -84,8 +90,8 @@ impl CssModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for CssModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -158,6 +164,11 @@ impl ValueToString for ModuleChunkItem {
 
 #[turbo_tasks::value_impl]
 impl ChunkItem for ModuleChunkItem {
+    #[turbo_tasks::function]
+    fn ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         self.module.references()

@@ -11,8 +11,8 @@
 #![feature(min_specialization)]
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks::primitives::StringVc;
+use turbo_tasks_fs::FileContent;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
@@ -20,6 +20,7 @@ use turbopack_core::{
         ChunkingContextVc,
     },
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 use turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
@@ -31,6 +32,11 @@ use turbopack_ecmascript::{
     },
     utils::stringify_js,
 };
+
+#[turbo_tasks::function]
+fn modifier() -> StringVc {
+    StringVc::cell("static".to_string())
+}
 
 #[turbo_tasks::value]
 #[derive(Clone)]
@@ -61,8 +67,8 @@ impl StaticModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for StaticModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -120,7 +126,7 @@ struct StaticAsset {
 #[turbo_tasks::value_impl]
 impl Asset for StaticAsset {
     #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
+    async fn ident(&self) -> Result<AssetIdentVc> {
         let source_path = self.source.path();
         let content = self.source.content();
         let content_hash = if let AssetContent::File(file) = &*content.await? {
@@ -137,7 +143,7 @@ impl Asset for StaticAsset {
             Some(ext) => self.context.asset_path(&content_hash_b16, ext),
             None => self.context.asset_path(&content_hash_b16, "bin"),
         };
-        Ok(asset_path)
+        Ok(AssetIdentVc::from_path(asset_path))
     }
 
     #[turbo_tasks::function]
@@ -154,18 +160,12 @@ struct ModuleChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for ModuleChunkItem {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "{} (static)",
-            self.module.await?.source.path().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for ModuleChunkItem {
+    #[turbo_tasks::function]
+    fn ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
         Ok(AssetReferencesVc::cell(vec![SingleAssetReferenceVc::new(
@@ -181,11 +181,6 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
-    }
-
-    #[turbo_tasks::function]
-    fn related_path(&self) -> FileSystemPathVc {
-        self.module.path()
     }
 
     #[turbo_tasks::function]

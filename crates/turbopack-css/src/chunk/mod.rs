@@ -8,7 +8,6 @@ use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
-use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -19,6 +18,7 @@ use turbopack_core::{
         FromChunkableAsset, ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
+    ident::{AssetIdent, AssetIdentVc, AssetParam},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -280,29 +280,32 @@ impl ValueToString for CssChunk {
 #[turbo_tasks::value_impl]
 impl Asset for CssChunk {
     #[turbo_tasks::function]
-    async fn path(self_vc: CssChunkVc) -> Result<FileSystemPathVc> {
+    async fn ident(self_vc: CssChunkVc) -> Result<AssetIdentVc> {
         let this = self_vc.await?;
-        let mut hasher = Xxh3Hash64Hasher::new();
+
+        let mut params = Vec::new();
 
         let main_entries = this.main_entries.await?;
-        let mut main_entries = main_entries.iter();
-        let mut needs_hash = false;
-        let main_entry = main_entries
-            .next()
-            .ok_or_else(|| anyhow!("Chunk must have at least one entry"))?;
-        for entry in main_entries {
-            let path = entry.path().to_string().await?;
-            hasher.write_value(path);
-            needs_hash = true;
+        let main_entry_key = StringVc::cell(String::new());
+        for entry in main_entries.iter() {
+            params.push(AssetParam::Asset(main_entry_key, entry.ident()))
         }
 
-        let hash = hasher.finish();
-        let mut path = main_entry.path();
-        if needs_hash {
-            path = path.append_to_stem(&format!(".{}", encode_hex(hash)))
-        }
+        let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
+            ident
+        } else if let AssetParam::Asset(_, ident) = params[0] {
+            AssetIdent {
+                path: ident.path(),
+                params,
+            }
+            .cell()
+        } else {
+            unreachable!()
+        };
 
-        Ok(this.context.chunk_path(path, ".css"))
+        Ok(AssetIdentVc::from_path(
+            this.context.chunk_path(ident, ".css"),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -359,19 +362,12 @@ impl CssChunkContextVc {
 
     #[turbo_tasks::function]
     pub async fn chunk_item_id(self, chunk_item: CssChunkItemVc) -> Result<ModuleIdVc> {
-        use std::fmt::Write;
-
-        let layer = &*self.await?.context.layer().await?;
-        let mut s = chunk_item.to_string().await?.clone_value();
-        if !layer.is_empty() {
-            if s.ends_with(')') {
-                s.pop();
-                write!(s, ", {layer})")?;
-            } else {
-                write!(s, " ({layer})")?;
-            }
+        let layer = self.await?.context.layer();
+        let mut ident = chunk_item.ident();
+        if !layer.await?.is_empty() {
+            ident = ident.with_modifier(layer)
         }
-        Ok(ModuleId::String(s).cell())
+        Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())
     }
 }
 
@@ -399,7 +395,7 @@ pub struct CssChunkItemContent {
 }
 
 #[turbo_tasks::value_trait]
-pub trait CssChunkItem: ChunkItem + ValueToString {
+pub trait CssChunkItem: ChunkItem {
     fn content(&self) -> CssChunkItemContentVc;
     fn chunking_context(&self) -> ChunkingContextVc;
     fn id(&self) -> ModuleIdVc {
@@ -454,7 +450,7 @@ impl Introspectable for CssChunk {
         let chunk_content = css_chunk_content(this.context, this.main_entries).await?;
         details += "Chunk items:\n\n";
         for item in chunk_content.chunk_items.iter() {
-            writeln!(details, "- {}", item.to_string().await?)?;
+            writeln!(details, "- {}", item.ident().to_string().await?)?;
         }
         details += "\nContent:\n\n";
         write!(details, "{}", content.await?)?;

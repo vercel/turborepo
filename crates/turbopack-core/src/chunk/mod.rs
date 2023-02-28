@@ -28,6 +28,7 @@ use self::{chunk_in_group::ChunkInGroupVc, optimize::optimize};
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
     environment::EnvironmentVc,
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
@@ -80,7 +81,7 @@ pub trait ChunkingContext {
     // environment since this can change due to transitions in the module graph
     fn environment(&self) -> EnvironmentVc;
 
-    fn chunk_path(&self, path: FileSystemPathVc, extension: &str) -> FileSystemPathVc;
+    fn chunk_path(&self, ident: AssetIdentVc, extension: &str) -> FileSystemPathVc;
 
     fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> BoolVc;
 
@@ -703,6 +704,7 @@ where
 
 #[turbo_tasks::value_trait]
 pub trait ChunkItem {
+    fn ident(&self) -> AssetIdentVc;
     /// A [ChunkItem] can describe different `references` than its original
     /// [Asset].
     /// TODO(alexkirsz) This should have a default impl that returns empty

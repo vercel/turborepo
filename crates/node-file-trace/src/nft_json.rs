@@ -1,8 +1,9 @@
 use anyhow::Result;
 use serde_json::json;
-use turbo_tasks_fs::{File, FileSystem, FileSystemPathVc};
+use turbo_tasks_fs::{File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::all_assets,
 };
 
@@ -22,9 +23,11 @@ impl NftJsonAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for NftJsonAsset {
     #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
+    async fn ident(&self) -> Result<AssetIdentVc> {
         let path = self.entry.path().await?;
-        Ok(path.fs.root().join(&format!("{}.nft.json", path.path)))
+        Ok(AssetIdentVc::from_path(
+            path.fs.root().join(&format!("{}.nft.json", path.path)),
+        ))
     }
 
     #[turbo_tasks::function]
