@@ -152,9 +152,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            cli/**/*.go
-            cli/go.mod
-            cli/go.sum
+            examples_tests/**
             scripts/run-example.sh
             !**.md
             !**.mdx
