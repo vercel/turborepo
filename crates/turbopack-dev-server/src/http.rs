@@ -1,6 +1,10 @@
 use anyhow::Result;
 use futures::{StreamExt, TryStreamExt};
-use hyper::{header::HeaderName, Request, Response};
+use hyper::{
+    header::{HeaderName, CONTENT_ENCODING},
+    http::HeaderValue,
+    Request, Response,
+};
 use mime_guess::mime;
 use turbo_tasks::TransientInstance;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
@@ -117,13 +121,21 @@ pub async fn process_request_with_content_source(
                 }
 
                 let content = file.content();
-                header_map.insert(
-                    "Content-Length",
-                    hyper::header::HeaderValue::try_from(content.len().to_string())?,
+                // Grab ropereader stream, coerce anyhow::Error to std::io::Error
+                let stream_ext = content
+                    .read()
+                    .into_stream()
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+
+                let gzipped_stream = tokio_util::io::ReaderStream::new(
+                    async_compression::tokio::bufread::GzipEncoder::new(
+                        tokio_util::io::StreamReader::new(stream_ext),
+                    ),
                 );
 
-                let bytes = content.read();
-                return Ok(response.body(hyper::Body::wrap_stream(bytes))?);
+                header_map.insert(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+
+                return Ok(response.body(hyper::Body::wrap_stream(gzipped_stream))?);
             }
         }
         GetFromSourceResult::HttpProxy(proxy_result) => {
