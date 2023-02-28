@@ -1,5 +1,6 @@
 import fs from "fs-extra";
 import path from "path";
+import { getTurboConfigs } from "turbo-utils";
 import type { Schema, Pipeline } from "turbo-types";
 
 import getTransformerHelpers from "../utils/getTransformerHelpers";
@@ -14,7 +15,7 @@ const INTRODUCED_IN = "1.5.0";
 
 export function hasLegacyEnvVarDependencies(config: Schema) {
   const dependsOn = [
-    config.globalDependencies,
+    "extends" in config ? [] : config.globalDependencies,
     Object.values(config.pipeline).flatMap(
       (pipeline) => pipeline.dependsOn ?? []
     ),
@@ -70,6 +71,10 @@ export function migratePipeline(pipeline: Pipeline) {
 }
 
 export function migrateGlobal(config: Schema) {
+  if ("extends" in config) {
+    return config;
+  }
+
   const { deps: globalDependencies, env } = migrateDependencies({
     env: config.globalEnv,
     deps: config.globalDependencies,
@@ -85,7 +90,6 @@ export function migrateGlobal(config: Schema) {
   } else {
     delete migratedConfig.globalEnv;
   }
-
   return migratedConfig;
 }
 
@@ -117,14 +121,9 @@ export function transformer({
   log.info(
     `Migrating environment variable dependencies from "globalDependencies" and "dependsOn" to "env" in "turbo.json"...`
   );
-  const turboConfigPath = path.join(root, "turbo.json");
-  const packageJsonPath = path.join(root, "package.json");
-  if (!fs.existsSync(turboConfigPath)) {
-    return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
-    });
-  }
 
+  // validate we don't have a package.json config
+  const packageJsonPath = path.join(root, "package.json");
   let packageJSON = {};
   try {
     packageJSON = fs.readJSONSync(packageJsonPath);
@@ -139,6 +138,14 @@ export function transformer({
     });
   }
 
+  // validate we have a root config
+  const turboConfigPath = path.join(root, "turbo.json");
+  if (!fs.existsSync(turboConfigPath)) {
+    return runner.abortTransform({
+      reason: `No turbo.json found at ${root}. Is the path correct?`,
+    });
+  }
+
   let turboJson: Schema = fs.readJsonSync(turboConfigPath);
   if (hasLegacyEnvVarDependencies(turboJson).hasKeys) {
     turboJson = migrateConfig(turboJson);
@@ -147,6 +154,18 @@ export function transformer({
   runner.modifyFile({
     filePath: turboConfigPath,
     after: turboJson,
+  });
+
+  // find and migrate any workspace configs
+  const workspaceConfigs = getTurboConfigs(root);
+  workspaceConfigs.forEach((workspaceConfig) => {
+    const { config, turboConfigPath } = workspaceConfig;
+    if (hasLegacyEnvVarDependencies(config).hasKeys) {
+      runner.modifyFile({
+        filePath: turboConfigPath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();
