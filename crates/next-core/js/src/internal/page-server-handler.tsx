@@ -96,12 +96,19 @@ export default function startHandler({
 
       // We provide a dummy base URL to the URL constructor so that it doesn't
       // throw when we pass a relative URL.
-      const resolvedPath = new URL(renderData.url, "next://").pathname;
+      let resolvedPath = new URL(renderData.url, "next://").pathname;
+      if (isDataReq) {
+        resolvedPath = resolvedPath.replace(
+          /^\/_next\/data\/development(.+).json$/,
+          (_, args) => args
+        );
+      }
       if (
         prerenderFallback === false &&
         // TODO(alexkirsz) Strip basePath.
         !prerenderRoutes.includes(resolvedPath)
       ) {
+        // console.log("prerender not found:", resolvedPath, "   prerendered:", prerenderRoutes);
         return createNotFoundResponse(isDataReq);
       }
     }
