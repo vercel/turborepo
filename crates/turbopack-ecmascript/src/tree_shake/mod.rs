@@ -383,11 +383,6 @@ impl Asset for EcmascriptModulePartAsset {
     fn references(&self) -> AssetReferencesVc {
         todo!()
     }
-
-    #[turbo_tasks::function]
-    fn versioned_content(&self) -> VersionedContentVc {
-        self.module.versioned_content()
-    }
 }
 
 #[turbo_tasks::value_impl]
