@@ -919,8 +919,10 @@ async function run() {
   // determine if we want to report summary into slack channel.
   // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
   const shouldReportSlack =
-    process.env.NEXT_TURBO_FORCE_SLACK_UPDATE === "true" ||
-    (!prNumber && !shouldDiffWithMain);
+    process.env.NEXT_TURBO_FORCE_SKIP_SLACK_UPDATE === "true"
+      ? false
+      : process.env.NEXT_TURBO_FORCE_SLACK_UPDATE === "true" ||
+        (!prNumber && !shouldDiffWithMain);
 
   // Collect current PR's failed test results
   const failedJobResults = await getFailedJobResults(octokit, token, sha);

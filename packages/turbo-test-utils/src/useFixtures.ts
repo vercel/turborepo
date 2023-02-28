@@ -2,16 +2,17 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs-extra";
 import yaml from "js-yaml";
+import JSON5 from "json5";
 
 export default function setupTestFixtures({
   directory,
-  test,
+  test = "",
 }: {
   directory: string;
-  test: string;
+  test?: string;
 }) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test);
+  const parentDirectory = path.join(directory, test ? test : "test-runs");
 
   afterEach(() => {
     fixtures.forEach((fixture) => {
@@ -33,7 +34,6 @@ export default function setupTestFixtures({
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-
     const fixturePath = path.join(directory, "__fixtures__", test, fixture);
     fs.copySync(fixturePath, testDirectory, {
       recursive: true,
@@ -52,15 +52,33 @@ export default function setupTestFixtures({
       };
     };
 
+    const write = (
+      filename: string,
+      content: string | NodeJS.ArrayBufferView
+    ) => {
+      const filePath = path.isAbsolute(filename)
+        ? filename
+        : path.join(testDirectory, filename);
+
+      fs.writeFileSync(filePath, content);
+    };
+
     const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
     const readJson = readGenerator((filePath) =>
-      fs.readJSONSync(filePath, "utf8")
+      JSON5.parse(fs.readFileSync(filePath, "utf8"))
     );
     const readYaml = readGenerator((filePath) =>
       yaml.load(fs.readFileSync(filePath, "utf8"))
     );
 
-    return { root: testDirectory, read, readJson, readYaml, directoryName };
+    return {
+      root: testDirectory,
+      read,
+      readJson,
+      readYaml,
+      write,
+      directoryName,
+    };
   };
 
   return { useFixture };
