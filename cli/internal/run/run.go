@@ -282,19 +282,22 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return errors.Wrap(err, "error preparing engine")
 	}
 
-	tracker := taskhash.NewTracker(
+	taskHashTracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
 		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
-		g.WorkspaceInfos,
 	)
 
-	err = tracker.CalculateFileHashes(
+	g.TaskHashTracker = taskHashTracker
+
+	// CalculateFileHashes assigns PackageInputsExpandedHashes as a side-effect
+	err = taskHashTracker.CalculateFileHashes(
 		engine.TaskGraph.Vertices(),
 		rs.Opts.runOpts.concurrency,
+		g.WorkspaceInfos,
+		g.TaskDefinitions,
 		r.base.RepoRoot,
-		g,
 	)
 
 	if err != nil {
@@ -359,7 +362,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			g,
 			rs,
 			engine,
-			tracker,
+			taskHashTracker,
 			turboCache,
 			r.base,
 			summary,
@@ -374,7 +377,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		g,
 		rs,
 		engine,
-		tracker,
+		taskHashTracker,
 		turboCache,
 		packagesInScope,
 		r.base,

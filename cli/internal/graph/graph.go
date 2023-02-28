@@ -9,15 +9,11 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
-
-// WorkspaceInfos holds information about each workspace in the monorepo.
-type WorkspaceInfos struct {
-	PackageJSONs map[string]*fs.PackageJSON
-	TurboConfigs map[string]*fs.TurboJSON
-}
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
@@ -29,7 +25,7 @@ type CompleteGraph struct {
 	Pipeline fs.Pipeline
 
 	// WorkspaceInfos stores the package.json contents by package name
-	WorkspaceInfos WorkspaceInfos
+	WorkspaceInfos workspace.Catalog
 
 	// GlobalHash is the hash of all global dependencies
 	GlobalHash string
@@ -39,6 +35,8 @@ type CompleteGraph struct {
 	// Map of TaskDefinitions by taskID
 	TaskDefinitions map[string]*fs.TaskDefinition
 	RepoRoot        turbopath.AbsoluteSystemPath
+
+	TaskHashTracker *taskhash.Tracker
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
@@ -67,6 +65,8 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			Outputs:         taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
+
+		packageTask.ExpandedInputs = g.TaskHashTracker.GetExpandedInputs(packageTask)
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd
