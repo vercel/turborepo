@@ -179,37 +179,6 @@ mod tests {
     }
 
     #[test]
-    fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
-        let file = repo_root.path().join("foo.js");
-        fs::write(file, "let z = 0;")?;
-
-        // First commit (we need a base commit to compare against)
-        commit_file(&repo, Path::new("foo.js"), None)?;
-
-        // Now change another file
-        let new_file = repo_root.path().join("bar.js");
-        fs::write(new_file, "let y = 1;")?;
-
-        // Test that uncommitted file is marked as changed with
-        // include_untracked` with the parameters that Go wil pass
-        let files = super::changed_files(
-            repo_root.path().to_path_buf(),
-            None,
-            true,
-            // Go will always pass the repo root as the relative
-            Some(repo_root.path().to_str().unwrap()),
-        )?;
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
-
-        Ok(())
-    }
-
-    #[test]
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
@@ -266,6 +235,38 @@ mod tests {
             Some("subdir"),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+        let file = repo_root.path().join("foo.js");
+        fs::write(file, "let z = 0;")?;
+
+        // First commit (we need a base commit to compare against)
+        commit_file(&repo, Path::new("foo.js"), None)?;
+
+        // Now change another file
+        let new_file = repo_root.path().join("bar.js");
+        fs::write(new_file, "let y = 1;")?;
+
+        // Test that uncommitted file is marked as changed with
+        // include_untracked` with the parameters that Go wil pass
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            None,
+            true,
+            // Go will pass the absolute repo root as the relative_to if there
+            // isn't a more specific subdir that should be used
+            Some(repo_root.path().to_str().unwrap()),
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         Ok(())
     }
