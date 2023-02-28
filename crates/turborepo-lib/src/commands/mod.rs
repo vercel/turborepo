@@ -77,7 +77,7 @@ impl CommandBase {
 
     fn create_client_config(&self) -> Result<()> {
         let client_config = ClientConfigLoader::new()
-            .with_remote_cache_timeout(self.args.remote_cache_timeout.clone())
+            .with_remote_cache_timeout(self.args.remote_cache_timeout)
             .load()?;
         self.client_config.set(client_config)?;
 
