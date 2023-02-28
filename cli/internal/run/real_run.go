@@ -36,7 +36,7 @@ func RealRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	hashes *taskhash.Tracker,
+	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
@@ -77,7 +77,7 @@ func RealRun(
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
-		taskHashes:      hashes,
+		taskHashTracker: taskHashTracker,
 		repoRoot:        base.RepoRoot,
 		isSinglePackage: singlePackage,
 	}
@@ -133,7 +133,7 @@ type execContext struct {
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
-	taskHashes      *taskhash.Tracker
+	taskHashTracker *taskhash.Tracker
 	repoRoot        turbopath.AbsoluteSystemPath
 	isSinglePackage bool
 }
@@ -158,7 +158,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
+	hash, err := ec.taskHashTracker.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
 	ec.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))

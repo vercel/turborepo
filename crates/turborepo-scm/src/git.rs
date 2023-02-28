@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use dunce::canonicalize as fs_canonicalize;
-use git2::{DiffFormat, DiffOptions, Oid, Repository};
+use git2::{DiffFormat, DiffOptions, Repository};
 
 use crate::Error;
 
@@ -78,10 +78,10 @@ fn add_changed_files_from_commits(
     from_commit: &str,
     to_commit: &str,
 ) -> Result<(), Error> {
-    let from_commit_oid = Oid::from_str(from_commit)?;
-    let to_commit_oid = Oid::from_str(to_commit)?;
-    let from_commit = repo.find_commit(from_commit_oid)?;
-    let to_commit = repo.find_commit(to_commit_oid)?;
+    let from_commit_ref = repo.revparse_single(from_commit)?;
+    let to_commit_ref = repo.revparse_single(to_commit)?;
+    let from_commit = from_commit_ref.peel_to_commit()?;
+    let to_commit = to_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
     let to_tree = to_commit.tree()?;
     let mut options = relative_to.map(|relative_to| {
@@ -119,8 +119,8 @@ pub fn previous_content(
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
     let repo = Repository::open(repo_root)?;
-    let from_commit_oid = Oid::from_str(from_commit)?;
-    let from_commit = repo.find_commit(from_commit_oid)?;
+    let from_commit_ref = repo.revparse_single(from_commit)?;
+    let from_commit = from_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
 
     // Canonicalize so strip_prefix works properly
@@ -262,6 +262,28 @@ mod tests {
             file,
         )?;
         assert_eq!(content, b"let z = 1;");
+        Ok(())
+    }
+
+    #[test]
+    fn test_revparse() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        let file = repo_root.path().join("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        fs::write(&file, "let z = 1;")?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+
+        let revparsed_head = repo.revparse_single("HEAD")?;
+        assert_eq!(revparsed_head.id(), second_commit_oid);
+        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1")?;
+        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
 
         Ok(())
     }
