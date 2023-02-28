@@ -353,7 +353,7 @@ impl<'de> Deserialize<'de> for Rope {
 impl PartialEq for Rope {
     // Ropes with similar contents are equals, regardless of their structure.
     fn eq(&self, other: &Self) -> bool {
-        if Arc::ptr_eq(&self.data, &other.data) {
+        if self.data.ptr_eq(&other.data) {
             return true;
         }
         if self.len() != other.len() {
@@ -392,10 +392,14 @@ impl PartialEq for Rope {
         let mut left = RopeReader::new(left, index);
         let mut right = RopeReader::new(right, index);
         loop {
-            match (left.fill_buf(), right.fill_buf()) {
+            match (left.next(), right.next()) {
                 // fill_buf should always return Ok, with either some number of bytes or 0 bytes
                 // when consumed.
-                (Ok(a), Ok(b)) => {
+                (Some(mut a), Some(mut b)) => {
+                    if a.ptr_eq(&b) {
+                        continue;
+                    }
+
                     let len = min(a.len(), b.len());
 
                     // When one buffer is consumed, both must be consumed.
@@ -407,12 +411,17 @@ impl PartialEq for Rope {
                         return false;
                     }
 
-                    left.consume(len);
-                    right.consume(len);
+                    if len < a.len() {
+                        a.advance(len);
+                        left.stack.push(StackElem::Local(a));
+                    }
+                    if len < b.len() {
+                        b.advance(len);
+                        right.stack.push(StackElem::Local(b));
+                    }
                 }
 
-                // If an error is ever returned (which shouldn't happen for us) for either/both,
-                // then we can't prove equality.
+                (None, None) => return true,
                 _ => return false,
             }
         }
@@ -498,6 +507,13 @@ impl RopeElem {
     fn maybe_eq(&self, other: &Self) -> Option<bool> {
         match (self, other) {
             (Local(a), Local(b)) => {
+                if a.ptr_eq(b) {
+                    return Some(true);
+                }
+
+                // We might as well do contents equality, because there's no faster way to do
+                // it. Returning a false result here is actually pretty fast, and allows us to
+                // skip creating the RopeReader struct.
                 if a.len() == b.len() {
                     return Some(a == b);
                 }
@@ -507,7 +523,7 @@ impl RopeElem {
                 None
             }
             (Shared(a), Shared(b)) => {
-                if Arc::ptr_eq(&a.0, &b.0) {
+                if a.ptr_eq(b) {
                     return Some(true);
                 }
 
@@ -683,6 +699,22 @@ impl From<RopeElem> for StackElem {
             Local(bytes) => Self::Local(bytes),
             Shared(inner) => Self::Shared(inner, 0),
         }
+    }
+}
+
+trait PtrEq {
+    fn ptr_eq(&self, other: &Self) -> bool;
+}
+
+impl PtrEq for Bytes {
+    fn ptr_eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.as_ptr() == other.as_ptr()
+    }
+}
+
+impl PtrEq for InnerRope {
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
