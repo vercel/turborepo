@@ -385,5 +385,6 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependencies:           dependencies,
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
+		Framework:              ht.Framework,
 	}
 }

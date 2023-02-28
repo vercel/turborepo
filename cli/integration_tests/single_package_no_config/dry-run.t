@@ -23,6 +23,7 @@ Check
     Dependencies           =                                                                                                         
     Dependendents          =                                                                                                         
     ResolvedTaskDefinition = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework              = <FRAMEWORK NOT DETECTED>                                                                                
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -48,7 +49,8 @@ Check
           "outputMode": "full",
           "env": [],
           "persistent": false
-        }
+        },
+        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
       }
     ]
   }

@@ -23,6 +23,7 @@ Check
     Dependencies           =                                                                                                             
     Dependendents          = test                                                                                                        
     ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework              = <FRAMEWORK NOT DETECTED>                                                                                    
   test
     Task                   = test                                                                                                          
     Hash                   = c71366ccd6a86465                                                                                              
@@ -34,6 +35,7 @@ Check
     Dependencies           = build                                                                                                         
     Dependendents          =                                                                                                               
     ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework              = <FRAMEWORK NOT DETECTED>                                                                                      
 
   $ ${TURBO} run test --dry=json --single-package
   {
@@ -65,7 +67,8 @@ Check
           "outputMode": "full",
           "env": [],
           "persistent": false
-        }
+        },
+        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
       },
       {
         "task": "test",
@@ -92,7 +95,8 @@ Check
           "outputMode": "full",
           "env": [],
           "persistent": false
-        }
+        },
+        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
       }
     ]
   }

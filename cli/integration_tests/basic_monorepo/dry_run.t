@@ -119,7 +119,8 @@ Setup
       "outputMode": "full",
       "env": [],
       "persistent": false
-    }
+    },
+    "framework": "<FRAMEWORK NOT DETECTED>"
   }
 
 # Validate output of util#build task
@@ -148,7 +149,8 @@ Setup
       "outputMode": "full",
       "env": [],
       "persistent": false
-    }
+    },
+    "framework": "<FRAMEWORK NOT DETECTED>"
   }
 
 Tasks that don't exist throw an error
