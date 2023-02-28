@@ -500,7 +500,11 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn references(&self) -> AssetReferencesVc {
-        let deps = self.split_data.await.unwrap().deps[&self.chunk_id].clone();
+        let split_data = self.split_data.await.unwrap();
+        let deps = match split_data.deps.get(&self.chunk_id) {
+            Some(v) => v,
+            None => return AssetReferencesVc::cell(vec![]),
+        };
 
         let assets = deps
             .iter()
