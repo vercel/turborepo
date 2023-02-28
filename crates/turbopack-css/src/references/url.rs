@@ -97,8 +97,8 @@ impl CodeGenerateable for UrlAssetReference {
         context: ChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let this = self_vc.await?;
-        // TODO This is not the correct way to get the current chunk path. It currently
-        // works as all chunks are in the same directory.
+        // TODO(WEB-662) This is not the correct way to get the current chunk path. It
+        // currently works as all chunks are in the same directory.
         let chunk_path =
             context.chunk_path(AssetIdentVc::from_path(this.origin.origin_path()), ".css");
         let context_path = chunk_path.parent().await?;
@@ -106,8 +106,8 @@ impl CodeGenerateable for UrlAssetReference {
         let mut visitors = Vec::new();
 
         if let ReferencedAsset::Some(asset) = &*self_vc.get_referenced_asset(context).await? {
-            // TODO This is not the correct way to get the path of the asset. `asset` is on
-            // module-level, but we need the output-level asset instead.
+            // TODO(WEB-662) This is not the correct way to get the path of the asset.
+            // `asset` is on module-level, but we need the output-level asset instead.
             let path = asset.ident().path().await?;
             let relative_path = context_path
                 .get_relative_path_to(&path)
