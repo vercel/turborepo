@@ -24,7 +24,7 @@ Check
     Dependendents           =                                                                                                             
     Inputs Files Considered = 4                                                                                                           
     ResolvedTaskDefinition  = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-    Framework               = <FRAMEWORK NOT DETECTED>                                                                                    
+    Framework               = <NO FRAMEWORK DETECTED>                                                                                     
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -61,7 +61,7 @@ Check
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
-        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
+        "framework": "\u003cNO FRAMEWORK DETECTED\u003e"
       }
     ]
   }

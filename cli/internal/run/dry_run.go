@@ -31,7 +31,7 @@ import (
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
 // the DryRunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
-const missingFrameworkLabel = "<FRAMEWORK NOT DETECTED>"
+const missingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed

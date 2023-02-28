@@ -24,7 +24,7 @@ Check
     Dependendents           = test                                                                                                        
     Inputs Files Considered = 4                                                                                                           
     ResolvedTaskDefinition  = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-    Framework               = <FRAMEWORK NOT DETECTED>                                                                                    
+    Framework               = <NO FRAMEWORK DETECTED>                                                                                     
   test
     Task                    = test                                                                                                          
     Hash                    = c71366ccd6a86465                                                                                              
@@ -37,7 +37,7 @@ Check
     Dependendents           =                                                                                                               
     Inputs Files Considered = 4                                                                                                             
     ResolvedTaskDefinition  = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-    Framework               = <FRAMEWORK NOT DETECTED>                                                                                      
+    Framework               = <NO FRAMEWORK DETECTED>                                                                                       
 
   $ ${TURBO} run test --dry=json --single-package
   {
@@ -76,7 +76,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
-        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
+        "framework": "\u003cNO FRAMEWORK DETECTED\u003e"
       },
       {
         "task": "test",
@@ -110,7 +110,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
-        "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
+        "framework": "\u003cNO FRAMEWORK DETECTED\u003e"
       }
     ]
   }
