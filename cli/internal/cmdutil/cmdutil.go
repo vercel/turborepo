@@ -125,7 +125,7 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 
 // AddFlags adds common flags for all turbo commands to the given flagset and binds
 // them to this instance of Helper
-func (h *Helper) AddFlags(flags *pflag.FlagSet) {
+func (h *Helper) addFlags(flags *pflag.FlagSet) {
 	flags.CountVarP(&h.verbosity, "verbosity", "v", "verbosity")
 	client.AddFlags(&h.clientOpts, flags)
 	config.AddRepoConfigFlags(flags)
