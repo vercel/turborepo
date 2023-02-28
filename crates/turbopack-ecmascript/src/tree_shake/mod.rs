@@ -12,7 +12,6 @@ use turbopack_core::{
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::{ModulePart, ModulePartVc},
-    version::VersionedContentVc,
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
@@ -325,7 +324,13 @@ impl PartialEq for SplitResult {
 /// For caching
 #[turbo_tasks::function]
 async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
-    let path = asset.as_asset().path().await.unwrap();
+    let filename = asset
+        .as_asset()
+        .path()
+        .await
+        .unwrap()
+        .file_name()
+        .to_string();
     let parsed = asset.parse().await.unwrap();
 
     match &*parsed {
@@ -335,7 +340,8 @@ async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
 
                 dep_graph.handle_weak(true);
 
-                let (data, modules) = dep_graph.split_module(&path.path.clone().into(), &items);
+                let (data, modules) =
+                    dep_graph.split_module(&format!("./{filename}").into(), &items);
 
                 SplitResult { data, modules }.cell()
             } else {
@@ -432,7 +438,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     fn content(&self) -> EcmascriptChunkItemContentVc {
         // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
         EcmascriptChunkItemContent {
-            inner_code: format!("__turbopack_export_value__({{ wip: true }});",).into(),
+            inner_code: format!("__turbopack_wip__({{ wip: true }});",).into(),
             ..Default::default()
         }
         .cell()
