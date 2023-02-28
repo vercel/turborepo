@@ -205,18 +205,18 @@ func (th *Tracker) CalculateFileHashes(
 
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
-			for PackageFileSpec := range hashQueue {
-				pkg, ok := workspaceInfos.PackageJSONs[PackageFileSpec.pkg]
+			for packageFileSpec := range hashQueue {
+				pkg, ok := workspaceInfos.PackageJSONs[packageFileSpec.pkg]
 				if !ok {
-					return fmt.Errorf("cannot find package %v", PackageFileSpec.pkg)
+					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
-				hashObject := PackageFileSpec.getHashObject(pkg, repoRoot)
-				hash, err := PackageFileSpec.hash(hashObject)
+				hashObject := packageFileSpec.getHashObject(pkg, repoRoot)
+				hash, err := packageFileSpec.hash(hashObject)
 				if err != nil {
 					return err
 				}
 				th.mu.Lock()
-				pfsKey := PackageFileSpec.ToKey()
+				pfsKey := packageFileSpec.ToKey()
 				hashes[pfsKey] = hash
 				hashObjects[pfsKey] = hashObject
 				th.mu.Unlock()
