@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{bail, Result};
+use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::json;
 use turbo_tasks::{
@@ -237,7 +236,7 @@ async fn config_assets(
     )
     .as_asset();
 
-    let mut inner = HashMap::new();
+    let mut inner = IndexMap::new();
     inner.insert("MIDDLEWARE_CHUNK_GROUP".to_string(), manifest);
     inner.insert("MIDDLEWARE_CONFIG".to_string(), config_asset);
     Ok(InnerAssetsVc::cell(inner))

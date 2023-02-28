@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{bail, Context, Result};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
@@ -176,7 +175,7 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([("CONFIG".to_string(), config_asset)])),
+        InnerAssetsVc::cell(IndexMap::from([("CONFIG".to_string(), config_asset)])),
     )
     .into()
 }

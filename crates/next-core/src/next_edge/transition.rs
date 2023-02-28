@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{anyhow, bail, Result};
+use indexmap::IndexMap;
 use turbo_tasks::Value;
 use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileContentVc, FileSystemPathVc};
 use turbopack::{
@@ -103,7 +102,7 @@ impl Transition for NextEdgeTransition {
             Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
             context.compile_time_info(),
-            InnerAssetsVc::cell(HashMap::from([("ENTRY".to_string(), asset)])),
+            InnerAssetsVc::cell(IndexMap::from([("ENTRY".to_string(), asset)])),
         );
 
         let asset = ChunkGroupFilesAsset {

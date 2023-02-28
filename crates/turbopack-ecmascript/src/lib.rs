@@ -23,13 +23,12 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 use chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
 };
 use code_gen::CodeGenerateableVc;
+use indexmap::IndexMap;
 use parse::{parse, ParseResult};
 pub use parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 use path_visitor::ApplyVisitors;
@@ -88,7 +87,7 @@ pub enum EcmascriptModuleAssetType {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct InnerAssets(HashMap<String, AssetVc>);
+pub struct InnerAssets(IndexMap<String, AssetVc>);
 
 #[turbo_tasks::function]
 fn modifier() -> StringVc {

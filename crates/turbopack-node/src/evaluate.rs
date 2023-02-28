@@ -1,7 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
+use std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 use anyhow::{Context, Result};
 use futures_retry::{FutureRetry, RetryPolicy};
+use indexmap::IndexMap;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -95,7 +96,7 @@ pub async fn get_evaluate_pool(
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([
+        InnerAssetsVc::cell(IndexMap::from([
             ("INNER".to_string(), module_asset),
             ("RUNTIME".to_string(), runtime_asset),
         ])),
