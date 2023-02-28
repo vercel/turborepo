@@ -132,7 +132,6 @@ func (a ParsedArgsFromRust) GetCwd() (string, error) {
 func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
 	if a.RemoteCacheTimeout != 0 {
 		return a.RemoteCacheTimeout, nil
-	} else {
-		return 0, fmt.Errorf("No remote cache timeout provided.")
 	}
+	return 0, fmt.Errorf("no remote cache timeout provided")
 }
