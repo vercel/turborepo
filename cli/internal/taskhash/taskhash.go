@@ -198,8 +198,8 @@ func (th *Tracker) CalculateFileHashes(
 		hashTasks.Add(pfs)
 	}
 
-	hashes := make(map[PackageFileHashKey]string)
-	hashObjects := make(map[PackageFileHashKey]map[turbopath.AnchoredUnixPath]string)
+	hashes := make(map[PackageFileHashKey]string, len(hashTasks))
+	hashObjects := make(map[PackageFileHashKey]map[turbopath.AnchoredUnixPath]string, len(hashTasks))
 	hashQueue := make(chan *PackageFileSpec, workerCount)
 	hashErrs := &errgroup.Group{}
 
