@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -77,7 +78,7 @@ func DryRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	tracker *taskhash.Tracker,
+	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
 	summary *dryRunSummary,
@@ -91,7 +92,7 @@ func DryRun(
 		ctx,
 		engine,
 		g,
-		tracker,
+		taskHashTracker,
 		rs,
 		base,
 		turboCache,
@@ -122,13 +123,14 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
 	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}
@@ -139,8 +141,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		framework := missingFrameworkLabel
-		if taskHashes.PackageTaskFramework[packageTask.TaskID] != "" {
-			framework = taskHashes.PackageTaskFramework[packageTask.TaskID]
+		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
+			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
 		}
 
 		isRootTask := packageTask.PackageName == util.RootPkgName
@@ -174,6 +176,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
 			Framework:              framework,
+			ExpandedInputs:         packageTask.ExpandedInputs,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
@@ -233,7 +236,7 @@ func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, e
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
@@ -309,7 +312,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
-
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
@@ -335,34 +338,36 @@ func commandLooksLikeTurbo(command string) bool {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID                 string             `json:"taskId"`
-	Task                   string             `json:"task"`
-	Package                string             `json:"package"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dir                    string             `json:"directory"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
-	Framework              string             `json:"framework"`
+	TaskID                 string                                `json:"taskId"`
+	Task                   string                                `json:"task"`
+	Package                string                                `json:"package"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dir                    string                                `json:"directory"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	Framework              string                                `json:"framework"`
 }
 
 type singlePackageTaskSummary struct {
-	Task                   string             `json:"task"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
-	Framework              string             `json:"framework"`
+	Task                   string                                `json:"task"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	Framework              string                                `json:"framework"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -386,5 +391,6 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 		Framework:              ht.Framework,
+		ExpandedInputs:         ht.ExpandedInputs,
 	}
 }

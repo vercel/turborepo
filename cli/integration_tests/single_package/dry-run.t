@@ -13,17 +13,18 @@ Check
   
   Tasks to Run
   build
-    Task                   = build                                                                                                       
-    Hash                   = 7bf32e1dedb04a5d                                                                                            
-    Cached (Local)         = false                                                                                                       
-    Cached (Remote)        = false                                                                                                       
-    Command                = echo 'building' > foo                                                                                       
-    Outputs                = foo                                                                                                         
-    Log File               = .turbo/turbo-build.log                                                                                      
-    Dependencies           =                                                                                                             
-    Dependendents          =                                                                                                             
-    ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-    Framework              = <FRAMEWORK NOT DETECTED>                                                                                    
+    Task                    = build                                                                                                       
+    Hash                    = 7bf32e1dedb04a5d                                                                                            
+    Cached (Local)          = false                                                                                                       
+    Cached (Remote)         = false                                                                                                       
+    Command                 = echo 'building' > foo                                                                                       
+    Outputs                 = foo                                                                                                         
+    Log File                = .turbo/turbo-build.log                                                                                      
+    Dependencies            =                                                                                                             
+    Dependendents           =                                                                                                             
+    Inputs Files Considered = 4                                                                                                           
+    ResolvedTaskDefinition  = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework               = <FRAMEWORK NOT DETECTED>                                                                                    
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -53,6 +54,12 @@ Check
           "outputMode": "full",
           "env": [],
           "persistent": false
+        },
+        "expandedInputs": {
+          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
+          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+          "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
         "framework": "\u003cFRAMEWORK NOT DETECTED\u003e"
       }
