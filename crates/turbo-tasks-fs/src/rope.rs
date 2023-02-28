@@ -22,7 +22,7 @@ static EMPTY_BUF: &[u8] = &[];
 
 /// A Rope provides an efficient structure for sharing bytes/strings between
 /// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
-/// the sharing contents of one Rope can be done by just cloning an Arc.
+/// sharing the contents of one Rope can be done by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
 #[turbo_tasks::value(shared, serialization = "custom", eq = "manual")]
@@ -388,7 +388,7 @@ impl PartialEq for Rope {
         }
 
         // At this point, we need to do slower contents equality. It's possible we'll
-        // still get some memory reference quality for Bytes.
+        // still get some memory reference equality for Bytes.
         let mut left = RopeReader::new(left, index);
         let mut right = RopeReader::new(right, index);
         loop {
