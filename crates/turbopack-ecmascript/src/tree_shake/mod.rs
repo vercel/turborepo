@@ -315,6 +315,9 @@ struct SplitResult {
 
     #[turbo_tasks(debug_ignore, trace_ignore)]
     modules: Vec<Module>,
+
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    deps: FxHashMap<u32, Vec<u32>>,
 }
 
 impl PartialEq for SplitResult {
@@ -446,7 +449,6 @@ pub struct EcmascriptModulePartChunkItem {
     context: ChunkingContextVc,
 
     chunk_id: u32,
-    deps: Vec<u32>,
 }
 
 #[turbo_tasks::value_impl]
@@ -493,8 +495,9 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn references(&self) -> AssetReferencesVc {
-        let assets = self
-            .deps
+        let deps = self.split_data.await.unwrap().deps[&self.chunk_id].clone();
+
+        let assets = deps
             .iter()
             .map(|&chunk_id| {
                 SingleAssetReferenceVc::new(
