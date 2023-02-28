@@ -15,4 +15,5 @@ if (module.hot) {
   module.hot.dispose(function () {
     window.__NEXT_P.push([PAGE_PATH]);
   });
+  module.hot.accept();
 }
