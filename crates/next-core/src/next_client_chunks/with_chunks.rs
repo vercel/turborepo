@@ -134,7 +134,7 @@ const chunks = {};
 #[turbo_tasks::value_impl]
 impl ChunkItem for WithChunksChunkItem {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
+    fn asset_ident(&self) -> AssetIdentVc {
         self.inner.ident()
     }
 

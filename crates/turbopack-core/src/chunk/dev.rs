@@ -12,7 +12,7 @@ use super::{ChunkingContext, ChunkingContextVc};
 use crate::{
     asset::{Asset, AssetVc},
     environment::EnvironmentVc,
-    ident::{AssetIdentVc, AssetParam},
+    ident::{AssetIdent, AssetIdentVc},
 };
 
 pub struct DevChunkingContextBuilder {
@@ -128,53 +128,52 @@ impl ChunkingContext for DevChunkingContext {
             name.truncate(name.len() - extension.len());
         }
 
-        if !ident.params.is_empty() {
-            let default_modifier = match extension {
-                ".js" => Some("ecmascript"),
-                ".css" => Some("css"),
-                _ => None,
-            };
+        let default_modifier = match extension {
+            ".js" => Some("ecmascript"),
+            ".css" => Some("css"),
+            _ => None,
+        };
 
-            let mut hasher = Xxh3Hash64Hasher::new();
-            let mut has_hash = false;
-            for param in ident.params.iter() {
-                match *param {
-                    AssetParam::Query(query) => {
-                        0_u8.deterministic_hash(&mut hasher);
-                        query.await?.deterministic_hash(&mut hasher);
-                        has_hash = true;
-                    }
-                    AssetParam::Fragment(fragment) => {
-                        1_u8.deterministic_hash(&mut hasher);
-                        fragment.await?.deterministic_hash(&mut hasher);
-                        has_hash = true;
-                    }
-                    AssetParam::Asset(key, ident) => {
-                        2_u8.deterministic_hash(&mut hasher);
-                        key.await?.deterministic_hash(&mut hasher);
-                        ident.to_string().await?.deterministic_hash(&mut hasher);
-                        has_hash = true;
-                    }
-                    AssetParam::Modifier(modifier) => {
-                        let modifier = modifier.await?;
-                        if let Some(default_modifier) = default_modifier {
-                            // We exclude the default modifier for each extension to create more
-                            // readable chunk paths
-                            if *modifier == default_modifier {
-                                continue;
-                            }
-                        }
-                        3_u8.deterministic_hash(&mut hasher);
-                        modifier.deterministic_hash(&mut hasher);
-                        has_hash = true;
-                    }
+        let mut hasher = Xxh3Hash64Hasher::new();
+        let mut has_hash = false;
+        let AssetIdent {
+            path: _,
+            query,
+            fragment,
+            assets,
+            modifiers,
+        } = ident;
+        if let Some(query) = query {
+            0_u8.deterministic_hash(&mut hasher);
+            query.await?.deterministic_hash(&mut hasher);
+            has_hash = true;
+        }
+        if let Some(fragment) = fragment {
+            1_u8.deterministic_hash(&mut hasher);
+            fragment.await?.deterministic_hash(&mut hasher);
+            has_hash = true;
+        }
+        for (key, ident) in assets.iter() {
+            2_u8.deterministic_hash(&mut hasher);
+            key.await?.deterministic_hash(&mut hasher);
+            ident.to_string().await?.deterministic_hash(&mut hasher);
+            has_hash = true;
+        }
+        for modifier in modifiers.iter() {
+            let modifier = modifier.await?;
+            if let Some(default_modifier) = default_modifier {
+                if &*modifier == default_modifier {
+                    continue;
                 }
             }
-            if has_hash {
-                let hash = encode_hex(hasher.finish());
-                let truncated_hash = &hash[..6];
-                write!(name, "_{}", truncated_hash)?;
-            }
+            3_u8.deterministic_hash(&mut hasher);
+            modifier.deterministic_hash(&mut hasher);
+            has_hash = true;
+        }
+        if has_hash {
+            let hash = encode_hex(hasher.finish());
+            let truncated_hash = &hash[..6];
+            write!(name, "_{}", truncated_hash)?;
         }
 
         // Location in "path" where hashed and named parts are split.

@@ -19,7 +19,7 @@ impl EcmascriptChunkContextVc {
     #[turbo_tasks::function]
     pub async fn chunk_item_id(self, chunk_item: EcmascriptChunkItemVc) -> Result<ModuleIdVc> {
         let layer = self.await?.context.layer();
-        let mut ident = chunk_item.ident();
+        let mut ident = chunk_item.asset_ident();
         if !layer.await?.is_empty() {
             ident = ident.with_modifier(layer)
         }

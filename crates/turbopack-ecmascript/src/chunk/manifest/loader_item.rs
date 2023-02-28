@@ -71,7 +71,7 @@ impl ManifestLoaderItemVc {
 #[turbo_tasks::value_impl]
 impl ChunkItem for ManifestLoaderItem {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
+    fn asset_ident(&self) -> AssetIdentVc {
         self.manifest.ident().with_modifier(modifier())
     }
 

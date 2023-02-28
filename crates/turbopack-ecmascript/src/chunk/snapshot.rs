@@ -139,7 +139,7 @@ impl EcmascriptChunkContentEntryVc {
                 let js_error_message = serde_json::to_string(&error_message)?;
                 let issue = CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
-                    path: chunk_item.ident().path(),
+                    path: chunk_item.asset_ident().path(),
                     title: StringVc::cell("Code generation for chunk item errored".to_string()),
                     message: StringVc::cell(error_message),
                 }

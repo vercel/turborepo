@@ -40,7 +40,7 @@ pub async fn expand_imports(
                     continue;
                 }
 
-                let id = &*imported_chunk_item.ident().to_string().await?;
+                let id = &*imported_chunk_item.asset_ident().to_string().await?;
                 writeln!(code, "/* import({}) */", id)?;
                 writeln!(code, "{}", open)?;
 
@@ -57,7 +57,7 @@ pub async fn expand_imports(
                     continue;
                 }
 
-                let id = &*composed_chunk_item.ident().to_string().await?;
+                let id = &*composed_chunk_item.asset_ident().to_string().await?;
                 writeln!(code, "/* composes({}) */", id)?;
 
                 let composed_content_vc = composed_chunk_item.content();

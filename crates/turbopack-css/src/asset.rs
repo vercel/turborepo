@@ -154,7 +154,7 @@ struct ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
+    fn asset_ident(&self) -> AssetIdentVc {
         self.module.ident()
     }
 

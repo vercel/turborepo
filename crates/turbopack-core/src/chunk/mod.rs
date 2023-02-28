@@ -712,7 +712,10 @@ where
 
 #[turbo_tasks::value_trait]
 pub trait ChunkItem {
-    fn ident(&self) -> AssetIdentVc;
+    /// The [AssetIdent] of the [Asset] that this [ChunkItem] was created from.
+    /// For most chunk types this must uniquely identify the asset as it's the
+    /// source of the module id used at runtime.
+    fn asset_ident(&self) -> AssetIdentVc;
     /// A [ChunkItem] can describe different `references` than its original
     /// [Asset].
     /// TODO(alexkirsz) This should have a default impl that returns empty

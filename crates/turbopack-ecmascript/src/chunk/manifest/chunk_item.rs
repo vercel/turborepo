@@ -76,7 +76,7 @@ impl EcmascriptChunkItem for ManifestChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for ManifestChunkItem {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
+    fn asset_ident(&self) -> AssetIdentVc {
         self.manifest.ident()
     }
 

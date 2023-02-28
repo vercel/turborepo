@@ -27,7 +27,7 @@ use turbopack_core::{
         Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContext,
         ChunkingContextVc,
     },
-    ident::{AssetIdent, AssetIdentVc, AssetParam},
+    ident::{AssetIdent, AssetIdentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -305,25 +305,24 @@ impl Asset for EcmascriptChunk {
         let this = self_vc.await?;
 
         // All information that makes the chunk unique need to be encoded in the params.
-        let mut params = Vec::new();
 
         // All main entries are included
         let main_entries = this.main_entries.await?;
         let main_entry_key = StringVc::cell(String::new());
-        for entry in main_entries.iter() {
-            params.push(AssetParam::Asset(main_entry_key, entry.ident()))
-        }
+        let mut assets = main_entries
+            .iter()
+            .map(|entry| (main_entry_key, entry.ident()))
+            .collect::<Vec<_>>();
 
         // The primary name of the chunk is the only entry or the common parent of all
         // entries.
-        let path = if let [AssetParam::Asset(_, ident)] = &params[..] {
+        let path = if let [(_, ident)] = &assets[..] {
             ident.path()
         } else if let &Some(common_parent) = &*self_vc.common_parent().await? {
             common_parent
-        } else if let AssetParam::Asset(_, ident) = params[0] {
-            ident.path()
         } else {
-            unreachable!()
+            let (_, ident) = assets[0];
+            ident.path()
         };
 
         // All omit entries are included
@@ -331,29 +330,42 @@ impl Asset for EcmascriptChunk {
             let omit_entries = omit_entries.await?;
             let omit_entry_key = StringVc::cell("omit".to_string());
             for entry in omit_entries.iter() {
-                params.push(AssetParam::Asset(omit_entry_key, entry.ident()))
+                assets.push((omit_entry_key, entry.ident()))
             }
         }
 
         // Evaluate info is included
+        let mut modifiers = Vec::new();
         if let Some(evaluate) = this.evaluate {
             let evaluate = evaluate.content(this.context, self_vc).await?;
-            for path in evaluate.ecma_chunks_server_paths.iter() {
-                params.push(AssetParam::Modifier(StringVc::cell(path.clone())));
-            }
-            for path in evaluate.other_chunks_server_paths.iter() {
-                params.push(AssetParam::Modifier(StringVc::cell(path.clone())));
-            }
-            for id in evaluate.entry_modules_ids.iter() {
-                params.push(AssetParam::Modifier(id.to_string()));
-            }
+            modifiers.extend(
+                evaluate
+                    .ecma_chunks_server_paths
+                    .iter()
+                    .cloned()
+                    .map(StringVc::cell),
+            );
+            modifiers.extend(
+                evaluate
+                    .other_chunks_server_paths
+                    .iter()
+                    .cloned()
+                    .map(StringVc::cell),
+            );
+            modifiers.extend(evaluate.entry_modules_ids.iter().map(|id| id.to_string()));
         }
 
         // Simplify when it's only a single main entry without extra info
-        let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
-            ident
+        let ident = if assets.len() == 1 && modifiers.is_empty() {
+            assets[0].1
         } else {
-            AssetIdentVc::new(Value::new(AssetIdent { path, params }))
+            AssetIdentVc::new(Value::new(AssetIdent {
+                path,
+                query: None,
+                fragment: None,
+                assets,
+                modifiers,
+            }))
         };
 
         Ok(AssetIdentVc::from_path(
@@ -425,7 +437,7 @@ impl Introspectable for EcmascriptChunk {
         details += "Chunk items:\n\n";
         for chunk in chunk_items.iter() {
             for item in chunk.await?.iter() {
-                writeln!(details, "- {}", item.ident().to_string().await?)?;
+                writeln!(details, "- {}", item.asset_ident().to_string().await?)?;
             }
         }
         details += "\nContent:\n\n";

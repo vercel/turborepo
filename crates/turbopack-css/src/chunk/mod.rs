@@ -18,7 +18,7 @@ use turbopack_core::{
         FromChunkableAsset, ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
-    ident::{AssetIdent, AssetIdentVc, AssetParam},
+    ident::{AssetIdent, AssetIdentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -268,23 +268,24 @@ impl Asset for CssChunk {
     async fn ident(self_vc: CssChunkVc) -> Result<AssetIdentVc> {
         let this = self_vc.await?;
 
-        let mut params = Vec::new();
-
         let main_entries = this.main_entries.await?;
         let main_entry_key = StringVc::cell(String::new());
-        for entry in main_entries.iter() {
-            params.push(AssetParam::Asset(main_entry_key, entry.ident()))
-        }
+        let assets = main_entries
+            .iter()
+            .map(|entry| (main_entry_key, entry.ident()))
+            .collect::<Vec<_>>();
 
-        let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
+        let ident = if let [(_, ident)] = assets[..] {
             ident
-        } else if let AssetParam::Asset(_, ident) = params[0] {
+        } else {
+            let (_, ident) = assets[0];
             AssetIdentVc::new(Value::new(AssetIdent {
                 path: ident.path(),
-                params,
+                query: None,
+                fragment: None,
+                assets,
+                modifiers: Vec::new(),
             }))
-        } else {
-            unreachable!()
         };
 
         Ok(AssetIdentVc::from_path(
@@ -347,7 +348,7 @@ impl CssChunkContextVc {
     #[turbo_tasks::function]
     pub async fn chunk_item_id(self, chunk_item: CssChunkItemVc) -> Result<ModuleIdVc> {
         let layer = self.await?.context.layer();
-        let mut ident = chunk_item.ident();
+        let mut ident = chunk_item.asset_ident();
         if !layer.await?.is_empty() {
             ident = ident.with_modifier(layer)
         }
@@ -434,7 +435,7 @@ impl Introspectable for CssChunk {
         let chunk_content = css_chunk_content(this.context, this.main_entries).await?;
         details += "Chunk items:\n\n";
         for item in chunk_content.chunk_items.iter() {
-            writeln!(details, "- {}", item.ident().to_string().await?)?;
+            writeln!(details, "- {}", item.asset_ident().to_string().await?)?;
         }
         details += "\nContent:\n\n";
         write!(details, "{}", content.await?)?;
