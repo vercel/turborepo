@@ -1,21 +1,32 @@
 use anyhow::Result;
-use indexmap::IndexMap;
-use turbopack_core::{chunk::ModuleIdReadRef, code_builder::CodeReadRef};
+use indexmap::{IndexMap, IndexSet};
+use serde::Serialize;
+use turbo_tasks::primitives::JsonValueVc;
+use turbo_tasks_fs::rope::Rope;
+use turbopack_core::{
+    chunk::ModuleId,
+    version::{PartialUpdate, TotalUpdate, Update, UpdateVc, VersionVc},
+};
 
-use super::{content::EcmascriptChunkContentVc, version::EcmascriptChunkVersionVc};
+use super::{
+    content::EcmascriptChunkContentVc, snapshot::EcmascriptChunkContentEntry,
+    version::EcmascriptChunkVersionVc,
+};
 
-#[turbo_tasks::value]
-pub(super) struct EcmascriptChunkUpdate {
-    pub added: IndexMap<ModuleIdReadRef, (u64, CodeReadRef)>,
-    pub deleted: IndexMap<ModuleIdReadRef, u64>,
-    pub modified: IndexMap<ModuleIdReadRef, CodeReadRef>,
+#[derive(Serialize)]
+#[serde(tag = "type")]
+struct EcmascriptChunkUpdate<'a> {
+    added: IndexMap<&'a ModuleId, HmrUpdateEntry<'a>>,
+    modified: IndexMap<&'a ModuleId, HmrUpdateEntry<'a>>,
+    deleted: IndexSet<&'a ModuleId>,
 }
 
+#[turbo_tasks::function]
 pub(super) async fn update_ecmascript_chunk(
     content: EcmascriptChunkContentVc,
-    from_version: EcmascriptChunkVersionVc,
+    from_version: VersionVc,
 ) -> Result<UpdateVc> {
-    let to_version = self_vc.version();
+    let to_version = content.version();
     let from_version =
         if let Some(from) = EcmascriptChunkVersionVc::resolve_from(from_version).await? {
             from
@@ -36,11 +47,11 @@ pub(super) async fn update_ecmascript_chunk(
         return Ok(Update::None.cell());
     }
 
-    let this = self_vc.await?;
-    let chunk_path = &this.chunk_path.await?.path;
+    let content = content.await?;
+    let chunk_path = &content.chunk_path.path;
 
     // TODO(alexkirsz) This should probably be stored as a HashMap already.
-    let mut module_factories: IndexMap<_, _> = this
+    let mut module_factories: IndexMap<_, _> = content
         .module_factories
         .iter()
         .map(|entry| (entry.id(), entry))
@@ -81,4 +92,30 @@ pub(super) async fn update_ecmascript_chunk(
     };
 
     Ok(update.into())
+}
+
+#[derive(serde::Serialize)]
+struct HmrUpdateEntry<'a> {
+    code: &'a Rope,
+    url: String,
+    map: Option<String>,
+}
+
+impl<'a> HmrUpdateEntry<'a> {
+    fn new(entry: &'a EcmascriptChunkContentEntry, chunk_path: &str) -> Self {
+        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
+        #[derive(Serialize)]
+        struct Id<'a> {
+            id: &'a ModuleId,
+        }
+        let id = serde_qs::to_string(&Id { id: &entry.id }).unwrap();
+        HmrUpdateEntry {
+            code: entry.source_code(),
+            url: format!("/{}?{}", chunk_path, &id),
+            map: entry
+                .code
+                .has_source_map()
+                .then(|| format!("/__turbopack_sourcemap__/{}.map?{}", chunk_path, &id)),
+        }
+    }
 }

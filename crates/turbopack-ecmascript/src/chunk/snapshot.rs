@@ -2,6 +2,7 @@ use std::{fmt::Write, io::Write as _, slice::Iter};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString};
+use turbo_tasks_fs::rope::Rope;
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     chunk::{ModuleId, ModuleIdReadRef},
@@ -113,6 +114,10 @@ impl EcmascriptChunkContentEntry {
 
     pub fn code(&self) -> &Code {
         &self.code
+    }
+
+    pub fn source_code(&self) -> &Rope {
+        self.code.source_code()
     }
 }
 

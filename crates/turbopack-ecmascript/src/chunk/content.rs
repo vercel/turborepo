@@ -23,6 +23,7 @@ use super::{
     item::{EcmascriptChunkItemVc, EcmascriptChunkItems, EcmascriptChunkItemsVc},
     placeable::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
     snapshot::EcmascriptChunkContentEntriesSnapshotReadRef,
+    update::update_ecmascript_chunk,
     version::{EcmascriptChunkVersion, EcmascriptChunkVersionVc},
 };
 use crate::utils::stringify_js;
@@ -327,11 +328,8 @@ impl VersionedContent for EcmascriptChunkContent {
     }
 
     #[turbo_tasks::function]
-    async fn update(
-        self_vc: EcmascriptChunkContentVc,
-        from_version: VersionVc,
-    ) -> Result<UpdateVc> {
-        update_ecmascript_chunk(self_vc, from_version).await
+    fn update(self_vc: EcmascriptChunkContentVc, from_version: VersionVc) -> UpdateVc {
+        update_ecmascript_chunk(self_vc, from_version)
     }
 }
 
