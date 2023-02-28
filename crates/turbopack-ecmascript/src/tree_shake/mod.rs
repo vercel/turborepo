@@ -296,7 +296,7 @@ impl Analyzer<'_> {
 
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
-    module: EcmascriptModuleAssetVc,
+    full_module: EcmascriptModuleAssetVc,
     chunk_id: u32,
 }
 
@@ -372,7 +372,11 @@ impl EcmascriptModulePartAssetVc {
             None => return Err(anyhow!("could not find chunk id for module part {:?}", key)),
         };
 
-        Ok(EcmascriptModulePartAsset { module, chunk_id }.cell())
+        Ok(EcmascriptModulePartAsset {
+            full_module: module,
+            chunk_id,
+        }
+        .cell())
     }
 }
 
@@ -380,7 +384,7 @@ impl EcmascriptModulePartAssetVc {
 impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     fn path(&self) -> FileSystemPathVc {
-        self.module.path()
+        self.full_module.path()
     }
 
     #[turbo_tasks::function]
@@ -468,7 +472,7 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
             .map(|&chunk_id| {
                 SingleAssetReferenceVc::new(
                     EcmascriptModulePartAssetVc::cell(EcmascriptModulePartAsset {
-                        module: self.full_module.clone(),
+                        full_module: self.full_module.clone(),
                         chunk_id,
                     })
                     .as_asset(),
