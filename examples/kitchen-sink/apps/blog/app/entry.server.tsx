@@ -1,21 +1,18 @@
-import type { EntryContext } from "@remix-run/node";
+import handleRequest from "@vercel/remix-entry-server";
 import { RemixServer } from "@remix-run/react";
-import { renderToString } from "react-dom/server";
+import type { EntryContext } from "@remix-run/server-runtime";
 
-export default function handleRequest(
+export default function (
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: EntryContext
 ) {
-  let markup = renderToString(
-    <RemixServer context={remixContext} url={request.url} />
+  const remixServer = <RemixServer context={remixContext} url={request.url} />;
+  return handleRequest(
+    request,
+    responseStatusCode,
+    responseHeaders,
+    remixServer
   );
-
-  responseHeaders.set("Content-Type", "text/html");
-
-  return new Response("<!DOCTYPE html>" + markup, {
-    status: responseStatusCode,
-    headers: responseHeaders,
-  });
 }

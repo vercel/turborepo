@@ -156,37 +156,68 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	taskNames := options.TaskNames
 	tasksOnly := options.TasksOnly
 
+	// If there are no affected packages, we don't need to go through all this work
+	// we can just exit early.
+	// TODO(mehulkar): but we still need to validate bad task names?
+	if len(pkgs) == 0 {
+		return nil
+	}
+
 	traversalQueue := []string{}
+
+	// get a set of taskNames passed in. we'll remove the ones that have a definition
+	missing := util.SetFromStrings(taskNames)
 
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
 	for _, pkg := range pkgs {
-		isRootPkg := pkg == util.RootPkgName
 		for _, taskName := range taskNames {
-			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
-			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
-			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
-				taskID := util.GetTaskId(pkg, taskName)
-				// Skip tasks that don't have a definition
-				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
-					var e *MissingTaskError
-					if errors.As(err, &e) {
-						// Initially, non-package tasks are not required to exist, as long as some
-						// package in the list packages defines it as a package-task. Dependencies
-						// *are* required to have a definition.
-						continue
-					}
+			taskID := util.GetTaskId(pkg, taskName)
 
-					return err
+			// Look up the task in the package
+			foundTask, err := e.getTaskDefinition(pkg, taskName, taskID)
+
+			// We can skip MissingTaskErrors because we'll validate against them later
+			// Return all other errors
+			if err != nil {
+				var e *MissingTaskError
+				if errors.As(err, &e) {
+					// Initially, non-package tasks are not required to exist, as long as some
+					// package in the list packages defines it as a package-task. Dependencies
+					// *are* required to have a definition.
+					continue
 				}
 
-				traversalQueue = append(traversalQueue, taskID)
+				return err
+			}
+
+			// If we found a task definition, remove it from the missing list
+			if foundTask != nil {
+				// delete taskName if it was found
+				missing.Delete(taskName)
+
+				// Even if a task definition was found, we _only_ want to add it as an entry point to
+				// the task graph (i.e. the traversalQueue), if it's:
+				// - A task from the non-root workspace (i.e. tasks from every other workspace)
+				// - A task that we *know* is rootEnabled task (in which case, the root workspace is acceptable)
+				isRootPkg := pkg == util.RootPkgName
+				if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
+					traversalQueue = append(traversalQueue, taskID)
+				}
 			}
 		}
 	}
 
 	visited := make(util.Set)
+
+	// validate that all tasks passed were found
+	missingList := missing.UnsafeListOfStrings()
+	sort.Strings(missingList)
+
+	if len(missingList) > 0 {
+		return fmt.Errorf("Could not find the following tasks in project: %s", strings.Join(missingList, ", "))
+	}
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
 	for len(traversalQueue) > 0 {

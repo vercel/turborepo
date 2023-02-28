@@ -10,9 +10,9 @@
                     Constant(
                         Undefined,
                     ),
-                    Array(
-                        2,
-                        [
+                    Array {
+                        total_nodes: 2,
+                        items: [
                             Variable(
                                 (
                                     Atom('file' type=static),
@@ -20,7 +20,8 @@
                                 ),
                             ),
                         ],
-                    ),
+                        mutable: true,
+                    },
                 ],
             ),
         ),
@@ -42,8 +43,10 @@
                             Require,
                         ),
                         Constant(
-                            StrWord(
-                                Atom('resolve' type=inline),
+                            Str(
+                                Word(
+                                    Atom('resolve' type=inline),
+                                ),
                             ),
                         ),
                         [
@@ -82,44 +85,56 @@
     ),
     (
         "a",
-        Array(
-            3,
-            [
+        Array {
+            total_nodes: 3,
+            items: [
                 Constant(
-                    StrWord(
-                        Atom('../lib/a.js' type=dynamic),
+                    Str(
+                        Word(
+                            Atom('../lib/a.js' type=dynamic),
+                        ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('../lib/b.js' type=dynamic),
+                    Str(
+                        Word(
+                            Atom('../lib/b.js' type=dynamic),
+                        ),
                     ),
                 ),
             ],
-        ),
+            mutable: true,
+        },
     ),
     (
         "b",
         MemberCall(
             6,
-            Array(
-                3,
-                [
+            Array {
+                total_nodes: 3,
+                items: [
                     Constant(
-                        StrWord(
-                            Atom('../lib/a.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
                         ),
                     ),
                     Constant(
-                        StrWord(
-                            Atom('../lib/b.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
                         ),
                     ),
                 ],
-            ),
+                mutable: true,
+            },
             Constant(
-                StrWord(
-                    Atom('map' type=static),
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
                 ),
             ),
             [
@@ -136,24 +151,31 @@
         "c",
         MemberCall(
             6,
-            Array(
-                3,
-                [
+            Array {
+                total_nodes: 3,
+                items: [
                     Constant(
-                        StrWord(
-                            Atom('../lib/a.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
                         ),
                     ),
                     Constant(
-                        StrWord(
-                            Atom('../lib/b.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
                         ),
                     ),
                 ],
-            ),
+                mutable: true,
+            },
             Constant(
-                StrWord(
-                    Atom('map' type=static),
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
                 ),
             ),
             [
@@ -170,24 +192,31 @@
         "d",
         MemberCall(
             6,
-            Array(
-                3,
-                [
+            Array {
+                total_nodes: 3,
+                items: [
                     Constant(
-                        StrWord(
-                            Atom('../lib/a.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
                         ),
                     ),
                     Constant(
-                        StrWord(
-                            Atom('../lib/b.js' type=dynamic),
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
                         ),
                     ),
                 ],
-            ),
+                mutable: true,
+            },
             Constant(
-                StrWord(
-                    Atom('map' type=static),
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
                 ),
             ),
             [
@@ -245,8 +274,10 @@
                             Require,
                         ),
                         Constant(
-                            StrWord(
-                                Atom('resolve' type=inline),
+                            Str(
+                                Word(
+                                    Atom('resolve' type=inline),
+                                ),
                             ),
                         ),
                         [

@@ -22,7 +22,9 @@ import (
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -33,8 +35,32 @@ const missingTaskLabel = "<NONEXISTENT>"
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	Packages []string      `json:"packages"`
-	Tasks    []taskSummary `json:"tasks"`
+	GlobalHashSummary *globalHashSummary `json:"globalHashSummary"`
+	Packages          []string           `json:"packages"`
+	Tasks             []taskSummary      `json:"tasks"`
+}
+
+type globalHashSummary struct {
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
+	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
+	GlobalCacheKey       string                                `json:"globalCacheKey"`
+	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
+}
+
+func newGlobalHashSummary(ghInputs struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs []string
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+}) *globalHashSummary {
+	// TODO(mehulkar): Add ghInputs.hashedSortedEnvPairs in here, but redact the values
+	return &globalHashSummary{
+		GlobalFileHashMap:    ghInputs.globalFileHashMap,
+		RootExternalDepsHash: ghInputs.rootExternalDepsHash,
+		GlobalCacheKey:       ghInputs.globalCacheKey,
+		Pipeline:             ghInputs.pipeline,
+	}
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
@@ -51,7 +77,7 @@ func DryRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	tracker *taskhash.Tracker,
+	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
 	summary *dryRunSummary,
@@ -65,7 +91,7 @@ func DryRun(
 		ctx,
 		engine,
 		g,
-		tracker,
+		taskHashTracker,
 		rs,
 		base,
 		turboCache,
@@ -96,13 +122,14 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
 	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}
@@ -142,6 +169,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
+			ExpandedInputs:         packageTask.ExpandedInputs,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
@@ -201,7 +229,7 @@ func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, e
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
@@ -213,6 +241,23 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		if err := p.Flush(); err != nil {
 			return err
 		}
+	}
+
+	fileCount := 0
+	for range summary.GlobalHashSummary.GlobalFileHashMap {
+		fileCount = fileCount + 1
+	}
+	w1 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	ui.Output("")
+	ui.Info(util.Sprintf("${CYAN}${BOLD}Global Hash Inputs${RESET}"))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
+	if bytes, err := json.Marshal(summary.GlobalHashSummary.Pipeline); err == nil {
+		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
+	}
+	if err := w1.Flush(); err != nil {
+		return err
 	}
 
 	ui.Output("")
@@ -260,6 +305,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
@@ -284,32 +330,34 @@ func commandLooksLikeTurbo(command string) bool {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID                 string             `json:"taskId"`
-	Task                   string             `json:"task"`
-	Package                string             `json:"package"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dir                    string             `json:"directory"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	TaskID                 string                                `json:"taskId"`
+	Task                   string                                `json:"task"`
+	Package                string                                `json:"package"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dir                    string                                `json:"directory"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 }
 
 type singlePackageTaskSummary struct {
-	Task                   string             `json:"task"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Task                   string                                `json:"task"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -332,5 +380,6 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependencies:           dependencies,
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
+		ExpandedInputs:         ht.ExpandedInputs,
 	}
 }

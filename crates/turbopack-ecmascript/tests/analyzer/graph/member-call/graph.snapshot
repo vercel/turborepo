@@ -1,9 +1,9 @@
 [
     (
         "array",
-        Array(
-            4,
-            [
+        Array {
+            total_nodes: 4,
+            items: [
                 Constant(
                     Num(
                         ConstantNumber(
@@ -26,16 +26,17 @@
                     ),
                 ),
             ],
-        ),
+            mutable: true,
+        },
     ),
     (
         "arrays",
         Alternatives(
             9,
             [
-                Array(
-                    4,
-                    [
+                Array {
+                    total_nodes: 4,
+                    items: [
                         Constant(
                             Num(
                                 ConstantNumber(
@@ -58,10 +59,11 @@
                             ),
                         ),
                     ],
-                ),
-                Array(
-                    4,
-                    [
+                    mutable: true,
+                },
+                Array {
+                    total_nodes: 4,
+                    items: [
                         Constant(
                             Num(
                                 ConstantNumber(
@@ -84,7 +86,8 @@
                             ),
                         ),
                     ],
-                ),
+                    mutable: true,
+                },
             ],
         ),
     ),
@@ -99,8 +102,10 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('concat' type=static),
+                Str(
+                    Word(
+                        Atom('concat' type=static),
+                    ),
                 ),
             ),
             [
@@ -125,9 +130,9 @@
                         ),
                     ),
                 ),
-                Array(
-                    4,
-                    [
+                Array {
+                    total_nodes: 4,
+                    items: [
                         Constant(
                             Num(
                                 ConstantNumber(
@@ -150,13 +155,16 @@
                             ),
                         ),
                     ],
-                ),
+                    mutable: true,
+                },
                 Concat(
                     3,
                     [
                         Constant(
-                            StrAtom(
-                                "hello ",
+                            Str(
+                                Atom(
+                                    "hello ",
+                                ),
                             ),
                         ),
                         Variable(
@@ -181,14 +189,16 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('concat' type=static),
+                Str(
+                    Word(
+                        Atom('concat' type=static),
+                    ),
                 ),
             ),
             [
-                Array(
-                    4,
-                    [
+                Array {
+                    total_nodes: 4,
+                    items: [
                         Constant(
                             Num(
                                 ConstantNumber(
@@ -211,7 +221,8 @@
                             ),
                         ),
                     ],
-                ),
+                    mutable: true,
+                },
             ],
         ),
     ),
@@ -259,12 +270,12 @@
             14,
             Member(
                 7,
-                Array(
-                    5,
-                    [
-                        Array(
-                            4,
-                            [
+                Array {
+                    total_nodes: 5,
+                    items: [
+                        Array {
+                            total_nodes: 4,
+                            items: [
                                 Constant(
                                     Num(
                                         ConstantNumber(
@@ -287,9 +298,11 @@
                                     ),
                                 ),
                             ],
-                        ),
+                            mutable: true,
+                        },
                     ],
-                ),
+                    mutable: true,
+                },
                 Constant(
                     Num(
                         ConstantNumber(
@@ -299,14 +312,16 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('concat' type=static),
+                Str(
+                    Word(
+                        Atom('concat' type=static),
+                    ),
                 ),
             ),
             [
-                Array(
-                    5,
-                    [
+                Array {
+                    total_nodes: 5,
+                    items: [
                         Constant(
                             Num(
                                 ConstantNumber(
@@ -334,7 +349,8 @@
                             ),
                         ),
                     ],
-                ),
+                    mutable: true,
+                },
             ],
         ),
     ),
@@ -344,12 +360,12 @@
             13,
             Member(
                 7,
-                Array(
-                    5,
-                    [
-                        Array(
-                            4,
-                            [
+                Array {
+                    total_nodes: 5,
+                    items: [
+                        Array {
+                            total_nodes: 4,
+                            items: [
                                 Constant(
                                     Num(
                                         ConstantNumber(
@@ -372,9 +388,11 @@
                                     ),
                                 ),
                             ],
-                        ),
+                            mutable: true,
+                        },
                     ],
-                ),
+                    mutable: true,
+                },
                 Constant(
                     Num(
                         ConstantNumber(
@@ -384,8 +402,10 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('concat' type=static),
+                Str(
+                    Word(
+                        Atom('concat' type=static),
+                    ),
                 ),
             ),
             [

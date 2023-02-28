@@ -1,6 +1,5 @@
-use std::collections::HashSet;
-
 use anyhow::{anyhow, Result};
+use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::introspect::{
@@ -23,14 +22,16 @@ use crate::{
 /// Creates a [NodeApiContentSource].
 #[turbo_tasks::function]
 pub fn create_node_api_source(
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
-    pathname: StringVc,
     route_match: RouteMatcherVc,
+    pathname: StringVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
 ) -> ContentSourceVc {
     NodeApiContentSource {
+        cwd,
         specificity,
         server_root,
         pathname,
@@ -50,6 +51,7 @@ pub fn create_node_api_source(
 /// to this directory.
 #[turbo_tasks::value]
 pub struct NodeApiContentSource {
+    cwd: FileSystemPathVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     pathname: StringVc,
@@ -114,8 +116,8 @@ impl GetContentSourceContent for NodeApiGetContentResult {
     }
     #[turbo_tasks::function]
     async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
-        let this = self.source.await?;
-        let Some(params) = &*this.route_match.params(&self.path).await? else {
+        let source = self.source.await?;
+        let Some(params) = &*source.route_match.params(&self.path).await? else {
             return Err(anyhow!("Non matching path provided"));
         };
         let ContentSourceData {
@@ -128,11 +130,12 @@ impl GetContentSourceContent for NodeApiGetContentResult {
         } = &*data else {
             return Err(anyhow!("Missing request data"));
         };
-        let entry = this.entry.entry(data.clone()).await?;
+        let entry = source.entry.entry(data.clone()).await?;
         Ok(ContentSourceContent::HttpProxy(render_proxy(
-            this.server_root.join(&self.path),
+            source.cwd,
+            source.server_root.join(&self.path),
             entry.module,
-            this.runtime_entries,
+            source.runtime_entries,
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
@@ -178,7 +181,7 @@ impl Introspectable for NodeApiContentSource {
 
     #[turbo_tasks::function]
     async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        let mut set = HashSet::new();
+        let mut set = IndexSet::new();
         for &entry in self.entry.entries().await?.iter() {
             let entry = entry.await?;
             set.insert((

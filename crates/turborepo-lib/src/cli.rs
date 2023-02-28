@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, link, login, logout, CommandBase},
+    commands::{bin, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -352,12 +352,23 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Use "none" to remove prefixes from task logs. Note that tasks running
+    /// in parallel interleave their logs and prefix is the only way
+    /// to identify which task produced a log.
+    #[clap(long, value_enum)]
+    pub log_prefix: Option<LogPrefix>,
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
     pub tasks: Vec<String>,
     #[clap(last = true, hide = true)]
     pub pass_through_args: Vec<String>,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum LogPrefix {
+    #[serde(rename = "none")]
+    None,
 }
 
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
@@ -477,10 +488,21 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Unlink { .. }
-        | Command::Daemon { .. }
-        | Command::Prune { .. }
-        | Command::Run(_) => Ok(Payload::Go(Box::new(clap_args))),
+        Command::Unlink { .. } => {
+            if clap_args.test_run {
+                println!("Unlink test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+
+            unlink::unlink(&mut base)?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Daemon { .. } | Command::Prune { .. } | Command::Run(_) => {
+            Ok(Payload::Go(Box::new(clap_args)))
+        }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 

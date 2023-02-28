@@ -2,8 +2,13 @@ use anyhow::Result;
 use turbo_tasks::Value;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc};
-use turbopack_core::environment::{
-    EdgeWorkerEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, ServerAddrVc,
+use turbopack_core::{
+    compile_time_defines,
+    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
+    environment::{
+        EdgeWorkerEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment,
+        ServerAddrVc,
+    },
 };
 
 use crate::{
@@ -11,14 +16,30 @@ use crate::{
     next_server::context::ServerContextType, util::foreign_code_context_condition,
 };
 
-#[turbo_tasks::function]
-pub fn get_edge_environment(server_addr: ServerAddrVc) -> EnvironmentVc {
-    EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::EdgeWorker(
-            EdgeWorkerEnvironment { server_addr }.into(),
-        )),
-        Value::new(EnvironmentIntention::Api),
+pub fn next_edge_defines() -> CompileTimeDefinesVc {
+    compile_time_defines!(
+        process.turbopack = true,
+        process.env.NODE_ENV = "development",
+        process.env.__NEXT_CLIENT_ROUTER_FILTER_ENABLED = false
     )
+    .cell()
+}
+
+#[turbo_tasks::function]
+pub fn get_edge_compile_time_info(
+    server_addr: ServerAddrVc,
+    intention: Value<EnvironmentIntention>,
+) -> CompileTimeInfoVc {
+    CompileTimeInfo {
+        environment: EnvironmentVc::new(
+            Value::new(ExecutionEnvironment::EdgeWorker(
+                EdgeWorkerEnvironment { server_addr }.into(),
+            )),
+            intention,
+        ),
+        defines: next_edge_defines(),
+    }
+    .cell()
 }
 
 #[turbo_tasks::function]

@@ -1,16 +1,18 @@
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs-extra";
+import yaml from "js-yaml";
+import JSON5 from "json5";
 
 export default function setupTestFixtures({
   directory,
-  test,
+  test = "",
 }: {
   directory: string;
-  test: string;
+  test?: string;
 }) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test);
+  const parentDirectory = path.join(directory, test ? test : "test-runs");
 
   afterEach(() => {
     fixtures.forEach((fixture) => {
@@ -23,7 +25,8 @@ export default function setupTestFixtures({
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
-    const testDirectory = path.join(parentDirectory, uuidv4());
+    const directoryName = uuidv4();
+    const testDirectory = path.join(parentDirectory, directoryName);
     if (!fs.existsSync(testDirectory)) {
       fs.mkdirSync(testDirectory, { recursive: true });
     }
@@ -31,30 +34,51 @@ export default function setupTestFixtures({
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-
     const fixturePath = path.join(directory, "__fixtures__", test, fixture);
     fs.copySync(fixturePath, testDirectory, {
       recursive: true,
     });
 
-    // helpers
-    const read = (filename: string) => {
-      try {
-        return fs.readFileSync(path.join(testDirectory, filename), "utf8");
-      } catch (e) {
-        return undefined;
-      }
+    const readGenerator = (method: (filePath: string) => unknown) => {
+      return <T>(filename: string) => {
+        const filePath = path.isAbsolute(filename)
+          ? filename
+          : path.join(testDirectory, filename);
+        try {
+          return method(filePath) as T;
+        } catch (e) {
+          return undefined;
+        }
+      };
     };
 
-    const readJson = (filename: string) => {
-      try {
-        return fs.readJSONSync(path.join(testDirectory, filename), "utf8");
-      } catch (e) {
-        return undefined;
-      }
+    const write = (
+      filename: string,
+      content: string | NodeJS.ArrayBufferView
+    ) => {
+      const filePath = path.isAbsolute(filename)
+        ? filename
+        : path.join(testDirectory, filename);
+
+      fs.writeFileSync(filePath, content);
     };
 
-    return { root: testDirectory, read, readJson };
+    const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
+    const readJson = readGenerator((filePath) =>
+      JSON5.parse(fs.readFileSync(filePath, "utf8"))
+    );
+    const readYaml = readGenerator((filePath) =>
+      yaml.load(fs.readFileSync(filePath, "utf8"))
+    );
+
+    return {
+      root: testDirectory,
+      read,
+      readJson,
+      readYaml,
+      write,
+      directoryName,
+    };
   };
 
   return { useFixture };

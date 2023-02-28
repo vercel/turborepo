@@ -19,20 +19,29 @@ use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLo
 use crate::evaluate_context::node_evaluate_asset_context;
 
 #[turbo_tasks::function]
-fn postcss_import_map_from_import_mapping(postcss_package: ImportMappingVc) -> ImportMapVc {
+async fn package_import_map_from_import_mapping(
+    package_name: &str,
+    package_mapping: ImportMappingVc,
+) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::default();
-    import_map.insert_exact_alias("@vercel/turbopack/postcss", postcss_package);
-    import_map.cell()
+    import_map.insert_exact_alias(
+        format!("@vercel/turbopack/{}", package_name),
+        package_mapping,
+    );
+    Ok(import_map.cell())
 }
 
 #[turbo_tasks::function]
-fn postcss_import_map_from_context(context_path: FileSystemPathVc) -> ImportMapVc {
+async fn package_import_map_from_context(
+    package_name: &str,
+    context_path: FileSystemPathVc,
+) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
-        "@vercel/turbopack/postcss",
-        ImportMapping::PrimaryAlternative("postcss".to_string(), Some(context_path)).cell(),
+        format!("@vercel/turbopack/{}", package_name),
+        ImportMapping::PrimaryAlternative(package_name.to_string(), Some(context_path)).cell(),
     );
-    import_map.cell()
+    Ok(import_map.cell())
 }
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
@@ -138,13 +147,13 @@ impl ModuleOptionsVc {
                             .join("postcss");
 
                         let import_map = if let Some(postcss_package) = options.postcss_package {
-                            postcss_import_map_from_import_mapping(postcss_package)
+                            package_import_map_from_import_mapping("postcss", postcss_package)
                         } else {
-                            postcss_import_map_from_context(path)
+                            package_import_map_from_context("postcss", path)
                         };
                         Some(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(vec![PostCssTransformVc::new(
-                                node_evaluate_asset_context(Some(import_map)),
+                                node_evaluate_asset_context(Some(import_map), None),
                                 execution_context,
                             )
                             .into()]),
@@ -246,14 +255,24 @@ impl ModuleOptionsVc {
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
                 .join("webpack_loaders");
+            let import_map = if let Some(loader_runner_package) =
+                webpack_loaders_options.loader_runner_package
+            {
+                package_import_map_from_import_mapping("loader-runner", loader_runner_package)
+            } else {
+                package_import_map_from_context("loader-runner", path)
+            };
             for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
                 rules.push(ModuleRule::new(
-                    ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                    ModuleRuleCondition::All(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
+                    ]),
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
-                                node_evaluate_asset_context(None),
+                                node_evaluate_asset_context(Some(import_map), None),
                                 execution_context,
                                 *loaders,
                             )

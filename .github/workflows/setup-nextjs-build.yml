@@ -66,26 +66,18 @@ jobs:
       - name: tune linux network
         run: sudo ethtool -K eth0 tx off rx off
 
-      - name: Checkout
+      - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
           ref: ${{ env.NEXTJS_VERSION }}
 
-      - uses: actions/cache@v3
-        id: restore-build
+      - name: Checkout failed test lists
+        uses: actions/checkout@v3
         with:
-          path: ./*
-          key: ${{ github.sha }}-${{ github.run_number }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: pnpm
+          repository: vercel/turbo
+          ref: nextjs-integration-test-data
+          path: integration-test-data
 
       - name: Download binary
         uses: actions/download-artifact@v3
@@ -98,6 +90,21 @@ jobs:
           chmod +x ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev
           cp ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev .
           ./next-dev --display-version
+
+      - uses: actions/cache/restore@v3
+        id: restore-build
+        with:
+          path: ./*
+          key: ${{ inputs.version }}-${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
 
       - name: Install dependencies
         run: |
@@ -117,9 +124,8 @@ jobs:
       # it is too heavyweight for the purpose since we do not need to persist
       # the cache across multiple runs.
       - name: Store next.js build cache with next-dev binary
-        uses: actions/cache@v3
-        timeout-minutes: 2
+        uses: actions/cache/save@v3
         id: cache-build
         with:
           path: ./*
-          key: ${{ github.sha }}-${{ github.run_number }}
+          key: ${{ inputs.version }}-${{ github.sha }}

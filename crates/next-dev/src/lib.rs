@@ -17,18 +17,20 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
+use dunce::canonicalize;
 use next_core::{
-    create_app_source, create_page_source, create_web_entry_source, env::load_env,
-    manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc, router_source::NextRouterContentSourceVc,
+    app_structure::find_app_structure, create_app_source, create_page_source,
+    create_web_entry_source, env::load_env, manifest::DevManifestContentSource,
+    next_config::load_next_config, next_image::NextImageContentSourceVc,
+    pages_structure::find_pages_structure, router_source::NextRouterContentSourceVc,
     source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    CollectiblesSource, RawVc, StatsType, TransientInstance, TransientValue, TurboTasks,
-    TurboTasksBackendApi, Value,
+    CollectiblesSource, CompletionsVc, RawVc, StatsType, TransientInstance, TransientValue,
+    TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
@@ -245,12 +247,12 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
         .strongly_consistent()
         .await?;
 
-    issue_reporter.report_issues(
+    let has_fatal = issue_reporter.report_issues(
         TransientInstance::new(issues.clone()),
         TransientValue::new(source.into()),
     );
 
-    if issues.has_fatal().await? {
+    if *has_fatal.await? {
         Err(anyhow!("Fatal issue(s) occurred"))
     } else {
         Ok(())
@@ -297,7 +299,7 @@ async fn source(
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".next/build");
 
-    let execution_context = ExecutionContextVc::new(project_path, build_output_root);
+    let execution_context = ExecutionContextVc::new(project_path, build_output_root, env);
 
     let next_config = load_next_config(execution_context.join("next_config"));
 
@@ -326,7 +328,9 @@ async fn source(
         &browserslist_query,
         next_config,
     );
+    let pages_structure = find_pages_structure(project_path, dev_server_root, next_config);
     let page_source = create_page_source(
+        pages_structure,
         project_path,
         execution_context,
         output_root.join("pages"),
@@ -336,7 +340,9 @@ async fn source(
         next_config,
         server_addr,
     );
+    let app_structure = find_app_structure(project_path, dev_server_root, next_config);
     let app_source = create_app_source(
+        app_structure,
         project_path,
         execution_context,
         output_root.join("app"),
@@ -378,7 +384,18 @@ async fn source(
         CombinedContentSourceVc::new(vec![static_source, page_source]).into(),
     )
     .into();
-    let router_source = NextRouterContentSourceVc::new(main_source, execution_context).into();
+    let router_source = NextRouterContentSourceVc::new(
+        main_source,
+        execution_context,
+        next_config,
+        server_addr,
+        CompletionsVc::cell(vec![
+            app_structure.routes_changed(),
+            pages_structure.routes_changed(),
+        ])
+        .all(),
+    )
+    .into();
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
@@ -419,7 +436,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     let dir = options
         .dir
         .as_ref()
-        .map(|dir| dir.canonicalize())
+        .map(canonicalize)
         .unwrap_or_else(current_dir)
         .context("project directory can't be found")?
         .to_str()
@@ -427,7 +444,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
         .to_string();
 
     let root_dir = if let Some(root) = options.root.as_ref() {
-        root.canonicalize()
+        canonicalize(root)
             .context("root directory can't be found")?
             .to_str()
             .context("root directory contains invalid characters")?

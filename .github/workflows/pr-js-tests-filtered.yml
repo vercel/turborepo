@@ -47,7 +47,7 @@ jobs:
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
       - name: Build debug binary
-        uses: ./.github/actions/build-debug-turborepo
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}

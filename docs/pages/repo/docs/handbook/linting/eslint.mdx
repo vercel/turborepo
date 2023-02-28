@@ -33,7 +33,6 @@ module.exports = {
   extends: ["next", "turbo", "prettier"],
   rules: {
     "@next/next/no-html-link-for-pages": "off",
-    "react/jsx-key": "off",
   },
 };
 ```
@@ -46,6 +45,7 @@ The `package.json` looks like this:
 {
   "name": "eslint-config-custom",
   "main": "index.js",
+  "version": "1.0.0",
   "dependencies": {
     "eslint": "latest",
     "eslint-config-next": "latest",

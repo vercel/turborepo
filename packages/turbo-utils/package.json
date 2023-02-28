@@ -15,23 +15,31 @@
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
   },
+  "module": "dist/index.mjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "test": "jest --passWithNoTests",
+    "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit"
   },
   "devDependencies": {
     "@manypkg/find-root": "^1.1.0",
     "@types/jest": "^27.4.0",
+    "@types/js-yaml": "^4.0.5",
     "@types/node": "^16.11.12",
     "eslint": "^8.23.0",
+    "execa": "5.1.1",
+    "globby": "11.1.0",
     "jest": "^27.4.3",
+    "js-yaml": "^4.1.0",
+    "json5": "^2.2.3",
     "ts-jest": "^27.1.1",
     "tsconfig": "workspace:*",
     "tsup": "^5.12.1",
+    "turbo-test-utils": "workspace:*",
+    "turbo-types": "workspace:*",
     "typescript": "^4.7.4"
   }
 }

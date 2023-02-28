@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use futures::{stream::FuturesUnordered, TryStreamExt};
 use indexmap::IndexSet;
 pub use node_entry::{
@@ -16,7 +16,7 @@ pub use node_entry::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
+use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -182,6 +182,7 @@ async fn separate_assets(
 /// Creates a node.js renderer pool for an entrypoint.
 #[turbo_tasks::function]
 pub async fn get_renderer_pool(
+    cwd: FileSystemPathVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -205,16 +206,16 @@ pub async fn get_renderer_pool(
 
     emit(intermediate_asset, output_root).await?;
 
-    let cwd = output_root;
     let entrypoint = intermediate_output_path.join("index.js");
 
-    if let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(entrypoint).await?)
-    {
-        let pool = NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4, debug);
-        Ok(pool.cell())
-    } else {
-        Err(anyhow!("can only render from a disk filesystem"))
-    }
+    let Some(cwd) = to_sys_path(cwd).await? else {
+        bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.fs().to_string().await?);
+    };
+    let Some(entrypoint) = to_sys_path(entrypoint).await? else {
+        bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.fs().to_string().await?);
+    };
+
+    Ok(NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4, debug).cell())
 }
 
 /// Converts a module graph into node.js executable assets
@@ -235,7 +236,7 @@ pub async fn get_intermediate_asset(
 #[turbo_tasks::value(shared)]
 pub struct ResponseHeaders {
     pub status: u16,
-    pub headers: Vec<String>,
+    pub headers: Vec<(String, String)>,
 }
 
 #[derive(Serialize)]
@@ -263,18 +264,17 @@ pub struct StructuredError {
 }
 
 impl StructuredError {
-    async fn print(
-        &self,
-        assets: HashMap<String, SourceMapVc>,
-        root: Option<String>,
-    ) -> Result<String> {
+    async fn print(&self, assets: HashMap<String, SourceMapVc>, root: &str) -> Result<String> {
         let mut message = String::new();
 
         writeln!(message, "{}: {}", self.name, self.message)?;
 
         for frame in &self.stack {
             if let Some((line, column)) = frame.get_pos() {
-                if let Some(path) = root.as_ref().and_then(|r| frame.file.strip_prefix(r)) {
+                if let Some(path) = frame.file.strip_prefix(
+                    // Add a trailing slash so paths don't lead with `/`.
+                    &format!("{}{}", root, std::path::MAIN_SEPARATOR),
+                ) {
                     if let Some(map) = assets.get(path) {
                         let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
                             .trace()
@@ -332,7 +332,7 @@ pub async fn trace_stack(
         .flatten()
         .collect::<HashMap<_, _>>();
 
-    error.print(assets, Some(root)).await
+    error.print(assets, &root).await
 }
 
 pub fn register() {

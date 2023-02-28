@@ -32,6 +32,7 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(new_uninit)]
+#![feature(never_type)]
 
 pub mod backend;
 mod collectibles;
@@ -39,6 +40,7 @@ mod completion;
 pub mod debug;
 mod display;
 pub mod event;
+pub mod graph;
 mod id;
 mod id_factory;
 mod join_iter_ext;
@@ -70,11 +72,11 @@ pub use id::{
     with_task_id_mapping, without_task_id_mapping, FunctionId, IdMapping, TaskId, TraitTypeId,
     ValueTypeId,
 };
-pub use join_iter_ext::{JoinIterExt, TryFlatMapRecursiveJoinIterExt, TryJoinIterExt};
+pub use join_iter_ext::{JoinIterExt, TryJoinIterExt};
 pub use manager::{
     dynamic_call, emit, get_invalidator, mark_stateful, run_once, spawn_blocking, spawn_thread,
     trait_call, turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
-    TurboTasksBackendApi, TurboTasksCallApi,
+    TurboTasksBackendApi, TurboTasksCallApi, Unused,
 };
 pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};

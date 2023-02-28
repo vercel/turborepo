@@ -2,24 +2,32 @@ import type { Ipc } from "@vercel/turbopack-next/ipc/index";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
-import { makeResolver } from "next/dist/server/router.js";
+import { toPairs } from "@vercel/turbopack-next/internal/headers";
+import { makeResolver } from "next/dist/server/lib/route-resolver";
 import loadConfig from "next/dist/server/config";
 import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
 
 import "next/dist/server/node-polyfill-fetch.js";
 
+import middlewareChunkGroup from "MIDDLEWARE_CHUNK_GROUP";
+import middlewareConfig from "MIDDLEWARE_CONFIG";
+
 type RouterRequest = {
   method: string;
   pathname: string;
-  // TODO: not passed to request
-  rawHeaders: Array<[string, string]>;
+  rawHeaders: [string, string][];
   rawQuery: string;
 };
 
-type RouteResult = {
-  url: string;
-  headers: Record<string, string>;
-};
+type RouteResult =
+  | {
+      type: "rewrite";
+      url: string;
+      headers: Record<string, string>;
+    }
+  | {
+      type: "none";
+    };
 
 type IpcOutgoingMessage = {
   type: "jsonValue";
@@ -36,16 +44,17 @@ type MessageData =
   | {
       type: "rewrite";
       data: RewriteResponse;
-    };
+    }
+  | { type: "none" };
 
 type RewriteResponse = {
   url: string;
-  headers: string[];
+  headers: [string, string][];
 };
 
 type MiddlewareHeadersResponse = {
   statusCode: number;
-  headers: string[];
+  headers: [string, string][];
 };
 
 let resolveRouteMemo: Promise<
@@ -65,7 +74,10 @@ async function getResolveRoute(
     true
   );
 
-  return await makeResolver(dir, nextConfig);
+  return await makeResolver(dir, nextConfig, {
+    files: middlewareChunkGroup,
+    matcher: middlewareConfig.matcher,
+  });
 }
 
 export default async function route(
@@ -136,18 +148,27 @@ async function handleClientResponse(
     }
 
     const data = JSON.parse(buffer) as RouteResult;
-    return {
-      type: "rewrite",
-      data: {
-        url: data.url,
-        headers: Object.entries(data.headers).flat(),
-      },
-    };
+
+    switch (data.type) {
+      case "none":
+        return {
+          type: "none",
+        };
+      case "rewrite":
+      default:
+        return {
+          type: "rewrite",
+          data: {
+            url: data.url,
+            headers: Object.entries(data.headers),
+          },
+        };
+    }
   }
 
   const responseHeaders: MiddlewareHeadersResponse = {
     statusCode: clientResponse.statusCode!,
-    headers: clientResponse.rawHeaders,
+    headers: toPairs(clientResponse.rawHeaders),
   };
 
   // TODO: support streaming middleware

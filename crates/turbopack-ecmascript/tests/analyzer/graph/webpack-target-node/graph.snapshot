@@ -111,8 +111,10 @@
             ),
             [
                 Constant(
-                    StrWord(
-                        Atom('../../webpack-api-runtime.js' type=dynamic),
+                    Str(
+                        Word(
+                            Atom('../../webpack-api-runtime.js' type=dynamic),
+                        ),
                     ),
                 ),
             ],
@@ -141,10 +143,11 @@
     ),
     (
         "exports",
-        Object(
-            1,
-            [],
-        ),
+        Object {
+            total_nodes: 1,
+            parts: [],
+            mutable: true,
+        },
     ),
     (
         "handler",
@@ -167,19 +170,25 @@
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('readFile' type=dynamic),
+                Str(
+                    Word(
+                        Atom('readFile' type=dynamic),
+                    ),
                 ),
             ),
             [
                 Constant(
-                    StrWord(
-                        Atom('./hello.txt' type=dynamic),
+                    Str(
+                        Word(
+                            Atom('./hello.txt' type=dynamic),
+                        ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('utf-8' type=inline),
+                    Str(
+                        Word(
+                            Atom('utf-8' type=inline),
+                        ),
                     ),
                 ),
             ],
@@ -208,8 +217,10 @@
             ),
             [
                 Constant(
-                    StrWord(
-                        Atom('fs/promises' type=dynamic),
+                    Str(
+                        Word(
+                            Atom('fs/promises' type=dynamic),
+                        ),
                     ),
                 ),
             ],
@@ -224,16 +235,18 @@
     ),
     (
         "users",
-        Array(
-            10,
-            [
-                Object(
-                    3,
-                    [
+        Array {
+            total_nodes: 10,
+            items: [
+                Object {
+                    total_nodes: 3,
+                    parts: [
                         KeyValue(
                             Constant(
-                                StrWord(
-                                    Atom('id' type=static),
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
                                 ),
                             ),
                             Constant(
@@ -245,14 +258,17 @@
                             ),
                         ),
                     ],
-                ),
-                Object(
-                    3,
-                    [
+                    mutable: true,
+                },
+                Object {
+                    total_nodes: 3,
+                    parts: [
                         KeyValue(
                             Constant(
-                                StrWord(
-                                    Atom('id' type=static),
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
                                 ),
                             ),
                             Constant(
@@ -264,14 +280,17 @@
                             ),
                         ),
                     ],
-                ),
-                Object(
-                    3,
-                    [
+                    mutable: true,
+                },
+                Object {
+                    total_nodes: 3,
+                    parts: [
                         KeyValue(
                             Constant(
-                                StrWord(
-                                    Atom('id' type=static),
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
                                 ),
                             ),
                             Constant(
@@ -283,8 +302,10 @@
                             ),
                         ),
                     ],
-                ),
+                    mutable: true,
+                },
             ],
-        ),
+            mutable: true,
+        },
     ),
 ]

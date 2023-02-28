@@ -263,6 +263,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b015a331cc64ebd1774ba119538573603427eaace0a1950c423ab971f903796"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "async-std"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -745,6 +756,9 @@ name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
+dependencies = [
+ "jobserver",
+]
 
 [[package]]
 name = "cesu8"
@@ -1636,6 +1650,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af3c796f3b0b408d9fd581611b47fa850821fcb84aa640b83a3c1a5be2d691f2"
 dependencies = [
  "console",
+ "fuzzy-matcher",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -2257,6 +2272,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
+]
+
+[[package]]
 name = "fxhash"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2335,6 +2359,19 @@ name = "gimli"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "221996f774192f0f718773def8201c4ae31f02616a54ccfc2d358bb0e5cefdec"
+
+[[package]]
+name = "git2"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccf7f68c2995f392c49fffb4f95ae2c873297830eb25c6bc4c114ce8f4562acc"
+dependencies = [
+ "bitflags",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "url",
+]
 
 [[package]]
 name = "glob"
@@ -2917,6 +2954,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 
 [[package]]
+name = "jobserver"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "068b1ee6743e4d11fb9c6a1e6064b3693a1b600e7f5f5988047d98b3dc9fb90b"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "jpeg-decoder"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3104,6 +3150,18 @@ name = "libc"
 version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
+
+[[package]]
+name = "libgit2-sys"
+version = "0.14.2+1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f3d95f6b51075fe9810a7ae22c7095f12b98005ab364d8544797a825ce946a4"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "pkg-config",
+]
 
 [[package]]
 name = "libloading"
@@ -3710,6 +3768,7 @@ dependencies = [
  "clap 4.1.4",
  "console-subscriber",
  "criterion 0.4.0",
+ "dunce",
  "futures",
  "mime",
  "next-core",
@@ -3754,7 +3813,6 @@ dependencies = [
  "mime",
  "next-core",
  "next-dev",
- "once_cell",
  "owo-colors",
  "parking_lot",
  "rand",
@@ -3774,6 +3832,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-node",
+ "turbopack-test-utils",
  "url",
  "webbrowser 0.7.1",
 ]
@@ -7561,6 +7620,7 @@ dependencies = [
  "bytes",
  "concurrent-queue 1.2.4",
  "criterion 0.3.6",
+ "dunce",
  "futures",
  "futures-retry",
  "include_dir",
@@ -7668,6 +7728,7 @@ name = "turbopack"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "criterion 0.3.6",
  "difference",
  "futures",
@@ -7755,6 +7816,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "indexmap",
+ "indoc",
  "once_cell",
  "regex",
  "serde",
@@ -7896,6 +7958,7 @@ dependencies = [
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-dev-server",
@@ -7929,6 +7992,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-test-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "similar",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+]
+
+[[package]]
 name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
@@ -7937,18 +8014,17 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "similar",
  "test-generator",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
  "turbopack-env",
+ "turbopack-test-utils",
 ]
 
 [[package]]
@@ -7959,6 +8035,7 @@ dependencies = [
  "directories",
  "prost",
  "prost-build",
+ "turborepo-scm",
 ]
 
 [[package]]
@@ -7998,6 +8075,16 @@ dependencies = [
  "tokio",
  "turbo-updater",
  "webbrowser 0.8.7",
+]
+
+[[package]]
+name = "turborepo-scm"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "git2",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

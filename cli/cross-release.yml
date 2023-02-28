@@ -10,7 +10,7 @@ builds:
   - id: turbo
     main: ./cmd/turbo
     tags:
-      - go
+      - rust
     binary: bin/go-turbo
     flags:
       - -trimpath
@@ -22,7 +22,6 @@ builds:
     targets:
       - linux_arm64
       - linux_amd64
-      - windows_arm64
       - windows_amd64
     overrides:
       - goos: linux

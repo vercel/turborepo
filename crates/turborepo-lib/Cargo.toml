@@ -28,7 +28,7 @@ clap = { version = "4.0.22", features = ["derive"] }
 clap_complete = "4.0.6"
 config = "0.13"
 console = "0.15.5"
-dialoguer = "0.10.3"
+dialoguer = { version = "0.10.3", features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = "1.0"
 env_logger = "0.10.0"

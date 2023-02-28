@@ -3,6 +3,7 @@ import { info, getInput } from "@actions/core";
 const { default: stripAnsi } = require("strip-ansi");
 const { default: nodeFetch } = require("node-fetch");
 const fs = require("fs");
+const path = require("path");
 const semver = require("semver");
 
 /**
@@ -158,6 +159,112 @@ async function fetchJobLogsFromWorkflow(
   return { logs, job };
 }
 
+// Store a json payload to share via slackapi/slack-github-action into Slack channel
+async function createSlackPostSummary(payload: {
+  shortCurrentNextJsVersion: string;
+  sha: string;
+  currentTestFailedSuiteCount: number;
+  currentTestPassedSuiteCount: number;
+  currentTestTotalSuiteCount: number;
+  currentTestFailedCaseCount: number;
+  currentTestPassedCaseCount: number;
+  currentTestTotalCaseCount: number;
+  suiteCountDiff?: number | null;
+  caseCountDiff?: number | null;
+  baseResults?: TestResultManifest;
+  shortBaseNextJsVersion?: string;
+  baseTestFailedSuiteCount?: number | null;
+  baseTestPassedSuiteCount?: number | null;
+  baseTestTotalSuiteCount?: number | null;
+  baseTestFailedCaseCount?: number | null;
+  baseTestPassedCaseCount?: number | null;
+  baseTestTotalCaseCount?: number | null;
+}) {
+  const {
+    suiteCountDiff,
+    caseCountDiff,
+    baseResults,
+    sha,
+    shortBaseNextJsVersion,
+    shortCurrentNextJsVersion,
+    baseTestFailedSuiteCount,
+    baseTestPassedSuiteCount,
+    baseTestTotalSuiteCount,
+    baseTestFailedCaseCount,
+    baseTestPassedCaseCount,
+    baseTestTotalCaseCount,
+    currentTestFailedSuiteCount,
+    currentTestPassedSuiteCount,
+    currentTestTotalSuiteCount,
+    currentTestFailedCaseCount,
+    currentTestPassedCaseCount,
+    currentTestTotalCaseCount,
+  } = payload;
+  let resultsSummary = "";
+  if (
+    Number.isSafeInteger(suiteCountDiff) &&
+    Number.isSafeInteger(caseCountDiff)
+  ) {
+    if (suiteCountDiff === 0) {
+      resultsSummary += "No changes in suite count.";
+    } else if (suiteCountDiff > 0) {
+      resultsSummary += `↓ ${suiteCountDiff} suites are fixed`;
+    } else if (suiteCountDiff < 0) {
+      resultsSummary += `↑ ${suiteCountDiff} suites are newly failed`;
+    }
+
+    if (caseCountDiff === 0) {
+      resultsSummary += "No changes in test cases count.";
+    } else if (caseCountDiff > 0) {
+      resultsSummary += `↓ ${caseCountDiff} test cases are fixed`;
+    } else if (caseCountDiff < 0) {
+      resultsSummary += `↑ ${caseCountDiff} test cases are newly failed`;
+    }
+  }
+
+  let baseTestSuiteText = "Summary without base";
+  let baseTestCaseText = "Summary without base";
+
+  if (
+    Number.isSafeInteger(baseTestFailedSuiteCount) &&
+    Number.isSafeInteger(baseTestPassedSuiteCount) &&
+    Number.isSafeInteger(baseTestTotalSuiteCount)
+  ) {
+    baseTestSuiteText = `:red_circle: ${baseTestFailedSuiteCount} / :large_green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})`;
+    baseTestCaseText = `:red_circle: ${baseTestFailedCaseCount} / :large_green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount})`;
+  }
+
+  const slackPayloadJson = JSON.stringify(
+    {
+      title: "Next.js integration test status with Turbopack",
+      // Derived from https://github.com/orgs/community/discussions/25470#discussioncomment-4720013
+      actionUrl: baseResults
+        ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+        : "Daily test run",
+      shaUrl: baseResults
+        ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/commit/${sha}`
+        : sha,
+      baseResultsRef: baseResults?.ref ?? "N/A",
+      shortBaseNextJsVersion: shortBaseNextJsVersion ?? "N/A",
+      // We're limited to 20 variables in Slack workflows, so combine these as text.
+      baseTestSuiteText,
+      baseTestCaseText,
+      sha: sha.substring(0, 7),
+      shortCurrentNextJsVersion,
+      currentTestSuiteText: `:red_circle: ${currentTestFailedSuiteCount} / :large_green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount})`,
+      currentTestCaseText: `:red_circle: ${currentTestFailedCaseCount} / :large_green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})`,
+      resultsSummary,
+    },
+    null,
+    2
+  );
+  console.log(
+    "Storing slack payload to ./slack-paylod.json to report into Slack channel.",
+    slackPayloadJson
+  );
+  fs.writeFileSync("./slack-payload.json", slackPayloadJson);
+}
+
 // Filter out logs that does not contain failed tests, then parse test results into json
 function collectFailedTestResults(
   splittedLogs: Array<string>,
@@ -202,9 +309,10 @@ function collectFailedTestResults(
             name: failedTest,
             data: JSON.parse(testData),
           });
-          logLine = failedSplitLogs.shift();
         } catch (_) {
-          console.log(`Failed to parse test data`);
+          console.log(`Failed to parse test data`, { logs });
+        } finally {
+          logLine = failedSplitLogs.shift();
         }
       }
 
@@ -228,14 +336,18 @@ async function getInputs(): Promise<{
   octokit: Octokit;
   prNumber: number | undefined;
   sha: string;
+  noBaseComparison: boolean;
   shouldExpandResultMessages: boolean;
 }> {
   const token = getInput("token");
   const shouldExpandResultMessages =
     getInput("expand_result_messages") === "true";
-  const shouldDiffWithMain = getInput("diff_base") === "main";
-  if (getInput("diff_base") !== "main" && getInput("diff_base") !== "release") {
-    console.error('Invalid diff_base, must be "main" or "release"');
+  const diffBase = getInput("diff_base");
+  const shouldDiffWithMain = diffBase === "main";
+  // For the daily cron workflow, we don't compare to previous but post daily summary
+  const noBaseComparison = diffBase === "none";
+  if (diffBase !== "main" && diffBase !== "release" && diffBase !== "none") {
+    console.error('Invalid diff_base, must be "main" or "release" or "none"');
     process.exit(1);
   }
 
@@ -302,6 +414,7 @@ async function getInputs(): Promise<{
     octokit,
     prNumber,
     sha,
+    noBaseComparison,
     shouldExpandResultMessages,
   };
 }
@@ -357,18 +470,8 @@ async function getFailedJobResults(
     ref: sha,
   } as any;
 
-  const failedJobResults = fullJobLogsFromWorkflow
-    .filter(({ logs, job }) => {
-      if (
-        !logs.includes(`failed to pass within`) ||
-        !logs.includes("--test output start--")
-      ) {
-        console.log(`Couldn't find failed tests in logs for job `, job.name);
-        return false;
-      }
-      return true;
-    })
-    .reduce((acc, { logs, job }) => {
+  const failedJobResults = fullJobLogsFromWorkflow.reduce(
+    (acc, { logs, job }) => {
       // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
       const splittedLogs = logs
         .split("NEXT_INTEGRATION_TEST: true")
@@ -378,7 +481,9 @@ async function getFailedJobResults(
       const failedTestResultsData = collectFailedTestResults(splittedLogs, job);
 
       return acc.concat(failedTestResultsData);
-    }, [] as Array<FailedJobResult>);
+    },
+    [] as Array<FailedJobResult>
+  );
 
   testResultManifest.result = failedJobResults;
 
@@ -447,6 +552,18 @@ async function getTestResultDiffBase(
     ).data.tree;
   } else {
     console.log("Trying to find latest test results from next.js release");
+    const getVersion = (v: { path?: string }) => {
+      if (v.path) {
+        console.log("Trying to get version from base path", v.path);
+        const base = path.basename(v.path, ".json");
+        const ret = base.split("-").slice(1, 3).join("-");
+        console.log("Found version", ret);
+        return ret;
+      }
+
+      return null;
+    };
+
     const baseTree = testResultsTree
       .filter((tree) => tree.path !== "main")
       .reduce((acc, value) => {
@@ -454,7 +571,14 @@ async function getTestResultDiffBase(
           return value;
         }
 
-        return semver.gt(value.path, acc.path) ? value : acc;
+        const currentVersion = semver.valid(getVersion(value));
+        const accVersion = semver.valid(getVersion(acc));
+
+        if (!currentVersion || !accVersion) {
+          return acc;
+        }
+
+        return semver.gt(currentVersion, accVersion) ? value : acc;
       }, null);
 
     if (!baseTree || !baseTree.sha) {
@@ -568,14 +692,41 @@ function getTestSummary(
     }
   );
 
-  console.log("Current test summary", {
-    currentTestFailedCaseCount,
-    currentTestFailedSuiteCount,
-    currentTestFailedNames,
-  });
+  const shortCurrentNextJsVersion =
+    failedJobResults.nextjsVersion.split(" ")[1];
+
+  console.log(
+    "Current test summary",
+    JSON.stringify(
+      {
+        currentTestFailedSuiteCount,
+        currentTestPassedSuiteCount,
+        currentTestTotalSuiteCount,
+        currentTestFailedCaseCount,
+        currentTestPassedCaseCount,
+        currentTestTotalCaseCount,
+        currentTestFailedNames,
+      },
+      null,
+      2
+    )
+  );
 
   if (!baseResults) {
     console.log("There's no base to compare");
+
+    if (shouldShareTestSummaryToSlack) {
+      createSlackPostSummary({
+        shortCurrentNextJsVersion,
+        sha,
+        currentTestPassedSuiteCount,
+        currentTestFailedSuiteCount,
+        currentTestTotalSuiteCount,
+        currentTestFailedCaseCount,
+        currentTestPassedCaseCount,
+        currentTestTotalCaseCount,
+      });
+    }
 
     return `### Test summary
 |   | Current (${sha}) | Diff |
@@ -618,11 +769,22 @@ function getTestSummary(
     }
   );
 
-  console.log("Base test summary", {
-    baseTestFailedSuiteCount,
-    baseTestFailedCaseCount,
-    baseTestFailedNames,
-  });
+  console.log(
+    "Base test summary",
+    JSON.stringify(
+      {
+        baseTestFailedSuiteCount,
+        baseTestPassedSuiteCount,
+        baseTestTotalSuiteCount,
+        baseTestFailedCaseCount,
+        baseTestPassedCaseCount,
+        baseTestTotalCaseCount,
+        baseTestFailedNames,
+      },
+      null,
+      2
+    )
+  );
 
   let testSuiteDiff = ":zero:";
   const suiteCountDiff = baseTestFailedSuiteCount - currentTestFailedSuiteCount;
@@ -641,8 +803,7 @@ function getTestSummary(
   }
 
   const shortBaseNextJsVersion = baseResults.nextjsVersion.split(" ")[1];
-  const shortCurrentNextJsVersion =
-    failedJobResults.nextjsVersion.split(" ")[1];
+
   // Append summary test report to the comment body
   let ret = `### Test summary
 |   | ${
@@ -679,50 +840,30 @@ function getTestSummary(
       .join(" \n")}`;
   }
 
-  // Store a json payload to share via slackapi/slack-github-action into Slack channel
+  console.log("Newly failed tests", JSON.stringify(newFailedTests, null, 2));
+  console.log("Fixed tests", JSON.stringify(fixedTests, null, 2));
+
   if (shouldShareTestSummaryToSlack) {
-    let resultsSummary = "";
-    if (suiteCountDiff === 0) {
-      resultsSummary += "No changes in suite count.";
-    } else if (suiteCountDiff > 0) {
-      resultsSummary += `↓ ${suiteCountDiff} suites are fixed`;
-    } else if (suiteCountDiff < 0) {
-      resultsSummary += `↑ ${suiteCountDiff} suites are newly failed`;
-    }
-
-    if (caseCountDiff === 0) {
-      resultsSummary += "No changes in test cases count.";
-    } else if (caseCountDiff > 0) {
-      resultsSummary += `↓ ${caseCountDiff} test cases are fixed`;
-    } else if (caseCountDiff < 0) {
-      resultsSummary += `↑ ${caseCountDiff} test cases are newly failed`;
-    }
-
-    const slackPayloadJson = JSON.stringify(
-      {
-        title: "Next.js integration test status with Turbopack",
-        // Derived from https://github.com/orgs/community/discussions/25470#discussioncomment-4720013
-        actionUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-        shaUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/commit/${sha}`,
-        baseResultsRef: baseResults.ref,
-        shortBaseNextJsVersion,
-        // We're limited to 20 variables in Slack workflows, so combine these as text.
-        baseTestSuiteText: `:red_circle: ${baseTestFailedSuiteCount} / :large_green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})`,
-        baseTestCaseText: `:red_circle: ${baseTestFailedCaseCount} / :large_green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount})`,
-        sha,
-        shortCurrentNextJsVersion,
-        currentTestSuiteText: `:red_circle: ${currentTestFailedSuiteCount} / :large_green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount})`,
-        currentTestCaseText: `:red_circle: ${currentTestFailedCaseCount} / :large_green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})`,
-        resultsSummary,
-      },
-      null,
-      2
-    );
-    console.log(
-      "Storing slack payload to ./slack-paylod.json to report into Slack channel.",
-      slackPayloadJson
-    );
-    fs.writeFileSync("./slack-payload.json", slackPayloadJson);
+    createSlackPostSummary({
+      shortCurrentNextJsVersion,
+      sha,
+      currentTestPassedSuiteCount,
+      currentTestFailedSuiteCount,
+      currentTestTotalSuiteCount,
+      currentTestFailedCaseCount,
+      currentTestPassedCaseCount,
+      currentTestTotalCaseCount,
+      suiteCountDiff,
+      caseCountDiff,
+      baseResults,
+      shortBaseNextJsVersion,
+      baseTestFailedCaseCount,
+      baseTestFailedSuiteCount,
+      baseTestPassedCaseCount,
+      baseTestPassedSuiteCount,
+      baseTestTotalCaseCount,
+      baseTestTotalSuiteCount,
+    });
   }
 
   return ret;
@@ -771,24 +912,31 @@ async function run() {
     shouldDiffWithMain,
     prNumber,
     sha,
+    noBaseComparison,
     shouldExpandResultMessages,
   } = await getInputs();
 
   // determine if we want to report summary into slack channel.
   // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
   const shouldReportSlack =
-    process.env.NEXT_TURBO_FORCE_SLACK_UPDATE === "true" ||
-    (!prNumber && !shouldDiffWithMain);
+    process.env.NEXT_TURBO_FORCE_SKIP_SLACK_UPDATE === "true"
+      ? false
+      : process.env.NEXT_TURBO_FORCE_SLACK_UPDATE === "true" ||
+        (!prNumber && !shouldDiffWithMain);
 
   // Collect current PR's failed test results
   const failedJobResults = await getFailedJobResults(octokit, token, sha);
 
   // Get the base to compare against
-  const baseResults = await getTestResultDiffBase(octokit, shouldDiffWithMain);
+  const baseResults = noBaseComparison
+    ? null
+    : await getTestResultDiffBase(octokit, shouldDiffWithMain);
 
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
   const failedTestLists = [];
+  // Collect failed test results for each job. We don't use this actively yet.
+  const perJobFailedLists = {};
 
   // Consturct a comment body to post test report with summary & full details.
   const comments = failedJobResults.result.reduce((acc, value, idx) => {
@@ -813,31 +961,39 @@ async function run() {
       groupedFails[ancestorKey].push(fail);
     }
 
-    commentValues.push(`\`${failedTest}\``);
-    failedTestLists.push(failedTest);
+    if (!failedTestLists.includes(failedTest)) {
+      commentValues.push(`\`${failedTest}\``);
+      failedTestLists.push(failedTest);
 
-    for (const group of Object.keys(groupedFails).sort()) {
-      const fails = groupedFails[group];
-      commentValues.push(`\n`);
-      fails.forEach((fail) => {
-        commentValues.push(`- ${group} > ${fail.title}`);
-      });
+      if (!perJobFailedLists[value.job]) {
+        perJobFailedLists[value.job] = [];
+      }
+      perJobFailedLists[value.job].push(failedTest);
     }
-
-    const strippedResultMessage =
-      resultMessage.length >= 50000
-        ? resultMessage.substring(0, 50000) +
-          `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
-        : resultMessage;
-    if (resultMessage.length >= 50000) {
-      console.log(
-        "Test result messages are too long, comment will post stripped."
-      );
-    }
-
     commentValues.push(`\n`);
 
+    // Currently there are too many test failures to post since it creates several comments.
+    // Only expands if explicitly requested in the option.
     if (shouldExpandResultMessages) {
+      for (const group of Object.keys(groupedFails).sort()) {
+        const fails = groupedFails[group];
+        commentValues.push(`\n`);
+        fails.forEach((fail) => {
+          commentValues.push(`- ${group} > ${fail.title}`);
+        });
+      }
+
+      const strippedResultMessage =
+        resultMessage.length >= 50000
+          ? resultMessage.substring(0, 50000) +
+            `...\n(Test result messages are too long, cannot post full message in comment. See the action logs for the full message.)`
+          : resultMessage;
+      if (resultMessage.length >= 50000) {
+        console.log(
+          "Test result messages are too long, comment will post stripped."
+        );
+      }
+
       commentValues.push(`<details>`);
       commentValues.push(`<summary>Expand output</summary>`);
       commentValues.push(strippedResultMessage);
@@ -871,7 +1027,7 @@ async function run() {
         getTestSummary(
           sha,
           shouldDiffWithMain,
-          baseResults,
+          noBaseComparison ? null : baseResults,
           failedJobResults,
           shouldReportSlack
         ),
@@ -882,15 +1038,19 @@ async function run() {
   const isMultipleComments = comments.length > 1;
 
   try {
-    if (!prNumber) {
-      return;
-    }
-
     // Store the list of failed test paths to a file
     fs.writeFileSync(
       "./failed-test-path-list.json",
-      JSON.stringify(failedTestLists, null, 2)
+      JSON.stringify(
+        failedTestLists.filter((x) => x.length > 5),
+        null,
+        2
+      )
     );
+
+    if (!prNumber) {
+      return;
+    }
 
     if (failedJobResults.result.length === 0) {
       console.log("No failed test results found :tada:");

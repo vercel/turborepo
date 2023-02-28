@@ -65,10 +65,9 @@ Examples of **correct** code for this rule:
 
 ## Options
 
-| Option        | Required | Default     | Details                                                                                                                                     | Example                                      |
-| ------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `turboConfig` | No       | Auto-detect | Resolved `turbo.json` configuration                                                                                                         | `require("./turbo.json")`                    |
-| `allowList`   | No       | []          | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
+| Option      | Required | Default | Details                                                                                                                                     | Example                                      |
+| ----------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `allowList` | No       | []      | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
 
 ## Further Reading
 
