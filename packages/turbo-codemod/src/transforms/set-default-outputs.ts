@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
+import { getTurboConfigs } from "turbo-utils";
 import type { Schema as TurboJsonSchema } from "turbo-types";
 
 import type { TransformerArgs } from "../types";
@@ -13,6 +14,18 @@ const TRANSFORMER = "set-default-outputs";
 const DESCRIPTION =
   'Add the "outputs" key with defaults where it is missing in `turbo.json`';
 const INTRODUCED_IN = "1.7.0";
+
+function migrateConfig(config: TurboJsonSchema) {
+  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+    if (!taskDef.outputs) {
+      taskDef.outputs = DEFAULT_OUTPUTS;
+    } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
+      delete taskDef.outputs;
+    }
+  }
+
+  return config;
+}
 
 export function transformer({
   root,
@@ -51,17 +64,19 @@ export function transformer({
   }
 
   const turboJson: TurboJsonSchema = fs.readJsonSync(turboConfigPath);
-  for (const [_, taskDef] of Object.entries(turboJson.pipeline)) {
-    if (!taskDef.outputs) {
-      taskDef.outputs = DEFAULT_OUTPUTS;
-    } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
-      delete taskDef.outputs;
-    }
-  }
-
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: turboJson,
+    after: migrateConfig(turboJson),
+  });
+
+  // find and migrate any workspace configs
+  const workspaceConfigs = getTurboConfigs(root);
+  workspaceConfigs.forEach((workspaceConfig) => {
+    const { config, turboConfigPath } = workspaceConfig;
+    runner.modifyFile({
+      filePath: turboConfigPath,
+      after: migrateConfig(config),
+    });
   });
 
   return runner.finish();
