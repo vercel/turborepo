@@ -263,6 +263,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b015a331cc64ebd1774ba119538573603427eaace0a1950c423ab971f903796"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "async-std"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3802,7 +3813,6 @@ dependencies = [
  "mime",
  "next-core",
  "next-dev",
- "once_cell",
  "owo-colors",
  "parking_lot",
  "rand",
@@ -3822,6 +3832,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-node",
+ "turbopack-test-utils",
  "url",
  "webbrowser 0.7.1",
 ]
@@ -7717,6 +7728,7 @@ name = "turbopack"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "criterion 0.3.6",
  "difference",
  "futures",
@@ -7980,6 +7992,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-test-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "similar",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+]
+
+[[package]]
 name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
@@ -7988,18 +8014,17 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "similar",
  "test-generator",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
  "turbopack-env",
+ "turbopack-test-utils",
 ]
 
 [[package]]
