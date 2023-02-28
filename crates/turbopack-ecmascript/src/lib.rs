@@ -187,7 +187,7 @@ impl Asset for EcmascriptModuleAsset {
                 ident.add_asset(StringVc::cell(name.clone()), asset.ident());
             }
             ident.add_modifier(modifier());
-            Ok(ident.cell())
+            Ok(AssetIdentVc::new(Value::new(ident)))
         } else {
             Ok(self.source.ident().with_modifier(modifier()))
         }
@@ -236,7 +236,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
 impl ResolveOrigin for EcmascriptModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.source.path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -394,7 +394,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                 inner_code: format!(
                     "const e = new Error(\"Could not parse module '{path}'\");\ne.code = \
                      'MODULE_UNPARSEABLE';\nthrow e;",
-                    path = self.module.path().to_string().await?
+                    path = self.module.ident().path().to_string().await?
                 )
                 .into(),
                 ..Default::default()

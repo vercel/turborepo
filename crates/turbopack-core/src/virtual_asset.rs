@@ -22,6 +22,11 @@ impl VirtualAssetVc {
             content,
         })
     }
+
+    #[turbo_tasks::function]
+    pub fn new_with_ident(ident: AssetIdentVc, content: AssetContentVc) -> Self {
+        Self::cell(VirtualAsset { ident, content })
+    }
 }
 
 #[turbo_tasks::value_impl]

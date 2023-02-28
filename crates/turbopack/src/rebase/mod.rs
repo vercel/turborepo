@@ -35,7 +35,7 @@ impl Asset for RebasedAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> AssetIdentVc {
         AssetIdentVc::from_path(FileSystemPathVc::rebase(
-            self.source.path(),
+            self.source.ident().path(),
             self.input_dir,
             self.output_dir,
         ))

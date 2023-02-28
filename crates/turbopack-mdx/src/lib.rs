@@ -59,8 +59,8 @@ async fn into_ecmascript_module_asset(
     let mdx_jsx_component =
         compile(&file.content().to_str()?, &Default::default()).map_err(|e| anyhow!("{}", e))?;
 
-    let source = VirtualAssetVc::new(
-        this.source.path(),
+    let source = VirtualAssetVc::new_with_ident(
+        this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );
     Ok(EcmascriptModuleAssetVc::new(
@@ -143,7 +143,7 @@ impl EcmascriptChunkPlaceable for MdxModuleAsset {
 impl ResolveOrigin for MdxModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.source.path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]

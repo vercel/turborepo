@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString};
 
 use super::{Chunk, ChunkVc, ParallelChunkReferenceVc};
 use crate::{
@@ -72,14 +72,6 @@ impl Asset for ChunkInGroup {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl ValueToString for ChunkInGroup {
-    #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        self.inner.to_string()
-    }
-}
-
 #[turbo_tasks::function]
 fn inner_chunk_key() -> StringVc {
     StringVc::cell("inner chunk".to_string())
@@ -110,7 +102,7 @@ impl Introspectable for ChunkInGroup {
             if let Some(chunk) = IntrospectableVc::resolve_from(self.inner).await? {
                 chunk.title()
             } else {
-                self.inner.path().to_string()
+                self.inner.ident().to_string()
             },
         )
     }

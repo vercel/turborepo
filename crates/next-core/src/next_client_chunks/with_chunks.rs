@@ -13,9 +13,9 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetReference,
-        ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc,
+        Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc,
+        ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -165,7 +165,7 @@ impl ValueToString for WithChunksAssetReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "referenced asset {}",
-            self.asset.path().to_string().await?
+            self.asset.ident().to_string().await?
         )))
     }
 }

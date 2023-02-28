@@ -120,7 +120,7 @@ impl Asset for TsConfigModuleAsset {
                 types
             } else {
                 let mut all_types = Vec::new();
-                let mut current = self.source.path().parent().resolve().await?;
+                let mut current = self.source.ident().path().parent().resolve().await?;
                 loop {
                     if let DirectoryContent::Entries(entries) =
                         &*current.join("node_modules/@types").read_dir().await?
@@ -221,7 +221,7 @@ impl ValueToString for TsExtendsReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "tsconfig extends {}",
-            self.config.path().to_string().await?,
+            self.config.ident().to_string().await?,
         )))
     }
 }

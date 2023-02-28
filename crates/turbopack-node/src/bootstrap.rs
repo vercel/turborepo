@@ -4,7 +4,7 @@ use anyhow::Result;
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };

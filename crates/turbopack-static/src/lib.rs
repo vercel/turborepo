@@ -11,7 +11,7 @@
 #![feature(min_specialization)]
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbo_tasks_fs::FileContent;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
@@ -127,7 +127,7 @@ struct StaticAsset {
 impl Asset for StaticAsset {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<AssetIdentVc> {
-        let source_path = self.source.path();
+        let source_path = self.source.ident().path();
         let content = self.source.content();
         let content_hash = if let AssetContent::File(file) = &*content.await? {
             if let FileContent::Content(file) = &*file.await? {
@@ -170,7 +170,10 @@ impl ChunkItem for ModuleChunkItem {
     async fn references(&self) -> Result<AssetReferencesVc> {
         Ok(AssetReferencesVc::cell(vec![SingleAssetReferenceVc::new(
             self.static_asset.into(),
-            StringVc::cell(format!("static(url) {}", self.static_asset.path().await?)),
+            StringVc::cell(format!(
+                "static(url) {}",
+                self.static_asset.ident().to_string().await?
+            )),
         )
         .into()]))
     }
@@ -188,7 +191,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_js(&format!("/{}", &*self.static_asset.path().await?))
+                path = stringify_js(&format!("/{}", &*self.static_asset.ident().path().await?))
             )
             .into(),
             ..Default::default()
@@ -208,7 +211,10 @@ impl CssEmbed for StaticCssEmbed {
     async fn references(&self) -> Result<AssetReferencesVc> {
         Ok(AssetReferencesVc::cell(vec![SingleAssetReferenceVc::new(
             self.static_asset.into(),
-            StringVc::cell(format!("static(url) {}", self.static_asset.path().await?)),
+            StringVc::cell(format!(
+                "static(url) {}",
+                self.static_asset.ident().path().await?
+            )),
         )
         .into()]))
     }

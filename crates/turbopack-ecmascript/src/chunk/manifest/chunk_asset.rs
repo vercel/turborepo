@@ -1,6 +1,5 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -118,7 +117,7 @@ impl ValueToString for ManifestChunkAssetReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "referenced manifest {}",
-            self.manifest.path().to_string().await?
+            self.manifest.ident().to_string().await?
         )))
     }
 }

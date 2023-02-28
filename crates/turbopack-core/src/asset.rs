@@ -37,14 +37,6 @@ pub trait Asset {
     /// all properties of the [Asset].
     fn ident(&self) -> AssetIdentVc;
 
-    /// The path of the [Asset]. It can potentially be a virtual path.
-    /// It's not expected to be something you can read to or write from in
-    /// general, only some [Asset] types have these property. It doesn't
-    /// uniquely identify an [Asset]. Use [Asset::ident] for that.
-    fn path(&self) -> FileSystemPathVc {
-        self.ident().path()
-    }
-
     /// The content of the [Asset].
     fn content(&self) -> AssetContentVc;
 

@@ -6,7 +6,7 @@ use std::fmt::Write;
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -27,7 +27,6 @@ use turbopack_core::{
     resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
-use turbopack_ecmascript::utils::FormatIter;
 use writer::expand_imports;
 
 use self::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
@@ -66,7 +65,9 @@ impl CssChunkVc {
     pub async fn common_parent(self) -> Result<FileSystemPathOptionVc> {
         let this = self.await?;
         let main_entries = this.main_entries.await?;
-        let mut paths = main_entries.iter().map(|entry| entry.path().parent());
+        let mut paths = main_entries
+            .iter()
+            .map(|entry| entry.ident().path().parent());
         let mut current = paths
             .next()
             .ok_or_else(|| anyhow!("Chunks must have at least one entry"))?
@@ -262,22 +263,6 @@ impl OptimizableChunk for CssChunk {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for CssChunk {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        let entry_strings = self
-            .main_entries
-            .await?
-            .iter()
-            .map(|entry| entry.path().to_string())
-            .try_join()
-            .await?;
-        let entry_strs = || entry_strings.iter().map(|s| s.as_str()).intersperse(" + ");
-        Ok(StringVc::cell(format!("chunk {}", FormatIter(entry_strs),)))
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl Asset for CssChunk {
     #[turbo_tasks::function]
     async fn ident(self_vc: CssChunkVc) -> Result<AssetIdentVc> {
@@ -294,11 +279,10 @@ impl Asset for CssChunk {
         let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
             ident
         } else if let AssetParam::Asset(_, ident) = params[0] {
-            AssetIdent {
+            AssetIdentVc::new(Value::new(AssetIdent {
                 path: ident.path(),
                 params,
-            }
-            .cell()
+            }))
         } else {
             unreachable!()
         };

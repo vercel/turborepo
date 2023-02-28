@@ -7,7 +7,7 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -136,7 +136,7 @@ impl CssChunkPlaceable for CssModuleAsset {
 impl ResolveOrigin for CssModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.source.path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -149,17 +149,6 @@ impl ResolveOrigin for CssModuleAsset {
 struct ModuleChunkItem {
     module: CssModuleAssetVc,
     context: ChunkingContextVc,
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for ModuleChunkItem {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "{} (css)",
-            self.module.await?.source.path().to_string().await?
-        )))
-    }
 }
 
 #[turbo_tasks::value_impl]
@@ -290,7 +279,7 @@ impl CssChunkItem for ModuleChunkItem {
             Ok(CssChunkItemContent {
                 inner_code: format!(
                     "/* unparseable {} */",
-                    self.module.path().to_string().await?
+                    self.module.ident().to_string().await?
                 )
                 .into(),
                 imports: vec![],

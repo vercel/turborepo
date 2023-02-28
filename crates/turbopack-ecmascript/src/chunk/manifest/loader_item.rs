@@ -6,7 +6,7 @@ use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc, ChunkableAsset, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkableAsset, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };

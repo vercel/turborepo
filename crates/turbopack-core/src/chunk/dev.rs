@@ -225,9 +225,9 @@ impl ChunkingContext for DevChunkingContext {
 
     #[turbo_tasks::function]
     async fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> Result<BoolVc> {
-        let parent_dir = asset_a.path().parent().await?;
+        let parent_dir = asset_a.ident().path().parent().await?;
 
-        let path = asset_b.path().await?;
+        let path = asset_b.ident().path().await?;
         if let Some(rel_path) = parent_dir.get_path_to(&path) {
             if !rel_path.starts_with("node_modules/") && !rel_path.contains("/node_modules/") {
                 return Ok(BoolVc::cell(true));

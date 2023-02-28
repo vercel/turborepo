@@ -1,11 +1,10 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use indoc::formatdoc;
-use turbo_tasks::{ValueToString};
-
+use turbo_tasks::ValueToString;
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };

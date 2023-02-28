@@ -5,7 +5,7 @@ use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
     version::{Update, UpdateVc, Version, VersionVc, VersionedContent, VersionedContentVc},

@@ -113,7 +113,7 @@ impl EcmascriptChunkItem for JsonChunkItem {
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         // We parse to JSON and then stringify again to ensure that the
         // JSON is valid.
-        let content = self.module.path().read();
+        let content = self.module.content().file_content();
         let data = content.parse_json().await?;
         match &*data {
             FileJsonContent::Content(data) => {
@@ -141,7 +141,7 @@ impl EcmascriptChunkItem for JsonChunkItem {
             FileJsonContent::NotFound => {
                 bail!(
                     "JSON file not found: {}",
-                    self.module.path().to_string().await?
+                    self.module.ident().to_string().await?
                 );
             }
         }

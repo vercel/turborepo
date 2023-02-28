@@ -6,7 +6,7 @@ use turbo_tasks::primitives::StringVc;
 use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
@@ -71,7 +71,11 @@ impl PageLoaderAssetVc {
 
         let file = File::from(result.build());
 
-        Ok(VirtualAssetVc::new(this.entry_asset.path().join("page-loader.ts"), file.into()).into())
+        Ok(VirtualAssetVc::new(
+            this.entry_asset.ident().path().join("page-loader.ts"),
+            file.into(),
+        )
+        .into())
     }
 
     #[turbo_tasks::function]

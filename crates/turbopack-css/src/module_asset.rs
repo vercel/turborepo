@@ -229,7 +229,7 @@ impl EcmascriptChunkPlaceable for ModuleCssModuleAsset {
 impl ResolveOrigin for ModuleCssModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.inner.path()
+        self.inner.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -296,7 +296,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         let Some(resolved_module) = &*resolved_module else {
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
-                                path: self.module.path(),
+                                source: self.module.ident(),
                                 message: StringVc::cell(formatdoc! {
                                     r#"
                                         Module {from} referenced in `composes: ... from {from};` can't be resolved.
@@ -310,7 +310,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         let Some(css_module) = ModuleCssModuleAssetVc::resolve_from(resolved_module).await? else {
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
-                                path: self.module.path(),
+                                source: self.module.ident(),
                                 message: StringVc::cell(formatdoc! {
                                     r#"
                                         Module {from} referenced in `composes: ... from {from};` is not a CSS module.
@@ -355,7 +355,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             // We generate a minimal map for runtime code so that the filename is
             // displayed in dev tools.
             source_map: Some(generate_minimal_source_map(
-                format!("{}.js", self.module.path().await?.path),
+                self.module.ident().to_string().await?.to_string(),
                 code,
             )),
             ..Default::default()
@@ -375,7 +375,7 @@ impl ValueToString for CssProxyToCssAssetReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "proxy(css) {}",
-            self.module.path().to_string().await?,
+            self.module.ident().to_string().await?,
         )))
     }
 }
@@ -463,7 +463,7 @@ impl CssChunkPlaceable for CssProxyModuleAsset {
 impl ResolveOrigin for CssProxyModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.module.path()
+        self.module.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -532,7 +532,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> ParseResultS
 #[turbo_tasks::value(shared)]
 struct CssModuleComposesIssue {
     severity: IssueSeverityVc,
-    path: FileSystemPathVc,
+    source: AssetIdentVc,
     message: StringVc,
 }
 
@@ -557,7 +557,7 @@ impl Issue for CssModuleComposesIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> FileSystemPathVc {
-        self.path
+        self.source.path()
     }
 
     #[turbo_tasks::function]

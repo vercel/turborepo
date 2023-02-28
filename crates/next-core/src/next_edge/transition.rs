@@ -67,7 +67,7 @@ impl Transition for NextEdgeTransition {
         let FileContent::Content(base) = &*self.bootstrap_file.await? else {
             bail!("runtime code not found");
         };
-        let path = asset.path().await?;
+        let path = asset.ident().path().await?;
         let path = self
             .base_path
             .await?
@@ -93,7 +93,7 @@ impl Transition for NextEdgeTransition {
         new_content.concat(base.content());
         let file = File::from(new_content.build());
         let virtual_asset = VirtualAssetVc::new(
-            asset.path().join("next-edge-bootstrap.ts"),
+            asset.ident().path().join("next-edge-bootstrap.ts"),
             FileContent::Content(file).cell().into(),
         );
 

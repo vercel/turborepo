@@ -2,10 +2,14 @@ use std::fmt::Write;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    primitives::StringVc, trace::TraceRawVcs, Value, ValueToString, ValueToStringVc,
+};
 use turbo_tasks_fs::FileSystemPathVc;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TraceRawVcs)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
+)]
 pub enum AssetParam {
     Query(StringVc),
     Fragment(StringVc),
@@ -13,8 +17,8 @@ pub enum AssetParam {
     Modifier(StringVc),
 }
 
-#[turbo_tasks::value(shared)]
-#[derive(Clone)]
+#[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(Clone, Debug, PartialOrd, Ord, Hash)]
 pub struct AssetIdent {
     pub path: FileSystemPathVc,
     /// The parameters of the [AssetIdent]. They must be in the order they
@@ -76,21 +80,25 @@ impl ValueToString for AssetIdent {
 
 #[turbo_tasks::value_impl]
 impl AssetIdentVc {
+    #[turbo_tasks::function]
+    pub fn new(ident: Value<AssetIdent>) -> Self {
+        ident.into_value().cell()
+    }
+
     /// Creates an [AssetIdent] from a [FileSystemPathVc]
     #[turbo_tasks::function]
     pub fn from_path(path: FileSystemPathVc) -> Self {
-        AssetIdent {
+        Self::new(Value::new(AssetIdent {
             path,
             params: Vec::new(),
-        }
-        .cell()
+        }))
     }
 
     #[turbo_tasks::function]
     pub async fn with_modifier(self, modifier: StringVc) -> Result<Self> {
         let mut this = self.await?.clone_value();
         this.params.push(AssetParam::Modifier(modifier));
-        Ok(this.cell())
+        Ok(Self::new(Value::new(this)))
     }
 
     #[turbo_tasks::function]

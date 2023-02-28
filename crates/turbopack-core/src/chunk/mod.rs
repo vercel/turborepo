@@ -198,7 +198,7 @@ impl ValueToString for ChunkGroup {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "group for {}",
-            self.entry.to_string().await?
+            self.entry.path().to_string().await?
         )))
     }
 }
@@ -211,7 +211,15 @@ impl ValueToString for ChunkGroup {
 /// returns true, all referenced assets (if they are [Chunk]s) are placed in the
 /// same chunk group.
 #[turbo_tasks::value_trait]
-pub trait Chunk: Asset + ValueToString {}
+pub trait Chunk: Asset {
+    // TODO Once output assets have their own trait, this path() method will move
+    // into that trait and ident() will be removed from that. Assets on the
+    // output-level only have a path and no complex ident.
+    /// The path of the chunk.
+    fn path(&self) -> FileSystemPathVc {
+        self.ident().path()
+    }
+}
 
 /// see [Chunk] for explanation
 #[turbo_tasks::value_trait]
@@ -299,7 +307,7 @@ impl ValueToString for ChunkReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "chunk {}",
-            self.chunk.to_string().await?
+            self.chunk.ident().to_string().await?
         )))
     }
 }
@@ -461,7 +469,7 @@ where
                     return Err(anyhow!(
                         "Asset {} was requested to be placed into the  same chunk, but this \
                          wasn't possible",
-                        asset.path().to_string().await?
+                        asset.ident().to_string().await?
                     ));
                 }
             }

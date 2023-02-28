@@ -17,12 +17,9 @@ use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{
     primitives::{StringReadRef, StringVc, UsizeVc},
-    TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
-use turbo_tasks_fs::{
-    FileSystemPathOptionVc,
-};
-
+use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -126,7 +123,9 @@ impl EcmascriptChunkVc {
     pub async fn common_parent(self) -> Result<FileSystemPathOptionVc> {
         let this = self.await?;
         let main_entries = this.main_entries.await?;
-        let mut paths = main_entries.iter().map(|entry| entry.path().parent());
+        let mut paths = main_entries
+            .iter()
+            .map(|entry| entry.ident().path().parent());
         let mut current = paths
             .next()
             .ok_or_else(|| anyhow!("Chunks must have at least one entry"))?
@@ -213,7 +212,7 @@ impl ValueToString for EcmascriptChunk {
                 let evaluate_entries_ids = evaluate_entries
                     .await?
                     .iter()
-                    .map(|entry| entry.path().to_string())
+                    .map(|entry| entry.ident().to_string())
                     .try_join()
                     .await?;
                 format!(
@@ -233,7 +232,7 @@ impl ValueToString for EcmascriptChunk {
                 entries
                     .await?
                     .iter()
-                    .map(|entry| entry.path().to_string())
+                    .map(|entry| entry.ident().to_string())
                     .try_join()
                     .await?
             } else {
@@ -354,7 +353,7 @@ impl Asset for EcmascriptChunk {
         let ident = if let [AssetParam::Asset(_, ident)] = params[..] {
             ident
         } else {
-            AssetIdent { path, params }.cell()
+            AssetIdentVc::new(Value::new(AssetIdent { path, params }))
         };
 
         Ok(AssetIdentVc::from_path(

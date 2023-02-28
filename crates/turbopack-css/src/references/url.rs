@@ -106,7 +106,9 @@ impl CodeGenerateable for UrlAssetReference {
         let mut visitors = Vec::new();
 
         if let ReferencedAsset::Some(asset) = &*self_vc.get_referenced_asset(context).await? {
-            let path = asset.path().await?;
+            // TODO This is not the correct way to get the path of the asset. `asset` is on
+            // module-level, but we need the output-level asset instead.
+            let path = asset.ident().path().await?;
             let relative_path = context_path
                 .get_relative_path_to(&path)
                 .unwrap_or_else(|| format!("/{}", path.path));

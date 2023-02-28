@@ -3,6 +3,7 @@ use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    chunk::Chunk,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
