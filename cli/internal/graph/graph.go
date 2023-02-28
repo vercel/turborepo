@@ -64,12 +64,9 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			TaskDefinition:  taskDefinition,
 			Outputs:         taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
-			ExpandedInputs:  make(map[turbopath.AnchoredUnixPath]string),
 		}
 
-		pfs := taskhash.SpecFromPackageTask(packageTask)
-		expandedInputs := g.TaskHashTracker.PackageInputsExpandedHashes[pfs.ToKey()]
-		packageTask.ExpandedInputs = expandedInputs
+		packageTask.ExpandedInputs = g.TaskHashTracker.GetExpandedInputs(packageTask)
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd
