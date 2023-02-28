@@ -94,7 +94,11 @@ func RealRun(
 		return ec.exec(ctx, packageTask, deps)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
+	getArgs := func(taskID string) []string {
+		return rs.ArgsForTask(taskID)
+	}
+
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
@@ -158,12 +162,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashTracker.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
+	hash := packageTask.Hash
 	ec.logger.Debug("task hash", "value", hash)
-	if err != nil {
-		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
-		// @TODO probably should abort fatally???
-	}
 	// TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
 	// the following block should never get hit. In the meantime, keep it after hashing
 	// so that downstream tasks can count on the hash existing

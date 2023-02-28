@@ -127,13 +127,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-
-		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
-		if err != nil {
-			return err
-		}
+		hash := packageTask.Hash
 
 		command := missingTaskLabel
 		if packageTask.Command != "" {
@@ -191,7 +185,10 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	// a visitor function and some hardcoded execOpts.
 	// Note: we do not currently attempt to parallelize the graph walking
 	// (as we do in real execution)
-	visitorFn := g.GetPackageTaskVisitor(ctx, dryRunExecFunc)
+	getArgs := func(taskID string) []string {
+		return rs.ArgsForTask(taskID)
+	}
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, dryRunExecFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
