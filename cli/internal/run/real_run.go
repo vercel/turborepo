@@ -96,11 +96,10 @@ func RealRun(
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := hashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
-		pfs := taskhash.SpecFromPackageTask(packageTask)
-		expandedInputs := hashes.PackageInputsExpandedHashes[pfs.ToKey()]
-		envPairs := hashes.HashableEnvPairs[packageTask.TaskID]
-		framework := hashes.PackageTaskFramework[packageTask.TaskID]
+		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		expandedInputs := taskHashTracker.GetExpandedInputs(packageTask)
+		envPairs := taskHashTracker.HashableEnvPairs[packageTask.TaskID]
+		framework := taskHashTracker.PackageTaskFramework[packageTask.TaskID]
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}

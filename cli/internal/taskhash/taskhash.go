@@ -59,7 +59,7 @@ type packageFileSpec struct {
 	inputs []string
 }
 
-func SpecFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
+func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
 	return packageFileSpec{
 		pkg:    packageTask.PackageName,
 		inputs: packageTask.TaskDefinition.Inputs,
@@ -284,7 +284,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
-	pfs := SpecFromPackageTask(packageTask)
+	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
 	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]
