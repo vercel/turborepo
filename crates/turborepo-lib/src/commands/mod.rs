@@ -6,8 +6,8 @@ use tokio::sync::OnceCell;
 use crate::{
     client::APIClient,
     config::{
-        default_user_config_path, get_repo_config_path, RepoConfig, RepoConfigLoader, UserConfig,
-        UserConfigLoader,
+        default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
+        RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
     },
     ui::UI,
     Args,
@@ -24,6 +24,7 @@ pub struct CommandBase {
     pub ui: UI,
     user_config: OnceCell<UserConfig>,
     repo_config: OnceCell<RepoConfig>,
+    client_config: OnceCell<ClientConfig>,
     args: Args,
 }
 
@@ -35,6 +36,7 @@ impl CommandBase {
             args,
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
+            client_config: OnceCell::new(),
         })
     }
 
@@ -73,6 +75,15 @@ impl CommandBase {
         Ok(())
     }
 
+    fn create_client_config(&self) -> Result<()> {
+        let client_config = ClientConfigLoader::new()
+            .with_remote_cache_timeout(self.args.remote_cache_timeout.clone())
+            .load()?;
+        self.client_config.set(client_config)?;
+
+        Ok(())
+    }
+
     pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig> {
         if self.repo_config.get().is_none() {
             self.create_repo_config()?;
@@ -105,9 +116,20 @@ impl CommandBase {
         Ok(self.user_config.get().unwrap())
     }
 
+    pub fn client_config(&self) -> Result<&ClientConfig> {
+        if self.client_config.get().is_none() {
+            self.create_client_config()?;
+        }
+
+        Ok(self.client_config.get().unwrap())
+    }
+
     pub fn api_client(&mut self) -> Result<APIClient> {
         let repo_config = self.repo_config()?;
+        let client_config = self.client_config()?;
+
         let api_url = repo_config.api_url();
-        APIClient::new(api_url, self.args.remote_cache_timeout)
+        let timeout = client_config.remote_cache_timeout();
+        APIClient::new(api_url, timeout)
     }
 }

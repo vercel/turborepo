@@ -1,7 +1,6 @@
 use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
-use config::{Config, Environment};
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -94,11 +93,6 @@ pub struct User {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: User,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct ClientConfigValue {
-    remote_cache_timeout: u64,
 }
 
 pub struct APIClient {
@@ -270,15 +264,9 @@ impl APIClient {
         false
     }
 
-    pub fn new(base_url: impl AsRef<str>, timeout: Option<u64>) -> Result<Self> {
-        let config: ClientConfigValue = Config::builder()
-            .add_source(Environment::with_prefix("turbo"))
-            .set_override_option("remote_cache_timeout", timeout)?
-            .build()?
-            .try_deserialize()?;
-
+    pub fn new(base_url: impl AsRef<str>, timeout: u64) -> Result<Self> {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(config.remote_cache_timeout))
+            .timeout(std::time::Duration::from_secs(timeout))
             .build()?;
 
         Ok(APIClient {
