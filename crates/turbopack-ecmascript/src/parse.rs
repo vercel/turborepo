@@ -138,21 +138,17 @@ pub async fn parse(
     let fs_path = &*source.path().await?;
     let file_path_hash = *hash_file_path(source.path()).await? as u128;
     let ty = ty.into_value();
-    let tsconfig = if let EcmascriptModuleAssetType::Ecmascript = &ty {
-        None
-    } else {
-        let tsconfig = find_context_file(source.path(), tsconfig());
-        match *tsconfig.await? {
-            FindContextFileResult::Found(path, _) => Some(
-                read_tsconfigs(
-                    path.read(),
-                    SourceAssetVc::new(path).into(),
-                    node_cjs_resolve_options(path.root()),
-                )
-                .await?,
-            ),
-            FindContextFileResult::NotFound(_) => None,
-        }
+    let tsconfig = find_context_file(source.path(), tsconfig());
+    let tsconfig = match *tsconfig.await? {
+        FindContextFileResult::Found(path, _) => Some(
+            read_tsconfigs(
+                path.read(),
+                SourceAssetVc::new(path).into(),
+                node_cjs_resolve_options(path.root()),
+            )
+            .await?,
+        ),
+        FindContextFileResult::NotFound(_) => None,
     };
 
     Ok(match &*content.await? {
@@ -305,6 +301,7 @@ async fn parse_content(
                 file_name_hash: file_path_hash,
                 tsconfig: &tsconfig,
             };
+
             for transform in transforms.iter() {
                 transform.apply(&mut parsed_program, &context).await?;
             }

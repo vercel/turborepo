@@ -83,7 +83,9 @@ impl ModuleOptionsVc {
                 }
             }
         }
-        let mut transforms = custom_ecmascript_app_transforms.clone();
+
+        let mut transforms = vec![EcmascriptInputTransform::Decorators];
+        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         // Order of transforms is important. e.g. if the React transform occurs before
