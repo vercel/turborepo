@@ -36,6 +36,13 @@ pub struct CachingStatusResponse {
     pub status: CachingStatus,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactResponse {
+    pub duration: u64,
+    pub expected_tag: Option<String>,
+    pub body: Vec<u8>,
+}
+
 /// Membership is the relationship between the logged-in user and a particular
 /// team
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,6 +247,10 @@ impl APIClient {
             token: verification_response.token,
             team_id: verification_response.team_id,
         })
+    }
+
+    pub fn fetch_artifact() -> Result<ArtifactResponse> {
+        todo!()
     }
 
     const RETRY_MAX: u32 = 2;

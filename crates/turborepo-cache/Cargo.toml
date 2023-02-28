@@ -6,10 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+base64 = "0.21.0"
 chrono = "0.4.23"
 dunce = "1.0.3"
 lazy_static = "1.4.0"
+os_str_bytes = "6.4.1"
+ring = "0.16.20"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
 tar = "0.4.38"
 thiserror = "1.0.38"
 turborepo-api-client = { path = "../turborepo-api-client" }
 zstd = "0.12.3"
+
+[dev-dependencies]
+anyhow = "1.0.69"

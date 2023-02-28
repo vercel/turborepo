@@ -1,20 +1,22 @@
 use std::{
-    fs::File,
+    fs,
+    fs::{create_dir_all, File},
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use chrono::{TimeZone, Utc};
 use dunce::canonicalize as fs_canonicalize;
 use lazy_static::lazy_static;
-use tar::Header;
+use tar::{EntryType, Header};
 use turborepo_api_client::APIClient;
 use zstd::stream::write::Encoder;
 
-use crate::CacheError;
+use crate::{signature_authentication::ArtifactSignatureAuthentication, CacheError};
 
 struct HttpCache {
     client: APIClient,
+    signer_verifier: Option<ArtifactSignatureAuthentication>,
 }
 
 lazy_static! {
@@ -53,6 +55,81 @@ impl HttpCache {
             header.set_size(size);
 
             tw.append_data(&mut header, path, f)?;
+        }
+
+        Ok(())
+    }
+
+    async fn retrieve(&self, hash: &str) -> Result<(), CacheError> {
+        let response = self.client.get_artifact(&hash).await?;
+
+        if let Some(signer_verifier) = &self.signer_verifier {
+            let expected_tag = response.expected_tag.ok_or(CacheError::MissingTag)?;
+            let is_valid = signer_verifier.validate(hash, &response.body, &expected_tag)?;
+
+            if !is_valid {
+                return Err(CacheError::InvalidTag(expected_tag));
+            }
+        }
+        let tar_reader = tar::Archive::new(zstd::Decoder::new(&response.body[..])?);
+        Ok(())
+    }
+
+    fn restore_tar(&self, root: &PathBuf, tar_reader: impl Read) -> Result<(), CacheError> {
+        let missing_links = Vec::new();
+        let mut files = Vec::new();
+        let zr = zstd::Decoder::new(tar_reader)?;
+        let mut tr = tar::Archive::new(zr);
+
+        for entry in tr.entries()? {
+            let mut entry = entry?;
+            let path = entry.path()?;
+            files.push(path.clone());
+            let filename = root.join(path);
+            let is_child = filename.starts_with(root);
+            if !is_child {
+                return Err(CacheError::InvalidPath(
+                    filename.to_string_lossy().to_string(),
+                ));
+            }
+            let header = entry.header();
+            match header.entry_type() {
+                EntryType::Regular => {
+                    if let Some(parent) = filename.parent() {
+                        create_dir_all(parent)?;
+                    }
+
+                    entry.unpack(&filename)?;
+                }
+                EntryType::Directory => {
+                    create_dir_all(&filename)?;
+                }
+                EntryType::Symlink => self.restore_symlink(root, header, false),
+                entry_type => {
+                    println!(
+                        "Unhandled file type {:?} for {}",
+                        entry_type,
+                        filename.to_string_lossy()
+                    )
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn restore_symlink(
+        &self,
+        root: &Path,
+        header: &Header,
+        allow_nonexistent_targets: bool,
+    ) -> Result<(), CacheError> {
+        let relative_link_target = header.link_name()?;
+        let link_filename = root.join(header.path()?);
+        let exists = link_filename.parent().map(|p| p.exists()).unwrap_or(false);
+        if !exists {
+            return Err(CacheError::InvalidPath(
+                link_filename.to_string_lossy().to_string(),
+            ));
         }
 
         Ok(())

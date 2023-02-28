@@ -4107,6 +4107,9 @@ name = "os_str_bytes"
 version = "6.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "output_vt100"
@@ -8012,9 +8015,15 @@ dependencies = [
 name = "turborepo-cache"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "base64 0.21.0",
  "chrono",
  "dunce",
  "lazy_static",
+ "os_str_bytes",
+ "ring",
+ "serde",
+ "serde_json",
  "tar",
  "thiserror",
  "turborepo-api-client",
