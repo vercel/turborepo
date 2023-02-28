@@ -43,6 +43,86 @@ describe("set-default-outputs", () => {
     `);
   });
 
+  it("migrates turbo.json outputs - workspace configs", async () => {
+    // load the fixture for the test
+    const { root, readJson } = useFixture({
+      fixture: "workspace-configs",
+    });
+
+    // run the transformer
+    const result = transformer({
+      root,
+      options: { force: false, dry: false, print: false },
+    });
+
+    expect(readJson("turbo.json") || "{}").toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      pipeline: {
+        "build-one": {
+          outputs: ["foo"],
+        },
+        "build-two": {},
+        "build-three": {
+          outputs: ["dist/**", "build/**"],
+        },
+      },
+    });
+
+    expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      extends: ["//"],
+      pipeline: {
+        build: {
+          outputs: ["dist/**", "build/**"],
+        },
+      },
+    });
+
+    expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      extends: ["//"],
+      pipeline: {
+        build: {},
+      },
+    });
+
+    expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
+      $schema: "https://turbo.build/schema.json",
+      extends: ["//"],
+      pipeline: {
+        "build-three": {
+          outputs: ["dist/**", "build/**"],
+        },
+      },
+    });
+
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes).toMatchInlineSnapshot(`
+      Object {
+        "apps/docs/turbo.json": Object {
+          "action": "modified",
+          "additions": 1,
+          "deletions": 1,
+        },
+        "apps/web/turbo.json": Object {
+          "action": "modified",
+          "additions": 1,
+          "deletions": 0,
+        },
+        "packages/ui/turbo.json": Object {
+          "action": "modified",
+          "additions": 1,
+          "deletions": 1,
+        },
+        "turbo.json": Object {
+          "action": "modified",
+          "additions": 2,
+          "deletions": 1,
+        },
+      }
+    `);
+  });
+
   it("migrates turbo.json outputs - dry", async () => {
     // load the fixture for the test
     const { root, read } = useFixture({
