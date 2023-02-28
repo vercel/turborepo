@@ -5,8 +5,8 @@ import "github.com/vercel/turbo/cli/internal/fs"
 // Framework is an identifier for something that we wish to inference against.
 type Framework struct {
 	Slug            string
-	EnvPrefix       string  `json:"-"`
-	DependencyMatch matcher `json:"-"`
+	EnvPrefix       string
+	DependencyMatch matcher
 }
 
 type matcher struct {
