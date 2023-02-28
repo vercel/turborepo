@@ -19,11 +19,7 @@ impl Version for EcmascriptChunkVersion {
     fn id(&self) -> StringVc {
         let mut hasher = Xxh3Hash64Hasher::new();
         let sorted_hashes = {
-            let mut hashes: Vec<_> = self
-                .module_factories_hashes
-                .values()
-                .map(|hash| *hash)
-                .collect();
+            let mut hashes: Vec<_> = self.module_factories_hashes.values().copied().collect();
             hashes.sort();
             hashes
         };

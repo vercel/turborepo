@@ -176,8 +176,7 @@ impl EcmascriptChunkContentVc {
     #[turbo_tasks::function]
     pub(super) async fn version(self) -> Result<EcmascriptChunkVersionVc> {
         let this = self.await?;
-        let chunk_server_path = if let Some(path) = this.output_root.get_path_to(&*this.chunk_path)
-        {
+        let chunk_server_path = if let Some(path) = this.output_root.get_path_to(&this.chunk_path) {
             path
         } else {
             bail!(
@@ -201,8 +200,7 @@ impl EcmascriptChunkContentVc {
     #[turbo_tasks::function]
     async fn code(self) -> Result<CodeVc> {
         let this = self.await?;
-        let chunk_server_path = if let Some(path) = this.output_root.get_path_to(&*this.chunk_path)
-        {
+        let chunk_server_path = if let Some(path) = this.output_root.get_path_to(&this.chunk_path) {
             path
         } else {
             bail!(
