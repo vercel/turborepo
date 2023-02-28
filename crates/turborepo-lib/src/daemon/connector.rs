@@ -10,7 +10,7 @@ use log::{debug, error};
 use notify::{Config, Event, EventKind, Watcher};
 use sysinfo::{ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
-use tokio::{net::UnixStream, sync::mpsc, time::timeout};
+use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
 
 use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
@@ -151,14 +151,23 @@ impl DaemonConnector {
         debug!("connecting to socket: {}", path.to_string_lossy());
         let arc = Arc::new(path);
 
+        #[cfg(not(target_os = "windows"))]
+        let closure = move |_| {
+            // we clone the reference counter here and move it into the async closure
+            let arc = arc.clone();
+            async move { tokio::net::UnixStream::connect::<&Path>(arc.as_path()).await }
+        };
+
+        #[cfg(target_os = "windows")]
+        let closure = move |_| {
+            let arc = arc.clone();
+            async move { win(arc) }
+        };
+
         // note, this endpoint is just a dummy. the actual path is passed in
         let channel = match Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
-            .connect_with_connector(tower::service_fn(move |_| {
-                // we clone the reference counter here and move it into the async closure
-                let arc = arc.clone();
-                async move { UnixStream::connect::<&Path>(arc.as_path()).await }
-            }))
+            .connect_with_connector(tower::service_fn(closure))
             .await
         {
             Ok(c) => c,
@@ -235,6 +244,16 @@ impl DaemonConnector {
             .ok_or(DaemonConnectorError::PidFile)
             .map(pidlock::Pidlock::new)
     }
+}
+
+#[cfg(target_os = "windows")]
+fn win(
+    path: Arc<PathBuf>,
+) -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite, std::io::Error> {
+    use tokio_util::compat::FuturesAsyncReadCompatExt;
+    uds_windows::UnixStream::connect(&*path)
+        .and_then(async_io::Async::new)
+        .map(FuturesAsyncReadCompatExt::compat)
 }
 
 /// Waits for a file at some path on the filesystem to be created or deleted.

@@ -6223,6 +6223,7 @@ checksum = "5427d89453009325de0d8f342c9490009f76e999cb7672d77e46267448f7e6b2"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",
@@ -6469,8 +6470,10 @@ dependencies = [
  "serde_yaml",
  "shared_child",
  "tiny-gradient",
+ "tokio-util",
  "tracing-subscriber",
  "turborepo-lib",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6988,6 +6991,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "async-io",
  "atty",
  "axum",
  "axum-server",
@@ -7030,10 +7034,13 @@ dependencies = [
  "thiserror",
  "tiny-gradient",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "tonic",
  "tonic-build",
  "tower",
  "turbo-updater",
+ "uds_windows",
  "url",
  "webbrowser",
 ]
@@ -7101,6 +7108,16 @@ name = "ucd-trie"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e79c4d996edb816c91e4308506774452e55e95c3c9de07b6729e17e15a5ef81"
+
+[[package]]
+name = "uds_windows"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce65604324d3cce9b966701489fbd0cf318cb1f7bd9dd07ac9a4ee6fb791930d"
+dependencies = [
+ "tempfile",
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "unicase"

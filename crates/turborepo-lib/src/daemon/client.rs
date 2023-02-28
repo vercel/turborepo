@@ -119,7 +119,7 @@ pub enum DaemonError {
     #[error("malformed response")]
     MalformedResponse,
     /// There was an issue connecting to the daemon.
-    #[error("unable to connect")]
+    #[error("unable to connect: {0}")]
     DaemonConnect(#[from] DaemonConnectorError),
 }
 
