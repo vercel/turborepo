@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module, Program};
@@ -367,7 +367,10 @@ impl EcmascriptModulePartAssetVc {
             ModulePart::Export(export) => Key::Export(export.await?.to_string()),
         };
 
-        let chunk_id = result.data[&key];
+        let chunk_id = match result.data.get(&key) {
+            Some(id) => *id,
+            None => return Err(anyhow!("could not find chunk id for module part {:?}", key)),
+        };
 
         Ok(EcmascriptModulePartAsset { module, chunk_id }.cell())
     }
