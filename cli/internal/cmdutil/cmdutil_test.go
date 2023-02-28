@@ -20,7 +20,7 @@ func TestTokenEnvVar(t *testing.T) {
 			t.Cleanup(func() {
 				_ = os.Unsetenv(v)
 			})
-			args := turbostate.ParsedArgsFromRust{
+			args := &turbostate.ParsedArgsFromRust{
 				CWD: "",
 			}
 			h := NewHelper("test-version", args)
@@ -48,7 +48,7 @@ func TestRemoteCacheTimeoutEnvVar(t *testing.T) {
 		t.Cleanup(func() {
 			_ = os.Unsetenv(key)
 		})
-		args := turbostate.ParsedArgsFromRust{
+		args := &turbostate.ParsedArgsFromRust{
 			CWD: "",
 		}
 		h := NewHelper("test-version", args)
@@ -67,7 +67,7 @@ func TestRemoteCacheTimeoutEnvVar(t *testing.T) {
 }
 
 func TestRemoteCacheTimeoutFlag(t *testing.T) {
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD:                "",
 		RemoteCacheTimeout: 599,
 	}
@@ -89,7 +89,7 @@ func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
 		t.Cleanup(func() {
 			_ = os.Unsetenv(key)
 		})
-		args := turbostate.ParsedArgsFromRust{
+		args := &turbostate.ParsedArgsFromRust{
 			CWD:                "",
 			RemoteCacheTimeout: 1,
 		}

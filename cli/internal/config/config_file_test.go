@@ -9,11 +9,9 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-var _ CLIConfigProvider = (*turbostate.ParsedArgsFromRust)(nil)
-
 func TestReadRepoConfigWhenMissing(t *testing.T) {
 	testDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("config.json")
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD: "",
 	}
 
@@ -31,7 +29,7 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 
 	slug := "my-team-slug"
 	apiURL := "http://my-login-url"
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD:  "",
 		Team: slug,
 		API:  apiURL,
@@ -59,7 +57,7 @@ func TestReadRepoConfigSetTeamAndAPIFlag(t *testing.T) {
 
 func TestRepoConfigIncludesDefaults(t *testing.T) {
 	testConfigFile := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD: "",
 	}
 
@@ -85,7 +83,7 @@ func TestRepoConfigIncludesDefaults(t *testing.T) {
 func TestWriteRepoConfig(t *testing.T) {
 	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 	testConfigFile := repoRoot.UntypedJoin(".turbo", "config.json")
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD: "",
 	}
 
@@ -117,7 +115,7 @@ func TestWriteRepoConfig(t *testing.T) {
 
 func TestWriteUserConfig(t *testing.T) {
 	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD: "",
 	}
 
@@ -147,7 +145,7 @@ func TestWriteUserConfig(t *testing.T) {
 
 func TestUserConfigFlags(t *testing.T) {
 	configPath := fs.AbsoluteSystemPathFromUpstream(t.TempDir()).UntypedJoin("turborepo", "config.json")
-	args := turbostate.ParsedArgsFromRust{
+	args := &turbostate.ParsedArgsFromRust{
 		CWD:   "",
 		Token: "my-token",
 	}

@@ -93,42 +93,42 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-// GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
+// GetColor returns the value of the `color` flag.
 func (a ParsedArgsFromRust) GetColor() bool {
 	return a.Color
 }
 
-// GetNoColor returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+// GetNoColor returns the value of the `token` flag.
 func (a ParsedArgsFromRust) GetNoColor() bool {
 	return a.NoColor
 }
 
-// GetLogin returns the value of the `login` flag. Used to implement CLIConfigProvider interface.
+// GetLogin returns the value of the `login` flag.
 func (a ParsedArgsFromRust) GetLogin() (string, error) {
 	return a.Login, nil
 }
 
-// GetAPI returns the value of the `api` flag. Used to implement CLIConfigProvider interface.
+// GetAPI returns the value of the `api` flag.
 func (a ParsedArgsFromRust) GetAPI() (string, error) {
 	return a.API, nil
 }
 
-// GetTeam returns the value of the `team` flag. Used to implement CLIConfigProvider interface.
+// GetTeam returns the value of the `team` flag.
 func (a ParsedArgsFromRust) GetTeam() (string, error) {
 	return a.Team, nil
 }
 
-// GetToken returns the value of the `token` flag. Used to implement CLIConfigProvider interface.
+// GetToken returns the value of the `token` flag.
 func (a ParsedArgsFromRust) GetToken() (string, error) {
 	return a.Token, nil
 }
 
-// GetCwd returns the value of the `cwd` flag. Used to implement CLIConfigProvider interface.
+// GetCwd returns the value of the `cwd` flag.
 func (a ParsedArgsFromRust) GetCwd() (string, error) {
 	return a.CWD, nil
 }
 
-// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag. Used to implement CLIConfigProvider interface.
+// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag.
 func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
 	if a.RemoteCacheTimeout != 0 {
 		return a.RemoteCacheTimeout, nil

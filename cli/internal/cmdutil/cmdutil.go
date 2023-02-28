@@ -60,7 +60,7 @@ func (h *Helper) RegisterCleanup(cleanup io.Closer) {
 
 // Cleanup runs the register cleanup handlers. It requires the flags
 // to the root command so that it can construct a UI if necessary
-func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
+func (h *Helper) Cleanup(cliConfig *turbostate.ParsedArgsFromRust) {
 	h.cleanupsMu.Lock()
 	defer h.cleanupsMu.Unlock()
 	var ui cli.Ui
@@ -74,12 +74,12 @@ func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
 	}
 }
 
-func (h *Helper) getUI(flags config.CLIConfigProvider) cli.Ui {
+func (h *Helper) getUI(cliConfig *turbostate.ParsedArgsFromRust) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
-	if flags.GetNoColor() {
+	if cliConfig.GetNoColor() {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if flags.GetColor() {
+	if cliConfig.GetColor() {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -124,7 +124,7 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 
 // NewHelper returns a new helper instance to hold configuration values for the root
 // turbo command.
-func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper {
+func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper {
 	return &Helper{
 		TurboVersion:   turboVersion,
 		UserConfigPath: config.DefaultUserConfigPath(),
@@ -134,7 +134,7 @@ func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper 
 
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
-func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error) {
+func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase, error) {
 	// terminal is for color/no-color output
 	terminal := h.getUI(cliConfig)
 	// logger is configured with verbosity level using --verbosity flag from end users

@@ -7,20 +7,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
-
-// CLIConfigProvider is an interface for providing configuration values from the CLI
-// It is implemented by a turbostate.Args struct.
-type CLIConfigProvider interface {
-	GetColor() bool
-	GetNoColor() bool
-	GetLogin() (string, error)
-	GetAPI() (string, error)
-	GetRemoteCacheTimeout() (uint64, error)
-	GetTeam() (string, error)
-	GetToken() (string, error)
-	GetCwd() (string, error)
-}
 
 // RepoConfig is a configuration object for the logged-in turborepo.com user
 type RepoConfig struct {
@@ -109,7 +97,7 @@ func (uc *UserConfig) Delete() error {
 // ReadUserConfigFile creates a UserConfig using the
 // specified path as the user config file. Note that the path or its parents
 // do not need to exist. On a write to this configuration, they will be created.
-func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*UserConfig, error) {
+func ReadUserConfigFile(path turbopath.AbsoluteSystemPath, cliConfig *turbostate.ParsedArgsFromRust) (*UserConfig, error) {
 	userViper := viper.New()
 	userViper.SetConfigFile(path.ToString())
 	userViper.SetConfigType("json")
@@ -148,7 +136,7 @@ const (
 // specified path as the repo config file. Note that the path or its
 // parents do not need to exist. On a write to this configuration, they
 // will be created.
-func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig CLIConfigProvider) (*RepoConfig, error) {
+func ReadRepoConfigFile(path turbopath.AbsoluteSystemPath, cliConfig *turbostate.ParsedArgsFromRust) (*RepoConfig, error) {
 	repoViper := viper.New()
 	repoViper.SetConfigFile(path.ToString())
 	repoViper.SetConfigType("json")
