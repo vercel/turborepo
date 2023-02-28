@@ -162,7 +162,7 @@ impl ChunkingContext for DevChunkingContext {
         for modifier in modifiers.iter() {
             let modifier = modifier.await?;
             if let Some(default_modifier) = default_modifier {
-                if &*modifier == default_modifier {
+                if *modifier == default_modifier {
                     continue;
                 }
             }
