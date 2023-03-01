@@ -14,9 +14,7 @@
       "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
     },
     "integration-tests": {
-      "inputs": [
-        "integration_tests/**"
-      ],
+      "inputs": ["integration_tests/**"],
       "env": ["GO_TAG"]
     }
   }
