@@ -408,8 +408,8 @@ impl PartialEq for Rope {
                         return false;
                     }
 
-                    left.advance(len);
-                    right.advance(len);
+                    left.consume(len);
+                    right.consume(len);
                 }
 
                 (None, None) => return true,
@@ -607,22 +607,11 @@ impl<'a> RopeReader<'a> {
 
             buf.put_slice(&bytes[offset..offset + amount]);
 
-            self.advance(amount);
+            self.consume(amount);
             remaining -= amount;
         }
 
         want - remaining
-    }
-
-    fn advance(&mut self, amount: usize) {
-        let Some(StackElem::Local(bytes, offset)) = self.stack.last_mut() else {
-            unreachable!();
-        };
-        if *offset + amount < bytes.len() {
-            *offset += amount;
-        } else {
-            self.stack.pop();
-        }
     }
 }
 
@@ -666,7 +655,14 @@ impl<'a> BufRead for RopeReader<'a> {
     }
 
     fn consume(&mut self, amt: usize) {
-        self.advance(amt)
+        let Some(StackElem::Local(bytes, offset)) = self.stack.last_mut() else {
+            unreachable!();
+        };
+        if *offset + amt < bytes.len() {
+            *offset += amt;
+        } else {
+            self.stack.pop();
+        }
     }
 }
 
