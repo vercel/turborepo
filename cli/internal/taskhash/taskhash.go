@@ -350,5 +350,8 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 
 // GetEnvVars returns the hashed env vars
 func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
-	return th.packageTaskEnvVars[taskID]
+	th.mu.RLock()
+	envVars := th.packageTaskEnvVars[taskID]
+	th.mu.RUnlock()
+	return envVars
 }
