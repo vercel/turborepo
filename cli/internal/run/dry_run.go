@@ -31,6 +31,7 @@ import (
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
 // the DryRunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
+const missingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
@@ -139,6 +140,11 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			command = packageTask.Command
 		}
 
+		framework := missingFrameworkLabel
+		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
+			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
+		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
@@ -169,6 +175,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
+			Framework:              framework,
 			ExpandedInputs:         packageTask.ExpandedInputs,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
@@ -312,6 +319,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspa
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
 		}
 
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Framework\t=\t%s\t${RESET}", task.Framework))
 		if err := w.Flush(); err != nil {
 			return err
 		}
@@ -344,6 +352,7 @@ type taskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	Framework              string                                `json:"framework"`
 }
 
 type singlePackageTaskSummary struct {
@@ -358,6 +367,7 @@ type singlePackageTaskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	Framework              string                                `json:"framework"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -380,6 +390,7 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependencies:           dependencies,
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
+		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
 	}
 }
