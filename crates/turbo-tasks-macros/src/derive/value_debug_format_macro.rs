@@ -64,7 +64,13 @@ fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStre
                 vec![#(
                     FormattingField::new(
                         stringify!(#fields_idents),
-                        #fields_idents.value_debug_format(depth.saturating_sub(1)).try_to_value_debug_string().await?.await?.to_string(),
+                        match #fields_idents.value_debug_format(depth.saturating_sub(1)).try_to_value_debug_string().await {
+                            Ok(result) => match result.await {
+                                Ok(result) => result.to_string(),
+                                Err(err) => format!("{:?}", err),
+                            },
+                            Err(err) => format!("{:?}", err),
+                        },
                     ),
                 )*],
             )
@@ -82,7 +88,13 @@ fn format_unnamed(ident: &Ident, fields: &FieldsUnnamed) -> (TokenStream2, Token
             FormattingStruct::new_unnamed(
                 stringify!(#ident),
                 vec![#(
-                    #fields_idents.value_debug_format(depth.saturating_sub(1)).try_to_value_debug_string().await?.await?.to_string(),
+                    match #fields_idents.value_debug_format(depth.saturating_sub(1)).try_to_value_debug_string().await {
+                        Ok(result) => match result.await {
+                            Ok(result) => result.to_string(),
+                            Err(err) => format!("{:?}", err),
+                        },
+                        Err(err) => format!("{:?}", err),
+                    },
                 )*],
             )
         },
