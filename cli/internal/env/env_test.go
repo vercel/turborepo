@@ -283,7 +283,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			setEnvs(tt.env)
 			// test
 			if got := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes).All.ToHashable(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetHashableEnvPairs() = %v, want %v", got, tt.want)
+				t.Errorf("got %#v, want %#v", got, tt.want)
 			}
 			// clean up the env for the next run
 			os.Clearenv()

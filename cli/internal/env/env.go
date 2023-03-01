@@ -5,9 +5,10 @@ import (
 	"os"
 	"sort"
 	"strings"
-
-	"github.com/vercel/turbo/cli/internal/util"
 )
+
+// EnvironmentVariableMap is a map of env variables and their values
+type EnvironmentVariableMap map[string]string
 
 // BySource contains a map of environment variables broken down by the source
 type BySource struct {
@@ -22,9 +23,6 @@ type DetailedMap struct {
 	All      EnvironmentVariableMap
 	BySource BySource
 }
-
-// EnvironmentVariableMap is a map of env variables and their values
-type EnvironmentVariableMap map[string]string
 
 // Merge takes another EnvironmentVariableMap and merges it into the receiver
 // It overwrites values if they already exist, but since the source of both will be os.Environ()
@@ -41,15 +39,12 @@ type EnvironmentVariablePairs []string
 // ToHashable returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
 // This is the value that is used upstream as a task hash input, so we need it to be deterministic
 func (evm EnvironmentVariableMap) ToHashable() EnvironmentVariablePairs {
-	// convert to set to eliminate duplicates
-	unique := make(util.Set, len(evm))
+	pairs := make([]string, 0, len(evm))
+
 	for k, v := range evm {
 		paired := fmt.Sprintf("%v=%v", k, v)
-		unique.Add(paired)
+		pairs = append(pairs, paired)
 	}
-
-	// turn it into a slice
-	pairs := unique.UnsafeListOfStrings()
 
 	// sort it so it's deterministic
 	sort.Strings(pairs)
