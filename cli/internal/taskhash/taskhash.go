@@ -298,7 +298,8 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		envPrefixes = append(envPrefixes, framework.EnvPrefix)
 	}
 
-	hashableEnvPairs := env.GetHashableEnvPairs(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
+	envVars := env.GetHashableEnvVars(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
+	hashableEnvPairs := envVars.All.ToHashable()
 	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
