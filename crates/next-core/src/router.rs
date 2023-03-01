@@ -265,6 +265,7 @@ fn edge_transition_map(
     project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -> TransitionsByNameVc {
     let edge_compile_time_info = get_edge_compile_time_info(server_addr, Value::new(Middleware));
 
@@ -281,6 +282,7 @@ fn edge_transition_map(
         project_path,
         Value::new(ServerContextType::Middleware),
         next_config,
+        execution_context,
     );
 
     let next_edge_transition = NextEdgeTransition {
@@ -325,6 +327,7 @@ pub async fn route(
             project_path,
             intermediate_output_path,
             next_config,
+            execution_context,
         )),
     );
 

@@ -37,6 +37,9 @@ custom_allocator = ["turbo-malloc/custom_allocator"]
 next-font-local = ["next-core/next-font-local"]
 native-tls = ["next-core/native-tls"]
 rustls-tls = ["next-core/rustls-tls"]
+__internal_nextjs_integration_test = [
+  "next-core/__internal_nextjs_integration_test",
+]
 
 [dependencies]
 anyhow = { version = "1.0.47", features = ["backtrace"] }

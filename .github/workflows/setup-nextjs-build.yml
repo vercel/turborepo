@@ -35,7 +35,7 @@ jobs:
 
       - name: Build next-dev (rustls-tls)
         run: |
-          cargo build --release -p next-dev --target x86_64-unknown-linux-musl --no-default-features --features cli,custom_allocator,rustls-tls
+          cargo build --release -p next-dev --target x86_64-unknown-linux-musl --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test
 
       - uses: actions/upload-artifact@v3
         with:
