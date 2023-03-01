@@ -89,6 +89,8 @@ impl ClientConfigLoader {
 
 #[cfg(test)]
 mod test {
+    use std::env::set_var;
+
     use super::*;
 
     #[test]
@@ -204,14 +206,25 @@ mod test {
             },
         ];
 
-        for test in tests {
+        for test in &tests {
             let config = ClientConfigLoader::new()
                 .with_remote_cache_timeout(test.arg)
                 .with_environment({
                     let mut env = HashMap::new();
-                    env.insert("TURBO_REMOTE_CACHE_TIMEOUT".into(), test.env);
+                    env.insert("TURBO_REMOTE_CACHE_TIMEOUT".into(), test.env.clone());
                     Some(env)
                 })
+                .load()?;
+
+            assert_eq!(config.remote_cache_timeout(), test.output);
+        }
+
+        // We can only hit the actual system for env vars in a single test
+        // without triggering race conditions.
+        for test in &tests {
+            set_var("TURBO_REMOTE_CACHE_TIMEOUT", test.env.clone());
+            let config = ClientConfigLoader::new()
+                .with_remote_cache_timeout(test.arg)
                 .load()?;
 
             assert_eq!(config.remote_cache_timeout(), test.output);
