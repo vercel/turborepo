@@ -627,13 +627,12 @@ impl<'a> RopeReader<'a> {
 }
 
 impl<'a> Iterator for RopeReader<'a> {
-    type Item = Bytes;
+    type Item = &'a Bytes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let n = self.next_internal();
-        n.map(|n| {
-            self.stack.pop();
-            n.0.clone()
+        self.next_internal().map(|(bytes, offset)| {
+            debug_assert!(offset == 0, "cannot mix Iterator with Read/BufRead");
+            bytes
         })
     }
 }
@@ -680,7 +679,7 @@ impl<'a> Stream for RopeReader<'a> {
     // differs from [Read::read] by not copying any memory.
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        Poll::Ready(this.next().map(Ok))
+        Poll::Ready(this.next().cloned().map(Ok))
     }
 }
 
