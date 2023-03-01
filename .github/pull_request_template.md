@@ -17,4 +17,4 @@
   organize and review it faster.
 -->
 
-[X] Auto label
+- [X] Auto label
