@@ -7,10 +7,11 @@ use super::request::{NextFontRequest, OneOrManyStrings};
 
 const ALLOWED_DISPLAY_VALUES: &[&str] = &["auto", "block", "swap", "fallback", "optional"];
 
-pub type FontData = IndexMap<String, FontDataEntry>;
+pub(crate) type FontData = IndexMap<String, FontDataEntry>;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
-pub struct NextFontGoogleOptions {
+#[turbo_tasks::value(transparent)]
+#[derive(Debug)]
+pub(crate) struct NextFontGoogleOptions {
     /// Name of the requested font from Google. Contains literal spaces.
     pub font_family: String,
     pub weights: FontWeights,
@@ -24,14 +25,20 @@ pub struct NextFontGoogleOptions {
     pub subsets: Option<Vec<String>>,
 }
 
+impl NextFontGoogleOptionsVc {
+    pub fn new(options: NextFontGoogleOptions) -> Self {
+        NextFontGoogleOptionsVc::cell(options)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
-pub enum FontWeights {
+pub(crate) enum FontWeights {
     Variable,
     Fixed(IndexSet<u16>),
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FontDataEntry {
+pub(crate) struct FontDataEntry {
     pub weights: Vec<String>,
     pub styles: Vec<String>,
     pub axes: Option<Vec<Axis>>,
@@ -39,17 +46,16 @@ pub struct FontDataEntry {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Axis {
+pub(crate) struct Axis {
     pub tag: String,
     pub min: f64,
     pub max: f64,
-    pub default_value: f64,
 }
 
 // Transforms the request fields to a struct suitable for making requests to
 // Google Fonts. Similar to next/font/google's validateData:
 // https://github.com/vercel/next.js/blob/28454c6ddbc310419467e5415aee26e48d079b46/packages/font/src/google/utils.ts#L22
-pub fn options_from_request(
+pub(crate) fn options_from_request(
     request: &NextFontRequest,
     data: &IndexMap<String, FontDataEntry>,
 ) -> Result<NextFontGoogleOptions> {
@@ -169,7 +175,7 @@ pub fn options_from_request(
         preload: argument.map(|a| a.preload).unwrap_or(true),
         selected_variable_axes: argument.and_then(|a| a.axes.clone()),
         fallback: argument.and_then(|a| a.fallback.clone()),
-        adjust_font_fallback: argument.map(|a| a.adjust_font_fallback).unwrap_or(false),
+        adjust_font_fallback: argument.map(|a| a.adjust_font_fallback).unwrap_or(true),
         variable: argument.and_then(|a| a.variable.clone()),
         subsets: argument.and_then(|a| a.subsets.clone()),
     })

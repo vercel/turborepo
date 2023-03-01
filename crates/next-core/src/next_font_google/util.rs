@@ -2,8 +2,9 @@ use std::cmp::Ordering;
 
 use anyhow::{anyhow, bail, Context, Result};
 use indexmap::{indexset, IndexSet};
+use turbo_tasks::primitives::{StringVc, U32Vc};
 
-use super::options::{FontData, FontWeights};
+use super::options::{FontData, FontWeights, NextFontGoogleOptionsVc};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct FontAxes {
@@ -16,6 +17,41 @@ pub(crate) struct FontAxes {
 pub(crate) enum FontItal {
     Italic,
     Normal,
+}
+
+#[turbo_tasks::value(transparent)]
+pub(crate) enum FontFamilyType {
+    WebFont,
+    Fallback,
+}
+
+impl FontFamilyTypeVc {
+    pub fn new(font_family_type: FontFamilyType) -> Self {
+        FontFamilyTypeVc::cell(font_family_type)
+    }
+}
+
+#[turbo_tasks::function]
+pub(crate) async fn get_scoped_font_family(
+    ty: FontFamilyTypeVc,
+    options: NextFontGoogleOptionsVc,
+    request_hash: U32Vc,
+) -> Result<StringVc> {
+    let options = options.await?;
+    let hash = {
+        let mut hash = format!("{:x?}", request_hash.await?);
+        hash.truncate(6);
+        hash
+    };
+
+    let font_family_base = options.font_family.replace(' ', "_");
+    let ty = &*ty.await?;
+    let font_family = match ty {
+        FontFamilyType::WebFont => font_family_base,
+        FontFamilyType::Fallback => format!("{}_Fallback", font_family_base),
+    };
+
+    Ok(StringVc::cell(format!("__{}_{}", font_family, hash)))
 }
 
 // Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L232
