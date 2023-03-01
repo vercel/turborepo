@@ -20,17 +20,17 @@ use ref_cast::RefCast;
 use relative_path::RelativePathBuf;
 
 use crate::{
-    abs_norm_path::{AbsNormPath, AbsNormPathBuf},
-    forward_rel_path::ForwardRelativePath,
+    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
+    forward_relative_path::ForwardRelativePath,
     fs_util, RelativePath,
 };
 
 #[derive(Debug, thiserror::Error)]
 enum ProjectRootError {
     #[error("Provided project root `{0}` is not equal to the canonicalized path `{1}`")]
-    NotCanonical(AbsNormPathBuf, AbsNormPathBuf),
+    NotCanonical(AbsoluteNormalizedPathBuf, AbsoluteNormalizedPathBuf),
     #[error("Project root `{0}` not found in path `{1}`")]
-    ProjectRootNotFound(ProjectRoot, AbsPathBuf),
+    ProjectRootNotFound(ProjectRoot, AbsolutePathBuf),
 }
 
 /// The 'ProjectFilesystem' that contains the root path and the current working
@@ -40,7 +40,7 @@ enum ProjectRootError {
 #[derive(Clone, Debug, Dupe, PartialEq, derive_more::Display)]
 #[display(fmt = "{root}")]
 pub struct ProjectRoot {
-    root: Arc<AbsNormPathBuf>,
+    root: Arc<AbsoluteNormalizedPathBuf>,
 }
 
 pub struct ProjectRootTemp {
@@ -70,7 +70,7 @@ impl ProjectRootTemp {
 }
 
 impl ProjectRoot {
-    pub fn new(root: AbsNormPathBuf) -> anyhow::Result<Self> {
+    pub fn new(root: AbsoluteNormalizedPathBuf) -> anyhow::Result<Self> {
         let canon = fs_util::canonicalize(&root).context("canonicalize project root")?;
         if canon != root {
             return Err(ProjectRootError::NotCanonical(root, canon).into());
@@ -82,13 +82,13 @@ impl ProjectRoot {
         })
     }
 
-    pub fn new_unchecked(root: AbsNormPathBuf) -> ProjectRoot {
+    pub fn new_unchecked(root: AbsoluteNormalizedPathBuf) -> ProjectRoot {
         ProjectRoot {
             root: Arc::new(root),
         }
     }
 
-    pub fn root(&self) -> &AbsNormPath {
+    pub fn root(&self) -> &AbsoluteNormalizedPath {
         &self.root
     }
 
@@ -98,30 +98,28 @@ impl ProjectRoot {
     ///
     /// ```
     /// use turborepo_paths::project::ProjectRoot;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
-    /// use turborepo_paths::abs_norm_path::AbsNormPathBuf;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
+    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsNormPathBuf::from("/usr/local/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsNormPathBuf::from("/usr/local/fbsource/buck/BUCK".into())?,
+    ///         AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/buck/BUCK".into())?,
     ///         fs.resolve(ProjectRelativePath::new("buck/BUCK")?)
     ///     );
     /// } else {
-    ///     let root = AbsNormPathBuf::from("c:/open/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsNormPathBuf::from("c:/open/fbsource/buck/BUCK".into())?,
+    ///         AbsoluteNormalizedPathBuf::from("c:/open/fbsource/buck/BUCK".into())?,
     ///         fs.resolve(ProjectRelativePath::new("buck/BUCK")?)
     ///     );
     /// }
-    ///
-    /// # anyhow::Ok(())
     /// ```
-    pub fn resolve(&self, path: impl PathLike) -> AbsNormPathBuf {
+    pub fn resolve(&self, path: impl PathLike) -> AbsoluteNormalizedPathBuf {
         path.resolve(self).into_owned()
     }
 
@@ -131,14 +129,14 @@ impl ProjectRoot {
     ///
     /// ```
     /// use turborepo_paths::project::{ProjectRoot};
-    /// use turborepo_paths::abs_norm_path::AbsNormPathBuf;
+    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
     /// use std::path::PathBuf;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let root = if cfg!(not(windows)) {
-    ///     AbsNormPathBuf::from("/usr/local/fbsource/".into())?
+    ///     AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?
     /// } else {
-    ///     AbsNormPathBuf::from("c:/open/fbsource/".into())?
+    ///     AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?
     /// };
     /// let fs = ProjectRoot::new_unchecked(root);
     ///
@@ -162,41 +160,41 @@ impl ProjectRoot {
     ///
     /// ```
     /// use std::borrow::Cow;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
-    /// use turborepo_paths::abs_norm_path::{AbsNormPathBuf, AbsNormPath};
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
+    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPathBuf, AbsoluteNormalizedPath};
     /// use turborepo_paths::project::ProjectRoot;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsNormPathBuf::from("/usr/local/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
     ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsNormPath::new("/usr/local/fbsource/src/buck.java")?)?
+    ///         fs.relativize(AbsoluteNormalizedPath::new("/usr/local/fbsource/src/buck.java")?)?
     ///     );
-    ///     assert!(fs.relativize(AbsNormPath::new("/other/path")?).is_err());
+    ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("/other/path")?).is_err());
     /// } else {
-    ///     let root = AbsNormPathBuf::from("c:/open/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
     ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsNormPath::new("c:/open/fbsource/src/buck.java")?)?
+    ///         fs.relativize(AbsoluteNormalizedPath::new("c:/open/fbsource/src/buck.java")?)?
     ///     );
     ///     assert_eq!(
     ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsNormPath::new(r"C:\open\fbsource\src\buck.java")?)?
+    ///         fs.relativize(AbsoluteNormalizedPath::new(r"C:\open\fbsource\src\buck.java")?)?
     ///     );
     ///     assert_eq!(
     ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsNormPath::new(r"\\?\C:\open\fbsource\src\buck.java")?)?
+    ///         fs.relativize(AbsoluteNormalizedPath::new(r"\\?\C:\open\fbsource\src\buck.java")?)?
     ///     );
-    ///     assert!(fs.relativize(AbsNormPath::new("c:/other/path")?).is_err());
+    ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("c:/other/path")?).is_err());
     /// }
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn relativize<'a, P: ?Sized + AsRef<AbsNormPath>>(
+    pub fn relativize<'a, P: ?Sized + AsRef<AbsoluteNormalizedPath>>(
         &self,
         p: &'a P,
     ) -> anyhow::Result<Cow<'a, ProjectRelativePath>> {
@@ -217,7 +215,7 @@ impl ProjectRoot {
     /// and return the remaining path.
     ///
     /// Fail if canonicalized path does not start with project root.
-    fn strip_project_root<'a>(&'a self, path: &'a AbsPath) -> anyhow::Result<PathBuf> {
+    fn strip_project_root<'a>(&'a self, path: &'a AbsolutePath) -> anyhow::Result<PathBuf> {
         let path = fs_util::simplified(path)?;
 
         if let Ok(rem) = Path::strip_prefix(path, &*self.root) {
@@ -253,7 +251,7 @@ impl ProjectRoot {
         Err(ProjectRootError::ProjectRootNotFound(self.dupe(), path.to_owned()).into())
     }
 
-    fn relativize_any_impl(&self, path: &AbsPath) -> anyhow::Result<ProjectRelativePathBuf> {
+    fn relativize_any_impl(&self, path: &AbsolutePath) -> anyhow::Result<ProjectRelativePathBuf> {
         let project_relative = self.strip_project_root(path)?;
         // TODO(nga): this does not treat `..` correctly.
         //   See the test below for an example.
@@ -265,7 +263,7 @@ impl ProjectRoot {
 
     /// Relativize an absolute path which may be not normalized or not
     /// canonicalize. This operation may involve disk access.
-    pub fn relativize_any<P: AsRef<AbsPath>>(
+    pub fn relativize_any<P: AsRef<AbsolutePath>>(
         &self,
         path: P,
     ) -> anyhow::Result<ProjectRelativePathBuf> {
@@ -424,8 +422,8 @@ impl ProjectRoot {
 
     fn copy_resolved(
         &self,
-        src_abs: &AbsNormPathBuf,
-        dest_abs: &AbsNormPathBuf,
+        src_abs: &AbsoluteNormalizedPathBuf,
+        dest_abs: &AbsoluteNormalizedPathBuf,
     ) -> anyhow::Result<()> {
         let src_type = fs_util::symlink_metadata(src_abs)?.file_type();
 
@@ -488,7 +486,10 @@ impl ProjectRoot {
     ///
     /// e.g. given a `target` of `/foo/bar1/baz1/out` and `dest` of
     /// `/foo/bar2/baz2/out`, the      result would be `../../bar1/baz1/out`
-    fn find_relative_path(target: &AbsNormPathBuf, dest: &AbsNormPathBuf) -> PathBuf {
+    fn find_relative_path(
+        target: &AbsoluteNormalizedPathBuf,
+        dest: &AbsoluteNormalizedPathBuf,
+    ) -> PathBuf {
         use itertools::{EitherOrBoth::*, Itertools};
         // Assemble both the '../' traversal, and the component that will come after
         // that
@@ -526,7 +527,10 @@ impl ProjectRoot {
 
     /// Creates symbolic link `dest` which points at the same location as
     /// symlink `src`.
-    fn copy_symlink(src: &AbsNormPathBuf, dest: &AbsNormPathBuf) -> anyhow::Result<()> {
+    fn copy_symlink(
+        src: &AbsoluteNormalizedPathBuf,
+        dest: &AbsoluteNormalizedPathBuf,
+    ) -> anyhow::Result<()> {
         let mut target = fs_util::read_link(src)?;
         if target.is_relative() {
             // Grab the absolute path, then re-relativize the path to the destination
@@ -535,16 +539,25 @@ impl ProjectRoot {
                 src.parent()
                     .expect("a path with a parent in symlink target"),
             );
-            target = Self::find_relative_path(&AbsNormPathBuf::try_from(absolute_target)?, dest);
+            target = Self::find_relative_path(
+                &AbsoluteNormalizedPathBuf::try_from(absolute_target)?,
+                dest,
+            );
         }
         fs_util::symlink(target, dest)
     }
 
-    fn copy_file(src: &AbsNormPathBuf, dst: &AbsNormPathBuf) -> anyhow::Result<()> {
+    fn copy_file(
+        src: &AbsoluteNormalizedPathBuf,
+        dst: &AbsoluteNormalizedPathBuf,
+    ) -> anyhow::Result<()> {
         fs_util::copy(src, dst).map(|_| ())
     }
 
-    fn copy_dir(src_dir: &AbsNormPathBuf, dest_dir: &AbsNormPathBuf) -> anyhow::Result<()> {
+    fn copy_dir(
+        src_dir: &AbsoluteNormalizedPathBuf,
+        dest_dir: &AbsoluteNormalizedPathBuf,
+    ) -> anyhow::Result<()> {
         fs_util::create_dir_all(dest_dir)?;
         for file in fs_util::read_dir(src_dir)? {
             let file = file?;
@@ -566,17 +579,17 @@ impl ProjectRoot {
 pub use internals::PathLike;
 
 use crate::{
-    abs_path::{AbsPath, AbsPathBuf},
-    project_rel_path::{ProjectRelativePath, ProjectRelativePathBuf},
+    absolute_path::{AbsolutePath, AbsolutePathBuf},
+    project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
 };
 
 mod internals {
     use std::borrow::Cow;
 
     use crate::{
-        abs_norm_path::{AbsNormPath, AbsNormPathBuf},
+        absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
         project::ProjectRoot,
-        project_rel_path::{ProjectRelativePath, ProjectRelativePathBuf},
+        project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
     };
 
     pub trait PathLike: PathLikeResolvable {}
@@ -584,29 +597,29 @@ mod internals {
     impl<T> PathLike for T where T: PathLikeResolvable {}
 
     pub trait PathLikeResolvable {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsNormPath>;
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath>;
     }
 
-    impl PathLikeResolvable for &AbsNormPath {
-        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsNormPath> {
+    impl PathLikeResolvable for &AbsoluteNormalizedPath {
+        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
             Cow::Borrowed(self)
         }
     }
 
-    impl PathLikeResolvable for &AbsNormPathBuf {
-        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsNormPath> {
+    impl PathLikeResolvable for &AbsoluteNormalizedPathBuf {
+        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
             Cow::Borrowed(self)
         }
     }
 
     impl PathLikeResolvable for &ProjectRelativePath {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsNormPath> {
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
             Cow::Owned(self.0.resolve(fs.root()))
         }
     }
 
     impl PathLikeResolvable for &ProjectRelativePathBuf {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsNormPath> {
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
             Cow::Owned(self.0.resolve(fs.root()))
         }
     }
@@ -617,11 +630,11 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::{
-        abs_path::AbsPath,
-        forward_rel_path::ForwardRelativePath,
+        absolute_path::AbsolutePath,
+        forward_relative_path::ForwardRelativePath,
         fs_util,
         project::{ProjectRoot, ProjectRootTemp},
-        project_rel_path::ProjectRelativePath,
+        project_relative_path::ProjectRelativePath,
     };
 
     #[test]
@@ -972,7 +985,7 @@ mod tests {
 
         let project_root = ProjectRootTemp::new().unwrap();
         let temp_dir = tempfile::tempdir().unwrap();
-        let temp_dir = AbsPath::new(temp_dir.path()).unwrap();
+        let temp_dir = AbsolutePath::new(temp_dir.path()).unwrap();
 
         fs_util::symlink(project_root.path.root(), temp_dir.join("foo")).unwrap();
         assert_eq!(

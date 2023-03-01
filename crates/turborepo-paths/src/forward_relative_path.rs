@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::{
-    abs_norm_path::{AbsNormPath, AbsNormPathBuf},
+    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
     file_name::{FileName, FileNameBuf},
     fs_util,
 };
@@ -102,7 +102,7 @@ impl ForwardRelativePath {
     /// normalized relative path, otherwise error.
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use std::path::Path;
     ///
     /// assert!(ForwardRelativePath::new("foo/bar").is_ok());
@@ -137,7 +137,7 @@ impl ForwardRelativePath {
     /// constructs a path ignoring trailing slashes.
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo/bar").is_ok());
     /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo/bar/").is_ok());
@@ -161,21 +161,24 @@ impl ForwardRelativePath {
     /// ```
     /// 
     /// use std::path::Path;
-    /// use turborepo_paths::abs_norm_path::{AbsNormPath, AbsNormPathBuf};
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsNormPath::new("/some")?);
-    ///     assert_eq!(AbsNormPathBuf::from("/some/foo/bar".into())?, path);
+    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsoluteNormalizedPath::new("/some")?);
+    ///     assert_eq!(AbsoluteNormalizedPathBuf::from("/some/foo/bar".into())?, path);
     /// } else {
-    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsNormPath::new("c:/some")?);
-    ///     assert_eq!(AbsNormPathBuf::from("c:/some/foo/bar".into())?, path);
+    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsoluteNormalizedPath::new("c:/some")?);
+    ///     assert_eq!(AbsoluteNormalizedPathBuf::from("c:/some/foo/bar".into())?, path);
     /// }
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    pub fn resolve<P: AsRef<AbsNormPath>>(&self, relative_to: P) -> AbsNormPathBuf {
+    pub fn resolve<P: AsRef<AbsoluteNormalizedPath>>(
+        &self,
+        relative_to: P,
+    ) -> AbsoluteNormalizedPathBuf {
         relative_to.as_ref().join(self)
     }
 
@@ -198,7 +201,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_rel_path::{ForwardRelativePathBuf, ForwardRelativePath};
+    /// use turborepo_paths::forward_relative_path::{ForwardRelativePathBuf, ForwardRelativePath};
     ///
     /// let path = ForwardRelativePath::new("foo/bar")?;
     /// let other = ForwardRelativePath::new("baz")?;
@@ -225,7 +228,7 @@ impl ForwardRelativePath {
     /// Returns a relative path of the parent directory
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// assert_eq!(
     ///     Some(ForwardRelativePath::new("foo")?),
@@ -263,7 +266,7 @@ impl ForwardRelativePath {
     /// a directory, this is the directory name.
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use turborepo_paths::file_name::FileName;
     ///
     /// assert_eq!(Some(FileName::unchecked_new("ls")), ForwardRelativePath::new("usr/bin/ls")?.file_name());
@@ -313,7 +316,7 @@ impl ForwardRelativePath {
     /// path is not a 'ForwardRelativePath'
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let path = ForwardRelativePath::new("test/haha/foo.txt")?;
     ///
@@ -361,7 +364,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let path = ForwardRelativePath::new("some/foo")?;
     ///
@@ -384,7 +387,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let path = ForwardRelativePath::new("some/foo")?;
     ///
@@ -414,7 +417,7 @@ impl ForwardRelativePath {
     /// * Otherwise, the portion of the file name before the final `.`
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let path = ForwardRelativePath::new("foo.rs")?;
     ///
@@ -441,7 +444,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// assert_eq!(Some("rs"), ForwardRelativePath::new("hi/foo.rs")?.extension());
     /// assert_eq!(Some("rs"), ForwardRelativePath::new("hi/foo.bar.rs")?.extension());
@@ -477,7 +480,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf};
+    /// use turborepo_paths::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
     ///
     /// assert_eq!(
     ///     ForwardRelativePathBuf::unchecked_new("foo/baz.txt".into()),
@@ -513,7 +516,7 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use turborepo_paths::file_name::FileName;
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let p = ForwardRelativePath::new("foo/bar/baz")?;
     /// let mut it = p.iter();
@@ -550,7 +553,7 @@ impl ForwardRelativePath {
     /// returning the remaining path or `None` if there were none left.
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
     /// let p = ForwardRelativePath::new("foo/bar/baz")?;
     /// assert_eq!(
@@ -651,7 +654,7 @@ impl ForwardRelativePathBuf {
     /// Pushes a `ForwardRelativePath` to the existing buffer
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf};
+    /// use turborepo_paths::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
     ///
     /// let mut path = ForwardRelativePathBuf::unchecked_new("foo".to_owned());
     /// path.push(ForwardRelativePath::unchecked_new("bar"));
@@ -710,7 +713,7 @@ impl ForwardRelativePathBuf {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
     /// use turborepo_paths::RelativePath;
     ///
     /// let mut path = ForwardRelativePathBuf::unchecked_new("foo".to_owned());
@@ -866,7 +869,7 @@ impl<'a> TryFrom<&'a str> for &'a ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use std::convert::TryFrom;
     ///
     /// assert!(<&ForwardRelativePath>::try_from("foo/bar").is_ok());
@@ -899,7 +902,7 @@ impl<'a> TryFrom<&'a Path> for &'a ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use std::convert::TryFrom;
     /// use std::path::Path;
     ///
@@ -929,7 +932,7 @@ impl<'a> TryFrom<&'a RelativePath> for &'a ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use std::convert::TryFrom;
     /// use turborepo_paths::RelativePath;
     ///
@@ -961,7 +964,7 @@ impl TryFrom<String> for ForwardRelativePathBuf {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
     /// use std::convert::TryFrom;
     ///
     /// assert!(ForwardRelativePathBuf::try_from("foo/bar".to_owned()).is_ok());
@@ -986,7 +989,7 @@ impl TryFrom<PathBuf> for ForwardRelativePathBuf {
     /// no allocation conversion
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
     /// use turborepo_paths::RelativePathBuf;
     /// use std::convert::TryFrom;
     /// use std::path::PathBuf;
@@ -1015,7 +1018,7 @@ impl TryFrom<RelativePathBuf> for ForwardRelativePathBuf {
     /// no allocation conversion
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
     /// use turborepo_paths::RelativePathBuf;
     /// use std::convert::TryFrom;
     ///
@@ -1213,7 +1216,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::forward_rel_path::{
+    use crate::forward_relative_path::{
         from_iter, FileName, ForwardRelativePath, ForwardRelativePathBuf,
     };
 

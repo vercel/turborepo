@@ -11,7 +11,7 @@ use gazebo::prelude::IterOwned;
 
 use crate::{
     file_name::{FileName, FileNameBuf},
-    forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf},
+    forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf},
 };
 
 /// Provide an iterator of FileNameBuf from inputs that can produce one. This is

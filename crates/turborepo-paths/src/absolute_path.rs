@@ -27,48 +27,48 @@ enum AbsPathError {
 
 #[derive(Hash, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct AbsPath(Path);
+pub struct AbsolutePath(Path);
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone)]
-pub struct AbsPathBuf(PathBuf);
+pub struct AbsolutePathBuf(PathBuf);
 
-impl fmt::Debug for AbsPath {
+impl fmt::Debug for AbsolutePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl fmt::Debug for AbsPathBuf {
+impl fmt::Debug for AbsolutePathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl AsRef<Path> for AbsPath {
+impl AsRef<Path> for AbsolutePath {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<AbsPath> for AbsPath {
-    fn as_ref(&self) -> &AbsPath {
+impl AsRef<AbsolutePath> for AbsolutePath {
+    fn as_ref(&self) -> &AbsolutePath {
         self
     }
 }
 
-impl AsRef<Path> for AbsPathBuf {
+impl AsRef<Path> for AbsolutePathBuf {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<AbsPath> for AbsPathBuf {
-    fn as_ref(&self) -> &AbsPath {
+impl AsRef<AbsolutePath> for AbsolutePathBuf {
+    fn as_ref(&self) -> &AbsolutePath {
         self
     }
 }
 
-impl Deref for AbsPath {
+impl Deref for AbsolutePath {
     type Target = Path;
 
     fn deref(&self) -> &Self::Target {
@@ -76,33 +76,33 @@ impl Deref for AbsPath {
     }
 }
 
-impl Deref for AbsPathBuf {
-    type Target = AbsPath;
+impl Deref for AbsolutePathBuf {
+    type Target = AbsolutePath;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.0.as_path() as *const Path as *const AbsPath) }
+        unsafe { &*(self.0.as_path() as *const Path as *const AbsolutePath) }
     }
 }
 
-impl Borrow<AbsPath> for AbsPathBuf {
-    fn borrow(&self) -> &AbsPath {
+impl Borrow<AbsolutePath> for AbsolutePathBuf {
+    fn borrow(&self) -> &AbsolutePath {
         self
     }
 }
 
-impl ToOwned for AbsPath {
-    type Owned = AbsPathBuf;
+impl ToOwned for AbsolutePath {
+    type Owned = AbsolutePathBuf;
 
     fn to_owned(&self) -> Self::Owned {
-        AbsPathBuf(self.0.to_owned())
+        AbsolutePathBuf(self.0.to_owned())
     }
 }
 
-impl AbsPath {
-    pub fn new(path: &Path) -> anyhow::Result<&AbsPath> {
+impl AbsolutePath {
+    pub fn new(path: &Path) -> anyhow::Result<&AbsolutePath> {
         if path.is_absolute() {
             // SAFETY: repr transparent.
-            Ok(unsafe { &*(path as *const Path as *const AbsPath) })
+            Ok(unsafe { &*(path as *const Path as *const AbsolutePath) })
         } else {
             Err(AbsPathError::PathNotAbsolute(path.to_path_buf()).into())
         }
@@ -112,22 +112,22 @@ impl AbsPath {
         &self.0
     }
 
-    pub fn join<P: AsRef<Path>>(&self, other: P) -> AbsPathBuf {
+    pub fn join<P: AsRef<Path>>(&self, other: P) -> AbsolutePathBuf {
         let path = self.0.join(other);
         assert!(path.is_absolute());
-        AbsPathBuf(path)
+        AbsolutePathBuf(path)
     }
 
-    pub fn parent(&self) -> Option<&AbsPath> {
-        self.0.parent().map(|p| AbsPath::new(p).unwrap())
+    pub fn parent(&self) -> Option<&AbsolutePath> {
+        self.0.parent().map(|p| AbsolutePath::new(p).unwrap())
     }
 
-    pub fn strip_prefix<P: AsRef<AbsPath>>(&self, prefix: P) -> anyhow::Result<&Path> {
+    pub fn strip_prefix<P: AsRef<AbsolutePath>>(&self, prefix: P) -> anyhow::Result<&Path> {
         Ok(self.0.strip_prefix(prefix.as_ref())?)
     }
 }
 
-impl AbsPathBuf {
+impl AbsolutePathBuf {
     pub fn into_path_buf(self) -> PathBuf {
         self.0
     }
@@ -176,19 +176,19 @@ impl AbsPathBuf {
     }
 }
 
-impl TryFrom<PathBuf> for AbsPathBuf {
+impl TryFrom<PathBuf> for AbsolutePathBuf {
     type Error = anyhow::Error;
 
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        AbsPath::new(&path)?;
-        Ok(AbsPathBuf(path))
+        AbsolutePath::new(&path)?;
+        Ok(AbsolutePathBuf(path))
     }
 }
 
-impl TryFrom<String> for AbsPathBuf {
+impl TryFrom<String> for AbsolutePathBuf {
     type Error = anyhow::Error;
 
     fn try_from(path: String) -> Result<Self, Self::Error> {
-        AbsPathBuf::try_from(PathBuf::from(path))
+        AbsolutePathBuf::try_from(PathBuf::from(path))
     }
 }

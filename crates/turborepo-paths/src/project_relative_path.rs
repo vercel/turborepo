@@ -23,21 +23,21 @@
 //! Sample uses
 //! ```
 //! use turborepo_paths::project::ProjectRoot;
-//! use turborepo_paths::project_rel_path::{ProjectRelativePathBuf, ProjectRelativePath};
-//! use turborepo_paths::abs_norm_path::{AbsNormPathBuf, AbsNormPath};
-//! use turborepo_paths::forward_rel_path::ForwardRelativePath;
+//! use turborepo_paths::project_relative_path::{ProjectRelativePathBuf, ProjectRelativePath};
+//! use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPathBuf, AbsoluteNormalizedPath};
+//! use turborepo_paths::forward_relative_path::ForwardRelativePath;
 //! use relative_path::RelativePath;
 //! use std::{borrow::Cow, convert::TryFrom};
 //!
 //! let root = if cfg!(not(windows)) {
-//!     AbsNormPathBuf::from("/usr/local/fbsource/".into())?
+//!     AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?
 //! } else {
-//!     AbsNormPathBuf::from("C:\\open\\fbsource\\".into())?
+//!     AbsoluteNormalizedPathBuf::from("C:\\open\\fbsource\\".into())?
 //! };
 //! let some_path = if cfg!(not(windows)) {
-//!     AbsNormPath::new("/usr/local/fbsource/buck/BUCK")?
+//!     AbsoluteNormalizedPath::new("/usr/local/fbsource/buck/BUCK")?
 //! } else {
-//!     AbsNormPath::new("c:/open/fbsource/buck/BUCK")?
+//!     AbsoluteNormalizedPath::new("c:/open/fbsource/buck/BUCK")?
 //! };
 //!
 //! let fs = ProjectRoot::new_unchecked(root);
@@ -69,7 +69,7 @@ use serde::Serialize;
 use crate::{
     file_name::FileName,
     fmt::quoted_display,
-    forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf, ForwardRelativePathIter},
+    forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf, ForwardRelativePathIter},
 };
 
 /// A un-owned forward pointing, fully normalized path that is relative to the
@@ -135,7 +135,7 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert!(ProjectRelativePath::new("foo/bar").is_ok());
     /// assert!(ProjectRelativePath::new("").is_ok());
@@ -165,8 +165,8 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
-    /// use turborepo_paths::project_rel_path::{ProjectRelativePathBuf, ProjectRelativePath};
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::project_relative_path::{ProjectRelativePathBuf, ProjectRelativePath};
     ///
     /// let path = ProjectRelativePath::new("foo/bar")?;
     /// let other = ForwardRelativePath::new("baz")?;
@@ -181,7 +181,7 @@ impl ProjectRelativePath {
     /// Returns a relative path of the parent directory
     ///
     /// ```
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert_eq!(
     ///     Some(ProjectRelativePath::new("foo")?),
@@ -202,7 +202,7 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use turborepo_paths::file_name::FileName;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert_eq!(Some(FileName::unchecked_new("bin")), ProjectRelativePath::new("usr/bin")?.file_name());
     ///
@@ -219,9 +219,9 @@ impl ProjectRelativePath {
     /// path is not a 'ForwardRelativePath'
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let path = ProjectRelativePath::new("test/haha/foo.txt")?;
     ///
@@ -246,7 +246,7 @@ impl ProjectRelativePath {
     /// Determines whether `base` is a prefix of `self`.
     ///
     /// ```
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let path = ProjectRelativePath::new("some/foo")?;
     ///
@@ -263,9 +263,9 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     ///
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let path = ProjectRelativePath::new("some/foo")?;
     ///
@@ -288,7 +288,7 @@ impl ProjectRelativePath {
     /// * Otherwise, the portion of the file name before the final `.`
     ///
     /// ```
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let path = ProjectRelativePath::new("foo.rs")?;
     ///
@@ -303,7 +303,7 @@ impl ProjectRelativePath {
     /// Extracts the extension of [`self.file_name`], if possible.
     ///
     /// ```
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert_eq!(Some("rs"), ProjectRelativePath::new("hi/foo.rs")?.extension());
     ///
@@ -318,7 +318,7 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use std::convert::TryFrom;
-    /// use turborepo_paths::project_rel_path::{ProjectRelativePath, ProjectRelativePathBuf};
+    /// use turborepo_paths::project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
     ///
     /// assert_eq!(
     ///     ProjectRelativePath::new("foo/bar")?.join_normalized("../baz.txt")?,
@@ -345,7 +345,7 @@ impl ProjectRelativePath {
     ///
     /// ```
     /// use turborepo_paths::file_name::FileName;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let p = ProjectRelativePath::new("foo/bar/baz")?;
     /// let mut it = p.iter();
@@ -381,9 +381,9 @@ impl ProjectRelativePath {
 impl<'a> From<&'a ForwardRelativePath> for &'a ProjectRelativePath {
     ///
     /// ```
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
     /// use std::convert::From;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let f = ForwardRelativePath::new("foo")?;
     ///
@@ -468,8 +468,8 @@ impl<'a> TryFrom<&'a str> for &'a ProjectRelativePath {
     ///
     /// ```
     /// use std::convert::TryFrom;
-    /// use turborepo_paths::forward_rel_path::ForwardRelativePath;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert!(<&ProjectRelativePath>::try_from("foo/bar").is_ok());
     /// assert!(<&ProjectRelativePath>::try_from("").is_ok());
@@ -490,7 +490,7 @@ impl<'a> TryFrom<&'a RelativePath> for &'a ProjectRelativePath {
     /// ```
     /// use std::convert::TryFrom;
     /// use turborepo_paths::RelativePath;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// assert!(<&ProjectRelativePath>::try_from(RelativePath::new("foo/bar")).is_ok());
     /// assert!(<&ProjectRelativePath>::try_from(RelativePath::new("")).is_ok());
@@ -510,7 +510,7 @@ impl TryFrom<String> for ProjectRelativePathBuf {
     /// no allocation conversion
     ///
     /// ```
-    /// use turborepo_paths::project_rel_path::ProjectRelativePathBuf;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePathBuf;
     /// use std::convert::TryFrom;
     ///
     /// assert!(ProjectRelativePathBuf::try_from("foo/bar".to_owned()).is_ok());
@@ -535,7 +535,7 @@ impl TryFrom<RelativePathBuf> for ProjectRelativePathBuf {
     /// ```
     /// use turborepo_paths::RelativePathBuf;
     /// use std::convert::TryFrom;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePathBuf;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePathBuf;
     ///
     /// assert!(ProjectRelativePathBuf::try_from(RelativePathBuf::from("foo/bar")).is_ok());
     /// assert!(ProjectRelativePathBuf::try_from(RelativePathBuf::from("")).is_ok());
@@ -558,7 +558,7 @@ impl TryFrom<PathBuf> for ProjectRelativePathBuf {
     /// 
     /// use std::convert::TryFrom;
     /// use std::path::PathBuf;
-    /// use turborepo_paths::project_rel_path::ProjectRelativePathBuf;
+    /// use turborepo_paths::project_relative_path::ProjectRelativePathBuf;
     ///
     /// assert!(ProjectRelativePathBuf::try_from(PathBuf::from("foo/bar")).is_ok());
     /// assert!(ProjectRelativePathBuf::try_from(PathBuf::from("")).is_ok());
@@ -607,7 +607,7 @@ impl Deref for ProjectRelativePathBuf {
 
 #[cfg(test)]
 mod tests {
-    use crate::project_rel_path::{ProjectRelativePath, ProjectRelativePathBuf};
+    use crate::project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
 
     #[test]
     fn path_display_is_readable() -> anyhow::Result<()> {

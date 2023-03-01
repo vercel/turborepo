@@ -20,7 +20,7 @@ use ref_cast::RefCast;
 use relative_path::RelativePath;
 use thiserror::Error;
 
-use crate::forward_rel_path::ForwardRelativePath;
+use crate::forward_relative_path::ForwardRelativePath;
 
 /// Errors from ForwardRelativePath creation
 #[derive(Error, Debug)]

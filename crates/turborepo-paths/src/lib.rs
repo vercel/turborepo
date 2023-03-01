@@ -25,17 +25,17 @@
 #![feature(type_alias_impl_trait)]
 #![feature(fs_try_exists)]
 
-pub mod abs_norm_path;
-pub mod abs_path;
+pub mod absolute_normalized_path;
+pub mod absolute_path;
 mod cmp_impls;
 pub mod file_name;
 pub(crate) mod fmt;
-pub mod forward_rel_path;
+pub mod forward_relative_path;
 mod fs_util;
 mod into_filename_buf_iterator;
 mod io_counters;
 pub mod project;
-pub mod project_rel_path;
+pub mod project_relative_path;
 
 pub use into_filename_buf_iterator::*;
 pub use relative_path::{RelativePath, RelativePathBuf};
@@ -45,9 +45,9 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{
-        abs_norm_path::{AbsNormPath, AbsNormPathBuf},
-        forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf},
-        project_rel_path::ProjectRelativePath,
+        absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
+        forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf},
+        project_relative_path::ProjectRelativePath,
     };
 
     #[test]
@@ -90,10 +90,10 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsNormPathBuf::from("/foo/bar".into())?;
+        let buf = AbsoluteNormalizedPathBuf::from("/foo/bar".into())?;
         assert_eq!("/foo/bar", format!("{}", buf));
         assert_eq!("AbsNormPathBuf(\"/foo/bar\")", format!("{:?}", buf));
-        let refpath: &AbsNormPath = &buf;
+        let refpath: &AbsoluteNormalizedPath = &buf;
         assert_eq!("/foo/bar", format!("{}", refpath));
         assert_eq!("AbsNormPath(\"/foo/bar\")", format!("{:?}", refpath));
 
@@ -103,10 +103,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsNormPathBuf::from("C:/foo/bar".into())?;
+        let buf = AbsoluteNormalizedPathBuf::from("C:/foo/bar".into())?;
         assert_eq!("C:/foo/bar", format!("{}", buf));
         assert_eq!("AbsNormPathBuf(\"C:/foo/bar\")", format!("{:?}", buf));
-        let refpath: &AbsNormPath = &buf;
+        let refpath: &AbsoluteNormalizedPath = &buf;
         assert_eq!("C:/foo/bar", format!("{}", refpath));
         assert_eq!("AbsNormPath(\"C:/foo/bar\")", format!("{:?}", refpath));
 

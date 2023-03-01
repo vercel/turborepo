@@ -26,8 +26,8 @@ use common_path::common_path;
 use relative_path::{RelativePath, RelativePathBuf};
 
 use crate::{
-    abs_norm_path::{AbsNormPath, AbsNormPathBuf},
-    abs_path::AbsPath,
+    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
+    absolute_path::AbsolutePath,
     io_counters::{IoCounterGuard, IoCounterKey},
 };
 
@@ -157,10 +157,10 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
-    pub fn path(&self) -> AbsNormPathBuf {
+    pub fn path(&self) -> AbsoluteNormalizedPathBuf {
         // This is safe, because `read_dir` is called with absolute path,
         // and filename is not dot or dot-dot.
-        AbsNormPathBuf::unchecked_new(self.dir_entry.path())
+        AbsoluteNormalizedPathBuf::unchecked_new(self.dir_entry.path())
     }
 }
 
@@ -190,14 +190,16 @@ impl Iterator for ReadDir {
     }
 }
 
-pub fn read_dir<P: AsRef<AbsNormPath>>(path: P) -> anyhow::Result<ReadDir> {
+pub fn read_dir<P: AsRef<AbsoluteNormalizedPath>>(path: P) -> anyhow::Result<ReadDir> {
     let _guard = IoCounterKey::ReadDir.guard();
     fs::read_dir(path.as_ref())
         .with_context(|| format!("read_dir({})", P::as_ref(&path).display()))
         .map(|read_dir| ReadDir { read_dir, _guard })
 }
 
-pub fn read_dir_if_exists<P: AsRef<AbsNormPath>>(path: P) -> anyhow::Result<Option<ReadDir>> {
+pub fn read_dir_if_exists<P: AsRef<AbsoluteNormalizedPath>>(
+    path: P,
+) -> anyhow::Result<Option<ReadDir>> {
     let _guard = IoCounterKey::ReadDir.guard();
     let read_dir = fs::read_dir(path.as_ref());
     let read_dir = match read_dir {
@@ -372,18 +374,18 @@ pub fn read_to_string_opt<P: AsRef<Path>>(path: P) -> anyhow::Result<Option<Stri
     }
 }
 
-pub fn canonicalize<P: AsRef<Path>>(path: P) -> anyhow::Result<AbsNormPathBuf> {
+pub fn canonicalize<P: AsRef<Path>>(path: P) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
     let _guard = IoCounterKey::Canonicalize.guard();
     let path = dunce::canonicalize(&path)
         .with_context(|| format!("canonicalize({})", P::as_ref(&path).display()))?;
-    AbsNormPathBuf::new(path)
+    AbsoluteNormalizedPathBuf::new(path)
 }
 
 /// Convert Windows UNC path to regular path.
-pub fn simplified(path: &AbsPath) -> anyhow::Result<&AbsPath> {
+pub fn simplified(path: &AbsolutePath) -> anyhow::Result<&AbsolutePath> {
     let path = dunce::simplified(path.as_ref());
     // This should not fail, but better not panic.
-    AbsPath::new(path)
+    AbsolutePath::new(path)
 }
 
 pub fn remove_dir<P: AsRef<Path>>(path: P) -> anyhow::Result<()> {
@@ -416,7 +418,7 @@ pub fn create_file<P: AsRef<Path>>(path: P) -> anyhow::Result<FileGuard> {
     })
 }
 
-// Create a relative path in a cross-patform way, we need this since
+// Create a relative path in a cross-platform way, we need this since
 // RelativePath fails when converting backslashes which means windows paths end
 // up failing. RelativePathBuf doesn't have this problem and we can easily
 // coerce it into a RelativePath. TODO(T143971518) Avoid RelativePath usage in
@@ -443,8 +445,8 @@ mod tests {
     use relative_path::RelativePath;
 
     use crate::{
-        abs_norm_path::AbsNormPath,
-        forward_rel_path::ForwardRelativePath,
+        absolute_normalized_path::AbsoluteNormalizedPath,
+        forward_relative_path::ForwardRelativePath,
         fs_util,
         fs_util::{
             create_dir_all, metadata, read_dir_if_exists, read_to_string, remove_all,
@@ -455,7 +457,7 @@ mod tests {
     #[test]
     fn if_exists_read_dir() -> anyhow::Result<()> {
         let binding = std::env::temp_dir();
-        let existing_path = AbsNormPath::new(&binding)?;
+        let existing_path = AbsoluteNormalizedPath::new(&binding)?;
         let res = read_dir_if_exists(existing_path)?;
         assert!(res.is_some());
         let not_existing_dir = existing_path.join(ForwardRelativePath::unchecked_new("dir"));

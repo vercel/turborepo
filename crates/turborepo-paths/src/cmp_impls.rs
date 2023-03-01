@@ -94,7 +94,7 @@ macro_rules! impl_cmp_str {
     };
 }
 
-use crate::forward_rel_path::{ForwardRelativePath, ForwardRelativePathBuf};
+use crate::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
 
 impl_cmp!(
     ForwardRelativePathBuf,
@@ -116,21 +116,29 @@ impl_cmp_str!(ForwardRelativePath, String, ForwardRelativePath);
 impl_cmp_str!(&'_ ForwardRelativePath, str, ForwardRelativePath);
 impl_cmp_str!(&'_ ForwardRelativePath, String, ForwardRelativePath);
 
-use crate::abs_norm_path::{AbsNormPath, AbsNormPathBuf};
+use crate::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
 
-impl_cmp!(AbsNormPathBuf, AbsNormPath, AbsNormPath);
-impl_cmp!(AbsNormPathBuf, &'_ AbsNormPath, AbsNormPath);
+impl_cmp!(
+    AbsoluteNormalizedPathBuf,
+    AbsoluteNormalizedPath,
+    AbsoluteNormalizedPath
+);
+impl_cmp!(
+    AbsoluteNormalizedPathBuf,
+    &'_ AbsoluteNormalizedPath,
+    AbsoluteNormalizedPath
+);
 
-impl_cmp_str!(AbsNormPathBuf, str, AbsNormPath);
-impl_cmp_str!(AbsNormPathBuf, &'_ str, AbsNormPath);
-impl_cmp_str!(AbsNormPathBuf, String, AbsNormPath);
-impl_cmp_str!(AbsNormPath, str, AbsNormPath);
-impl_cmp_str!(AbsNormPath, &'_ str, AbsNormPath);
-impl_cmp_str!(AbsNormPath, String, AbsNormPath);
-impl_cmp_str!(&'_ AbsNormPath, str, AbsNormPath);
-impl_cmp_str!(&'_ AbsNormPath, String, AbsNormPath);
+impl_cmp_str!(AbsoluteNormalizedPathBuf, str, AbsoluteNormalizedPath);
+impl_cmp_str!(AbsoluteNormalizedPathBuf, &'_ str, AbsoluteNormalizedPath);
+impl_cmp_str!(AbsoluteNormalizedPathBuf, String, AbsoluteNormalizedPath);
+impl_cmp_str!(AbsoluteNormalizedPath, str, AbsoluteNormalizedPath);
+impl_cmp_str!(AbsoluteNormalizedPath, &'_ str, AbsoluteNormalizedPath);
+impl_cmp_str!(AbsoluteNormalizedPath, String, AbsoluteNormalizedPath);
+impl_cmp_str!(&'_ AbsoluteNormalizedPath, str, AbsoluteNormalizedPath);
+impl_cmp_str!(&'_ AbsoluteNormalizedPath, String, AbsoluteNormalizedPath);
 
-use crate::project_rel_path::{ProjectRelativePath, ProjectRelativePathBuf};
+use crate::project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
 
 impl_cmp!(
     ProjectRelativePathBuf,
