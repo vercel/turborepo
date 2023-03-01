@@ -37,9 +37,9 @@ pub struct Rope {
 }
 
 /// An Arc container for ropes. This indirection allows for easily sharing the
-/// contents between Ropes (and also RopeBuilders/RopeReaders).
-#[derive(Clone, Debug, Default)]
-struct InnerRope(Arc<Box<[RopeElem]>>);
+/// contents between Ropes (and also [RopeBuilder]s/[RopeReader]s).
+#[derive(Clone, Debug)]
+struct InnerRope(Arc<[RopeElem]>);
 
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
@@ -100,7 +100,8 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
+    /// Returns a [Read]/[AsyncRead]/[Stream]/[Iterator] instance over all
+    /// bytes.
     pub fn read(&self) -> RopeReader {
         RopeReader::new(&self.data, 0)
     }
@@ -453,6 +454,12 @@ impl InnerRope {
     }
 }
 
+impl Default for InnerRope {
+    fn default() -> Self {
+        InnerRope(Arc::new([]))
+    }
+}
+
 impl DeterministicHash for InnerRope {
     /// Ropes with similar contents hash the same, regardless of their
     /// structure. Notice the InnerRope does not contain a length (and any
@@ -482,12 +489,12 @@ impl From<Box<[RopeElem]>> for InnerRope {
                 }
             }
         }
-        InnerRope(Arc::new(els))
+        InnerRope(Arc::from(els))
     }
 }
 
 impl Deref for InnerRope {
-    type Target = Arc<Box<[RopeElem]>>;
+    type Target = Arc<[RopeElem]>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -532,7 +539,7 @@ impl DeterministicHash for RopeElem {
     }
 }
 
-/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
+/// Implements the [Read]/[AsyncRead]/[Stream]/[Iterator] trait over a [Rope].
 #[derive(Debug, Default)]
 pub struct RopeReader {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
