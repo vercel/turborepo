@@ -119,7 +119,7 @@ impl<T: Into<Bytes>> From<T> for Rope {
         } else {
             Rope {
                 length: bytes.len(),
-                data: InnerRope::from(Box::from([Local(bytes)])),
+                data: InnerRope::from(vec![Local(bytes)]),
             }
         }
     }
@@ -201,7 +201,7 @@ impl RopeBuilder {
         self.finish();
         Rope {
             length: self.length,
-            data: InnerRope::from(self.committed.into_boxed_slice()),
+            data: InnerRope::from(self.committed),
         }
     }
 }
@@ -470,8 +470,8 @@ impl DeterministicHash for InnerRope {
     }
 }
 
-impl From<Box<[RopeElem]>> for InnerRope {
-    fn from(els: Box<[RopeElem]>) -> Self {
+impl From<Vec<RopeElem>> for InnerRope {
+    fn from(els: Vec<RopeElem>) -> Self {
         if cfg!(debug_assertions) {
             // It's important that an InnerRope never contain an empty Bytes section.
             for el in els.iter() {
@@ -690,7 +690,7 @@ mod test {
     }
     impl From<Vec<RopeElem>> for RopeElem {
         fn from(value: Vec<RopeElem>) -> Self {
-            RopeElem::Shared(InnerRope::from(value.into_boxed_slice()))
+            RopeElem::Shared(InnerRope::from(value))
         }
     }
     impl From<Rope> for RopeElem {
@@ -700,7 +700,7 @@ mod test {
     }
     impl Rope {
         fn new(value: Vec<RopeElem>) -> Self {
-            let data = InnerRope::from(value.into_boxed_slice());
+            let data = InnerRope::from(value);
             Rope {
                 length: data.len(),
                 data,
