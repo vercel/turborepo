@@ -6,6 +6,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Write as _,
     path::PathBuf,
+    thread::available_parallelism,
 };
 
 use anyhow::{bail, Result};
@@ -230,7 +231,7 @@ pub async fn get_renderer_pool(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
-        4,
+        available_parallelism().map_or(1, |v| v.get()),
         debug,
     )
     .cell())

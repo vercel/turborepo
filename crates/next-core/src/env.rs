@@ -47,29 +47,6 @@ pub async fn load_env(project_path: FileSystemPathVc) -> Result<ProcessEnvVc> {
     Ok(env)
 }
 
-#[turbo_tasks::function]
-pub async fn full_env(
-    env: ProcessEnvVc,
-    client: bool,
-    next_config: NextConfigVc,
-) -> Result<ProcessEnvVc> {
-    let env = if client {
-        FilterProcessEnvVc::new(
-            env,
-            vec![
-                "NEXT_PUBLIC_".to_string(),
-                "NODE_ENV".to_string(),
-                "__NEXT_TEST_MODE".to_string(),
-            ],
-        )
-        .into()
-    } else {
-        env
-    };
-
-    Ok(CustomProcessEnvVc::new(env, next_config.env()).into())
-}
-
 /// Creates a ProcessEnvVc safe to use in JS, by stringifying and encoding as
 /// regular JS strings. Setting `client` to true will additionally filter the
 /// env to just the keys that are acceptable for the client to access.
