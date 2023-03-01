@@ -50,6 +50,7 @@ pub async fn get_server_resolve_options_context(
 ) -> Result<ResolveOptionsContextVc> {
     let next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     let foreign_code_context_condition = foreign_code_context_condition(next_config).await?;
+    let root_dir = project_path.root().resolve().await?;
 
     Ok(match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
@@ -59,7 +60,7 @@ pub async fn get_server_resolve_options_context(
             );
 
             let resolve_options_context = ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(root_dir),
                 enable_node_externals: true,
                 enable_node_native_modules: true,
                 module: true,
@@ -80,7 +81,7 @@ pub async fn get_server_resolve_options_context(
         }
         ServerContextType::AppSSR { .. } => {
             let resolve_options_context = ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(root_dir),
                 enable_node_externals: true,
                 enable_node_native_modules: true,
                 module: true,
@@ -100,7 +101,7 @@ pub async fn get_server_resolve_options_context(
         }
         ServerContextType::AppRSC { .. } => {
             let resolve_options_context = ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(root_dir),
                 enable_node_externals: true,
                 enable_node_native_modules: true,
                 module: true,
@@ -120,7 +121,7 @@ pub async fn get_server_resolve_options_context(
         }
         ServerContextType::AppRoute { .. } => {
             let resolve_options_context = ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(root_dir),
                 module: true,
                 custom_conditions: vec!["development".to_string()],
                 import_map: Some(next_server_import_map),
@@ -138,7 +139,7 @@ pub async fn get_server_resolve_options_context(
         }
         ServerContextType::Middleware => {
             let resolve_options_context = ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(root_dir),
                 enable_node_externals: true,
                 module: true,
                 custom_conditions: vec!["development".to_string()],

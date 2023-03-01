@@ -1,3 +1,4 @@
+use anyhow::Result;
 use turbo_tasks::Value;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -14,12 +15,12 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-pub fn node_evaluate_asset_context(
+pub async fn node_evaluate_asset_context(
     project_path: FileSystemPathVc,
     import_map: Option<ImportMapVc>,
     transitions: Option<TransitionsByNameVc>,
-) -> AssetContextVc {
-    ModuleAssetContextVc::new(
+) -> Result<AssetContextVc> {
+    Ok(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
         CompileTimeInfo {
             environment: EnvironmentVc::new(
@@ -42,7 +43,7 @@ pub fn node_evaluate_asset_context(
         .cell(),
         ResolveOptionsContext {
             enable_typescript: true,
-            enable_node_modules: Some(project_path),
+            enable_node_modules: Some(project_path.root().resolve().await?),
             enable_node_externals: true,
             enable_node_native_modules: true,
             custom_conditions: vec!["development".to_string(), "node".to_string()],
@@ -51,5 +52,5 @@ pub fn node_evaluate_asset_context(
         }
         .cell(),
     )
-    .as_asset_context()
+    .as_asset_context())
 }

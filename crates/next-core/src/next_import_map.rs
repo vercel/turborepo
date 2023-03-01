@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result};
-use turbo_tasks::Value;
+use turbo_tasks::{debug::ValueDebug, Value, ValueToString};
 use turbo_tasks_fs::{glob::GlobVc, FileSystem, FileSystemPathVc};
 use turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
 use turbopack_core::{
@@ -396,17 +396,19 @@ pub async fn insert_next_shared_aliases(
 }
 
 #[turbo_tasks::function]
-fn package_lookup_resolve_options(project_path: FileSystemPathVc) -> ResolveOptionsVc {
-    resolve_options(
+async fn package_lookup_resolve_options(
+    project_path: FileSystemPathVc,
+) -> Result<ResolveOptionsVc> {
+    Ok(resolve_options(
         project_path,
         ResolveOptionsContext {
-            enable_node_modules: Some(project_path),
+            enable_node_modules: Some(project_path.root().resolve().await?),
             enable_node_native_modules: true,
             custom_conditions: vec!["development".to_string()],
             ..Default::default()
         }
         .cell(),
-    )
+    ))
 }
 
 #[turbo_tasks::function]
@@ -418,19 +420,10 @@ pub async fn get_next_package(project_path: FileSystemPathVc) -> Result<FileSyst
         ))),
         package_lookup_resolve_options(project_path),
     );
-    let assets = result.primary_assets().await?;
-    let asset = assets.first().context("Next.js package not found")?;
-    Ok(asset.ident().path().parent())
-}
-
-#[turbo_tasks::function]
-pub async fn get_swc_helpers_package(project_path: FileSystemPathVc) -> Result<FileSystemPathVc> {
-    let result = resolve(
-        get_next_package(project_path),
-        RequestVc::parse(Value::new(Pattern::Constant(
-            "@swc/helpers/package.json".to_string(),
-        ))),
-        package_lookup_resolve_options(project_path),
+    println!(
+        "{} in {}",
+        result.dbg().await?,
+        project_path.to_string().await?
     );
     let assets = result.primary_assets().await?;
     let asset = assets.first().context("Next.js package not found")?;

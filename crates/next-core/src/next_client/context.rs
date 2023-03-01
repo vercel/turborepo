@@ -89,7 +89,7 @@ pub async fn get_client_resolve_options_context(
     let next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     let next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
     let module_options_context = ResolveOptionsContext {
-        enable_node_modules: Some(project_path),
+        enable_node_modules: Some(project_path.root().resolve().await?),
         custom_conditions: vec!["development".to_string()],
         import_map: Some(next_client_import_map),
         fallback_import_map: Some(next_client_fallback_import_map),

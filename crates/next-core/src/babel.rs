@@ -126,7 +126,7 @@ pub async fn is_babel_loader_available(project_path: FileSystemPathVc) -> Result
         resolve_options(
             project_path,
             ResolveOptionsContext {
-                enable_node_modules: Some(project_path),
+                enable_node_modules: Some(project_path.root().resolve().await?),
                 enable_node_native_modules: true,
                 custom_conditions: vec!["development".to_string()],
                 ..Default::default()
