@@ -407,12 +407,8 @@ impl PartialEq for Rope {
                         return false;
                     }
 
-                    if len < alen {
-                        left.stack.push(StackElem::Local(a, ai + len));
-                    }
-                    if len < blen {
-                        right.stack.push(StackElem::Local(b, bi + len));
-                    }
+                    left.consume(len);
+                    right.consume(len);
                 }
 
                 (None, None) => return true,
@@ -574,16 +570,18 @@ impl<'a> RopeReader<'a> {
         // Iterates the rope's elements recursively until we find the next Local
         // section, returning its Bytes.
         loop {
-            match self.stack.pop() {
+            match self.stack.last_mut() {
                 None => return None,
                 Some(StackElem::Local(b, o)) => {
-                    debug_assert!(o < b.len(), "must not have empty Bytes section");
-                    return Some((b, o));
+                    debug_assert!(*o < b.len(), "must not have empty Bytes section");
+                    return Some((b, *o));
                 }
                 Some(StackElem::Shared(inner, index)) => {
-                    let el = &inner[index];
-                    if index + 1 < inner.len() {
-                        self.stack.push(StackElem::Shared(inner, index + 1));
+                    let el = &inner[*index];
+                    if *index + 1 < inner.len() {
+                        *index += 1;
+                    } else {
+                        self.stack.pop();
                     }
 
                     self.stack.push(StackElem::from(el));
@@ -604,14 +602,12 @@ impl<'a> RopeReader<'a> {
             };
 
             let len = bytes.len() - offset;
-            let amt = min(len, remaining);
+            let amount = min(len, remaining);
 
-            buf.put_slice(&bytes[offset..offset + amt]);
+            buf.put_slice(&bytes[offset..offset + amount]);
 
-            if amt < len {
-                self.stack.push(StackElem::Local(bytes, offset + amt))
-            }
-            remaining -= amt;
+            self.consume(amount);
+            remaining -= amount;
         }
 
         want - remaining
@@ -651,20 +647,10 @@ impl<'a> BufRead for RopeReader<'a> {
     fn fill_buf(&mut self) -> IoResult<&[u8]> {
         // Returns the full buffer without coping any data. The same bytes will
         // continue to be returned until [consume] is called.
-        let (bytes, offset) = match self.next_internal() {
-            None => return Ok(EMPTY_BUF),
-            Some(b) => b,
-        };
-
-        // This is just so we can get a reference to the asset that is kept alive by the
-        // RopeReader itself. We can then auto-convert that reference into the needed u8
-        // slice reference.
-        self.stack.push(StackElem::Local(bytes, offset));
-        let Some(StackElem::Local(bytes, offset)) = self.stack.last() else {
-            unreachable!()
-        };
-
-        Ok(&bytes[*offset..])
+        Ok(match self.next_internal() {
+            None => EMPTY_BUF,
+            Some((bytes, offset)) => &bytes[offset..],
+        })
     }
 
     fn consume(&mut self, amt: usize) {
