@@ -335,7 +335,9 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 }
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
-// Thes was stored during CalculateFilesHash, so that method must run first
+// Thes was stored during CalculateFilesHash(), so that method must run first.
+// Reads from the underlying map in this method do NOT need to be protected by a mutex
+// because CalculateFileHash() runs and finishes all writes to the map before walking the TaskGraph.
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
 	pfs := specFromPackageTask(packageTask)
 	expandedInputs := th.packageInputsExpandedHashes[pfs.ToKey()]
@@ -348,7 +350,10 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 	return inputsCopy
 }
 
-// GetEnvVars returns the hashed env vars
+// GetEnvVars returns the hashed env vars for a given taskID.
+// This operation is protected by a mutex, because the underlying map where the
+// env vars are stored is written in CalculateTaskHash which runs while
+// walking the Task Graph (in graph.GetPackageTaskVisitor).
 func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 	th.mu.RLock()
 	envVars := th.packageTaskEnvVars[taskID]
