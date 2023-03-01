@@ -22,7 +22,8 @@
 //!
 //! Sample uses
 //! ```
-//! use turborepo_paths::project::ProjectRoot;
+//! use turborepo_paths::project::ProjectRoot
+//! ;
 //! use turborepo_paths::project_relative_path::{ProjectRelativePathBuf, ProjectRelativePath};
 //! use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPathBuf, AbsoluteNormalizedPath};
 //! use turborepo_paths::forward_relative_path::ForwardRelativePath;

@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 use dunce::canonicalize as fs_canonicalize;
 use git2::{DiffFormat, DiffOptions, Repository};
+use turborepo_paths::{absolute_normalized_path::AbsoluteNormalizedPathBuf, project::ProjectRoot};
 
 use crate::Error;
 
@@ -20,17 +21,20 @@ use crate::Error;
 ///
 /// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
-    repo_root: PathBuf,
+    repo_root: String,
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
     // If the relative_to is an absolute path we attempt to make it root relative
     let relative_to = relative_to
-        .zip(repo_root.to_str())
-        .and_then(|(rel, root)| rel.strip_prefix(root))
+        .and_then(|rel| rel.strip_prefix(&repo_root))
         .or(relative_to);
-    let repo = Repository::open(repo_root)?;
+
+    let repo_root =
+        ProjectRoot::new(AbsoluteNormalizedPathBuf::from(repo_root).map_err(Error::PathError)?)
+            .map_err(Error::PathError)?;
+    let repo = Repository::open(repo_root.root())?;
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
 

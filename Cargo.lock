@@ -8061,10 +8061,12 @@ dependencies = [
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dunce",
  "git2",
  "tempfile",
  "thiserror",
+ "turborepo-paths",
 ]
 
 [[package]]
