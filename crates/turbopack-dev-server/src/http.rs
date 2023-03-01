@@ -1,6 +1,9 @@
 use anyhow::Result;
 use futures::{StreamExt, TryStreamExt};
-use hyper::{header::HeaderName, Request, Response};
+use hyper::{
+    header::{Entry, HeaderName, HeaderValue},
+    Body as HyperBody, Request, Response,
+};
 use mime_guess::mime;
 use turbo_tasks::TransientInstance;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
@@ -60,9 +63,9 @@ async fn get_from_source(
 /// response.
 pub async fn process_request_with_content_source(
     source: ContentSourceVc,
-    request: Request<hyper::Body>,
+    request: Request<HyperBody>,
     issue_reporter: IssueReporterVc,
-) -> Result<Response<hyper::Body>> {
+) -> Result<Response<HyperBody>> {
     let original_path = request.uri().path().to_string();
     let request = http_request_to_source_request(request).await?;
     let result = get_from_source(source, TransientInstance::new(request), issue_reporter);
@@ -81,29 +84,28 @@ pub async fn process_request_with_content_source(
                 for (header_name, header_value) in headers {
                     header_map.append(
                         HeaderName::try_from(header_name.clone())?,
-                        hyper::header::HeaderValue::try_from(header_value.as_str())?,
+                        HeaderValue::try_from(header_value.as_str())?,
                     );
                 }
 
                 for (header_name, header_value) in header_overwrites.iter() {
                     header_map.insert(
                         HeaderName::try_from(header_name.clone())?,
-                        hyper::header::HeaderValue::try_from(header_value)?,
+                        HeaderValue::try_from(header_value)?,
                     );
                 }
 
                 if let Some(content_type) = file.content_type() {
                     header_map.append(
                         "content-type",
-                        hyper::header::HeaderValue::try_from(content_type.to_string())?,
+                        HeaderValue::try_from(content_type.to_string())?,
                     );
-                } else if let hyper::header::Entry::Vacant(entry) = header_map.entry("content-type")
-                {
+                } else if let Entry::Vacant(entry) = header_map.entry("content-type") {
                     let guess = mime_guess::from_path(&original_path).first_or_octet_stream();
                     // If a text type, application/javascript, or application/json was
                     // guessed, use a utf-8 charset as  we most likely generated it as
                     // such.
-                    entry.insert(hyper::header::HeaderValue::try_from(
+                    entry.insert(HeaderValue::try_from(
                         if (guess.type_() == mime::TEXT
                             || guess.subtype() == mime::JAVASCRIPT
                             || guess.subtype() == mime::JSON)
@@ -116,14 +118,25 @@ pub async fn process_request_with_content_source(
                     )?);
                 }
 
-                let content = file.content();
                 header_map.insert(
                     "Content-Length",
-                    hyper::header::HeaderValue::try_from(content.len().to_string())?,
+                    HeaderValue::try_from(file.content().len().to_string())?,
                 );
 
-                let bytes = content.read();
-                return Ok(response.body(hyper::Body::wrap_stream(bytes))?);
+                let content = content.clone();
+                let (mut writer, body) = HyperBody::channel();
+                tokio::spawn(async move {
+                    let FileContent::Content(file) = &*content else {
+                        unreachable!();
+                    };
+                    let bytes = file.read();
+                    for b in bytes {
+                        writer.send_data(b.clone()).await?;
+                    }
+                    anyhow::Ok(())
+                });
+
+                return Ok(response.body(body)?);
             }
         }
         GetFromSourceResult::HttpProxy(proxy_result) => {
@@ -133,19 +146,28 @@ pub async fn process_request_with_content_source(
             for (name, value) in &proxy_result.headers {
                 headers.append(
                     HeaderName::from_bytes(name.as_bytes())?,
-                    hyper::header::HeaderValue::from_str(value)?,
+                    HeaderValue::from_str(value)?,
                 );
             }
 
-            return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
+            let proxy_result = proxy_result.clone();
+            let (mut writer, body) = HyperBody::channel();
+            tokio::spawn(async move {
+                let bytes = proxy_result.body.read();
+                for b in bytes {
+                    writer.send_data(b.clone()).await?;
+                }
+                anyhow::Ok(())
+            });
+            return Ok(response.body(body)?);
         }
         _ => {}
     }
 
-    Ok(Response::builder().status(404).body(hyper::Body::empty())?)
+    Ok(Response::builder().status(404).body(HyperBody::empty())?)
 }
 
-async fn http_request_to_source_request(request: Request<hyper::Body>) -> Result<SourceRequest> {
+async fn http_request_to_source_request(request: Request<HyperBody>) -> Result<SourceRequest> {
     let (parts, body) = request.into_parts();
 
     let bytes: Vec<_> = body

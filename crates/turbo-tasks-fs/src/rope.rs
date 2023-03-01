@@ -12,7 +12,6 @@ use std::{
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher};
@@ -677,19 +676,6 @@ impl<'a> BufRead for RopeReader<'a> {
         } else {
             self.stack.pop();
         }
-    }
-}
-
-impl<'a> Stream for RopeReader<'a> {
-    // The Result<Bytes> item type is required for this to be streamable into a
-    // [Hyper::Body].
-    type Item = Result<Bytes>;
-
-    // Returns a "result" of reading the next shared bytes reference. This
-    // differs from [Read::read] by not copying any memory.
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        Poll::Ready(this.next().cloned().map(Ok))
     }
 }
 
