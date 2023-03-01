@@ -21,6 +21,7 @@ type PackageTask struct {
 	ExcludedOutputs []string
 	LogFile         string
 	ExpandedInputs  map[turbopath.AnchoredUnixPath]string
+	Hash            string
 }
 
 // OutputPrefix returns the prefix to be used for logging and ui for this task

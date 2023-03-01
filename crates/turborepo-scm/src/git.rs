@@ -25,6 +25,11 @@ pub fn changed_files(
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
+    // If the relative_to is an absolute path we attempt to make it root relative
+    let relative_to = relative_to
+        .zip(repo_root.to_str())
+        .and_then(|(rel, root)| rel.strip_prefix(root))
+        .or(relative_to);
     let repo = Repository::open(repo_root)?;
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
@@ -230,6 +235,38 @@ mod tests {
             Some("subdir"),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+        let file = repo_root.path().join("foo.js");
+        fs::write(file, "let z = 0;")?;
+
+        // First commit (we need a base commit to compare against)
+        commit_file(&repo, Path::new("foo.js"), None)?;
+
+        // Now change another file
+        let new_file = repo_root.path().join("bar.js");
+        fs::write(new_file, "let y = 1;")?;
+
+        // Test that uncommitted file is marked as changed with
+        // include_untracked` with the parameters that Go wil pass
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            None,
+            true,
+            // Go will pass the absolute repo root as the relative_to if there
+            // isn't a more specific subdir that should be used
+            Some(repo_root.path().to_str().unwrap()),
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         Ok(())
     }

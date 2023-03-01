@@ -51,8 +51,8 @@ Verbosity level 2
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash env vars for util:build: vars=\[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash: value=d09a52ea72495c87 (re)
   util:build: cache bypass, force executing d09a52ea72495c87
   util:build: 
@@ -81,8 +81,8 @@ Verbosity level 2
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash env vars for util:build: vars=\[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash: value=d09a52ea72495c87 (re)
   util:build: cache bypass, force executing d09a52ea72495c87
   util:build: 

@@ -34,7 +34,8 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
     "--dry-run=json",
 ];
 
-static TURBO_SKIP_NOTIFIER_ARGS: [&str; 4] = ["--help", "--h", "--version", "--v"];
+static TURBO_SKIP_NOTIFIER_ARGS: [&str; 5] =
+    ["--help", "--h", "--version", "--v", "--no-update-notifier"];
 
 fn turbo_version_has_shim(version: &str) -> bool {
     let version = Version::parse(version).unwrap();

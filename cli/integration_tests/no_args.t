@@ -21,6 +21,7 @@ Make sure exit code is 2 when no args are passed
   Options:
         --version                   
         --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier        Disable the turbo update notification
         --api <API>                 Override the endpoint for API calls
         --color                     Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile

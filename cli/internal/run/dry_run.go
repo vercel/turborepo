@@ -20,7 +20,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/runcache"
@@ -34,6 +33,7 @@ import (
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
 // the DryRunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
+const missingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
@@ -132,17 +132,16 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-
-		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
-		if err != nil {
-			return err
-		}
+		hash := packageTask.Hash
 
 		command := missingTaskLabel
 		if packageTask.Command != "" {
 			command = packageTask.Command
+		}
+
+		framework := missingFrameworkLabel
+		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
+			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
 		}
 
 		isRootTask := packageTask.PackageName == util.RootPkgName
@@ -174,6 +173,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
+			Framework:              framework,
 			ExpandedInputs:         packageTask.ExpandedInputs,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
@@ -189,7 +189,10 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	// a visitor function and some hardcoded execOpts.
 	// Note: we do not currently attempt to parallelize the graph walking
 	// (as we do in real execution)
-	visitorFn := g.GetPackageTaskVisitor(ctx, dryRunExecFunc)
+	getArgs := func(taskID string) []string {
+		return rs.ArgsForTask(taskID)
+	}
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, dryRunExecFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
@@ -317,6 +320,7 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspa
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
 		}
 
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Framework\t=\t%s\t${RESET}", task.Framework))
 		if err := w.Flush(); err != nil {
 			return err
 		}
@@ -352,7 +356,7 @@ type taskSummary struct {
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOutputs"`
 	Environment            []string                              `json:"environmentVariables"`
-	Framework              *inference.Framework                  `json:"framework"`
+	Framework              string                                `json:"framework"`
 }
 
 type singlePackageTaskSummary struct {
@@ -369,6 +373,7 @@ type singlePackageTaskSummary struct {
 	RunSummary             *BuildTargetState                     `json:"taskSummary"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOutputs"`
+	Framework              string                                `json:"framework"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -392,6 +397,7 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 		RunSummary:             ht.RunSummary,
+		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
 		ExpandedOutputs:        ht.ExpandedOutputs,
 	}
