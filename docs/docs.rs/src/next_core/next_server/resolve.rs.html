@@ -206,7 +206,7 @@
         </span><span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
     };
 
-    <span class="kw">if </span>node_asset.path().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= expected.resolve().<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">if </span>node_asset.ident().path().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= expected.resolve().<span class="kw">await</span><span class="question-mark">? </span>{
         <span class="comment">// node.js resolves to a different file
         </span><span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
     }

@@ -391,10 +391,13 @@
 <span id="391">391</span>
 <span id="392">392</span>
 <span id="393">393</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
+<span id="394">394</span>
+<span id="395">395</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -407,6 +410,7 @@
     asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkGroupVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -465,7 +469,7 @@
     )
     .as_asset();
 
-    <span class="kw">let </span>module_path = module_asset.path().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>module_path = module_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_name = module_path.file_name();
     <span class="kw">let </span>file_name = <span class="kw">if </span>file_name.ends_with(<span class="string">&quot;.js&quot;</span>) {
         Cow::Borrowed(file_name)
@@ -475,7 +479,7 @@
     <span class="kw">let </span>path = intermediate_output_path.join(file_name.as_ref());
     <span class="kw">let </span>entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
-            runtime_asset.path().join(<span class="string">&quot;evaluate.js&quot;</span>),
+            runtime_asset.ident().path().join(<span class="string">&quot;evaluate.js&quot;</span>),
             File::from(
                 <span class="string">&quot;import { run } from &#39;RUNTIME&#39;; run((...args) =&gt; \
                  (require(&#39;INNER&#39;).default(...args)))&quot;</span>,
@@ -487,7 +491,7 @@
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([
+        InnerAssetsVc::cell(IndexMap::from([
             (<span class="string">&quot;INNER&quot;</span>.to_string(), module_asset),
             (<span class="string">&quot;RUNTIME&quot;</span>.to_string(), runtime_asset),
         ])),
@@ -568,7 +572,7 @@
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
-    context_path_for_issue: FileSystemPathVc,
+    context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
@@ -618,7 +622,7 @@
             EvalJavaScriptIncomingMessage::Error(error) =&gt; {
                 EvaluationIssue {
                     error,
-                    context_path: context_path_for_issue,
+                    context_ident: context_ident_for_issue,
                     cwd,
                 }
                 .cell()
@@ -643,7 +647,7 @@
             EvalJavaScriptIncomingMessage::BuildDependency { path } =&gt; {
                 <span class="comment">// TODO We might miss some changes that happened during execution
                 </span>BuildDependencyIssue {
-                    context_path: context_path_for_issue,
+                    context_ident: context_ident_for_issue,
                     path: cwd.join(<span class="kw-2">&amp;</span>path),
                 }
                 .cell()
@@ -672,7 +676,7 @@
 <span class="doccomment">/// An issue that occurred while evaluating node code.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>EvaluationIssue {
-    <span class="kw">pub </span>context_path: FileSystemPathVc,
+    <span class="kw">pub </span>context_ident: AssetIdentVc,
     <span class="kw">pub </span>cwd: FileSystemPathVc,
     <span class="kw">pub </span>error: StructuredError,
 }
@@ -691,7 +695,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.context_path
+        <span class="self">self</span>.context_ident.path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -711,7 +715,7 @@
 <span class="doccomment">/// An issue that occurred while evaluating node code.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>BuildDependencyIssue {
-    <span class="kw">pub </span>context_path: FileSystemPathVc,
+    <span class="kw">pub </span>context_ident: AssetIdentVc,
     <span class="kw">pub </span>path: FileSystemPathVc,
 }
 
@@ -734,7 +738,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.context_path
+        <span class="self">self</span>.context_ident.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -627,6 +627,10 @@
 <span id="627">627</span>
 <span id="628">628</span>
 <span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -1191,10 +1195,14 @@
             <span class="kw">let </span>modules = input_to_modules(fs, input, process_cwd, exact, enable_mdx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>module <span class="kw">in </span>modules.iter() {
                 <span class="kw">let </span>set = all_assets(<span class="kw-2">*</span>module);
-                IssueVc::attach_context(module.path(), <span class="string">&quot;gathering list of assets&quot;</span>.to_string(), set)
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                IssueVc::attach_context(
+                    module.ident().path(),
+                    <span class="string">&quot;gathering list of assets&quot;</span>.to_string(),
+                    set,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">for </span>asset <span class="kw">in </span>set.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                    <span class="kw">let </span>path = asset.path().<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>path = asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
                     result.insert(path.path.to_string());
                 }
             }
@@ -1211,7 +1219,7 @@
                 </span>.iter()
             {
                 <span class="kw">let </span>nft_asset = NftJsonAssetVc::new(<span class="kw-2">*</span>module);
-                <span class="kw">let </span>path = nft_asset.path().<span class="kw">await</span><span class="question-mark">?</span>.path.clone();
+                <span class="kw">let </span>path = nft_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>.path.clone();
                 output_nft_assets.push(path);
                 emits.push(emit_asset(nft_asset.into()));
             }

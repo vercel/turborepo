@@ -51,16 +51,18 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
+<span id="54">54</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use super</span>::{Issue, IssueSeverityVc, IssueSourceVc, IssueVc, OptionIssueSourceVc};
+<span class="kw">use </span><span class="kw">crate</span>::ident::AssetIdentVc;
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>AnalyzeIssue {
     <span class="kw">pub </span>severity: IssueSeverityVc,
-    <span class="kw">pub </span>path: FileSystemPathVc,
+    <span class="kw">pub </span>source_ident: AssetIdentVc,
     <span class="kw">pub </span>title: StringVc,
     <span class="kw">pub </span>message: StringVc,
     <span class="kw">pub </span>category: StringVc,
@@ -91,7 +93,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+        <span class="self">self</span>.source_ident.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -137,6 +137,12 @@
 <span id="137">137</span>
 <span id="138">138</span>
 <span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -145,8 +151,9 @@
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -209,7 +216,11 @@
 
         <span class="kw">let </span>file = File::from(result.build());
 
-        <span class="prelude-val">Ok</span>(VirtualAssetVc::new(this.entry_asset.path().join(<span class="string">&quot;page-loader.ts&quot;</span>), file.into()).into())
+        <span class="prelude-val">Ok</span>(VirtualAssetVc::new(
+            this.entry_asset.ident().path().join(<span class="string">&quot;page-loader.ts&quot;</span>),
+            file.into(),
+        )
+        .into())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -236,11 +247,12 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>PageLoaderAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.server_root
-            .join(<span class="string">&quot;_next/static/chunks/pages&quot;</span>)
-            .join(<span class="kw-2">&amp;</span>get_asset_path_from_route(<span class="kw-2">&amp;</span><span class="self">self</span>.pathname.<span class="kw">await</span><span class="question-mark">?</span>, <span class="string">&quot;.js&quot;</span>)))
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
+            <span class="self">self</span>.server_root
+                .join(<span class="string">&quot;_next/static/chunks/pages&quot;</span>)
+                .join(<span class="kw-2">&amp;</span>get_asset_path_from_route(<span class="kw-2">&amp;</span><span class="self">self</span>.pathname.<span class="kw">await</span><span class="question-mark">?</span>, <span class="string">&quot;.js&quot;</span>)),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]

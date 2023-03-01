@@ -124,12 +124,11 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
-<span id="127">127</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt};
+<span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
     chunk::{
@@ -167,8 +166,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>EcmascriptChunkItem: ChunkItem + ValueToString {
-    <span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
+</span><span class="kw">pub trait </span>EcmascriptChunkItem: ChunkItem {
     <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkItemContentVc;
     <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
     <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleIdVc {

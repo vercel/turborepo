@@ -303,12 +303,13 @@
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -331,6 +332,11 @@
     transform::CssInputTransformsVc,
     CssModuleAssetType,
 };
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;css&quot;</span>.to_string())
+}
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
@@ -380,8 +386,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -426,7 +432,7 @@
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>CssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>origin_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+        <span class="self">self</span>.source.ident().path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -442,18 +448,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;{} (css)&quot;</span>,
-            <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.source.path().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ModuleChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
         <span class="self">self</span>.module.references()
@@ -575,7 +575,7 @@
             <span class="prelude-val">Ok</span>(CssChunkItemContent {
                 inner_code: <span class="macro">format!</span>(
                     <span class="string">&quot;/* unparseable {} */&quot;</span>,
-                    <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    <span class="self">self</span>.module.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>)
                 .into(),
                 imports: <span class="macro">vec!</span>[],

@@ -565,14 +565,6 @@
 <span id="565">565</span>
 <span id="566">566</span>
 <span id="567">567</span>
-<span id="568">568</span>
-<span id="569">569</span>
-<span id="570">570</span>
-<span id="571">571</span>
-<span id="572">572</span>
-<span id="573">573</span>
-<span id="574">574</span>
-<span id="575">575</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -592,6 +584,7 @@
         ChunkingTypeOptionVc,
     },
     context::AssetContextVc,
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
@@ -621,6 +614,11 @@
     CssModuleAssetVc,
 };
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;css module&quot;</span>.to_string())
+}
+
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>ModuleCssModuleAsset {
@@ -640,8 +638,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ModuleCssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.inner.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.inner.ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -798,7 +796,7 @@
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>ModuleCssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>origin_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.inner.path()
+        <span class="self">self</span>.inner.ident().path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -814,18 +812,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;{} (css module)&quot;</span>,
-            <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ModuleChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="comment">// The proxy reference must come first so it is processed before other potential
@@ -853,11 +845,6 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="kw">let </span>classes = <span class="self">self</span>.module.classes().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -876,7 +863,7 @@
                         <span class="kw">let </span><span class="prelude-val">Some</span>(resolved_module) = <span class="kw-2">&amp;*</span>resolved_module <span class="kw">else </span>{
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
-                                path: <span class="self">self</span>.module.path(),
+                                source: <span class="self">self</span>.module.ident(),
                                 message: StringVc::cell(<span class="macro">formatdoc! </span>{
                                     <span class="string">r#&quot;
                                         Module {from} referenced in `composes: ... from {from};` can&#39;t be resolved.
@@ -890,7 +877,7 @@
                         <span class="kw">let </span><span class="prelude-val">Some</span>(css_module) = ModuleCssModuleAssetVc::resolve_from(resolved_module).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
                             CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
-                                path: <span class="self">self</span>.module.path(),
+                                source: <span class="self">self</span>.module.ident(),
                                 message: StringVc::cell(<span class="macro">formatdoc! </span>{
                                     <span class="string">r#&quot;
                                         Module {from} referenced in `composes: ... from {from};` is not a CSS module.
@@ -935,7 +922,7 @@
             <span class="comment">// We generate a minimal map for runtime code so that the filename is
             // displayed in dev tools.
             </span>source_map: <span class="prelude-val">Some</span>(generate_minimal_source_map(
-                <span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, <span class="self">self</span>.module.path().<span class="kw">await</span><span class="question-mark">?</span>.path),
+                <span class="self">self</span>.module.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
                 code,
             )),
             ..Default::default()
@@ -955,7 +942,7 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;proxy(css) {}&quot;</span>,
-            <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="self">self</span>.module.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
         )))
     }
 }
@@ -994,8 +981,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssProxyModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -1043,7 +1030,7 @@
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>CssProxyModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>origin_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
+        <span class="self">self</span>.module.ident().path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -1059,15 +1046,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>CssProxyModuleChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        <span class="self">self</span>.module.as_chunk_item(<span class="self">self</span>.context).to_string()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>CssProxyModuleChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
         <span class="self">self</span>.module.references()
@@ -1115,7 +1099,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">struct </span>CssModuleComposesIssue {
     severity: IssueSeverityVc,
-    path: FileSystemPathVc,
+    source: AssetIdentVc,
     message: StringVc,
 }
 
@@ -1140,7 +1124,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+        <span class="self">self</span>.source.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

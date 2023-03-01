@@ -377,6 +377,7 @@
 <span id="377">377</span>
 <span id="378">378</span>
 <span id="379">379</span>
+<span id="380">380</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>lazy_static::lazy_static;
@@ -482,7 +483,7 @@
     <span class="kw">if let </span><span class="prelude-val">Some</span>(config_asset) = <span class="kw-2">*</span>config {
         <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>config_asset.content().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>FileContent::Content(<span class="kw-2">ref </span>config_file) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">let </span>config_file_path = config_asset.path();
+                <span class="kw">let </span>config_file_path = config_asset.ident().path();
                 <span class="kw">let </span>config_file_dir = config_file_path.parent();
                 <span class="kw">let </span>node_pre_gyp_config: NodePreGypConfigJson =
                     parse_json_rope_with_source_context(config_file.content())<span class="question-mark">?</span>;
@@ -531,6 +532,7 @@
                     assets.insert(SourceAssetVc::new(resolved_file_vc).into());
                 }
                 <span class="kw">for </span>entry <span class="kw">in </span>config_asset
+                    .ident()
                     .path()
                     .parent()
                     <span class="comment">// TODO

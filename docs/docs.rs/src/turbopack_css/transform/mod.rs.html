@@ -40,10 +40,6 @@
 <span id="40">40</span>
 <span id="41">41</span>
 <span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -65,17 +61,13 @@
 
 <span class="kw">pub struct </span>TransformContext&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub </span>source_map: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Arc&lt;SourceMap&gt;,
-    <span class="kw">pub </span>file_name_str: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
 }
 
 <span class="kw">impl </span>CssInputTransform {
     <span class="kw">pub async fn </span>apply(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         stylesheet: <span class="kw-2">&amp;mut </span>Stylesheet,
-        <span class="kw-2">&amp;</span>TransformContext {
-            source_map: <span class="kw">_</span>,
-            file_name_str: <span class="kw">_</span>,
-        }: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        <span class="kw-2">&amp;</span>TransformContext { source_map: <span class="kw">_ </span>}: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
             CssInputTransform::Nested =&gt; {

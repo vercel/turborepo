@@ -453,25 +453,6 @@
 <span id="453">453</span>
 <span id="454">454</span>
 <span id="455">455</span>
-<span id="456">456</span>
-<span id="457">457</span>
-<span id="458">458</span>
-<span id="459">459</span>
-<span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
-<span id="469">469</span>
-<span id="470">470</span>
-<span id="471">471</span>
-<span id="472">472</span>
-<span id="473">473</span>
-<span id="474">474</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -480,9 +461,8 @@
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
-<span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -493,6 +473,7 @@
         FromChunkableAsset, ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
+    ident::{AssetIdent, AssetIdentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -501,7 +482,6 @@
     resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
-<span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
 <span class="kw">use </span>writer::expand_imports;
 
 <span class="kw">use </span><span class="self">self</span>::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
@@ -540,7 +520,9 @@
     </span><span class="kw">pub async fn </span>common_parent(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathOptionVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>main_entries = this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>paths = main_entries.iter().map(|entry| entry.path().parent());
+        <span class="kw">let </span><span class="kw-2">mut </span>paths = main_entries
+            .iter()
+            .map(|entry| entry.ident().path().parent());
         <span class="kw">let </span><span class="kw-2">mut </span>current = paths
             .next()
             .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Chunks must have at least one entry&quot;</span>))<span class="question-mark">?
@@ -736,47 +718,34 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>CssChunk {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="kw">let </span>entry_strings = <span class="self">self
-            </span>.main_entries
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.iter()
-            .map(|entry| entry.path().to_string())
-            .try_join()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>entry_strs = || entry_strings.iter().map(|s| s.as_str()).intersperse(<span class="string">&quot; + &quot;</span>);
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;chunk {}&quot;</span>, FormatIter(entry_strs),)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    </span><span class="kw">async fn </span>ident(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
 
         <span class="kw">let </span>main_entries = this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>main_entries = main_entries.iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>needs_hash = <span class="bool-val">false</span>;
-        <span class="kw">let </span>main_entry = main_entries
-            .next()
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Chunk must have at least one entry&quot;</span>))<span class="question-mark">?</span>;
-        <span class="kw">for </span>entry <span class="kw">in </span>main_entries {
-            <span class="kw">let </span>path = entry.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-            hasher.write_value(path);
-            needs_hash = <span class="bool-val">true</span>;
-        }
+        <span class="kw">let </span>main_entry_key = StringVc::cell(String::new());
+        <span class="kw">let </span>assets = main_entries
+            .iter()
+            .map(|entry| (main_entry_key, entry.ident()))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>hash = hasher.finish();
-        <span class="kw">let </span><span class="kw-2">mut </span>path = main_entry.path();
-        <span class="kw">if </span>needs_hash {
-            path = path.append_to_stem(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;.{}&quot;</span>, encode_hex(hash)))
-        }
+        <span class="kw">let </span>ident = <span class="kw">if let </span>[(<span class="kw">_</span>, ident)] = assets[..] {
+            ident
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>(<span class="kw">_</span>, ident) = assets[<span class="number">0</span>];
+            AssetIdentVc::new(Value::new(AssetIdent {
+                path: ident.path(),
+                query: <span class="prelude-val">None</span>,
+                fragment: <span class="prelude-val">None</span>,
+                assets,
+                modifiers: Vec::new(),
+            }))
+        };
 
-        <span class="prelude-val">Ok</span>(this.context.chunk_path(path, <span class="string">&quot;.css&quot;</span>))
+        <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
+            this.context.chunk_path(ident, <span class="string">&quot;.css&quot;</span>),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -833,19 +802,12 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>chunk_item_id(<span class="self">self</span>, chunk_item: CssChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleIdVc&gt; {
-        <span class="kw">use </span>std::fmt::Write;
-
-        <span class="kw">let </span>layer = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.context.layer().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>s = chunk_item.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-        <span class="kw">if </span>!layer.is_empty() {
-            <span class="kw">if </span>s.ends_with(<span class="string">&#39;)&#39;</span>) {
-                s.pop();
-                <span class="macro">write!</span>(s, <span class="string">&quot;, {layer})&quot;</span>)<span class="question-mark">?</span>;
-            } <span class="kw">else </span>{
-                <span class="macro">write!</span>(s, <span class="string">&quot; ({layer})&quot;</span>)<span class="question-mark">?</span>;
-            }
+        <span class="kw">let </span>layer = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.context.layer();
+        <span class="kw">let </span><span class="kw-2">mut </span>ident = chunk_item.asset_ident();
+        <span class="kw">if </span>!layer.<span class="kw">await</span><span class="question-mark">?</span>.is_empty() {
+            ident = ident.with_modifier(layer)
         }
-        <span class="prelude-val">Ok</span>(ModuleId::String(s).cell())
+        <span class="prelude-val">Ok</span>(ModuleId::String(ident.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone_value()).cell())
     }
 }
 
@@ -873,7 +835,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>CssChunkItem: ChunkItem + ValueToString {
+</span><span class="kw">pub trait </span>CssChunkItem: ChunkItem {
     <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CssChunkItemContentVc;
     <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
     <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleIdVc {
@@ -928,7 +890,7 @@
         <span class="kw">let </span>chunk_content = css_chunk_content(this.context, this.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
         details += <span class="string">&quot;Chunk items:\n\n&quot;</span>;
         <span class="kw">for </span>item <span class="kw">in </span>chunk_content.chunk_items.iter() {
-            <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+            <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
         }
         details += <span class="string">&quot;\nContent:\n\n&quot;</span>;
         <span class="macro">write!</span>(details, <span class="string">&quot;{}&quot;</span>, content.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;

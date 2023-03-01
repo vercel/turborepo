@@ -292,15 +292,17 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{ValueToString, ValueToStringVc};
 <span class="kw">pub mod </span>resolve;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
-<span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::DirectoryContent;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
@@ -330,8 +332,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>TsConfigModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -413,7 +415,7 @@
                 types
             } <span class="kw">else </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>all_types = Vec::new();
-                <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="self">self</span>.source.path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="self">self</span>.source.ident().path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">loop </span>{
                     <span class="kw">if let </span>DirectoryContent::Entries(entries) =
                         <span class="kw-2">&amp;*</span>current.join(<span class="string">&quot;node_modules/@types&quot;</span>).read_dir().<span class="kw">await</span><span class="question-mark">?
@@ -514,7 +516,7 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;tsconfig extends {}&quot;</span>,
-            <span class="self">self</span>.config.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="self">self</span>.config.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
         )))
     }
 }

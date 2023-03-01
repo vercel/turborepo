@@ -250,9 +250,9 @@
 <span id="250">250</span>
 <span id="251">251</span>
 <span id="252">252</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
+<span id="253">253</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
@@ -265,6 +265,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -363,8 +364,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>PostCssTransformedAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -427,7 +428,7 @@
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([(<span class="string">&quot;CONFIG&quot;</span>.to_string(), config_asset)])),
+        InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;CONFIG&quot;</span>.to_string(), config_asset)])),
     )
     .into()
 }
@@ -437,7 +438,8 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>process(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessPostCssResultVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>find_config_result = find_context_file(this.source.path().parent(), postcss_configs());
+        <span class="kw">let </span>find_config_result =
+            find_context_file(this.source.ident().path().parent(), postcss_configs());
         <span class="kw">let </span>FindContextFileResult::Found(config_path, <span class="kw">_</span>) = <span class="kw-2">*</span>find_config_result.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ProcessPostCssResult {
                 content: this.source.content(),
@@ -467,14 +469,14 @@
         </span><span class="kw">let </span>extra_configs = extra_configs(context, config_path);
 
         <span class="kw">let </span>postcss_executor = postcss_executor(context, config_path);
-        <span class="kw">let </span>css_fs_path = this.source.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>css_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>css_path = css_fs_path.path.as_str();
         <span class="kw">let </span>config_value = evaluate(
             project_root,
             postcss_executor,
             project_root,
             env,
-            this.source.path(),
+            this.source.ident(),
             context,
             intermediate_output_path,
             <span class="prelude-val">Some</span>(extra_configs),

@@ -445,7 +445,7 @@
 
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackRuntime::Webpack5 {
                             chunk_request_expr: value,
-                            context_path: asset.path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
+                            context_path: asset.ident().path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
                         }
                         .into());
                     }

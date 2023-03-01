@@ -115,7 +115,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc) -&gt; AssetVc {
         VirtualAssetVc::new(
-            asset.path().join(<span class="string">&quot;layout-entry.tsx&quot;</span>),
+            asset.ident().path().join(<span class="string">&quot;layout-entry.tsx&quot;</span>),
             next_js_file(<span class="string">&quot;entry/app/layout-entry.tsx&quot;</span>).into(),
         )
         .into()

@@ -140,7 +140,6 @@
 <span id="140">140</span>
 <span id="141">141</span>
 <span id="142">142</span>
-<span id="143">143</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::CompletionVc;
@@ -150,6 +149,7 @@
 };
 
 <span class="kw">use crate</span>::{
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     version::{VersionedAssetContentVc, VersionedContentVc},
 };
@@ -175,11 +175,9 @@
 <span class="doccomment">/// An asset. It also forms a graph when following [Asset::references].
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>Asset {
-    <span class="doccomment">/// The path of the [Asset]. It can potentially be a virtual path.
-    /// It&#39;s not expected to be something you can read to or write from in
-    /// general, only some [Asset] types have these property. It&#39;s more like
-    /// a name/identifier of the [Asset].
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
+    <span class="doccomment">/// The identifier of the [Asset]. It&#39;s expected to be unique and capture
+    /// all properties of the [Asset].
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc;
 
     <span class="doccomment">/// The content of the [Asset].
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc;

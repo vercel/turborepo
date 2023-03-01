@@ -161,16 +161,16 @@
 <span id="161">161</span>
 <span id="162">162</span>
 <span id="163">163</span>
-<span id="164">164</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::writedoc;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc, ChunkableAsset, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkableAsset, ChunkingContext, ChunkingContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 
@@ -185,6 +185,16 @@
     },
     utils::stringify_js,
 };
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;loader&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>chunk_list_modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;chunks list&quot;</span>.to_string())
+}
 
 <span class="doccomment">/// The manifest loader item is shipped in the same chunk that uses the dynamic
 /// `import()` expression. Its responsibility is to load the manifest chunk from
@@ -215,26 +225,19 @@
     </span><span class="kw">async fn </span>chunks_list_path(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
         <span class="kw">let </span>this = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this.context.chunk_path(
-            this.manifest.path().parent().join(<span class="string">&quot;chunk-list.json&quot;</span>),
+            this.manifest.ident().with_modifier(chunk_list_modifier()),
             <span class="string">&quot;.json&quot;</span>,
         ))
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ManifestLoaderItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        <span class="self">self</span>.manifest
-            .path()
-            .parent()
-            .join(<span class="string">&quot;manifest-loader.js&quot;</span>)
-            .to_string()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ManifestLoaderItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.manifest.ident().with_modifier(modifier())
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: ManifestLoaderItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span>this = <span class="kw-2">&amp;*</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -251,11 +254,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.manifest.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

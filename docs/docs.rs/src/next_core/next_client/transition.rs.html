@@ -100,6 +100,9 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -142,13 +145,13 @@
     </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc) -&gt; AssetVc {
         <span class="kw">if </span><span class="self">self</span>.is_app {
             VirtualAssetVc::new(
-                asset.path().join(<span class="string">&quot;next-app-hydrate.tsx&quot;</span>),
+                asset.ident().path().join(<span class="string">&quot;next-app-hydrate.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/app/hydrate.tsx&quot;</span>).into(),
             )
             .into()
         } <span class="kw">else </span>{
             VirtualAssetVc::new(
-                asset.path().join(<span class="string">&quot;next-hydrate.tsx&quot;</span>),
+                asset.ident().path().join(<span class="string">&quot;next-hydrate.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/next-hydrate.tsx&quot;</span>).into(),
             )
             .into()
@@ -187,7 +190,10 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
         <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="prelude-val">Some</span>(chunkable_asset) =&gt; chunkable_asset,
-            <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;asset {} is not chunkable&quot;</span>, asset.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>),
+            <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(
+                <span class="string">&quot;asset {} is not chunkable&quot;</span>,
+                asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
+            </span>),
         };
 
         <span class="kw">let </span>runtime_entries = <span class="self">self</span>.runtime_entries.resolve_entries(context.into());

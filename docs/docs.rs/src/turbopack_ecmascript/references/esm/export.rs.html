@@ -327,9 +327,9 @@
                     <span class="string">&quot;export * used with module {} which has no exports\nTypescript only: Did you \
                      want to export only types with `export type {{ ... }} from \&quot;...\&quot;`?&quot;</span>,
                     <span class="comment">// TODO recommend export type * from &quot;...&quot; once https://github.com/microsoft/TypeScript/issues/37238 is implemented
-                    </span>asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    </span>asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>)),
-                path: asset.path(),
+                source_ident: asset.ident(),
                 severity: IssueSeverity::Warning.into(),
                 source: <span class="prelude-val">None</span>,
                 title: StringVc::cell(<span class="string">&quot;unexpected export *&quot;</span>.to_string()),
@@ -344,9 +344,9 @@
                     <span class="string">&quot;export * used with module {} which only has a default export (default export \
                      is not exported with export *)\nDid you want to use `export {{ default }} \
                      from \&quot;...\&quot;;` instead?&quot;</span>,
-                    asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>)),
-                path: asset.path(),
+                source_ident: asset.ident(),
                 severity: IssueSeverity::Warning.into(),
                 source: <span class="prelude-val">None</span>,
                 title: StringVc::cell(<span class="string">&quot;unexpected export *&quot;</span>.to_string()),
@@ -364,9 +364,9 @@
                          only available at runtime\nList all export names manually (`export {{ a, \
                          b, c }} from \&quot;...\&quot;) or rewrite the module to ESM, to avoid the \
                          additional runtime code.`&quot;</span>,
-                        asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                        asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                     </span>)),
-                    path: asset.path(),
+                    source_ident: asset.ident(),
                     severity: IssueSeverity::Warning.into(),
                     source: <span class="prelude-val">None</span>,
                     title: StringVc::cell(<span class="string">&quot;unexpected export *&quot;</span>.to_string()),

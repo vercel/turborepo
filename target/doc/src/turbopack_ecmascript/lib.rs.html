@@ -407,6 +407,8 @@
 <span id="407">407</span>
 <span id="408">408</span>
 <span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -432,13 +434,12 @@
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>webpack;
 
-<span class="kw">use </span>std::collections::HashMap;
-
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
 };
 <span class="kw">use </span>code_gen::CodeGenerateableVc;
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>parse::{parse, ParseResult};
 <span class="kw">pub use </span>parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 <span class="kw">use </span>path_visitor::ApplyVisitors;
@@ -453,13 +454,14 @@
 <span class="kw">pub use </span>transform::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
 };
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -496,7 +498,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>InnerAssets(HashMap&lt;String, AssetVc&gt;);
+</span><span class="kw">pub struct </span>InnerAssets(IndexMap&lt;String, AssetVc&gt;);
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;ecmascript&quot;</span>.to_string())
+}
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone, Copy)]
@@ -583,8 +590,17 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_assets) = <span class="self">self</span>.inner_assets {
+            <span class="kw">let </span><span class="kw-2">mut </span>ident = <span class="self">self</span>.source.ident().<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+            <span class="kw">for </span>(name, asset) <span class="kw">in </span>inner_assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+                ident.add_asset(StringVc::cell(name.clone()), asset.ident());
+            }
+            ident.add_modifier(modifier());
+            <span class="prelude-val">Ok</span>(AssetIdentVc::new(Value::new(ident)))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.source.ident().with_modifier(modifier()))
+        }
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -630,7 +646,7 @@
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>EcmascriptModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>origin_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+        <span class="self">self</span>.source.ident().path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -661,19 +677,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="comment">// TODO include inner_assets in this name
-        </span><span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;{} (ecmascript)&quot;</span>,
-            <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.source.path().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ModuleChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
         <span class="self">self</span>.module.references()
@@ -685,11 +694,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -800,7 +804,7 @@
                 inner_code: <span class="macro">format!</span>(
                     <span class="string">&quot;const e = new Error(\&quot;Could not parse module &#39;{path}&#39;\&quot;);\ne.code = \
                      &#39;MODULE_UNPARSEABLE&#39;;\nthrow e;&quot;</span>,
-                    path = <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    path = <span class="self">self</span>.module.ident().path().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>)
                 .into(),
                 ..Default::default()

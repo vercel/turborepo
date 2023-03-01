@@ -367,9 +367,8 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks::{
@@ -385,6 +384,7 @@
     chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention::Middleware, ServerAddrVc},
+    ident::AssetIdentVc,
     reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -605,7 +605,7 @@
     )
     .as_asset();
 
-    <span class="kw">let </span><span class="kw-2">mut </span>inner = HashMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>inner = IndexMap::new();
     inner.insert(<span class="string">&quot;MIDDLEWARE_CHUNK_GROUP&quot;</span>.to_string(), manifest);
     inner.insert(<span class="string">&quot;MIDDLEWARE_CONFIG&quot;</span>.to_string(), config_asset);
     <span class="prelude-val">Ok</span>(InnerAssetsVc::cell(inner))
@@ -712,7 +712,7 @@
         router_asset,
         project_root,
         env,
-        project_root,
+        AssetIdentVc::from_path(project_root),
         context,
         intermediate_output_path,
         <span class="prelude-val">Some</span>(next_config),

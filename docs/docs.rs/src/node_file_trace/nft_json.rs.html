@@ -54,11 +54,15 @@
 <span id="54">54</span>
 <span id="55">55</span>
 <span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::json;
-<span class="kw">use </span>turbo_tasks_fs::{File, FileSystem, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{File, FileSystem};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::all_assets,
 };
 
@@ -78,21 +82,23 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>NftJsonAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="kw">let </span>path = <span class="self">self</span>.entry.path().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(path.fs.root().join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.nft.json&quot;</span>, path.path)))
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="kw">let </span>path = <span class="self">self</span>.entry.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
+            path.fs.root().join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.nft.json&quot;</span>, path.path)),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
-        <span class="kw">let </span>context = <span class="self">self</span>.entry.path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>context = <span class="self">self</span>.entry.ident().path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// For clippy -- This explicit deref is necessary
-        </span><span class="kw">let </span>entry_path = <span class="kw-2">&amp;*</span><span class="self">self</span>.entry.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>entry_path = <span class="kw-2">&amp;*</span><span class="self">self</span>.entry.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>result = Vec::new();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(self_path) = context.get_relative_path_to(entry_path) {
             <span class="kw">let </span>set = all_assets(<span class="self">self</span>.entry);
             <span class="kw">for </span>asset <span class="kw">in </span>set.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="kw">let </span>path = asset.path().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>path = asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(rel_path) = context.get_relative_path_to(<span class="kw-2">&amp;</span>path) {
                     <span class="kw">if </span>rel_path != self_path {
                         result.push(rel_path);

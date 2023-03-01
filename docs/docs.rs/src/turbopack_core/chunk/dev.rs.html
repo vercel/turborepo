@@ -211,18 +211,69 @@
 <span id="211">211</span>
 <span id="212">212</span>
 <span id="213">213</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc},
     Value, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
+<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
 <span class="kw">use super</span>::{ChunkingContext, ChunkingContextVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc},
     environment::EnvironmentVc,
+    ident::{AssetIdent, AssetIdentVc},
 };
 
 <span class="kw">pub struct </span>DevChunkingContextBuilder {
@@ -320,25 +371,70 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_path(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        path_vc: FileSystemPathVc,
-        extension: <span class="kw-2">&amp;</span>str,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    </span><span class="kw">async fn </span>chunk_path(<span class="kw-2">&amp;</span><span class="self">self</span>, ident: AssetIdentVc, extension: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
         <span class="kw">fn </span>clean(s: <span class="kw-2">&amp;</span>str) -&gt; String {
             s.replace(<span class="string">&#39;/&#39;</span>, <span class="string">&quot;_&quot;</span>)
         }
-        <span class="comment">// For clippy -- This explicit deref is necessary
-        </span><span class="kw">let </span>path = <span class="kw-2">&amp;*</span>path_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>ident.<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="comment">// For clippy -- This explicit deref is necessary
+        </span><span class="kw">let </span>path = <span class="kw-2">&amp;*</span>ident.path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>name = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self</span>.context_path.<span class="kw">await</span><span class="question-mark">?</span>.get_path_to(path) {
             clean(inner)
         } <span class="kw">else </span>{
-            clean(<span class="kw-2">&amp;</span>path_vc.to_string().<span class="kw">await</span><span class="question-mark">?</span>)
+            clean(<span class="kw-2">&amp;</span>ident.path.to_string().<span class="kw">await</span><span class="question-mark">?</span>)
         };
         <span class="kw">let </span>removed_extension = name.ends_with(extension);
         <span class="kw">if </span>removed_extension {
             name.truncate(name.len() - extension.len());
+        }
+
+        <span class="kw">let </span>default_modifier = <span class="kw">match </span>extension {
+            <span class="string">&quot;.js&quot; </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">&quot;ecmascript&quot;</span>),
+            <span class="string">&quot;.css&quot; </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">&quot;css&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>has_hash = <span class="bool-val">false</span>;
+        <span class="kw">let </span>AssetIdent {
+            path: <span class="kw">_</span>,
+            query,
+            fragment,
+            assets,
+            modifiers,
+        } = ident;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(query) = query {
+            <span class="number">0_u8</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            query.<span class="kw">await</span><span class="question-mark">?</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            has_hash = <span class="bool-val">true</span>;
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fragment) = fragment {
+            <span class="number">1_u8</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            fragment.<span class="kw">await</span><span class="question-mark">?</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            has_hash = <span class="bool-val">true</span>;
+        }
+        <span class="kw">for </span>(key, ident) <span class="kw">in </span>assets.iter() {
+            <span class="number">2_u8</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            key.<span class="kw">await</span><span class="question-mark">?</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            ident.to_string().<span class="kw">await</span><span class="question-mark">?</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            has_hash = <span class="bool-val">true</span>;
+        }
+        <span class="kw">for </span>modifier <span class="kw">in </span>modifiers.iter() {
+            <span class="kw">let </span>modifier = modifier.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(default_modifier) = default_modifier {
+                <span class="kw">if </span><span class="kw-2">*</span>modifier == default_modifier {
+                    <span class="kw">continue</span>;
+                }
+            }
+            <span class="number">3_u8</span>.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            modifier.deterministic_hash(<span class="kw-2">&amp;mut </span>hasher);
+            has_hash = <span class="bool-val">true</span>;
+        }
+        <span class="kw">if </span>has_hash {
+            <span class="kw">let </span>hash = encode_hex(hasher.finish());
+            <span class="kw">let </span>truncated_hash = <span class="kw-2">&amp;</span>hash[..<span class="number">6</span>];
+            <span class="macro">write!</span>(name, <span class="string">&quot;_{}&quot;</span>, truncated_hash)<span class="question-mark">?</span>;
         }
 
         <span class="comment">// Location in &quot;path&quot; where hashed and named parts are split.
@@ -389,9 +485,9 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>can_be_in_same_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>, asset_a: AssetVc, asset_b: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
-        <span class="kw">let </span>parent_dir = asset_a.path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>parent_dir = asset_a.ident().path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>path = asset_b.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>path = asset_b.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(rel_path) = parent_dir.get_path_to(<span class="kw-2">&amp;</span>path) {
             <span class="kw">if </span>!rel_path.starts_with(<span class="string">&quot;node_modules/&quot;</span>) &amp;&amp; !rel_path.contains(<span class="string">&quot;/node_modules/&quot;</span>) {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">true</span>));

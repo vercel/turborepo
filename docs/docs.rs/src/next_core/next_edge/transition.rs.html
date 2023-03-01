@@ -115,10 +115,8 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
-<span id="118">118</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileContentVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{
@@ -185,7 +183,7 @@
         <span class="kw">let </span>FileContent::Content(base) = <span class="kw-2">&amp;*</span><span class="self">self</span>.bootstrap_file.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;runtime code not found&quot;</span>);
         };
-        <span class="kw">let </span>path = asset.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>path = asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>path = <span class="self">self
             </span>.base_path
             .<span class="kw">await</span><span class="question-mark">?
@@ -211,7 +209,7 @@
         new_content.concat(base.content());
         <span class="kw">let </span>file = File::from(new_content.build());
         <span class="kw">let </span>virtual_asset = VirtualAssetVc::new(
-            asset.path().join(<span class="string">&quot;next-edge-bootstrap.ts&quot;</span>),
+            asset.ident().path().join(<span class="string">&quot;next-edge-bootstrap.ts&quot;</span>),
             FileContent::Content(file).cell().into(),
         );
 
@@ -221,7 +219,7 @@
             Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
             context.compile_time_info(),
-            InnerAssetsVc::cell(HashMap::from([(<span class="string">&quot;ENTRY&quot;</span>.to_string(), asset)])),
+            InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;ENTRY&quot;</span>.to_string(), asset)])),
         );
 
         <span class="kw">let </span>asset = ChunkGroupFilesAsset {

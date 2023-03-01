@@ -2202,6 +2202,9 @@
 <span id="2202">2202</span>
 <span id="2203">2203</span>
 <span id="2204">2204</span>
+<span id="2205">2205</span>
+<span id="2206">2206</span>
+<span id="2207">2207</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2392,7 +2395,7 @@
     compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>analysis = AnalyzeEcmascriptModuleResultBuilder::new();
-    <span class="kw">let </span>path = source.path();
+    <span class="kw">let </span>path = origin.origin_path();
 
     <span class="comment">// Is this a typescript file that requires analzying type references?
     </span><span class="kw">let </span>analyze_types = <span class="kw">match </span><span class="kw-2">&amp;*</span>ty {
@@ -2478,9 +2481,10 @@
                             <span class="comment">// TODO this probably needs to be a field in EcmascriptModuleAsset so it
                             // knows to use that SourceMap when running code generation.
                             // The reference is needed too for turbotrace
-                            </span>analysis.add_reference(SourceMapReferenceVc::new(
-                                source.path(),
-                                source.path().parent().join(path),
+                            </span><span class="kw">let </span>origin_path = origin.origin_path();
+                            analysis.add_reference(SourceMapReferenceVc::new(
+                                origin_path,
+                                origin_path.parent().join(path),
                             ))
                         }
                     }
@@ -2859,7 +2863,7 @@
                     }
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(..)) =&gt; {
-                        <span class="kw">let </span>parent_path = source.path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>parent_path = origin.origin_path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="kw">let </span>linked_func_call = link_value(JsValue::call(
@@ -3007,7 +3011,7 @@
                                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                             }
                             analysis.add_reference(NodePreGypConfigReferenceVc::new(
-                                source.path().parent(),
+                                origin.origin_path().parent(),
                                 pat.into(),
                                 compile_time_info.environment().compile_target(),
                             ));
@@ -3034,8 +3038,10 @@
                             <span class="kw">let </span>first_arg = link_value(args[<span class="number">0</span>].clone()).<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = first_arg.as_str() {
                                 <span class="comment">// TODO this resolving should happen within NodeGypBuildReferenceVc
-                                </span><span class="kw">let </span>current_context =
-                                    source.path().root().join(s.trim_start_matches(<span class="string">&quot;/ROOT/&quot;</span>));
+                                </span><span class="kw">let </span>current_context = origin
+                                    .origin_path()
+                                    .root()
+                                    .join(s.trim_start_matches(<span class="string">&quot;/ROOT/&quot;</span>));
                                 analysis.add_reference(NodeGypBuildReferenceVc::new(
                                     current_context,
                                     compile_time_info.environment().compile_target(),
@@ -3063,7 +3069,7 @@
                             <span class="kw">let </span>first_arg = link_value(args[<span class="number">0</span>].clone()).<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>s) = first_arg.as_str() {
                                 analysis.add_reference(NodeBindingsReferenceVc::new(
-                                    source.path(),
+                                    origin.origin_path(),
                                     s.to_string(),
                                 ));
                                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
@@ -3310,7 +3316,7 @@
                 .get_mut()
                 .extend(effects.into_iter().map(Action::Effect).rev());
 
-            <span class="kw">let </span>linker = |value| value_visitor(source, origin, value, compile_time_info);
+            <span class="kw">let </span>linker = |value| value_visitor(origin, value, compile_time_info);
             <span class="comment">// There can be many references to import.meta, but only the first should hoist
             // the object allocation.
             </span><span class="kw">let </span><span class="kw-2">mut </span>first_import_meta = <span class="bool-val">true</span>;
@@ -3571,7 +3577,9 @@
                             Effect::ImportMeta { ast_path, span: <span class="kw">_ </span>} =&gt; {
                                 <span class="kw">if </span>first_import_meta {
                                     first_import_meta = <span class="bool-val">false</span>;
-                                    analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
+                                    analysis.add_code_gen(ImportMetaBindingVc::new(
+                                        source.ident().path(),
+                                    ));
                                 }
 
                                 analysis
@@ -3784,18 +3792,16 @@
 }
 
 <span class="kw">async fn </span>value_visitor(
-    source: AssetVc,
     origin: ResolveOriginVc,
     v: JsValue,
     compile_time_info: CompileTimeInfoVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt; {
-    <span class="kw">let </span>(<span class="kw-2">mut </span>v, modified) = value_visitor_inner(source, origin, v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(<span class="kw-2">mut </span>v, modified) = value_visitor_inner(origin, v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
     v.normalize_shallow();
     <span class="prelude-val">Ok</span>((v, modified))
 }
 
 <span class="kw">async fn </span>value_visitor_inner(
-    source: AssetVc,
     origin: ResolveOriginVc,
     v: JsValue,
     compile_time_info: CompileTimeInfoVc,
@@ -3829,7 +3835,7 @@
                     .iter()
                     .map(|result| <span class="kw">async move </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
-                            <span class="prelude-val">Some</span>(require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>)
+                            <span class="prelude-val">Some</span>(require_resolve(asset.ident().path()).<span class="kw">await</span><span class="question-mark">?</span>)
                         } <span class="kw">else </span>{
                             <span class="prelude-val">None
                         </span>})
@@ -3861,8 +3867,8 @@
             }
         }
         JsValue::FreeVar(<span class="kw-2">ref </span>kind) =&gt; <span class="kw">match </span>kind {
-            FreeVarKind::Dirname =&gt; as_abs_path(source.path().parent()).<span class="kw">await</span><span class="question-mark">?</span>,
-            FreeVarKind::Filename =&gt; as_abs_path(source.path()).<span class="kw">await</span><span class="question-mark">?</span>,
+            FreeVarKind::Dirname =&gt; as_abs_path(origin.origin_path().parent()).<span class="kw">await</span><span class="question-mark">?</span>,
+            FreeVarKind::Filename =&gt; as_abs_path(origin.origin_path()).<span class="kw">await</span><span class="question-mark">?</span>,
 
             FreeVarKind::Require =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
             FreeVarKind::Define =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Define),

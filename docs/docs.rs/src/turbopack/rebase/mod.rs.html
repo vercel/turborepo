@@ -104,6 +104,11 @@
 <span id="104">104</span>
 <span id="105">105</span>
 <span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::Result;
@@ -111,6 +116,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::ResolveResultVc,
 };
@@ -138,8 +144,12 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>RebasedAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        FileSystemPathVc::rebase(<span class="self">self</span>.source.path(), <span class="self">self</span>.input_dir, <span class="self">self</span>.output_dir)
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        AssetIdentVc::from_path(FileSystemPathVc::rebase(
+            <span class="self">self</span>.source.ident().path(),
+            <span class="self">self</span>.input_dir,
+            <span class="self">self</span>.output_dir,
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]

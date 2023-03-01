@@ -227,6 +227,7 @@
 <span id="227">227</span>
 <span id="228">228</span>
 <span id="229">229</span>
+<span id="230">230</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc};
@@ -234,7 +235,8 @@
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     version::{Update, UpdateVc, Version, VersionVc, VersionedContent, VersionedContentVc},
 };
@@ -253,8 +255,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>DevHtmlAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        AssetIdentVc::from_path(<span class="self">self</span>.path)
     }
 
     <span class="attr">#[turbo_tasks::function]

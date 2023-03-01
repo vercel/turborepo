@@ -308,7 +308,7 @@
         <span class="kw">let </span>expanded = expanded.get();
         <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
             <span class="kw">let </span>expanded = expanded.contains(root_asset);
-            assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
+            assets.push((root_asset.ident().path(), <span class="kw-2">*</span>root_asset));
             assets_set.insert(<span class="kw-2">*</span>root_asset);
             <span class="kw">if </span>expanded {
                 queue.push_back(all_referenced_assets(<span class="kw-2">*</span>root_asset));
@@ -316,7 +316,7 @@
         }
     } <span class="kw">else </span>{
         <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
-            assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
+            assets.push((root_asset.ident().path(), <span class="kw-2">*</span>root_asset));
             assets_set.insert(<span class="kw-2">*</span>root_asset);
             queue.push_back(all_referenced_assets(<span class="kw-2">*</span>root_asset));
         }
@@ -333,7 +333,7 @@
                 <span class="kw">if </span>expanded {
                     queue.push_back(all_referenced_assets(<span class="kw-2">*</span>asset));
                 }
-                assets.push((asset.path(), <span class="kw-2">*</span>asset));
+                assets.push((asset.ident().path(), <span class="kw-2">*</span>asset));
             }
         }
     }

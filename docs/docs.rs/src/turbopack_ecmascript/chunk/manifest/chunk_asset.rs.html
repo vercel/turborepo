@@ -132,15 +132,20 @@
 <span id="132">132</span>
 <span id="133">133</span>
 <span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkGroupVc, ChunkVc, ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc,
         ChunkableAssetVc, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
@@ -154,6 +159,11 @@
     },
     EcmascriptChunkVc,
 };
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;manifest chunk&quot;</span>.to_string())
+}
 
 <span class="doccomment">/// The manifest chunk is deferred until requested by the manifest loader
 /// item when the dynamic `import()` expression is reached. Its responsibility
@@ -191,8 +201,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ManifestChunkAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.asset.path().join(<span class="string">&quot;manifest-chunk.js&quot;</span>)
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.asset.ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -246,7 +256,7 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;referenced manifest {}&quot;</span>,
-            <span class="self">self</span>.manifest.path().to_string().<span class="kw">await</span><span class="question-mark">?
+            <span class="self">self</span>.manifest.ident().to_string().<span class="kw">await</span><span class="question-mark">?
         </span>)))
     }
 }

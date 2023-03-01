@@ -611,6 +611,7 @@
 <span id="611">611</span>
 <span id="612">612</span>
 <span id="613">613</span>
+<span id="614">614</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -626,6 +627,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     context::AssetContext,
+    ident::AssetIdentVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -1183,7 +1185,7 @@
         EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[config_chunk])
     });
     <span class="kw">let </span>asset_path = config_asset
-        .map_or(project_root, |a| a.path())
+        .map_or(project_root, |a| a.ident().path())
         .join(<span class="string">&quot;load-next-config.js&quot;</span>);
     <span class="kw">let </span>load_next_config_asset = context.process(
         next_asset(asset_path, <span class="string">&quot;entry/config/next.js&quot;</span>),
@@ -1194,7 +1196,7 @@
         load_next_config_asset,
         project_root,
         env,
-        config_asset.map_or(project_root, |c| c.path()),
+        config_asset.map_or_else(|| AssetIdentVc::from_path(project_root), |c| c.ident()),
         context,
         intermediate_output_path,
         runtime_entries,

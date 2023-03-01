@@ -68,7 +68,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>SourceAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
-        <span class="kw">let </span>context = <span class="self">self</span>.source.path().parent();
+        <span class="kw">let </span>context = <span class="self">self</span>.source.ident().path().parent();
 
         <span class="prelude-val">Ok</span>(resolve_raw(context, <span class="self">self</span>.path, <span class="bool-val">false</span>))
     }

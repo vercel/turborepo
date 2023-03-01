@@ -130,22 +130,14 @@
 <span id="130">130</span>
 <span id="131">131</span>
 <span id="132">132</span>
-<span id="133">133</span>
-<span id="134">134</span>
-<span id="135">135</span>
-<span id="136">136</span>
-<span id="137">137</span>
-<span id="138">138</span>
-<span id="139">139</span>
-<span id="140">140</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 
 <span class="kw">use super</span>::{Chunk, ChunkVc, ParallelChunkReferenceVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ParallelChunkReference,
+    ident::AssetIdentVc,
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -182,8 +174,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ChunkInGroup {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.inner.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.inner.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -209,14 +201,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>versioned_content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VersionedContentVc {
         <span class="self">self</span>.inner.versioned_content()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ChunkInGroup {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        <span class="self">self</span>.inner.to_string()
     }
 }
 
@@ -250,7 +234,7 @@
             <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk) = IntrospectableVc::resolve_from(<span class="self">self</span>.inner).<span class="kw">await</span><span class="question-mark">? </span>{
                 chunk.title()
             } <span class="kw">else </span>{
-                <span class="self">self</span>.inner.path().to_string()
+                <span class="self">self</span>.inner.ident().to_string()
             },
         )
     }

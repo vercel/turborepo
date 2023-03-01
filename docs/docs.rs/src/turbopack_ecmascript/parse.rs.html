@@ -317,6 +317,7 @@
 <span id="317">317</span>
 <span id="318">318</span>
 <span id="319">319</span>
+<span id="320">320</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -338,9 +339,12 @@
         visit::VisitMutWith,
     },
 };
-<span class="kw">use </span>turbo_tasks::{primitives::U64Vc, Value, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
-<span class="kw">use </span>turbo_tasks_hash::{DeterministicHasher, Xxh3Hash64Hasher};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{StringVc, U64Vc},
+    Value, ValueToString,
+};
+<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
+<span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
@@ -451,8 +455,8 @@
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
     <span class="kw">let </span>content = source.content();
-    <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.path().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_file_path(source.path()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
+    <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_ident(source.ident().to_string()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
     <span class="kw">let </span>ty = ty.into_value();
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
         AssetContent::File(file) =&gt; <span class="kw">match </span><span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -474,7 +478,7 @@
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(e).context(<span class="macro">anyhow!</span>(
                                 <span class="string">&quot;Transforming and/or parsing of {} failed&quot;</span>,
-                                source.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                                source.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                             </span>));
                         }
                     }
@@ -630,11 +634,9 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>hash_file_path(file_path_vc: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
-    <span class="kw">let </span>file_path = <span class="kw-2">&amp;*</span>file_path_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
-    hasher.write_bytes(file_path.file_name().as_bytes());
-    <span class="prelude-val">Ok</span>(U64Vc::cell(hasher.finish()))
+</span><span class="kw">async fn </span>hash_ident(ident: StringVc) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
+    <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>ident.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(U64Vc::cell(hash_xxh3_hash64(ident)))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

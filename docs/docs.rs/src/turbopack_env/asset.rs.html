@@ -136,23 +136,15 @@
 <span id="136">136</span>
 <span id="137">137</span>
 <span id="138">138</span>
-<span id="139">139</span>
-<span id="140">140</span>
-<span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
@@ -186,8 +178,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ProcessEnvAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.root.join(<span class="string">&quot;.env.js&quot;</span>)
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        AssetIdentVc::from_path(<span class="self">self</span>.root.join(<span class="string">&quot;.env.js&quot;</span>))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -237,15 +229,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ProcessEnvChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        <span class="self">self</span>.inner.path().to_string()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ProcessEnvChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.inner.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
         AssetReferencesVc::empty()
@@ -257,11 +246,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.inner.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

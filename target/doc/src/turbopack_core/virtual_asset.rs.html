@@ -30,15 +30,29 @@
 <span id="30">30</span>
 <span id="31">31</span>
 <span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
-<span class="kw">use </span><span class="kw">crate</span>::asset::{Asset, AssetContentVc, AssetVc};
+<span class="kw">use crate</span>::{
+    asset::{Asset, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
+};
 
 <span class="doccomment">/// An [Asset] that is created from some passed source code.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>VirtualAsset {
-    <span class="kw">pub </span>path: FileSystemPathVc,
+    <span class="kw">pub </span>ident: AssetIdentVc,
     <span class="kw">pub </span>content: AssetContentVc,
 }
 
@@ -46,15 +60,23 @@
 </span><span class="kw">impl </span>VirtualAssetVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(path: FileSystemPathVc, content: AssetContentVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(VirtualAsset { path, content })
+        <span class="self">Self</span>::cell(VirtualAsset {
+            ident: AssetIdentVc::from_path(path),
+            content,
+        })
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new_with_ident(ident: AssetIdentVc, content: AssetContentVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(VirtualAsset { ident, content })
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>VirtualAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.ident
     }
 
     <span class="attr">#[turbo_tasks::function]

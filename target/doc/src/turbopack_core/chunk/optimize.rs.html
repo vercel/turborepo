@@ -326,7 +326,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
-<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
 <span class="kw">use super</span>::{ChunkGroupVc, ChunkVc, ChunksVc};
@@ -343,7 +343,7 @@
 
 <span class="doccomment">/// Trait to mark a chunk as optimizable.
 </span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>OptimizableChunk: Chunk + Asset + ValueToString {
+</span><span class="kw">pub trait </span>OptimizableChunk: Chunk + Asset {
     <span class="kw">fn </span>get_optimizer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkOptimizerVc;
 }
 

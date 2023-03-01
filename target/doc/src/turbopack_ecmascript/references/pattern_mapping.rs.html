@@ -366,7 +366,7 @@
             title: StringVc::cell(<span class="string">&quot;non-ecmascript placeable asset&quot;</span>.to_string()),
             message: StringVc::cell(<span class="macro">format!</span>(
                 <span class="string">&quot;asset {} is not placeable in ESM chunks, so it doesn&#39;t have a module id&quot;</span>,
-                asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
             </span>)),
             path: origin.origin_path(),
         }

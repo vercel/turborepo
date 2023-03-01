@@ -1364,19 +1364,19 @@
         <span class="kw">let </span>virtual_asset = <span class="kw">match </span>ty {
             SsrType::AutoApi =&gt; <span class="macro">unreachable!</span>(),
             SsrType::Api =&gt; VirtualAssetVc::new(
-                this.entry_asset.path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
+                this.entry_asset.ident().path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-api.tsx&quot;</span>).into(),
             ),
             SsrType::EdgeApi =&gt; VirtualAssetVc::new(
-                this.entry_asset.path().join(<span class="string">&quot;server-edge-api.tsx&quot;</span>),
+                this.entry_asset.ident().path().join(<span class="string">&quot;server-edge-api.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-edge-api.tsx&quot;</span>).into(),
             ),
             SsrType::Data =&gt; VirtualAssetVc::new(
-                this.entry_asset.path().join(<span class="string">&quot;server-data.tsx&quot;</span>),
+                this.entry_asset.ident().path().join(<span class="string">&quot;server-data.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-data.tsx&quot;</span>).into(),
             ),
             SsrType::Html =&gt; VirtualAssetVc::new(
-                this.entry_asset.path().join(<span class="string">&quot;server-renderer.tsx&quot;</span>),
+                this.entry_asset.ident().path().join(<span class="string">&quot;server-renderer.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-renderer.tsx&quot;</span>).into(),
             ),
         };

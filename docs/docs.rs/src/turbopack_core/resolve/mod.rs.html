@@ -1286,6 +1286,10 @@
 <span id="1286">1286</span>
 <span id="1287">1287</span>
 <span id="1288">1288</span>
+<span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1933,9 +1937,13 @@
 
     <span class="kw">for </span>primary <span class="kw">in </span>result_value.primary.iter() {
         <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = primary {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_result) =
-                apply_plugins_to_path(asset.path().resolve().<span class="kw">await</span><span class="question-mark">?</span>, context, request, options)
-                    .<span class="kw">await</span><span class="question-mark">?
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(new_result) = apply_plugins_to_path(
+                asset.ident().path().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
+                context,
+                request,
+                options,
+            )
+            .<span class="kw">await</span><span class="question-mark">?
             </span>{
                 <span class="kw">let </span>new_result = new_result.<span class="kw">await</span><span class="question-mark">?</span>;
                 changed = <span class="bool-val">true</span>;

@@ -348,7 +348,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_ident_from_placeable(
         asset: <span class="kw-2">&amp;</span>EcmascriptChunkPlaceableVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>path = asset.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>path = asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(magic_identifier::encode(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
             <span class="string">&quot;imported module {}&quot;</span>,
             path

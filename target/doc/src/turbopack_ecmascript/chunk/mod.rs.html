@@ -464,8 +464,6 @@
 <span id="464">464</span>
 <span id="465">465</span>
 <span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>evaluate;
@@ -485,17 +483,17 @@
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringReadRef, StringVc, UsizeVc},
-    TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
-<span class="kw">use </span>turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
-<span class="kw">use </span>turbo_tasks_hash::{encode_hex, DeterministicHasher, Xxh3Hash64Hasher};
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkReferenceVc, ChunkVc, ChunkingContext,
+        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContext,
         ChunkingContextVc,
     },
+    ident::{AssetIdent, AssetIdentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -591,7 +589,9 @@
     </span><span class="kw">pub async fn </span>common_parent(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathOptionVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>main_entries = this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>paths = main_entries.iter().map(|entry| entry.path().parent());
+        <span class="kw">let </span><span class="kw-2">mut </span>paths = main_entries
+            .iter()
+            .map(|entry| entry.ident().path().parent());
         <span class="kw">let </span><span class="kw-2">mut </span>current = paths
             .next()
             .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Chunks must have at least one entry&quot;</span>))<span class="question-mark">?
@@ -678,7 +678,7 @@
                 <span class="kw">let </span>evaluate_entries_ids = evaluate_entries
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.iter()
-                    .map(|entry| entry.path().to_string())
+                    .map(|entry| entry.ident().to_string())
                     .try_join()
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">format!</span>(
@@ -698,7 +698,7 @@
                 entries
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.iter()
-                    .map(|entry| entry.path().to_string())
+                    .map(|entry| entry.ident().to_string())
                     .try_join()
                     .<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
@@ -767,80 +767,76 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(self_vc: EcmascriptChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    </span><span class="kw">async fn </span>ident(self_vc: EcmascriptChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// All information that makes the chunk unique need to be encoded in the path.
-        // As we can&#39;t make the path that long, we split info into &quot;hashed info&quot; and
-        // &quot;named info&quot;. All hashed info is hashed and that hash is appended to
-        // the named info. Together they will make up the path.
-        </span><span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>need_hash = <span class="bool-val">false</span>;
+        <span class="comment">// All information that makes the chunk unique need to be encoded in the params.
 
-        <span class="comment">// evalute only contributes to the hashed info
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = this.evaluate {
-            <span class="kw">let </span>evaluate = evaluate.content(this.context, self_vc).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>ecma_chunks_server_paths = <span class="kw-2">&amp;</span>evaluate.ecma_chunks_server_paths;
-            hasher.write_usize(ecma_chunks_server_paths.len());
-            <span class="kw">for </span>path <span class="kw">in </span>ecma_chunks_server_paths.iter() {
-                hasher.write_ref(path);
-                need_hash = <span class="bool-val">true</span>;
-            }
-            <span class="kw">let </span>other_chunks_server_paths = <span class="kw-2">&amp;</span>evaluate.other_chunks_server_paths;
-            hasher.write_usize(other_chunks_server_paths.len());
-            <span class="kw">for </span>path <span class="kw">in </span>other_chunks_server_paths.iter() {
-                hasher.write_ref(path);
-                need_hash = <span class="bool-val">true</span>;
-            }
-            <span class="kw">let </span>entry_modules_ids = <span class="kw-2">&amp;</span>evaluate.entry_modules_ids;
-            hasher.write_usize(entry_modules_ids.len());
-            <span class="kw">for </span>id <span class="kw">in </span>entry_modules_ids.iter() {
-                hasher.write_value(id.<span class="kw">await</span><span class="question-mark">?</span>);
-                need_hash = <span class="bool-val">true</span>;
-            }
-        }
-        <span class="kw">let </span>main_entries = this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// If there is only a single entry we can used that for the named info.
-        // If there are multiple entries we hash them and use the common parent as named
-        // info.
-        </span><span class="kw">let </span><span class="kw-2">mut </span>path = <span class="kw">if </span>main_entries.len() == <span class="number">1 </span>{
-            <span class="kw">let </span>main_entry = main_entries.iter().next().unwrap();
-            main_entry.path()
+        // All main entries are included
+        </span><span class="kw">let </span>main_entries = this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>main_entry_key = StringVc::cell(String::new());
+        <span class="kw">let </span><span class="kw-2">mut </span>assets = main_entries
+            .iter()
+            .map(|entry| (main_entry_key, entry.ident()))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="comment">// The primary name of the chunk is the only entry or the common parent of all
+        // entries.
+        </span><span class="kw">let </span>path = <span class="kw">if let </span>[(<span class="kw">_</span>, ident)] = <span class="kw-2">&amp;</span>assets[..] {
+            ident.path()
+        } <span class="kw">else if let </span><span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(common_parent) = <span class="kw-2">&amp;*</span>self_vc.common_parent().<span class="kw">await</span><span class="question-mark">? </span>{
+            common_parent
         } <span class="kw">else </span>{
-            hasher.write_usize(main_entries.len());
-            <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;</span>main_entries {
-                <span class="kw">let </span>path = entry.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-                hasher.write_value(path);
-                need_hash = <span class="bool-val">true</span>;
-            }
-            <span class="kw">if let </span><span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(common_parent) = <span class="kw-2">&amp;*</span>self_vc.common_parent().<span class="kw">await</span><span class="question-mark">? </span>{
-                common_parent
-            } <span class="kw">else </span>{
-                <span class="kw">let </span>main_entry = main_entries
-                    .iter()
-                    .next()
-                    .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;chunk must have at least one entry&quot;</span>))<span class="question-mark">?</span>;
-                main_entry.path()
-            }
+            <span class="kw">let </span>(<span class="kw">_</span>, ident) = assets[<span class="number">0</span>];
+            ident.path()
         };
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(omit_entries) = this.omit_entries {
+
+        <span class="comment">// All omit entries are included
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(omit_entries) = this.omit_entries {
             <span class="kw">let </span>omit_entries = omit_entries.<span class="kw">await</span><span class="question-mark">?</span>;
-            hasher.write_usize(omit_entries.len());
-            <span class="kw">for </span>omit_entry <span class="kw">in </span><span class="kw-2">&amp;</span>omit_entries {
-                <span class="kw">let </span>path = omit_entry.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-                hasher.write_value(path);
+            <span class="kw">let </span>omit_entry_key = StringVc::cell(<span class="string">&quot;omit&quot;</span>.to_string());
+            <span class="kw">for </span>entry <span class="kw">in </span>omit_entries.iter() {
+                assets.push((omit_entry_key, entry.ident()))
             }
-            need_hash = <span class="bool-val">true</span>;
         }
 
-        <span class="kw">if </span>need_hash {
-            <span class="kw">let </span>hash = hasher.finish();
-            <span class="kw">let </span>hash = encode_hex(hash);
-            <span class="kw">let </span>truncated_hash = <span class="kw-2">&amp;</span>hash[..<span class="number">6</span>];
-            path = path.append_to_stem(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;_{}&quot;</span>, truncated_hash))
+        <span class="comment">// Evaluate info is included
+        </span><span class="kw">let </span><span class="kw-2">mut </span>modifiers = Vec::new();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = this.evaluate {
+            <span class="kw">let </span>evaluate = evaluate.content(this.context, self_vc).<span class="kw">await</span><span class="question-mark">?</span>;
+            modifiers.extend(
+                evaluate
+                    .ecma_chunks_server_paths
+                    .iter()
+                    .cloned()
+                    .map(StringVc::cell),
+            );
+            modifiers.extend(
+                evaluate
+                    .other_chunks_server_paths
+                    .iter()
+                    .cloned()
+                    .map(StringVc::cell),
+            );
+            modifiers.extend(evaluate.entry_modules_ids.iter().map(|id| id.to_string()));
         }
 
-        <span class="prelude-val">Ok</span>(this.context.chunk_path(path, <span class="string">&quot;.js&quot;</span>))
+        <span class="comment">// Simplify when it&#39;s only a single main entry without extra info
+        </span><span class="kw">let </span>ident = <span class="kw">if </span>assets.len() == <span class="number">1 </span>&amp;&amp; modifiers.is_empty() {
+            assets[<span class="number">0</span>].<span class="number">1
+        </span>} <span class="kw">else </span>{
+            AssetIdentVc::new(Value::new(AssetIdent {
+                path,
+                query: <span class="prelude-val">None</span>,
+                fragment: <span class="prelude-val">None</span>,
+                assets,
+                modifiers,
+            }))
+        };
+
+        <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
+            this.context.chunk_path(ident, <span class="string">&quot;.js&quot;</span>),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -907,7 +903,7 @@
         details += <span class="string">&quot;Chunk items:\n\n&quot;</span>;
         <span class="kw">for </span>chunk <span class="kw">in </span>chunk_items.iter() {
             <span class="kw">for </span>item <span class="kw">in </span>chunk.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
             }
         }
         details += <span class="string">&quot;\nContent:\n\n&quot;</span>;

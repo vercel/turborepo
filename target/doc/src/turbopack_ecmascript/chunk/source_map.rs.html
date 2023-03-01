@@ -81,11 +81,15 @@
 <span id="81">81</span>
 <span id="82">82</span>
 <span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    chunk::Chunk,
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
     source_map::GenerateSourceMap,
@@ -110,10 +114,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptChunkSourceMapAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
         <span class="comment">// NOTE(alexkirsz) We used to include the chunk&#39;s version id in the path,
         // but this caused `all_assets_map` to be recomputed on every change.
-        </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.chunk.path().append(<span class="string">&quot;.map&quot;</span>))
+        </span><span class="prelude-val">Ok</span>(AssetIdentVc::from_path(<span class="self">self</span>.chunk.path().append(<span class="string">&quot;.map&quot;</span>)))
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -55,11 +55,13 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemEntryType, FileSystemPathVc, LinkContent};
 
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 
@@ -81,8 +83,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>SourceAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        AssetIdentVc::from_path(<span class="self">self</span>.path)
     }
 
     <span class="attr">#[turbo_tasks::function]

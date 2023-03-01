@@ -342,6 +342,11 @@
 <span id="342">342</span>
 <span id="343">343</span>
 <span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -399,8 +404,8 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.iter()
             .map(|a| <span class="kw">async </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">if </span><span class="kw-2">*</span>a.path().extension().<span class="kw">await</span><span class="question-mark">? </span>!= <span class="string">&quot;map&quot; </span>{
-                    <span class="prelude-val">Some</span>(a.content().write(a.path()))
+                <span class="prelude-val">Ok</span>(<span class="kw">if </span><span class="kw-2">*</span>a.ident().path().extension().<span class="kw">await</span><span class="question-mark">? </span>!= <span class="string">&quot;map&quot; </span>{
+                    <span class="prelude-val">Some</span>(a.content().write(a.ident().path()))
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
                 </span>})
@@ -482,7 +487,12 @@
             // others as &quot;external&quot;. We follow references on &quot;internal&quot; assets, but do not
             // look into references of &quot;external&quot; assets, since there are no &quot;internal&quot;
             // assets behind &quot;externals&quot;
-            </span><span class="kw">if </span>asset.path().<span class="kw">await</span><span class="question-mark">?</span>.is_inside(intermediate_output_path) {
+            </span><span class="kw">if </span>asset
+                .ident()
+                .path()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.is_inside(intermediate_output_path)
+            {
                 <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
                 <span class="kw">for </span>reference <span class="kw">in </span>asset.references().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                     <span class="kw">for </span>asset <span class="kw">in </span>reference.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
@@ -659,9 +669,9 @@
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
             };
 
-            <span class="kw">let </span>path = <span class="kw">match </span>to_sys_path(a.path()).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">let </span>path = <span class="kw">match </span>to_sys_path(a.ident().path()).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="prelude-val">Some</span>(p) =&gt; p,
-                <span class="prelude-val">None </span>=&gt; PathBuf::from(<span class="kw-2">&amp;</span>a.path().<span class="kw">await</span><span class="question-mark">?</span>.path),
+                <span class="prelude-val">None </span>=&gt; PathBuf::from(<span class="kw-2">&amp;</span>a.ident().path().<span class="kw">await</span><span class="question-mark">?</span>.path),
             };
 
             <span class="kw">let </span>p = path.strip_prefix(<span class="kw-2">&amp;</span>root).unwrap();

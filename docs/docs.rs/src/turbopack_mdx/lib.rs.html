@@ -196,21 +196,17 @@
 <span id="196">196</span>
 <span id="197">197</span>
 <span id="198">198</span>
-<span id="199">199</span>
-<span id="200">200</span>
-<span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mdxjs::compile;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
     virtual_asset::VirtualAssetVc,
@@ -224,6 +220,11 @@
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
 };
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;mdx&quot;</span>.to_string())
+}
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone, Copy)]
@@ -256,8 +257,8 @@
     </span><span class="kw">let </span>mdx_jsx_component =
         compile(<span class="kw-2">&amp;</span>file.content().to_str()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>Default::default()).map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;{}&quot;</span>, e))<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>source = VirtualAssetVc::new(
-        this.source.path(),
+    <span class="kw">let </span>source = VirtualAssetVc::new_with_ident(
+        this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );
     <span class="prelude-val">Ok</span>(EcmascriptModuleAssetVc::new(
@@ -293,8 +294,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>MdxModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -340,7 +341,7 @@
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>MdxModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>origin_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+        <span class="self">self</span>.source.ident().path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -356,18 +357,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>MdxChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;{} (mdx)&quot;</span>,
-            <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.source.path().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>MdxChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
         <span class="self">self</span>.module.references()
@@ -379,11 +374,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
     }
 
     <span class="doccomment">/// Once we have mdx contents, we should treat it as j|tsx components and

@@ -113,7 +113,7 @@
                 <span class="macro">bail!</span>(
                     <span class="string">&quot;runtime reference resolved to an asset ({}) that is not placeable into an \
                      ecmascript chunk&quot;</span>,
-                    asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>);
             }
         }

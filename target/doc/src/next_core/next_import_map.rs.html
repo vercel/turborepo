@@ -951,7 +951,7 @@
     );
     <span class="kw">let </span>assets = result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>asset = assets.first().context(<span class="string">&quot;Next.js package not found&quot;</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(asset.path().parent())
+    <span class="prelude-val">Ok</span>(asset.ident().path().parent())
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -965,7 +965,7 @@
     );
     <span class="kw">let </span>assets = result.primary_assets().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>asset = assets.first().context(<span class="string">&quot;Next.js package not found&quot;</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(asset.path().parent())
+    <span class="prelude-val">Ok</span>(asset.ident().path().parent())
 }
 
 <span class="kw">pub async fn </span>insert_alias_option&lt;<span class="kw">const </span>N: usize&gt;(

@@ -395,6 +395,7 @@
 <span id="395">395</span>
 <span id="396">396</span>
 <span id="397">397</span>
+<span id="398">398</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -409,6 +410,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     context::AssetContext,
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
@@ -430,7 +432,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>TsConfigIssue {
     <span class="kw">pub </span>severity: IssueSeverityVc,
-    <span class="kw">pub </span>path: FileSystemPathVc,
+    <span class="kw">pub </span>source_ident: AssetIdentVc,
     <span class="kw">pub </span>message: StringVc,
 }
 
@@ -453,7 +455,7 @@
                 }
                 TsConfigIssue {
                     severity: IssueSeverity::Error.into(),
-                    path: tsconfig.path(),
+                    source_ident: tsconfig.ident(),
                     message: StringVc::cell(message),
                 }
                 .cell()
@@ -464,7 +466,7 @@
             FileJsonContent::NotFound =&gt; {
                 TsConfigIssue {
                     severity: IssueSeverity::Error.into(),
-                    path: tsconfig.path(),
+                    source_ident: tsconfig.ident(),
                     message: StringVc::cell(<span class="string">&quot;tsconfig not found&quot;</span>.into()),
                 }
                 .cell()
@@ -475,7 +477,7 @@
             FileJsonContent::Content(json) =&gt; {
                 configs.push((parsed_data, tsconfig));
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(extends) = json[<span class="string">&quot;extends&quot;</span>].as_str() {
-                    <span class="kw">let </span>context = tsconfig.path().parent();
+                    <span class="kw">let </span>context = tsconfig.ident().path().parent();
                     <span class="kw">let </span>result = resolve(
                         context,
                         RequestVc::parse(Value::new(extends.to_string().into())),
@@ -492,7 +494,7 @@
                     } <span class="kw">else </span>{
                         TsConfigIssue {
                             severity: IssueSeverity::Error.into(),
-                            path: tsconfig.path(),
+                            source_ident: tsconfig.ident(),
                             message: StringVc::cell(<span class="string">&quot;extends doesn&#39;t resolve correctly&quot;</span>.into()),
                         }
                         .cell()
@@ -556,7 +558,7 @@
     <span class="kw">let </span>base_url = <span class="kw">if let </span><span class="prelude-val">Some</span>(base_url) = read_from_tsconfigs(<span class="kw-2">&amp;</span>configs, |json, source| {
         json[<span class="string">&quot;compilerOptions&quot;</span>][<span class="string">&quot;baseUrl&quot;</span>]
             .as_str()
-            .map(|base_url| source.path().parent().try_join(base_url))
+            .map(|base_url| source.ident().path().parent().try_join(base_url))
     })
     .<span class="kw">await</span><span class="question-mark">?
     </span>{
@@ -569,7 +571,7 @@
     <span class="kw">for </span>(content, source) <span class="kw">in </span>configs.iter().rev() {
         <span class="kw">if let </span>FileJsonContent::Content(json) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>JsonValue::Object(paths) = <span class="kw-2">&amp;</span>json[<span class="string">&quot;compilerOptions&quot;</span>][<span class="string">&quot;paths&quot;</span>] {
-                <span class="kw">let </span><span class="kw-2">mut </span>context = source.path().parent();
+                <span class="kw">let </span><span class="kw-2">mut </span>context = source.ident().path().parent();
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(base_url) = json[<span class="string">&quot;compilerOptions&quot;</span>][<span class="string">&quot;baseUrl&quot;</span>].as_str() {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(new_context) = <span class="kw-2">*</span>context.try_join(base_url).<span class="kw">await</span><span class="question-mark">? </span>{
                         context = new_context;
@@ -588,7 +590,7 @@
                     } <span class="kw">else </span>{
                         TsConfigIssue {
                             severity: IssueSeverity::Warning.cell(),
-                            path: source.path(),
+                            source_ident: source.ident(),
                             message: StringVc::cell(<span class="macro">format!</span>(
                                 <span class="string">&quot;compilerOptions.paths[{key}] doesn&#39;t contains an array as \
                                  expected\n{key}: {value:#}&quot;</span>,
@@ -784,7 +786,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+        <span class="self">self</span>.source_ident.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

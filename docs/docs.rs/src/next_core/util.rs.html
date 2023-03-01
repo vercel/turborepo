@@ -292,6 +292,7 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>swc_core::ecma::ast::Program;
@@ -300,6 +301,7 @@
 <span class="kw">use </span>turbopack::condition::ContextCondition;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::{
@@ -399,7 +401,7 @@
 <span class="doccomment">/// An issue that occurred while resolving the React Refresh runtime module.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextSourceConfigParsingIssue {
-    path: FileSystemPathVc,
+    ident: AssetIdentVc,
     detail: StringVc,
 }
 
@@ -422,7 +424,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.path
+        <span class="self">self</span>.ident.path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -467,7 +469,7 @@
                                 <span class="kw">return </span><span class="prelude-val">Ok</span>(parse_config_from_js_value(module_asset, <span class="kw-2">&amp;</span>value).cell());
                             } <span class="kw">else </span>{
                                 NextSourceConfigParsingIssue {
-                                    path: module_asset.path(),
+                                    ident: module_asset.ident(),
                                     detail: StringVc::cell(
                                         <span class="string">&quot;The exported config object must contain an variable \
                                          initializer.&quot;
@@ -492,7 +494,7 @@
     <span class="kw">let </span>invalid_config = |detail: <span class="kw-2">&amp;</span>str, value: <span class="kw-2">&amp;</span>JsValue| {
         <span class="kw">let </span>(explainer, hints) = value.explain(<span class="number">2</span>, <span class="number">0</span>);
         NextSourceConfigParsingIssue {
-            path: module_asset.path(),
+            ident: module_asset.ident(),
             detail: StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;{detail} Got {explainer}.{hints}&quot;</span>)),
         }
         .cell()

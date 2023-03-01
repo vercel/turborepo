@@ -273,7 +273,7 @@
     assets.insert(asset);
     <span class="kw">while let </span><span class="prelude-val">Some</span>((parent, references)) = queue.pop_front() {
         IssueVc::attach_context(
-            parent.path(),
+            parent.ident().path(),
             <span class="string">&quot;expanding references of asset&quot;</span>.to_string(),
             references,
         )

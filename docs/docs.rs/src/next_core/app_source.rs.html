@@ -734,12 +734,14 @@
 <span id="734">734</span>
 <span id="735">735</span>
 <span id="736">736</span>
+<span id="737">737</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
@@ -1452,7 +1454,7 @@ import BOOTSTRAP from {};
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
                 this.context.compile_time_info(),
-                InnerAssetsVc::cell(HashMap::from([(<span class="string">&quot;ROUTE_CHUNK_GROUP&quot;</span>.to_string(), entry)])),
+                InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;ROUTE_CHUNK_GROUP&quot;</span>.to_string(), entry)])),
             ),
             chunking_context,
             intermediate_output_path: this.intermediate_output_path,

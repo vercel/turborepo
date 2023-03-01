@@ -172,7 +172,7 @@
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ModuleId, ModuleIdReadRef},
+    chunk::{ChunkItem, ModuleId, ModuleIdReadRef},
     code_builder::{Code, CodeBuilder, CodeReadRef, CodeVc},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
 };
@@ -306,7 +306,7 @@
                 <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span>error_message)<span class="question-mark">?</span>;
                 <span class="kw">let </span>issue = CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
-                    path: chunk_item.related_path(),
+                    path: chunk_item.asset_ident().path(),
                     title: StringVc::cell(<span class="string">&quot;Code generation for chunk item errored&quot;</span>.to_string()),
                     message: StringVc::cell(error_message),
                 }

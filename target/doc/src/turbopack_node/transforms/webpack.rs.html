@@ -192,6 +192,7 @@
 <span id="192">192</span>
 <span id="193">193</span>
 <span id="194">194</span>
+<span id="195">195</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -202,6 +203,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -292,8 +294,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>WebpackLoadersProcessedAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -349,7 +351,7 @@
         <span class="kw">let </span>context = this.evaluate_context;
 
         <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(project_root, context);
-        <span class="kw">let </span>resource_fs_path = this.source.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>resource_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
         <span class="kw">let </span>loaders = this.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>config_value = evaluate(
@@ -357,7 +359,7 @@
             webpack_loaders_executor,
             project_root,
             env,
-            this.source.path(),
+            this.source.ident(),
             context,
             intermediate_output_path,
             <span class="prelude-val">None</span>,

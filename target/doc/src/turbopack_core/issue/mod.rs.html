@@ -603,7 +603,7 @@
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>turbo_tasks::{
     emit,
-    primitives::{BoolVc, StringVc, U64Vc},
+    primitives::{BoolVc, StringReadRef, StringVc, U64Vc},
     CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
     ValueToString, ValueToStringVc,
 };
@@ -1141,7 +1141,7 @@
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
 #[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>PlainAsset {
-    <span class="kw">pub </span>path: String,
+    <span class="kw">pub </span>ident: StringReadRef,
     <span class="attr">#[turbo_tasks(debug_ignore)]
     </span><span class="kw">pub </span>content: FileContentReadRef,
 }
@@ -1157,7 +1157,7 @@
         };
 
         <span class="prelude-val">Ok</span>(PlainAsset {
-            path: asset.path().<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
+            ident: asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
             content,
         }
         .cell())

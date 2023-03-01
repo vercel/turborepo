@@ -231,6 +231,7 @@
 <span id="231">231</span>
 <span id="232">232</span>
 <span id="233">233</span>
+<span id="234">234</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -244,8 +245,8 @@
 </span><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
+<span class="kw">use </span>turbo_tasks_fs::FileContent;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
@@ -253,6 +254,7 @@
         ChunkingContextVc,
     },
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 <span class="kw">use </span>turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
@@ -264,6 +266,11 @@
     },
     utils::stringify_js,
 };
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;static&quot;</span>.to_string())
+}
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
@@ -294,8 +301,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>StaticModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.source.path()
+    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.source.ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -353,8 +360,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>StaticAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="kw">let </span>source_path = <span class="self">self</span>.source.path();
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="kw">let </span>source_path = <span class="self">self</span>.source.ident().path();
         <span class="kw">let </span>content = <span class="self">self</span>.source.content();
         <span class="kw">let </span>content_hash = <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>FileContent::Content(file) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -370,7 +377,7 @@
             <span class="prelude-val">Some</span>(ext) =&gt; <span class="self">self</span>.context.asset_path(<span class="kw-2">&amp;</span>content_hash_b16, ext),
             <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.context.asset_path(<span class="kw-2">&amp;</span>content_hash_b16, <span class="string">&quot;bin&quot;</span>),
         };
-        <span class="prelude-val">Ok</span>(asset_path)
+        <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(asset_path))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -387,23 +394,20 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleChunkItem {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;{} (static)&quot;</span>,
-            <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.source.path().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ModuleChunkItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
+        <span class="self">self</span>.module.ident()
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[SingleAssetReferenceVc::new(
             <span class="self">self</span>.static_asset.into(),
-            StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;static(url) {}&quot;</span>, <span class="self">self</span>.static_asset.path().<span class="kw">await</span><span class="question-mark">?</span>)),
+            StringVc::cell(<span class="macro">format!</span>(
+                <span class="string">&quot;static(url) {}&quot;</span>,
+                <span class="self">self</span>.static_asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
+            </span>)),
         )
         .into()]))
     }
@@ -417,16 +421,11 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
-        <span class="self">self</span>.module.path()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: <span class="macro">format!</span>(
                 <span class="string">&quot;__turbopack_export_value__({path});&quot;</span>,
-                path = stringify_js(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="kw-2">&amp;*</span><span class="self">self</span>.static_asset.path().<span class="kw">await</span><span class="question-mark">?</span>))
+                path = stringify_js(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="kw-2">&amp;*</span><span class="self">self</span>.static_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>))
             )
             .into(),
             ..Default::default()
@@ -446,7 +445,10 @@
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[SingleAssetReferenceVc::new(
             <span class="self">self</span>.static_asset.into(),
-            StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;static(url) {}&quot;</span>, <span class="self">self</span>.static_asset.path().<span class="kw">await</span><span class="question-mark">?</span>)),
+            StringVc::cell(<span class="macro">format!</span>(
+                <span class="string">&quot;static(url) {}&quot;</span>,
+                <span class="self">self</span>.static_asset.ident().path().<span class="kw">await</span><span class="question-mark">?
+            </span>)),
         )
         .into()]))
     }

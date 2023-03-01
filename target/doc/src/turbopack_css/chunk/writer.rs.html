@@ -160,6 +160,9 @@
 <span id="160">160</span>
 <span id="161">161</span>
 <span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashSet, VecDeque},
     io::Write,
@@ -167,7 +170,10 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
-<span class="kw">use </span>turbopack_core::{chunk::ModuleId, code_builder::CodeBuilder};
+<span class="kw">use </span>turbopack_core::{
+    chunk::{ChunkItem, ModuleId},
+    code_builder::CodeBuilder,
+};
 
 <span class="kw">use super</span>::{CssChunkItemVc, CssImport};
 <span class="kw">use </span><span class="kw">crate</span>::chunk::CssChunkItem;
@@ -199,7 +205,7 @@
                     <span class="kw">continue</span>;
                 }
 
-                <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>imported_chunk_item.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>imported_chunk_item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">writeln!</span>(code, <span class="string">&quot;/* import({}) */&quot;</span>, id)<span class="question-mark">?</span>;
                 <span class="macro">writeln!</span>(code, <span class="string">&quot;{}&quot;</span>, open)<span class="question-mark">?</span>;
 
@@ -216,7 +222,7 @@
                     <span class="kw">continue</span>;
                 }
 
-                <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>composed_chunk_item.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>composed_chunk_item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">writeln!</span>(code, <span class="string">&quot;/* composes({}) */&quot;</span>, id)<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>composed_content_vc = composed_chunk_item.content();
