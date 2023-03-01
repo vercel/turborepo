@@ -92,10 +92,16 @@ mod tests {
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
         let buf = AbsoluteNormalizedPathBuf::from("/foo/bar".into())?;
         assert_eq!("/foo/bar", format!("{}", buf));
-        assert_eq!("AbsNormPathBuf(\"/foo/bar\")", format!("{:?}", buf));
+        assert_eq!(
+            "AbsoluteNormalizedPathBuf(\"/foo/bar\")",
+            format!("{:?}", buf)
+        );
         let refpath: &AbsoluteNormalizedPath = &buf;
         assert_eq!("/foo/bar", format!("{}", refpath));
-        assert_eq!("AbsNormPath(\"/foo/bar\")", format!("{:?}", refpath));
+        assert_eq!(
+            "AbsoluteNormalizedPath(\"/foo/bar\")",
+            format!("{:?}", refpath)
+        );
 
         Ok(())
     }

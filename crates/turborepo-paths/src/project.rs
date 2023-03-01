@@ -102,22 +102,23 @@ impl ProjectRoot {
     /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/buck/BUCK".into())?,
-    ///         fs.resolve(ProjectRelativePath::new("buck/BUCK")?)
+    ///         AbsoluteNormalizedPathBuf::from("/usr/local/vercel/turbo/turbo.json".into())?,
+    ///         fs.resolve(ProjectRelativePath::new("turbo/turbo.json")?)
     ///     );
     /// } else {
-    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("c:/open/fbsource/buck/BUCK".into())?,
-    ///         fs.resolve(ProjectRelativePath::new("buck/BUCK")?)
+    ///         AbsoluteNormalizedPathBuf::from("c:/open/vercel/turbo/turbo.json".into())?,
+    ///         fs.resolve(ProjectRelativePath::new("turbo/turbo.json")?)
     ///     );
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn resolve(&self, path: impl PathLike) -> AbsoluteNormalizedPathBuf {
         path.resolve(self).into_owned()
@@ -134,15 +135,15 @@ impl ProjectRoot {
     /// use turborepo_paths::project_relative_path::ProjectRelativePath;
     ///
     /// let root = if cfg!(not(windows)) {
-    ///     AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?
+    ///     AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?
     /// } else {
-    ///     AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?
+    ///     AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?
     /// };
     /// let fs = ProjectRoot::new_unchecked(root);
     ///
     /// assert_eq!(
-    ///     PathBuf::from("buck/BUCK"),
-    ///     fs.as_relative_path(ProjectRelativePath::new("buck/BUCK")?)
+    ///     PathBuf::from("turbo/turbo.json"),
+    ///     fs.as_relative_path(ProjectRelativePath::new("turbo/turbo.json")?)
     /// );
     ///
     /// # anyhow::Ok(())
@@ -165,29 +166,29 @@ impl ProjectRoot {
     /// use turborepo_paths::project::ProjectRoot;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new("/usr/local/fbsource/src/buck.java")?)?
+    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteNormalizedPath::new("/usr/local/vercel/src/turbo.js")?)?
     ///     );
     ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("/other/path")?).is_err());
     /// } else {
-    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/fbsource/".into())?;
+    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new("c:/open/fbsource/src/buck.java")?)?
+    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteNormalizedPath::new("c:/open/vercel/src/turbo.js")?)?
     ///     );
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new(r"C:\open\fbsource\src\buck.java")?)?
+    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteNormalizedPath::new(r"C:\open\vercel\src\turbo.js")?)?
     ///     );
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/buck.java")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new(r"\\?\C:\open\fbsource\src\buck.java")?)?
+    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteNormalizedPath::new(r"\\?\C:\open\vercel\src\turbo.js")?)?
     ///     );
     ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("c:/other/path")?).is_err());
     /// }

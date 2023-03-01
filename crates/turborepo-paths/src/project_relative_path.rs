@@ -10,10 +10,10 @@
 //!
 //! 'ProjectRelativePath's are normalized, platform agnostic, forward pointing
 //! relative paths based at the `project root`.
-//! The `project root` is an 'AbsPath' that corresponds to the root of the buck
-//! process. This is not the current directory where the buck process is
-//! invoked. It is the path of the root of the buck project, which defines the
-//! buck version and configurations.
+//! The `project root` is an 'AbsPath' that corresponds to the root of the turbo
+//! process. This is not the current directory where the turbo process is
+//! invoked. It is the path of the root of the turborepo, which defines the
+//! turbo version and configurations.
 //!
 //! The 'ProjectFilesystem' is the filesystem containing the `project root`
 //! information. This file system is used to interact with the
@@ -22,8 +22,7 @@
 //!
 //! Sample uses
 //! ```
-//! use turborepo_paths::project::ProjectRoot
-//! ;
+//! use turborepo_paths::project::ProjectRoot;
 //! use turborepo_paths::project_relative_path::{ProjectRelativePathBuf, ProjectRelativePath};
 //! use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPathBuf, AbsoluteNormalizedPath};
 //! use turborepo_paths::forward_relative_path::ForwardRelativePath;
@@ -31,25 +30,25 @@
 //! use std::{borrow::Cow, convert::TryFrom};
 //!
 //! let root = if cfg!(not(windows)) {
-//!     AbsoluteNormalizedPathBuf::from("/usr/local/fbsource/".into())?
+//!     AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?
 //! } else {
-//!     AbsoluteNormalizedPathBuf::from("C:\\open\\fbsource\\".into())?
+//!     AbsoluteNormalizedPathBuf::from("C:\\open\\vercel\\".into())?
 //! };
 //! let some_path = if cfg!(not(windows)) {
-//!     AbsoluteNormalizedPath::new("/usr/local/fbsource/buck/BUCK")?
+//!     AbsoluteNormalizedPath::new("/usr/local/vercel/turbo/turbo.json")?
 //! } else {
-//!     AbsoluteNormalizedPath::new("c:/open/fbsource/buck/BUCK")?
+//!     AbsoluteNormalizedPath::new("c:/open/vercel/turbo/turbo.json")?
 //! };
 //!
 //! let fs = ProjectRoot::new_unchecked(root);
 //! let project_rel = fs.relativize(some_path)?;
 //!
-//! assert_eq!(Cow::Borrowed(ProjectRelativePath::new("buck/BUCK")?), project_rel);
+//! assert_eq!(Cow::Borrowed(ProjectRelativePath::new("turbo/turbo.json")?), project_rel);
 //! assert_eq!(some_path.to_buf(), fs.resolve(project_rel.as_ref()));
 //!
 //! let rel_path = RelativePath::new("../src");
 //! let project_rel_2 = project_rel.join_normalized(rel_path)?;
-//! assert_eq!(ProjectRelativePathBuf::try_from("buck/src".to_owned())?, project_rel_2);
+//! assert_eq!(ProjectRelativePathBuf::try_from("turbo/src".to_owned())?, project_rel_2);
 //!
 //! assert_eq!(some_path.join_normalized(rel_path)?, fs.resolve(&project_rel_2).to_buf());
 //!

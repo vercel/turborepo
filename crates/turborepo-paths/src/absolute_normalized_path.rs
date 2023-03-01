@@ -108,6 +108,7 @@ impl AbsoluteNormalizedPath {
     /// } else {
     ///    assert!(AbsoluteNormalizedPath::new("/foo/bar").is_ok());
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn new<P: ?Sized + AsRef<Path>>(p: &P) -> anyhow::Result<&AbsoluteNormalizedPath> {
         let path = AbsolutePath::new(p.as_ref())?;
@@ -129,6 +130,7 @@ impl AbsoluteNormalizedPath {
     ///     let abs_path = AbsoluteNormalizedPath::new("C:\\my")?;
     ///     assert_eq!("C:\\my\\foo\\bar", abs_path.join(ForwardRelativePath::new("foo/bar")?).to_string());
     /// }
+    /// # anyhow::Ok(())
     /// ```
     #[allow(clippy::collapsible_else_if)]
     pub fn join<P: AsRef<ForwardRelativePath>>(&self, path: P) -> AbsoluteNormalizedPathBuf {
@@ -169,6 +171,7 @@ impl AbsoluteNormalizedPath {
     ///         AbsoluteNormalizedPath::new("c:/")?.parent()
     ///     );
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn parent(&self) -> Option<&AbsoluteNormalizedPath> {
         self.0.parent().map(AbsoluteNormalizedPath::ref_cast)
@@ -228,6 +231,7 @@ impl AbsoluteNormalizedPath {
     ///     assert!(shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share2\foo")?).is_err());
     ///     assert!(shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share\fo")?).is_err());
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn strip_prefix<P: AsRef<AbsoluteNormalizedPath>>(
         &self,
@@ -276,6 +280,7 @@ impl AbsoluteNormalizedPath {
     ///     assert!(!shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share2\foo")?));
     ///     assert!(!shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share\fo")?));
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn starts_with<P: AsRef<AbsoluteNormalizedPath>>(&self, base: P) -> bool {
         self.starts_with_impl(base.as_ref())
@@ -316,7 +321,7 @@ impl AbsoluteNormalizedPath {
     ///     let abs_path = AbsoluteNormalizedPath::new("c:/some/foo")?;
     ///     assert!(abs_path.ends_with("foo"));
     /// }
-    ///    
+    /// # anyhow::Ok(())    
     /// ```
     pub fn ends_with<P: AsRef<Path>>(&self, child: P) -> bool {
         self.0.ends_with(child.as_ref())
@@ -348,6 +353,7 @@ impl AbsoluteNormalizedPath {
     ///         true
     ///     );
     /// }
+    /// # anyhow::Ok(())
     /// ```
     pub fn join_normalized<P: AsRef<RelativePath>>(
         &self,
