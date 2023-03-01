@@ -99,8 +99,7 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a [Read]/[AsyncRead]/[Stream]/[Iterator] instance over all
-    /// bytes.
+    /// Returns a [Read]/[AsyncRead]/[Iterator] instance over all bytes.
     pub fn read(&self) -> RopeReader {
         RopeReader::new(&self.data, 0)
     }
@@ -392,18 +391,18 @@ impl PartialEq for Rope {
         let mut left = RopeReader::new(left, index);
         let mut right = RopeReader::new(right, index);
         loop {
-            match (left.next_internal(), right.next_internal()) {
-                (Some((a, ai)), Some((b, bi))) => {
-                    let alen = a.len() - ai;
-                    let blen = b.len() - bi;
-                    let len = min(alen, blen);
+            match (left.fill_buf(), right.fill_buf()) {
+                // fill_buf should always return Ok, with either some number of bytes or 0 bytes
+                // when consumed.
+                (Ok(a), Ok(b)) => {
+                    let len = min(a.len(), b.len());
 
                     // When one buffer is consumed, both must be consumed.
                     if len == 0 {
-                        return alen == blen;
+                        return a.len() == b.len();
                     }
 
-                    if a[ai..ai + len] != b[bi..bi + len] {
+                    if a[0..len] != b[0..len] {
                         return false;
                     }
 
@@ -411,7 +410,8 @@ impl PartialEq for Rope {
                     right.consume(len);
                 }
 
-                (None, None) => return true,
+                // If an error is ever returned (which shouldn't happen for us) for either/both,
+                // then we can't prove equality.
                 _ => return false,
             }
         }
@@ -537,7 +537,7 @@ impl DeterministicHash for RopeElem {
     }
 }
 
-/// Implements the [Read]/[AsyncRead]/[Stream]/[Iterator] trait over a [Rope].
+/// Implements the [Read]/[AsyncRead]/[Iterator] trait over a [Rope].
 #[derive(Debug, Default)]
 pub struct RopeReader<'a> {
     // root: InnerRope,
@@ -654,14 +654,17 @@ impl<'a> BufRead for RopeReader<'a> {
     }
 
     fn consume(&mut self, amt: usize) {
-        let Some(StackElem::Local(bytes, offset)) = self.stack.last_mut() else {
-            unreachable!();
+        if let Some(StackElem::Local(bytes, offset)) = self.stack.last_mut() {
+            if *offset + amt < bytes.len() {
+                *offset += amt;
+            } else {
+                debug_assert!(
+                    *offset + amt == bytes.len(),
+                    "cannot over-consume RopeReader"
+                );
+                self.stack.pop();
+            }
         };
-        if *offset + amt < bytes.len() {
-            *offset += amt;
-        } else {
-            self.stack.pop();
-        }
     }
 }
 
