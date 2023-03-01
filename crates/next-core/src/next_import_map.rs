@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result};
-use turbo_tasks::{debug::ValueDebug, Value, ValueToString};
+use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystem, FileSystemPathVc};
 use turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
 use turbopack_core::{
@@ -419,11 +419,6 @@ pub async fn get_next_package(project_path: FileSystemPathVc) -> Result<FileSyst
             "next/package.json".to_string(),
         ))),
         package_lookup_resolve_options(project_path),
-    );
-    println!(
-        "{} in {}",
-        result.dbg().await?,
-        project_path.to_string().await?
     );
     let assets = result.primary_assets().await?;
     let asset = assets.first().context("Next.js package not found")?;
