@@ -1,8 +1,15 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
-use dunce::canonicalize as fs_canonicalize;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{absolute_normalized_path::AbsoluteNormalizedPathBuf, project::ProjectRoot};
+use turborepo_paths::{
+    absolute_normalized_path::AbsoluteNormalizedPathBuf,
+    fs_util,
+    project::ProjectRoot,
+    project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
+};
 
 use crate::Error;
 
@@ -21,25 +28,45 @@ use crate::Error;
 ///
 /// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
-    repo_root: String,
+    repo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
-    // If the relative_to is an absolute path we attempt to make it root relative
-    let relative_to = relative_to
-        .and_then(|rel| rel.strip_prefix(&repo_root))
-        .or(relative_to);
+    // Initialize repository at repo root
+    let repo = Repository::open(&repo_root)?;
+    let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
 
-    let repo_root =
-        ProjectRoot::new(AbsoluteNormalizedPathBuf::from(repo_root).map_err(Error::PathError)?)
-            .map_err(Error::PathError)?;
-    let repo = Repository::open(repo_root.root())?;
+    let relative_to = if let Some(relative_to) = relative_to {
+        let relative_to_path = Path::new(relative_to);
+        if relative_to_path.is_relative() {
+            Some(ProjectRelativePathBuf::unchecked_new(
+                relative_to.to_string(),
+            ))
+        } else {
+            let relative_to = fs_util::canonicalize(relative_to)?;
+            Some(repo_root.relativize(&relative_to)?.to_buf())
+        }
+    } else {
+        None
+    };
+
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
+    add_changed_files_from_unstaged_changes(
+        &repo,
+        relative_to.as_deref(),
+        &mut files,
+        include_untracked,
+    )?;
 
     if let Some((from_commit, to_commit)) = commit_range {
-        add_changed_files_from_commits(&repo, &mut files, relative_to, from_commit, to_commit)?;
+        add_changed_files_from_commits(
+            &repo,
+            &mut files,
+            relative_to.as_deref(),
+            from_commit,
+            to_commit,
+        )?;
     }
 
     Ok(files)
@@ -47,31 +74,36 @@ pub fn changed_files(
 
 fn add_changed_files_from_unstaged_changes(
     repo: &Repository,
+    relative_to: Option<&ProjectRelativePath>,
     files: &mut HashSet<String>,
-    relative_to: Option<&str>,
     include_untracked: bool,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
     options.include_untracked(include_untracked);
     options.recurse_untracked_dirs(include_untracked);
-    relative_to.map(|relative_to| options.pathspec(relative_to));
+
+    if let Some(relative_to) = relative_to {
+        options.pathspec(relative_to.to_string());
+    }
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
     for delta in diff.deltas() {
         let file = delta.old_file();
-        if let Some(path) = file.path() {
+        if let Some(file_path) = file.path() {
             // NOTE: In the original Go code, `Rel` works even if the base path is not a
             // prefix of the original path. In Rust, `strip_prefix` returns an
             // error if the base path is not a prefix of the original path.
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
-            let path = relative_to.map_or(path, |relative_to| {
-                path.strip_prefix(relative_to).unwrap_or(path)
-            });
+            let project_relative_file_path = relative_to.map_or(Ok(file_path), |relative_to| {
+                file_path.strip_prefix(relative_to.to_string())
+            })?;
+
             files.insert(
-                path.to_str()
-                    .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
+                project_relative_file_path
+                    .to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(file_path.to_path_buf()))?
                     .to_string(),
             );
         }
@@ -83,7 +115,7 @@ fn add_changed_files_from_unstaged_changes(
 fn add_changed_files_from_commits(
     repo: &Repository,
     files: &mut HashSet<String>,
-    relative_to: Option<&str>,
+    relative_to: Option<&ProjectRelativePath>,
     from_commit: &str,
     to_commit: &str,
 ) -> Result<(), Error> {
@@ -95,7 +127,7 @@ fn add_changed_files_from_commits(
     let to_tree = to_commit.tree()?;
     let mut options = relative_to.map(|relative_to| {
         let mut options = DiffOptions::new();
-        options.pathspec(relative_to);
+        options.pathspec(relative_to.to_string());
         options
     });
 
@@ -127,18 +159,18 @@ pub fn previous_content(
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let repo = Repository::open(repo_root)?;
+    let repo = Repository::open(&repo_root)?;
+    let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
     let from_commit_ref = repo.revparse_single(from_commit)?;
     let from_commit = from_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
 
     // Canonicalize so strip_prefix works properly
-    let file_path = fs_canonicalize(file_path)?;
-    let repo_dir = fs_canonicalize(repo.workdir().ok_or(Error::RepositoryNotFound)?)?;
+    let file_path = fs_util::canonicalize(file_path)?;
 
-    let relative_path = file_path.strip_prefix(repo_dir).unwrap_or(&file_path);
+    let relative_path = repo_root.relativize(&file_path)?;
 
-    let file = from_tree.get_path(relative_path)?;
+    let file = from_tree.get_path(Path::new(relative_path.as_str()))?;
     let blob = repo.find_blob(file.id())?;
     let content = blob.content();
 

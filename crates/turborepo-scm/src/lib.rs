@@ -14,8 +14,8 @@ pub enum Error {
     RepositoryNotFound,
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    // We don't implement `From` for `anyhow::Error` because we
-    // don't want to convert all `anyhow::Error` values into a `PathError`
     #[error("path error: {0}")]
-    PathError(anyhow::Error),
+    PathError(#[from] anyhow::Error),
+    #[error("strip prefix error: {0}")]
+    StripPrefixError(#[from] std::path::StripPrefixError),
 }

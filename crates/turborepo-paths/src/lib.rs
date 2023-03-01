@@ -24,6 +24,7 @@
 
 #![feature(type_alias_impl_trait)]
 #![feature(fs_try_exists)]
+#![feature(absolute_path)]
 
 pub mod absolute_normalized_path;
 pub mod absolute_path;
@@ -31,7 +32,7 @@ mod cmp_impls;
 pub mod file_name;
 pub(crate) mod fmt;
 pub mod forward_relative_path;
-mod fs_util;
+pub mod fs_util;
 mod into_filename_buf_iterator;
 mod io_counters;
 pub mod project;
