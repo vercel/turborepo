@@ -112,6 +112,7 @@ pub async fn diff(path: FileSystemPathVc, actual: AssetContentVc) -> Result<()> 
         if *UPDATE {
             let content = File::from(actual).into();
             path.write(content).await?;
+            println!("updated contents of {}", path_str);
         } else {
             if expected.is_none() {
                 eprintln!("new file {path_str} detected:");
