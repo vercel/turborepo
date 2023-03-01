@@ -596,18 +596,15 @@ impl<'a> RopeReader<'a> {
         let mut remaining = want;
 
         while remaining > 0 {
-            let (bytes, offset) = match self.next_internal() {
+            let bytes = match self.next_internal() {
                 None => break,
-                Some(b) => b,
+                Some((b, o)) => &b[o..],
             };
 
-            let len = bytes.len() - offset;
-            let amount = min(len, remaining);
-
-            buf.put_slice(&bytes[offset..offset + amount]);
-
-            self.consume(amount);
-            remaining -= amount;
+            let amt = min(bytes.len(), remaining);
+            buf.put_slice(&bytes[0..amt]);
+            self.consume(amt);
+            remaining -= amt;
         }
 
         want - remaining
@@ -620,6 +617,7 @@ impl<'a> Iterator for RopeReader<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.next_internal().map(|(bytes, offset)| {
             debug_assert!(offset == 0, "cannot mix Iterator with Read/BufRead");
+            self.stack.pop();
             bytes
         })
     }
@@ -679,6 +677,13 @@ impl<'a> From<&'a RopeElem> for StackElem<'a> {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        cmp::min,
+        io::{BufRead, Read},
+    };
+
+    use bytes::Bytes;
+
     use super::{InnerRope, Rope, RopeBuilder, RopeElem};
 
     // These are intentionally not exposed, because they do inefficient conversions
@@ -861,5 +866,75 @@ mod test {
         let b = Rope::new(vec!["abc".into(), shared.into(), "hhh".into()]);
 
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn iteration() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let chunks = rope.read().into_iter().collect::<Vec<&Bytes>>();
+
+        assert_eq!(chunks, vec!["abc", "def", "ghi"]);
+    }
+
+    #[test]
+    fn read() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut buf = [0_u8; 2];
+        let mut reader = rope.read();
+        loop {
+            let amt = reader.read(&mut buf).unwrap();
+            if amt == 0 {
+                break;
+            }
+            chunks.push(Vec::from(&buf[0..amt]));
+        }
+
+        assert_eq!(
+            chunks,
+            vec![
+                Vec::from(*b"ab"),
+                Vec::from(*b"cd"),
+                Vec::from(*b"ef"),
+                Vec::from(*b"gh"),
+                Vec::from(*b"i")
+            ]
+        );
+    }
+
+    #[test]
+    fn fill_buf() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut reader = rope.read();
+        loop {
+            let buf = reader.fill_buf().unwrap();
+            if buf.is_empty() {
+                break;
+            }
+            let c = min(2, buf.len());
+            chunks.push(Vec::from(buf));
+            reader.consume(c);
+        }
+
+        assert_eq!(
+            chunks,
+            // We're receiving a full buf, then only consuming 2 bytes, so we'll still get the
+            // third.
+            vec![
+                Vec::from(*b"abc"),
+                Vec::from(*b"c"),
+                Vec::from(*b"def"),
+                Vec::from(*b"f"),
+                Vec::from(*b"ghi"),
+                Vec::from(*b"i")
+            ]
+        );
     }
 }
