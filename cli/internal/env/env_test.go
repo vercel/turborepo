@@ -30,7 +30,7 @@ var _envVarPrefixes = []string{
 	"VUE_APP_",
 }
 
-func TestGetHashableEnvPairs(t *testing.T) {
+func TestGetHashableEnvVars(t *testing.T) {
 	type args struct {
 		envKeys     []string
 		envPrefixes []string
@@ -282,8 +282,8 @@ func TestGetHashableEnvPairs(t *testing.T) {
 			// set the env vars
 			setEnvs(tt.env)
 			// test
-			if got := Get(tt.args.envKeys, tt.args.envPrefixes).Composite.ToHashable(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetHashableEnvPairs() = %v, want %v", got, tt.want)
+			if got := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes).All.ToHashable(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %#v, want %#v", got, tt.want)
 			}
 			// clean up the env for the next run
 			os.Clearenv()

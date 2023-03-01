@@ -300,8 +300,8 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		envPrefixes = append(envPrefixes, framework.EnvPrefix)
 	}
 
-	envMap := env.Get(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
-	hashableEnvPairs := envMap.Composite.ToHashable()
+	envVars := env.GetHashableEnvVars(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
+	hashableEnvPairs := envVars.All.ToHashable()
 	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
@@ -325,7 +325,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}
 	th.mu.Lock()
-	th.packageTaskEnvVars[packageTask.TaskID] = envMap
+	th.packageTaskEnvVars[packageTask.TaskID] = envVars
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	if framework != nil {
 		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug

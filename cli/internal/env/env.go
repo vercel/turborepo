@@ -6,26 +6,24 @@ import (
 	"os"
 	"sort"
 	"strings"
-
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
-// Details contains a map of environment variables broken down by the source
-type Details struct {
+// EnvironmentVariableMap is a map of env variables and their values
+type EnvironmentVariableMap map[string]string
+
+// BySource contains a map of environment variables broken down by the source
+type BySource struct {
 	Explicit EnvironmentVariableMap
 	Prefixed EnvironmentVariableMap
 }
 
 // DetailedMap contains the composite and the detailed maps of environment variables
-// Composite is used as a taskhash input (taskhash.CalculateTaskHash)
-// Details is used to print out a Dry Run Summary
+// All is used as a taskhash input (taskhash.CalculateTaskHash)
+// BySoure is used to print out a Dry Run Summary
 type DetailedMap struct {
-	Composite EnvironmentVariableMap
-	Details   Details
+	All      EnvironmentVariableMap
+	BySource BySource
 }
-
-// EnvironmentVariableMap is a map of env variables and their values
-type EnvironmentVariableMap map[string]string
 
 // Merge takes another EnvironmentVariableMap and merges it into the receiver
 // It overwrites values if they already exist, but since the source of both will be os.Environ()
@@ -43,14 +41,11 @@ type EnvironmentVariablePairs []string
 // It takes a transformer value to operate on each key-value pair and return a string
 func (evm EnvironmentVariableMap) mapToPair(transformer func(k string, v string) string) EnvironmentVariablePairs {
 	// convert to set to eliminate duplicates
-	unique := make(util.Set, len(evm))
+	pairs := make([]string, 0, len(evm))
 	for k, v := range evm {
 		paired := transformer(k, v)
-		unique.Add(paired)
+		pairs = append(pairs, paired)
 	}
-
-	// turn it into a slice
-	pairs := unique.UnsafeListOfStrings()
 
 	// sort it so it's deterministic
 	sort.Strings(pairs)
@@ -115,8 +110,8 @@ func fromPrefixes(all EnvironmentVariableMap, includes []string, exclude string)
 	return output
 }
 
-// Get returns all sorted key=value env var pairs for both frameworks and from envKeys
-func Get(keys []string, prefixes []string) DetailedMap {
+// GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
+func GetHashableEnvVars(keys []string, prefixes []string) DetailedMap {
 	all := getEnvMap()
 	excludePrefix := all["TURBO_CI_VENDOR_ENV_KEY"] // this might not be set
 
@@ -129,8 +124,8 @@ func Get(keys []string, prefixes []string) DetailedMap {
 	envVars.Merge(prefixed)
 
 	detailedMap := DetailedMap{
-		Composite: envVars,
-		Details: Details{
+		All: envVars,
+		BySource: BySource{
 			Explicit: explicit,
 			Prefixed: prefixed,
 		},

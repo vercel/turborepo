@@ -129,8 +129,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		hash := packageTask.Hash
 		envVars := taskEnvVarSummary{
-			Configured: packageTask.HashedEnvVars.Details.Explicit.ToSecretHashable(),
-			Inferred:   packageTask.HashedEnvVars.Details.Prefixed.ToSecretHashable(),
+			Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
+			Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
 		}
 
 		command := missingTaskLabel
