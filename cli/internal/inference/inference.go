@@ -6,7 +6,7 @@ import "github.com/vercel/turbo/cli/internal/fs"
 type Framework struct {
 	Slug            string
 	EnvPrefix       string
-	DependencyMatch matcher `json:"-"`
+	DependencyMatch matcher
 }
 
 type matcher struct {

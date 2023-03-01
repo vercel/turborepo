@@ -153,6 +153,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		if err != nil {
 			return err
 		}
+
 		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
 		if err != nil {
 			return err
