@@ -128,6 +128,10 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		hash := packageTask.Hash
+		envVars := taskEnvVarSummary{
+			Configured: packageTask.HashedEnvVars.Details.Explicit.ToSecretHashable(),
+			Inferred:   packageTask.HashedEnvVars.Details.Prefixed.ToSecretHashable(),
+		}
 
 		command := missingTaskLabel
 		if packageTask.Command != "" {
@@ -171,6 +175,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			Command:                command,
 			Framework:              framework,
 			ExpandedInputs:         packageTask.ExpandedInputs,
+			EnvVars:                envVars,
 
 			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
@@ -310,6 +315,10 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspa
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
+
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))
+
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
@@ -350,6 +359,7 @@ type taskSummary struct {
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
+	EnvVars                taskEnvVarSummary                     `json:"environmentVariables"`
 }
 
 type singlePackageTaskSummary struct {
@@ -365,6 +375,7 @@ type singlePackageTaskSummary struct {
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
+	EnvVars                taskEnvVarSummary                     `json:"environmentVariables"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -389,5 +400,11 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
+		EnvVars:                ht.EnvVars,
 	}
+}
+
+type taskEnvVarSummary struct {
+	Configured []string `json:"configured"`
+	Inferred   []string `json:"inferred"`
 }

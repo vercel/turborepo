@@ -36,7 +36,8 @@ type Tracker struct {
 	mu                          sync.RWMutex
 	packageInputsHashes         packageFileHashes
 	packageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
-	packageTaskHashes           map[string]string // taskID -> hash
+	packageTaskEnvVars          map[string]env.DetailedMap // key is taskID
+	packageTaskHashes           map[string]string          // taskID -> hash
 	PackageTaskFramework        map[string]string
 }
 
@@ -48,6 +49,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		pipeline:             pipeline,
 		packageTaskHashes:    make(map[string]string),
 		PackageTaskFramework: make(map[string]string),
+		packageTaskEnvVars:   make(map[string]env.DetailedMap),
 	}
 }
 
@@ -323,6 +325,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}
 	th.mu.Lock()
+	th.packageTaskEnvVars[packageTask.TaskID] = envMap
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	if framework != nil {
 		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
@@ -343,4 +346,9 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 	}
 
 	return inputsCopy
+}
+
+// GetEnvVars returns the hashed env vars
+func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
+	return th.packageTaskEnvVars[taskID]
 }
