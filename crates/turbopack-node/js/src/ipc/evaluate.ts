@@ -27,9 +27,11 @@ type IpcOutgoingMessage =
   | {
       type: "emittedError";
       severity: "warning" | "error";
-      name: string;
-      message: string;
-      stack: string[];
+      error: {
+        name: string;
+        message: string;
+        stack: string[];
+      };
     };
 
 export type Ipc = GenericIpc<IpcIncomingMessage, IpcOutgoingMessage>;

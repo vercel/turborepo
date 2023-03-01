@@ -263,20 +263,11 @@ pub async fn evaluate(
                     cwd.join(&path).read_glob(GlobVc::new(&glob), false),
                 ));
             }
-            EvalJavaScriptIncomingMessage::EmittedError {
-                name,
-                message,
-                stack,
-                severity,
-            } => {
+            EvalJavaScriptIncomingMessage::EmittedError { error, severity } => {
                 EvaluateEmittedErrorIssue {
                     context: context_path_for_issue,
                     cwd,
-                    error: StructuredError {
-                        name,
-                        message,
-                        stack,
-                    },
+                    error,
                     severity: severity.cell(),
                 }
                 .cell()

@@ -107,14 +107,14 @@ export { transform as default };
 
 function makeErrorEmitter(severity: "warning" | "error", ipc: Ipc) {
   return function (error: Error | string) {
-    const errorObject = error instanceof Error ? error : new Error(error);
-
     ipc.send({
       type: "emittedError",
-      severity: "warning",
-      name: errorObject.name,
-      message: errorObject.message,
-      stack: parseStackTrace(errorObject.stack),
+      severity: severity,
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? parseStackTrace(error.stack) : [],
+      },
     });
   };
 }

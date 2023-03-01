@@ -265,9 +265,7 @@ enum EvalJavaScriptIncomingMessage {
     },
     EmittedError {
         severity: IssueSeverity,
-        name: String,
-        message: String,
-        stack: Vec<StackFrame>,
+        error: StructuredError,
     },
     Error(StructuredError),
 }
