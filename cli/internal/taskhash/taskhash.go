@@ -327,7 +327,6 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	th.mu.Lock()
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	th.HashableEnvPairs[packageTask.TaskID] = hashableEnvPairs
-	th.PackageTaskFramework[packageTask.TaskID] = framework
 	if framework != nil {
 		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
 	}
