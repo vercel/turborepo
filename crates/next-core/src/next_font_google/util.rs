@@ -179,7 +179,6 @@ pub(crate) fn get_stylesheet_url(
     }
 
     let first_variant = variants.first();
-    println!("first variant {:?}", first_variant);
     match first_variant {
         None => Ok(format!(
             "{}?family={}&display={}",
