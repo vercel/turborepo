@@ -98,9 +98,11 @@ export default function startHandler({
       // throw when we pass a relative URL.
       let resolvedPath = new URL(renderData.url, "next://").pathname;
       if (isDataReq) {
+        // we still want to match data requests so we remove the prefix and extension
+        // to get back the path the page would have
         resolvedPath = resolvedPath.replace(
           /^\/_next\/data\/development(.+).json$/,
-          (_, args) => args
+          "$1"
         );
       }
       if (
@@ -108,7 +110,6 @@ export default function startHandler({
         // TODO(alexkirsz) Strip basePath.
         !prerenderRoutes.includes(resolvedPath)
       ) {
-        // console.log("prerender not found:", resolvedPath, "   prerendered:", prerenderRoutes);
         return createNotFoundResponse(isDataReq);
       }
     }
