@@ -5,7 +5,6 @@ use std::{
 
 use git2::{DiffFormat, DiffOptions, Repository};
 use turborepo_paths::{
-    absolute_normalized_path::AbsoluteNormalizedPathBuf,
     fs_util,
     project::ProjectRoot,
     project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
