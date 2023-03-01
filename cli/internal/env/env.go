@@ -9,18 +9,18 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-// Details contains a map of environment variables broken down by the source
-type Details struct {
+// BySource contains a map of environment variables broken down by the source
+type BySource struct {
 	Explicit EnvironmentVariableMap
 	Prefixed EnvironmentVariableMap
 }
 
 // DetailedMap contains the composite and the detailed maps of environment variables
-// Composite is used as a taskhash input (taskhash.CalculateTaskHash)
-// Details is used to print out a Dry Run Summary
+// All is used as a taskhash input (taskhash.CalculateTaskHash)
+// BySoure is used to print out a Dry Run Summary
 type DetailedMap struct {
-	Composite EnvironmentVariableMap
-	Details   Details
+	All      EnvironmentVariableMap
+	BySource BySource
 }
 
 // EnvironmentVariableMap is a map of env variables and their values
@@ -97,8 +97,8 @@ func fromPrefixes(all EnvironmentVariableMap, includes []string, exclude string)
 	return output
 }
 
-// Get returns all sorted key=value env var pairs for both frameworks and from envKeys
-func Get(keys []string, prefixes []string) DetailedMap {
+// GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
+func GetHashableEnvVars(keys []string, prefixes []string) DetailedMap {
 	all := getEnvMap()
 	excludePrefix := all["TURBO_CI_VENDOR_ENV_KEY"] // this might not be set
 
@@ -111,8 +111,8 @@ func Get(keys []string, prefixes []string) DetailedMap {
 	envVars.Merge(prefixed)
 
 	detailedMap := DetailedMap{
-		Composite: envVars,
-		Details: Details{
+		All: envVars,
+		BySource: BySource{
 			Explicit: explicit,
 			Prefixed: prefixed,
 		},
