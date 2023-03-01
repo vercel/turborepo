@@ -77,7 +77,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			packageTask,
 			taskGraph.DownEdges(taskID),
 			logger,
-			getArgs(taskID),
+			getArgs(taskName),
 		)
 
 		if err != nil {
