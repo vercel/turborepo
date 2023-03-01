@@ -6,7 +6,7 @@ use hyper::{
 };
 use mime_guess::mime;
 use turbo_tasks::TransientInstance;
-use turbo_tasks_fs::{FileContent, FileContentReadRef};
+use turbo_tasks_fs::{rope::Rope, FileContent, FileContentReadRef};
 use turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 
 use crate::source::{
@@ -118,25 +118,13 @@ pub async fn process_request_with_content_source(
                     )?);
                 }
 
+                let content = file.content();
                 header_map.insert(
                     "Content-Length",
-                    HeaderValue::try_from(file.content().len().to_string())?,
+                    HeaderValue::try_from(content.len().to_string())?,
                 );
 
-                let content = content.clone();
-                let (mut writer, body) = HyperBody::channel();
-                tokio::spawn(async move {
-                    let FileContent::Content(file) = &*content else {
-                        unreachable!();
-                    };
-                    let bytes = file.read();
-                    for b in bytes {
-                        writer.send_data(b.clone()).await?;
-                    }
-                    anyhow::Ok(())
-                });
-
-                return Ok(response.body(body)?);
+                return Ok(response.body(stream_rope(content.clone()))?);
             }
         }
         GetFromSourceResult::HttpProxy(proxy_result) => {
@@ -150,21 +138,23 @@ pub async fn process_request_with_content_source(
                 );
             }
 
-            let proxy_result = proxy_result.clone();
-            let (mut writer, body) = HyperBody::channel();
-            tokio::spawn(async move {
-                let bytes = proxy_result.body.read();
-                for b in bytes {
-                    writer.send_data(b.clone()).await?;
-                }
-                anyhow::Ok(())
-            });
-            return Ok(response.body(body)?);
+            return Ok(response.body(stream_rope(proxy_result.body.clone()))?);
         }
         _ => {}
     }
 
     Ok(Response::builder().status(404).body(HyperBody::empty())?)
+}
+
+fn stream_rope(rope: Rope) -> HyperBody {
+    let (mut writer, body) = HyperBody::channel();
+    tokio::spawn(async move {
+        for b in rope.read() {
+            writer.send_data(b.clone()).await?;
+        }
+        anyhow::Ok(())
+    });
+    body
 }
 
 async fn http_request_to_source_request(request: Request<HyperBody>) -> Result<SourceRequest> {
