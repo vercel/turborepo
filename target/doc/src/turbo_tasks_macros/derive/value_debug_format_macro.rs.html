@@ -105,6 +105,21 @@
 <span id="105">105</span>
 <span id="106">106</span>
 <span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -159,10 +174,24 @@
     .into()
 }
 
+<span class="doccomment">/// Formats a single field nested inside named or unnamed fields.
+</span><span class="kw">fn </span>format_field(value: TokenStream2) -&gt; TokenStream2 {
+    <span class="macro">quote! </span>{
+        <span class="kw">match </span>#value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">match </span>result.<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(result) =&gt; result.to_string(),
+                <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, err),
+            },
+            <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, err),
+        }
+    }
+}
+
 <span class="doccomment">/// Formats a struct or enum variant with named fields (e.g. `struct Foo {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 </span><span class="kw">fn </span>format_named(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsNamed) -&gt; (TokenStream2, TokenStream2) {
     <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>fields_values = fields_idents.iter().cloned().map(format_field);
     (
         captures,
         <span class="macro">quote! </span>{
@@ -171,7 +200,7 @@
                 <span class="macro">vec!</span>[#(
                     FormattingField::new(
                         <span class="macro">stringify!</span>(#fields_idents),
-                        #fields_idents.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
+                        #fields_values,
                     ),
                 )<span class="kw-2">*</span>],
             )
@@ -183,13 +212,14 @@
 /// Foo(u32)`, `Foo::Bar(u32)`).
 </span><span class="kw">fn </span>format_unnamed(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsUnnamed) -&gt; (TokenStream2, TokenStream2) {
     <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>fields_values = fields_idents.into_iter().map(format_field);
     (
         captures,
         <span class="macro">quote! </span>{
             FormattingStruct::new_unnamed(
                 <span class="macro">stringify!</span>(#ident),
                 <span class="macro">vec!</span>[#(
-                    #fields_idents.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
+                    #fields_values,
                 )<span class="kw-2">*</span>],
             )
         },
