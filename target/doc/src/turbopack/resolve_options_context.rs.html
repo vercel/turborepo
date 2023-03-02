@@ -103,7 +103,11 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     environment::EnvironmentVc,
     resolve::{
@@ -122,7 +126,9 @@
     <span class="kw">pub </span>enable_typescript: bool,
     <span class="kw">pub </span>enable_react: bool,
     <span class="kw">pub </span>enable_node_native_modules: bool,
-    <span class="kw">pub </span>enable_node_modules: bool,
+    <span class="doccomment">/// Enable resolving of the node_modules folder when withing the provided
+    /// directory
+    </span><span class="kw">pub </span>enable_node_modules: <span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;,
     <span class="doccomment">/// Mark well-known Node.js modules as external imports and load them using
     /// native `require`. e.g. url, querystring, os
     </span><span class="kw">pub </span>enable_node_externals: bool,

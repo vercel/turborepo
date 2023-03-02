@@ -251,8 +251,10 @@
 <span id="251">251</span>
 <span id="252">252</span>
 <span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
@@ -428,7 +430,9 @@
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;CONFIG&quot;</span>.to_string(), config_asset)])),
+        InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+            <span class="string">&quot;CONFIG&quot;</span>.to_string() =&gt; config_asset
+        }),
     )
     .into()
 }
@@ -448,7 +452,7 @@
         };
 
         <span class="kw">let </span>ExecutionContext {
-            project_root,
+            project_path,
             intermediate_output_path,
             env,
         } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -472,9 +476,9 @@
         <span class="kw">let </span>css_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>css_path = css_fs_path.path.as_str();
         <span class="kw">let </span>config_value = evaluate(
-            project_root,
+            project_path,
             postcss_executor,
-            project_root,
+            project_path,
             env,
             this.source.ident(),
             context,

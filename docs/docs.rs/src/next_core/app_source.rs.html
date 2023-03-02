@@ -735,13 +735,14 @@
 <span id="735">735</span>
 <span id="736">736</span>
 <span id="737">737</span>
+<span id="738">738</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
@@ -783,7 +784,7 @@
         next_layout_entry_transition::NextLayoutEntryTransition, LayoutSegment, LayoutSegmentsVc,
     },
     app_structure::{AppStructure, AppStructureItem, AppStructureVc, OptionAppStructureVc},
-    embed_js::{next_js_file, wrap_with_next_js_fs},
+    embed_js::next_js_file,
     env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
@@ -1051,8 +1052,6 @@
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
-    <span class="kw">let </span>project_path = wrap_with_next_js_fs(project_path);
-
     <span class="kw">let </span><span class="prelude-val">Some</span>(app_structure) = <span class="kw-2">*</span>app_structure.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
     };
@@ -1100,7 +1099,7 @@
         next_config,
     );
 
-    <span class="prelude-val">Ok</span>(create_app_source_for_directory(
+    <span class="kw">let </span>source = create_app_source_for_directory(
         app_structure,
         context_ssr,
         context,
@@ -1109,7 +1108,8 @@
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         output_path,
-    ))
+    );
+    <span class="prelude-val">Ok</span>(source)
 }
 
 <span class="attr">#[allow(clippy::too_many_arguments)]
@@ -1454,7 +1454,9 @@ import BOOTSTRAP from {};
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
                 this.context.compile_time_info(),
-                InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;ROUTE_CHUNK_GROUP&quot;</span>.to_string(), entry)])),
+                InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+                    <span class="string">&quot;ROUTE_CHUNK_GROUP&quot;</span>.to_string() =&gt; entry
+                }),
             ),
             chunking_context,
             intermediate_output_path: this.intermediate_output_path,

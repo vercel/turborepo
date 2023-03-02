@@ -282,7 +282,7 @@
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
@@ -306,7 +306,7 @@
 <span class="kw">use </span><span class="kw">super</span>::transforms::get_next_client_transforms_rules;
 <span class="kw">use crate</span>::{
     babel::maybe_add_babel_loader,
-    embed_js::attached_next_js_package_path,
+    embed_js::next_js_fs,
     env::env_for_js,
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
@@ -367,7 +367,7 @@
     <span class="kw">let </span>next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     <span class="kw">let </span>next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
     <span class="kw">let </span>module_options_context = ResolveOptionsContext {
-        enable_node_modules: <span class="bool-val">true</span>,
+        enable_node_modules: <span class="prelude-val">Some</span>(project_path.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>),
         custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
         import_map: <span class="prelude-val">Some</span>(next_client_import_map),
         fallback_import_map: <span class="prelude-val">Some</span>(next_client_fallback_import_map),
@@ -546,7 +546,7 @@
                 RequestVc::parse(Value::new(Pattern::Constant(
                     <span class="string">&quot;./dev/bootstrap.ts&quot;</span>.to_string(),
                 ))),
-                attached_next_js_package_path(project_root).join(<span class="string">&quot;_&quot;</span>),
+                next_js_fs().root().join(<span class="string">&quot;_&quot;</span>),
             )
             .cell(),
         );

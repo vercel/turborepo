@@ -143,11 +143,12 @@
 <span id="143">143</span>
 <span id="144">144</span>
 <span id="145">145</span>
+<span id="146">146</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>serde_json::Value;
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>indexmap::indexmap;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -155,15 +156,16 @@
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_dev_server::source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc};
 <span class="kw">use </span>turbopack_ecmascript::{
     utils::stringify_js, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
-<span class="kw">use crate</span>::{embed_js::next_js_file, util::get_asset_path_from_route};
+<span class="kw">use crate</span>::{embed_js::next_js_file_path, util::get_asset_path_from_route};
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>create_page_loader(
@@ -207,7 +209,8 @@
             stringify_js(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="kw-2">&amp;*</span>this.pathname.<span class="kw">await</span><span class="question-mark">?</span>))
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>base_code = next_js_file(<span class="string">&quot;entry/page-loader.ts&quot;</span>);
+        <span class="kw">let </span>page_loader_path = next_js_file_path(<span class="string">&quot;entry/page-loader.ts&quot;</span>);
+        <span class="kw">let </span>base_code = page_loader_path.read();
         <span class="kw">if let </span>FileContent::Content(base_file) = <span class="kw-2">&amp;*</span>base_code.<span class="kw">await</span><span class="question-mark">? </span>{
             result += base_file.content()
         } <span class="kw">else </span>{
@@ -216,11 +219,7 @@
 
         <span class="kw">let </span>file = File::from(result.build());
 
-        <span class="prelude-val">Ok</span>(VirtualAssetVc::new(
-            this.entry_asset.ident().path().join(<span class="string">&quot;page-loader.ts&quot;</span>),
-            file.into(),
-        )
-        .into())
+        <span class="prelude-val">Ok</span>(VirtualAssetVc::new(page_loader_path, file.into()).into())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -229,12 +228,15 @@
 
         <span class="kw">let </span>loader_entry_asset = <span class="self">self</span>.get_loader_entry_asset();
 
-        <span class="kw">let </span>asset = EcmascriptModuleAssetVc::new(
+        <span class="kw">let </span>asset = EcmascriptModuleAssetVc::new_with_inner_assets(
             loader_entry_asset,
             this.client_context,
-            turbo_tasks::Value::new(EcmascriptModuleAssetType::Typescript),
+            Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
             this.client_context.compile_time_info(),
+            InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+                <span class="string">&quot;PAGE&quot;</span>.to_string() =&gt; this.client_context.process(this.entry_asset, Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)))
+            }),
         );
 
         <span class="kw">let </span>chunk_group =
@@ -264,13 +266,13 @@
         <span class="kw">let </span><span class="kw-2">mut </span>data = Vec::with_capacity(chunks.len());
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
             <span class="kw">let </span>path = chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
-            data.push(Value::String(path.path.clone()));
+            data.push(serde_json::Value::String(path.path.clone()));
         }
 
         <span class="kw">let </span>content = <span class="macro">format!</span>(
             <span class="string">&quot;__turbopack_load_page_chunks__({}, {})\n&quot;</span>,
             stringify_js(<span class="kw-2">&amp;</span>this.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
-            Value::Array(data)
+            serde_json::Value::Array(data)
         );
 
         <span class="prelude-val">Ok</span>(AssetContentVc::from(File::from(content)))

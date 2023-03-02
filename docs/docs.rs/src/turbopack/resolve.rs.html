@@ -414,9 +414,9 @@
             }
         } <span class="kw">else </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>mods = Vec::new();
-            <span class="kw">if </span>opt.enable_node_modules {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(dir) = opt.enable_node_modules {
                 mods.push(ResolveModules::Nested(
-                    root,
+                    dir,
                     <span class="macro">vec!</span>[<span class="string">&quot;node_modules&quot;</span>.to_string()],
                 ));
             }

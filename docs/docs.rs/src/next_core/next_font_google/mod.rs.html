@@ -378,8 +378,6 @@
 <span id="378">378</span>
 <span id="379">379</span>
 <span id="380">380</span>
-<span id="381">381</span>
-<span id="382">382</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
@@ -404,7 +402,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::options::FontWeights;
 <span class="kw">use crate</span>::{
-    embed_js::attached_next_js_package_path,
+    embed_js::next_js_file_path,
     next_font_google::{
         options::FontDataEntry,
         util::{get_font_axes, get_stylesheet_url},
@@ -458,8 +456,8 @@
         <span class="kw">let </span>properties =
             get_font_css_properties(get_scoped_font_family(<span class="kw-2">*</span>query_vc), options).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>js_asset = VirtualAssetVc::new(
-                attached_next_js_package_path(<span class="self">self</span>.project_path)
-                    .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;internal/font/google/{}.js&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>)),
+                next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
+                    .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>)),
                 FileContent::Content(
                     <span class="macro">formatdoc!</span>(
                         <span class="string">r#&quot;
@@ -537,10 +535,8 @@
         <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options);
         <span class="kw">let </span>scoped_font_family = get_scoped_font_family(<span class="kw-2">*</span>query_vc);
-        <span class="kw">let </span>css_virtual_path = attached_next_js_package_path(<span class="self">self</span>.project_path).join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-            <span class="string">&quot;internal/font/google/{}.module.css&quot;</span>,
-            get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?
-        </span>));
+        <span class="kw">let </span>css_virtual_path = next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
+            .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}.module.css&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>));
 
         <span class="kw">let </span>stylesheet_res = fetch(
             stylesheet_url,

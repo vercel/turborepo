@@ -230,8 +230,6 @@
 <span id="230">230</span>
 <span id="231">231</span>
 <span id="232">232</span>
-<span id="233">233</span>
-<span id="234">234</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringsVc},
@@ -240,7 +238,7 @@
 <span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
 <span class="kw">use </span>turbopack_dev_server::source::specificity::SpecificityVc;
 
-<span class="kw">use crate</span>::{embed_js::wrap_with_next_js_fs, next_config::NextConfigVc};
+<span class="kw">use </span><span class="kw">crate</span>::next_config::NextConfigVc;
 
 <span class="doccomment">/// A final route in the pages directory.
 </span><span class="attr">#[turbo_tasks::value]
@@ -347,8 +345,6 @@
     server_root: FileSystemPathVc,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;OptionPagesStructureVc&gt; {
-    <span class="kw">let </span>project_path = wrap_with_next_js_fs(project_path);
-
     <span class="kw">let </span>pages = project_path.join(<span class="string">&quot;pages&quot;</span>);
     <span class="kw">let </span>src_pages = project_path.join(<span class="string">&quot;src/pages&quot;</span>);
     <span class="kw">let </span>pages_dir = <span class="kw">if </span><span class="kw-2">*</span>pages.get_type().<span class="kw">await</span><span class="question-mark">? </span>== FileSystemEntryType::Directory {

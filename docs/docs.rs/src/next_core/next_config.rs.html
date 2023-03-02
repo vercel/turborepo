@@ -609,9 +609,6 @@
 <span id="609">609</span>
 <span id="610">610</span>
 <span id="611">611</span>
-<span id="612">612</span>
-<span id="613">613</span>
-<span id="614">614</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1154,7 +1151,7 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>load_next_config(execution_context: ExecutionContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;NextConfigVc&gt; {
     <span class="kw">let </span>ExecutionContext {
-        project_root,
+        project_path,
         intermediate_output_path,
         env,
     } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1165,8 +1162,8 @@
     import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
     import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
 
-    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()), <span class="prelude-val">None</span>);
-    <span class="kw">let </span>find_config_result = find_context_file(project_root, next_configs());
+    <span class="kw">let </span>context = node_evaluate_asset_context(project_path, <span class="prelude-val">Some</span>(import_map.cell()), <span class="prelude-val">None</span>);
+    <span class="kw">let </span>find_config_result = find_context_file(project_path, next_configs());
     <span class="kw">let </span>config_asset = <span class="kw">match </span><span class="kw-2">&amp;*</span>find_config_result.<span class="kw">await</span><span class="question-mark">? </span>{
         FindContextFileResult::Found(config_path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(SourceAssetVc::new(<span class="kw-2">*</span>config_path)),
         FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
@@ -1184,19 +1181,16 @@
         .as_ecmascript_chunk_placeable();
         EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[config_chunk])
     });
-    <span class="kw">let </span>asset_path = config_asset
-        .map_or(project_root, |a| a.ident().path())
-        .join(<span class="string">&quot;load-next-config.js&quot;</span>);
     <span class="kw">let </span>load_next_config_asset = context.process(
-        next_asset(asset_path, <span class="string">&quot;entry/config/next.js&quot;</span>),
+        next_asset(<span class="string">&quot;entry/config/next.js&quot;</span>),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
     <span class="kw">let </span>config_value = evaluate(
-        project_root,
+        project_path,
         load_next_config_asset,
-        project_root,
+        project_path,
         env,
-        config_asset.map_or_else(|| AssetIdentVc::from_path(project_root), |c| c.ident()),
+        config_asset.map_or_else(|| AssetIdentVc::from_path(project_path), |c| c.ident()),
         context,
         intermediate_output_path,
         runtime_entries,

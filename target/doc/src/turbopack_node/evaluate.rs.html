@@ -393,11 +393,13 @@
 <span id="393">393</span>
 <span id="394">394</span>
 <span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
-<span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -473,6 +475,8 @@
     <span class="kw">let </span>file_name = module_path.file_name();
     <span class="kw">let </span>file_name = <span class="kw">if </span>file_name.ends_with(<span class="string">&quot;.js&quot;</span>) {
         Cow::Borrowed(file_name)
+    } <span class="kw">else if let </span><span class="prelude-val">Some</span>(file_name) = file_name.strip_suffix(<span class="string">&quot;.ts&quot;</span>) {
+        Cow::Owned(<span class="macro">format!</span>(<span class="string">&quot;{file_name}.js&quot;</span>))
     } <span class="kw">else </span>{
         Cow::Owned(<span class="macro">format!</span>(<span class="string">&quot;{file_name}.js&quot;</span>))
     };
@@ -491,10 +495,10 @@
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(IndexMap::from([
-            (<span class="string">&quot;INNER&quot;</span>.to_string(), module_asset),
-            (<span class="string">&quot;RUNTIME&quot;</span>.to_string(), runtime_asset),
-        ])),
+        InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+            <span class="string">&quot;INNER&quot;</span>.to_string() =&gt; module_asset,
+            <span class="string">&quot;RUNTIME&quot;</span>.to_string() =&gt; runtime_asset
+        }),
     );
 
     <span class="kw">let </span>(<span class="prelude-val">Some</span>(cwd), <span class="prelude-val">Some</span>(entrypoint)) = (to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">?</span>, to_sys_path(path).<span class="kw">await</span><span class="question-mark">?</span>) <span class="kw">else </span>{

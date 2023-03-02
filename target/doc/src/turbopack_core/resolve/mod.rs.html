@@ -1284,12 +1284,6 @@
 <span id="1284">1284</span>
 <span id="1285">1285</span>
 <span id="1286">1286</span>
-<span id="1287">1287</span>
-<span id="1288">1288</span>
-<span id="1289">1289</span>
-<span id="1290">1290</span>
-<span id="1291">1291</span>
-<span id="1292">1292</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1986,7 +1980,7 @@
         <span class="kw">let </span>result_ref = import_map.lookup(request).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>result_ref;
         <span class="kw">if </span>!<span class="macro">matches!</span>(result, ImportMapResult::NoEntry) {
-            <span class="kw">let </span>resolve_result_vc =
+            <span class="kw">let </span>resolved_result =
                 resolve_import_map_result(result, context, context, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="comment">// We might have matched an alias in the import map, but there is no guarantee
             // the alias actually resolves to something. For instance, a tsconfig.json
@@ -1994,8 +1988,8 @@
             // would also match a request to &quot;@emotion/core&quot;. Here, we follow what the
             // Typescript resolution algorithm does in case an alias match
             // doesn&#39;t resolve to anything: fall back to resolving the request normally.
-            </span><span class="kw">if </span>!<span class="kw-2">*</span>resolve_result_vc.is_unresolveable().<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_result_vc);
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(result) = resolved_result {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
             }
         }
     }
@@ -2136,10 +2130,10 @@
         <span class="kw">if </span><span class="kw-2">*</span>result.is_unresolveable().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">let </span>result_ref = import_map.lookup(request).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>result_ref;
-            <span class="kw">if </span>!<span class="macro">matches!</span>(result, ImportMapResult::NoEntry) {
-                <span class="kw">let </span>resolve_result_vc =
-                    resolve_import_map_result(result, context, context, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_result_vc);
+            <span class="kw">let </span>resolved_result =
+                resolve_import_map_result(result, context, context, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = resolved_result {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
             }
         }
     }
@@ -2312,9 +2306,9 @@
     original_context: FileSystemPathVc,
     original_request: RequestVc,
     options: ResolveOptionsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ResolveResultVc&gt;&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>result {
-        ImportMapResult::Result(result) =&gt; <span class="kw-2">*</span>result,
+        ImportMapResult::Result(result) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>result),
         ImportMapResult::Alias(request, alias_context) =&gt; {
             <span class="kw">let </span>request = <span class="kw-2">*</span>request;
             <span class="kw">let </span>context = alias_context.unwrap_or(context);
@@ -2322,18 +2316,9 @@
             </span><span class="kw">if </span>request.resolve().<span class="kw">await</span><span class="question-mark">? </span>== original_request
                 &amp;&amp; context.resolve().<span class="kw">await</span><span class="question-mark">? </span>== original_context
             {
-                <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
-                    context: original_context,
-                    request_type: <span class="macro">format!</span>(<span class="string">&quot;import map alias to {}&quot;</span>, request.to_string().<span class="kw">await</span><span class="question-mark">?</span>),
-                    request: original_request,
-                    resolve_options: options,
-                    error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;cycle during resolving&quot;</span>.to_string()),
-                }
-                .cell();
-                issue.as_issue().emit();
-                ResolveResult::unresolveable().cell()
-            } <span class="kw">else </span>{
-                resolve_internal(context, request, options)
+                <span class="prelude-val">None
+            </span>} <span class="kw">else </span>{
+                <span class="prelude-val">Some</span>(resolve_internal(context, request, options))
             }
         }
         ImportMapResult::Alternatives(list) =&gt; {
@@ -2350,9 +2335,11 @@
                 })
                 .try_join()
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            ResolveResultVc::select_first(results)
+            <span class="prelude-val">Some</span>(ResolveResultVc::select_first(
+                results.into_iter().flatten().collect(),
+            ))
         }
-        ImportMapResult::NoEntry =&gt; <span class="macro">unreachable!</span>(),
+        ImportMapResult::NoEntry =&gt; <span class="prelude-val">None</span>,
     })
 }
 
@@ -2362,7 +2349,7 @@
     original_context: FileSystemPathVc,
     original_request: RequestVc,
     options: ResolveOptionsVc,
-) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
+) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ResolveResultVc&gt;&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
     Box::pin(<span class="kw">async move </span>{
         resolve_import_map_result(result, context, original_context, original_request, options)
             .<span class="kw">await
@@ -2449,15 +2436,16 @@
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(resolved_map) = resolved_map {
         <span class="kw">let </span>result = resolved_map.lookup(<span class="kw-2">*</span>path, original_request).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>!<span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>result, ImportMapResult::NoEntry) {
-            <span class="kw">return </span>resolve_import_map_result(
-                <span class="kw-2">&amp;</span>result,
-                path.parent(),
-                original_context,
-                original_request,
-                options,
-            )
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>resolved_result = resolve_import_map_result(
+            <span class="kw-2">&amp;</span>result,
+            path.parent(),
+            original_context,
+            original_request,
+            options,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = resolved_result {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
         }
     }
 

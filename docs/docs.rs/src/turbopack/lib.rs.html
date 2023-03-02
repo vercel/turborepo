@@ -591,21 +591,6 @@
 <span id="591">591</span>
 <span id="592">592</span>
 <span id="593">593</span>
-<span id="594">594</span>
-<span id="595">595</span>
-<span id="596">596</span>
-<span id="597">597</span>
-<span id="598">598</span>
-<span id="599">599</span>
-<span id="600">600</span>
-<span id="601">601</span>
-<span id="602">602</span>
-<span id="603">603</span>
-<span id="604">604</span>
-<span id="605">605</span>
-<span id="606">606</span>
-<span id="607">607</span>
-<span id="608">608</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -768,100 +753,13 @@
     })
 }
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>module(
-    source: AssetVc,
-    context: ModuleAssetContextVc,
-    reference_type: Value&lt;ReferenceType&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
-    <span class="kw">let </span>ident = source.ident().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
-
-    <span class="kw">let </span>reference_type = reference_type.into_value();
-    <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
-    <span class="kw">let </span><span class="kw-2">mut </span>current_module_type = <span class="prelude-val">None</span>;
-    <span class="kw">for </span>rule <span class="kw">in </span>options.<span class="kw">await</span><span class="question-mark">?</span>.rules.iter() {
-        <span class="kw">if </span>rule
-            .matches(source, <span class="kw-2">&amp;*</span>ident.path().<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type)
-            .<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            <span class="kw">for </span>effect <span class="kw">in </span>rule.effects() {
-                <span class="kw">match </span>effect {
-                    ModuleRuleEffect::SourceTransforms(transforms) =&gt; {
-                        current_source = transforms.transform(current_source);
-                        <span class="kw">if </span>current_source.ident().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= ident {
-                            <span class="comment">// The ident has been changed, so we need to apply new rules.
-                            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(module(current_source, context, Value::new(reference_type)));
-                        }
-                    }
-                    ModuleRuleEffect::ModuleType(module) =&gt; {
-                        current_module_type = <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module);
-                    }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) =&gt; {
-                        current_module_type = <span class="kw">match </span>current_module_type {
-                            <span class="prelude-val">Some</span>(ModuleType::Ecmascript(transforms)) =&gt; <span class="prelude-val">Some</span>(
-                                ModuleType::Ecmascript(transforms.extend(<span class="kw-2">*</span>additional_transforms)),
-                            ),
-                            <span class="prelude-val">Some</span>(ModuleType::Typescript(transforms)) =&gt; <span class="prelude-val">Some</span>(
-                                ModuleType::Typescript(transforms.extend(<span class="kw-2">*</span>additional_transforms)),
-                            ),
-                            <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(transforms)) =&gt; {
-                                <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(
-                                    transforms.extend(<span class="kw-2">*</span>additional_transforms),
-                                ))
-                            }
-                            <span class="prelude-val">Some</span>(module_type) =&gt; {
-                                ModuleIssue {
-                                    ident,
-                                    title: StringVc::cell(<span class="string">&quot;Invalid module type&quot;</span>.to_string()),
-                                    description: StringVc::cell(
-                                        <span class="string">&quot;The module type must be Ecmascript or Typescript to add \
-                                         Ecmascript transforms&quot;
-                                            </span>.to_string(),
-                                    ),
-                                }
-                                .cell()
-                                .as_issue()
-                                .emit();
-                                <span class="prelude-val">Some</span>(module_type)
-                            }
-                            <span class="prelude-val">None </span>=&gt; {
-                                ModuleIssue {
-                                    ident,
-                                    title: StringVc::cell(<span class="string">&quot;Missing module type&quot;</span>.to_string()),
-                                    description: StringVc::cell(
-                                        <span class="string">&quot;The module type effect must be applied before adding \
-                                         Ecmascript transforms&quot;
-                                            </span>.to_string(),
-                                    ),
-                                }
-                                .cell()
-                                .as_issue()
-                                .emit();
-                                <span class="prelude-val">None
-                            </span>}
-                        };
-                    }
-                    ModuleRuleEffect::Custom =&gt; {
-                        <span class="macro">todo!</span>(<span class="string">&quot;Custom module rule effects are not yet supported&quot;</span>);
-                    }
-                }
-            }
-        }
-    }
-
-    <span class="kw">let </span>module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
-
-    <span class="prelude-val">Ok</span>(apply_module_type(current_source, context, module_type))
-}
-
 <span class="attr">#[derive(Debug)]
 #[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ModuleAssetContext {
-    transitions: TransitionsByNameVc,
-    compile_time_info: CompileTimeInfoVc,
-    module_options_context: ModuleOptionsContextVc,
-    resolve_options_context: ResolveOptionsContextVc,
+    <span class="kw">pub </span>transitions: TransitionsByNameVc,
+    <span class="kw">pub </span>compile_time_info: CompileTimeInfoVc,
+    <span class="kw">pub </span>module_options_context: ModuleOptionsContextVc,
+    <span class="kw">pub </span>resolve_options_context: ResolveOptionsContextVc,
     transition: <span class="prelude-ty">Option</span>&lt;TransitionVc&gt;,
 }
 
@@ -931,6 +829,98 @@
             resolve_options_context,
         ))
     }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>process_default(
+        self_vc: ModuleAssetContextVc,
+        source: AssetVc,
+        reference_type: Value&lt;ReferenceType&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+        <span class="kw">let </span>ident = source.ident().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>options = ModuleOptionsVc::new(ident.path().parent(), self_vc.module_options_context());
+
+        <span class="kw">let </span>reference_type = reference_type.into_value();
+        <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
+        <span class="kw">let </span><span class="kw-2">mut </span>current_module_type = <span class="prelude-val">None</span>;
+        <span class="kw">for </span>rule <span class="kw">in </span>options.<span class="kw">await</span><span class="question-mark">?</span>.rules.iter() {
+            <span class="kw">if </span>rule
+                .matches(source, <span class="kw-2">&amp;*</span>ident.path().<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type)
+                .<span class="kw">await</span><span class="question-mark">?
+            </span>{
+                <span class="kw">for </span>effect <span class="kw">in </span>rule.effects() {
+                    <span class="kw">match </span>effect {
+                        ModuleRuleEffect::SourceTransforms(transforms) =&gt; {
+                            current_source = transforms.transform(current_source);
+                            <span class="kw">if </span>current_source.ident().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= ident {
+                                <span class="comment">// The ident has been changed, so we need to apply new rules.
+                                </span><span class="kw">return </span><span class="prelude-val">Ok</span>(self_vc
+                                    .process_default(current_source, Value::new(reference_type)));
+                            }
+                        }
+                        ModuleRuleEffect::ModuleType(module) =&gt; {
+                            current_module_type = <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module);
+                        }
+                        ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) =&gt; {
+                            current_module_type = <span class="kw">match </span>current_module_type {
+                                <span class="prelude-val">Some</span>(ModuleType::Ecmascript(transforms)) =&gt; {
+                                    <span class="prelude-val">Some</span>(ModuleType::Ecmascript(
+                                        transforms.extend(<span class="kw-2">*</span>additional_transforms),
+                                    ))
+                                }
+                                <span class="prelude-val">Some</span>(ModuleType::Typescript(transforms)) =&gt; {
+                                    <span class="prelude-val">Some</span>(ModuleType::Typescript(
+                                        transforms.extend(<span class="kw-2">*</span>additional_transforms),
+                                    ))
+                                }
+                                <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(transforms)) =&gt; {
+                                    <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(
+                                        transforms.extend(<span class="kw-2">*</span>additional_transforms),
+                                    ))
+                                }
+                                <span class="prelude-val">Some</span>(module_type) =&gt; {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StringVc::cell(<span class="string">&quot;Invalid module type&quot;</span>.to_string()),
+                                        description: StringVc::cell(
+                                            <span class="string">&quot;The module type must be Ecmascript or Typescript to \
+                                             add Ecmascript transforms&quot;
+                                                </span>.to_string(),
+                                        ),
+                                    }
+                                    .cell()
+                                    .as_issue()
+                                    .emit();
+                                    <span class="prelude-val">Some</span>(module_type)
+                                }
+                                <span class="prelude-val">None </span>=&gt; {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StringVc::cell(<span class="string">&quot;Missing module type&quot;</span>.to_string()),
+                                        description: StringVc::cell(
+                                            <span class="string">&quot;The module type effect must be applied before adding \
+                                             Ecmascript transforms&quot;
+                                                </span>.to_string(),
+                                        ),
+                                    }
+                                    .cell()
+                                    .as_issue()
+                                    .emit();
+                                    <span class="prelude-val">None
+                                </span>}
+                            };
+                        }
+                        ModuleRuleEffect::Custom =&gt; {
+                            <span class="macro">todo!</span>(<span class="string">&quot;Custom module rule effects are not yet supported&quot;</span>);
+                        }
+                    }
+                }
+            }
+        }
+
+        <span class="kw">let </span>module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
+
+        <span class="prelude-val">Ok</span>(apply_module_type(current_source, self_vc, module_type))
+    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -995,7 +985,6 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())
     }
-
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>process(
         self_vc: ModuleAssetContextVc,
@@ -1004,28 +993,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) = this.transition {
-            <span class="kw">let </span>asset = transition.process_source(asset);
-            <span class="kw">let </span>compile_time_info = transition.process_compile_time_info(this.compile_time_info);
-            <span class="kw">let </span>module_options_context =
-                transition.process_module_options_context(this.module_options_context);
-            <span class="kw">let </span>resolve_options_context =
-                transition.process_resolve_options_context(this.resolve_options_context);
-            <span class="kw">let </span>context = ModuleAssetContextVc::new(
-                this.transitions,
-                compile_time_info,
-                module_options_context,
-                resolve_options_context,
-            );
-            <span class="kw">let </span>m = module(asset, context, reference_type);
-            <span class="prelude-val">Ok</span>(transition.process_module(m, context))
+            <span class="prelude-val">Ok</span>(transition.process(asset, self_vc, reference_type))
         } <span class="kw">else </span>{
-            <span class="kw">let </span>context = ModuleAssetContextVc::new(
-                this.transitions,
-                this.compile_time_info,
-                this.module_options_context,
-                this.resolve_options_context,
-            );
-            <span class="prelude-val">Ok</span>(module(asset, context, reference_type))
+            <span class="prelude-val">Ok</span>(self_vc.process_default(asset, reference_type))
         }
     }
 

@@ -202,6 +202,9 @@
 <span id="202">202</span>
 <span id="203">203</span>
 <span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
@@ -272,16 +275,18 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkPlaceable <span class="kw">for </span>WithClientChunksAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk_item(
+    </span><span class="kw">async fn </span>as_chunk_item(
         self_vc: WithClientChunksAssetVc,
         context: ChunkingContextVc,
-    ) -&gt; EcmascriptChunkItemVc {
-        WithClientChunksChunkItem {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(WithClientChunksChunkItem {
             context: context.with_layer(<span class="string">&quot;rsc&quot;</span>),
             inner: self_vc,
+            chunk_item: this.asset.as_chunk_item(context),
         }
         .cell()
-        .into()
+        .into())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -295,6 +300,7 @@
 </span><span class="kw">struct </span>WithClientChunksChunkItem {
     context: ChunkingContextVc,
     inner: WithClientChunksAssetVc,
+    chunk_item: EcmascriptChunkItemVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

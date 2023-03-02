@@ -248,7 +248,7 @@
         <span class="comment">// The next-dev server can currently run against projects as simple as
         // `index.js`. If this isn&#39;t a Next.js project, don&#39;t try to use the Next.js
         // router.
-        </span><span class="kw">let </span>project_root = this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>.project_root;
+        </span><span class="kw">let </span>project_root = this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>.project_path;
         <span class="kw">if </span>!(<span class="kw-2">*</span>has_next_config(project_root).<span class="kw">await</span><span class="question-mark">?</span>) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(this
                 .inner

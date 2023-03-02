@@ -436,6 +436,26 @@
 <span id="436">436</span>
 <span id="437">437</span>
 <span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -643,6 +663,26 @@
     ) {
         <span class="self">self</span>.map
             .insert(AliasPattern::wildcard(prefix, suffix), mapping);
+    }
+
+    <span class="doccomment">/// Inserts an alias that resolves an prefix always from a certain location
+    /// to create a singleton.
+    </span><span class="kw">pub fn </span>insert_singleton_alias&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        prefix: <span class="kw">impl </span>Into&lt;String&gt; + <span class="lifetime">&#39;a</span>,
+        context_path: FileSystemPathVc,
+    ) {
+        <span class="kw">let </span>prefix = prefix.into();
+        <span class="kw">let </span>wildcard_prefix = prefix.clone() + <span class="string">&quot;/&quot;</span>;
+        <span class="kw">let </span>wildcard_alias: String = prefix.clone() + <span class="string">&quot;/*&quot;</span>;
+        <span class="self">self</span>.insert_exact_alias(
+            <span class="kw-2">&amp;</span>prefix,
+            ImportMapping::PrimaryAlternative(prefix.clone(), <span class="prelude-val">Some</span>(context_path)).cell(),
+        );
+        <span class="self">self</span>.insert_wildcard_alias(
+            wildcard_prefix,
+            ImportMapping::PrimaryAlternative(wildcard_alias, <span class="prelude-val">Some</span>(context_path)).cell(),
+        );
     }
 }
 

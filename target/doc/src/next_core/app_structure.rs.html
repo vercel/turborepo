@@ -361,9 +361,6 @@
 <span id="361">361</span>
 <span id="362">362</span>
 <span id="363">363</span>
-<span id="364">364</span>
-<span id="365">365</span>
-<span id="366">366</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -379,7 +376,6 @@
 
 <span class="kw">use crate</span>::{
     app_render::{LayoutSegment, LayoutSegmentVc, LayoutSegmentsVc},
-    embed_js::wrap_with_next_js_fs,
     next_config::NextConfigVc,
 };
 
@@ -467,8 +463,6 @@
     server_root: FileSystemPathVc,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;OptionAppStructureVc&gt; {
-    <span class="kw">let </span>project_path = wrap_with_next_js_fs(project_path);
-
     <span class="kw">if </span>!<span class="kw-2">*</span>next_config.app_dir().<span class="kw">await</span><span class="question-mark">? </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(OptionAppStructureVc::cell(<span class="prelude-val">None</span>));
     }

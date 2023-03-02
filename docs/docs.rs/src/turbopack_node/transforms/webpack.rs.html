@@ -311,10 +311,10 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContextVc) -&gt; AssetVc {
+</span><span class="kw">fn </span>webpack_loaders_executor(project_path: FileSystemPathVc, context: AssetContextVc) -&gt; AssetVc {
     EcmascriptModuleAssetVc::new(
         VirtualAssetVc::new(
-            project_root.join(<span class="string">&quot;__turbopack__/webpack-loaders-executor.ts&quot;</span>),
+            project_path.join(<span class="string">&quot;__turbopack__/webpack-loaders-executor.ts&quot;</span>),
             AssetContent::File(embed_file(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).cell(),
         )
         .into(),
@@ -333,7 +333,7 @@
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>ExecutionContext {
-            project_root,
+            project_path,
             intermediate_output_path,
             env,
         } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -350,14 +350,14 @@
         <span class="kw">let </span>content = content.content().to_str()<span class="question-mark">?</span>;
         <span class="kw">let </span>context = this.evaluate_context;
 
-        <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(project_root, context);
+        <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(project_path, context);
         <span class="kw">let </span>resource_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
         <span class="kw">let </span>loaders = this.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>config_value = evaluate(
-            project_root,
+            project_path,
             webpack_loaders_executor,
-            project_root,
+            project_path,
             env,
             this.source.ident(),
             context,

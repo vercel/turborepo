@@ -22,32 +22,8 @@
 <span id="22">22</span>
 <span id="23">23</span>
 <span id="24">24</span>
-<span id="25">25</span>
-<span id="26">26</span>
-<span id="27">27</span>
-<span id="28">28</span>
-<span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks_fs::{
-    attach::AttachedFileSystemVc, embed_directory, FileContentVc, FileSystem, FileSystemPathVc,
-    FileSystemVc,
-};
-<span class="kw">use </span>turbopack_core::{asset::AssetVc, virtual_asset::VirtualAssetVc};
+</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks_fs::{embed_directory, FileContentVc, FileSystem, FileSystemPathVc, FileSystemVc};
+<span class="kw">use </span>turbopack_core::{asset::AssetVc, source_asset::SourceAssetVc};
 
 <span class="kw">pub const </span>VIRTUAL_PACKAGE_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;@vercel/turbopack-next&quot;</span>;
 
@@ -67,24 +43,8 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>attached_next_js_package_path(
-    project_path: FileSystemPathVc,
-) -&gt; FileSystemPathVc {
-    project_path.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;[embedded_modules]/{}&quot;</span>, VIRTUAL_PACKAGE_NAME))
-}
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>wrap_with_next_js_fs(
-    project_path: FileSystemPathVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-    <span class="kw">let </span>attached_path = attached_next_js_package_path(project_path);
-    <span class="kw">let </span>fs = AttachedFileSystemVc::new(attached_path, next_js_fs());
-    <span class="prelude-val">Ok</span>(fs.convert_path(project_path))
-}
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>next_asset(asset_path: FileSystemPathVc, path: <span class="kw-2">&amp;</span>str) -&gt; AssetVc {
-    VirtualAssetVc::new(asset_path, next_js_file(path).into()).into()
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>next_asset(path: <span class="kw-2">&amp;</span>str) -&gt; AssetVc {
+    SourceAssetVc::new(next_js_file_path(path)).into()
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

@@ -154,6 +154,9 @@
 <span id="154">154</span>
 <span id="155">155</span>
 <span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
@@ -238,16 +241,18 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkPlaceable <span class="kw">for </span>ChunkGroupFilesAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk_item(
+    </span><span class="kw">async fn </span>as_chunk_item(
         self_vc: ChunkGroupFilesAssetVc,
         context: ChunkingContextVc,
-    ) -&gt; EcmascriptChunkItemVc {
-        ChunkGroupFilesChunkItem {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ChunkGroupFilesChunkItem {
             context,
             inner: self_vc,
+            chunk: this.asset.as_chunk(context),
         }
         .cell()
-        .into()
+        .into())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -260,6 +265,7 @@
 </span><span class="kw">struct </span>ChunkGroupFilesChunkItem {
     context: ChunkingContextVc,
     inner: ChunkGroupFilesAssetVc,
+    chunk: ChunkVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

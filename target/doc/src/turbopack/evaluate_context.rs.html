@@ -51,7 +51,12 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::Value;
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::Value;
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
@@ -66,11 +71,12 @@
 };
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>node_evaluate_asset_context(
+</span><span class="kw">pub async fn </span>node_evaluate_asset_context(
+    project_path: FileSystemPathVc,
     import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
     transitions: <span class="prelude-ty">Option</span>&lt;TransitionsByNameVc&gt;,
-) -&gt; AssetContextVc {
-    ModuleAssetContextVc::new(
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContextVc&gt; {
+    <span class="prelude-val">Ok</span>(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
         CompileTimeInfo {
             environment: EnvironmentVc::new(
@@ -93,7 +99,7 @@
         .cell(),
         ResolveOptionsContext {
             enable_typescript: <span class="bool-val">true</span>,
-            enable_node_modules: <span class="bool-val">true</span>,
+            enable_node_modules: <span class="prelude-val">Some</span>(project_path.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>),
             enable_node_externals: <span class="bool-val">true</span>,
             enable_node_native_modules: <span class="bool-val">true</span>,
             custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string(), <span class="string">&quot;node&quot;</span>.to_string()],
@@ -102,7 +108,7 @@
         }
         .cell(),
     )
-    .as_asset_context()
+    .as_asset_context())
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbopack" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

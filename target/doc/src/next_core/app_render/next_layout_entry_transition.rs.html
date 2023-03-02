@@ -82,7 +82,11 @@
 <span id="82">82</span>
 <span id="83">83</span>
 <span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::indexmap;
+<span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
     <span class="self">self</span>,
@@ -91,15 +95,14 @@
     transition::{Transition, TransitionVc},
     ModuleAssetContextVc,
 };
-<span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
-    compile_time_info::CompileTimeInfoVc,
-    virtual_asset::VirtualAssetVc,
+<span class="kw">use </span>turbopack_core::{asset::AssetVc, compile_time_info::CompileTimeInfoVc, context::AssetContext};
+<span class="kw">use </span>turbopack_ecmascript::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
-<span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceableVc;
 
 <span class="kw">use crate</span>::{
-    embed_js::next_js_file, next_client_component::with_client_chunks::WithClientChunksAsset,
+    embed_js::next_asset, next_client_component::with_client_chunks::WithClientChunksAsset,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -112,15 +115,6 @@
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Transition <span class="kw">for </span>NextLayoutEntryTransition {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc) -&gt; AssetVc {
-        VirtualAssetVc::new(
-            asset.ident().path().join(<span class="string">&quot;layout-entry.tsx&quot;</span>),
-            next_js_file(<span class="string">&quot;entry/app/layout-entry.tsx&quot;</span>).into(),
-        )
-        .into()
-    }
-
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>process_compile_time_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -149,21 +143,31 @@
     </span><span class="kw">async fn </span>process_module(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         asset: AssetVc,
-        _context: ModuleAssetContextVc,
+        context: ModuleAssetContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
-        <span class="prelude-val">Ok</span>(
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                WithClientChunksAsset {
-                    asset: placeable,
-                    <span class="comment">// next.js code already adds _next prefix
-                    </span>server_root: <span class="self">self</span>.server_root.join(<span class="string">&quot;_next&quot;</span>),
-                }
-                .cell()
-                .into()
-            } <span class="kw">else </span>{
-                asset
-            },
-        )
+        <span class="kw">let </span>internal_asset = next_asset(<span class="string">&quot;entry/app/layout-entry.tsx&quot;</span>);
+
+        <span class="kw">let </span>asset = EcmascriptModuleAssetVc::new_with_inner_assets(
+            internal_asset,
+            context.into(),
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[
+                EcmascriptInputTransform::TypeScript,
+                EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
+            ]),
+            context.compile_time_info(),
+            InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+                <span class="string">&quot;PAGE&quot;</span>.to_string() =&gt; asset
+            }),
+        );
+
+        <span class="prelude-val">Ok</span>(WithClientChunksAsset {
+            asset: asset.into(),
+            <span class="comment">// next.js code already adds _next prefix
+            </span>server_root: <span class="self">self</span>.server_root.join(<span class="string">&quot;_next&quot;</span>),
+        }
+        .cell()
+        .into())
     }
 }
 </code></pre></div>

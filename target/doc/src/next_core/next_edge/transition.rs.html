@@ -115,8 +115,10 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileContentVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{
@@ -219,7 +221,9 @@
             Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
             context.compile_time_info(),
-            InnerAssetsVc::cell(IndexMap::from([(<span class="string">&quot;ENTRY&quot;</span>.to_string(), asset)])),
+            InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+                <span class="string">&quot;ENTRY&quot;</span>.to_string() =&gt; asset
+            }),
         );
 
         <span class="kw">let </span>asset = ChunkGroupFilesAsset {

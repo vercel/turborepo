@@ -292,16 +292,16 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>is_babel_loader_available(project_root: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+</span><span class="kw">pub async fn </span>is_babel_loader_available(project_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
     <span class="kw">let </span>result = resolve(
-        project_root,
+        project_path,
         RequestVc::parse(Value::new(Pattern::Constant(
             <span class="string">&quot;babel-loader/package.json&quot;</span>.to_string(),
         ))),
         resolve_options(
-            project_root,
+            project_path,
             ResolveOptionsContext {
-                enable_node_modules: <span class="bool-val">true</span>,
+                enable_node_modules: <span class="prelude-val">Some</span>(project_path.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>),
                 enable_node_native_modules: <span class="bool-val">true</span>,
                 custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
                 ..Default::default()

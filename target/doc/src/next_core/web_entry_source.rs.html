@@ -103,9 +103,6 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
-<span id="106">106</span>
-<span id="107">107</span>
-<span id="108">108</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -123,7 +120,6 @@
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use crate</span>::{
-    embed_js::wrap_with_next_js_fs,
     next_client::context::{
         get_client_asset_context, get_client_chunking_context, get_client_compile_time_info,
         get_client_runtime_entries, ClientContextType,
@@ -133,7 +129,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>create_web_entry_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     entry_requests: Vec&lt;RequestVc&gt;,
     server_root: FileSystemPathVc,
@@ -142,28 +138,26 @@
     browserslist_query: <span class="kw-2">&amp;</span>str,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
-    <span class="kw">let </span>project_root = wrap_with_next_js_fs(project_root);
-
     <span class="kw">let </span>ty = Value::new(ClientContextType::Other);
     <span class="kw">let </span>compile_time_info = get_client_compile_time_info(browserslist_query);
     <span class="kw">let </span>context = get_client_asset_context(
-        project_root,
+        project_path,
         execution_context,
         compile_time_info,
         ty,
         next_config,
     );
     <span class="kw">let </span>chunking_context = get_client_chunking_context(
-        project_root,
+        project_path,
         server_root,
         compile_time_info.environment(),
         ty,
     );
-    <span class="kw">let </span>entries = get_client_runtime_entries(project_root, env, ty, next_config);
+    <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     <span class="kw">let </span>runtime_entries = entries.resolve_entries(context);
 
-    <span class="kw">let </span>origin = PlainResolveOriginVc::new(context, project_root.join(<span class="string">&quot;_&quot;</span>)).as_resolve_origin();
+    <span class="kw">let </span>origin = PlainResolveOriginVc::new(context, project_path.join(<span class="string">&quot;_&quot;</span>)).as_resolve_origin();
     <span class="kw">let </span>entries = entry_requests
         .into_iter()
         .map(|request| <span class="kw">async move </span>{
