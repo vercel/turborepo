@@ -18,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
@@ -348,10 +349,17 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		// dryRunSummary contains information that is statically analyzable about
 		// the tasks that we expect to run based on the user command.
 		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
-		summary := &dryRunSummary{
-			Packages:          packagesInScope,
-			GlobalHashSummary: newGlobalHashSummary(globalHashable),
-			Tasks:             []taskSummary{},
+		summary := &runsummary.RunSummary{
+			Packages: packagesInScope,
+			// TODO(mehulkar): passing the globalHashable struct directly caused a type mismatch compilation error
+			GlobalHashSummary: runsummary.NewGlobalHashSummary(
+				globalHashable.globalFileHashMap,
+				globalHashable.rootExternalDepsHash,
+				globalHashable.hashedSortedEnvPairs,
+				globalHashable.globalCacheKey,
+				globalHashable.pipeline,
+			),
+			Tasks: []runsummary.TaskSummary{},
 		}
 
 		return DryRun(
