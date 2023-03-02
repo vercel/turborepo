@@ -109,8 +109,15 @@ impl ContentSource for NextRouterContentSource {
             this.routes_changed,
         );
 
-        Ok(match &*res.await? {
-            RouterResult::Error => bail!("error during Next.js routing"),
+        let res = res
+            .await
+            .with_context(|| anyhow!("failed to fetch /{path}{}", formated_query(raw_query)))?;
+
+        Ok(match &*res {
+            RouterResult::Error => bail!(
+                "error during Next.js routing for /{path}{}",
+                formated_query(raw_query)
+            ),
             RouterResult::None => this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())),
@@ -136,6 +143,14 @@ impl ContentSource for NextRouterContentSource {
                 .into(),
             ),
         })
+    }
+}
+
+fn formated_query(query: &str) -> String {
+    if query.is_empty() {
+        "".to_string()
+    } else {
+        format!("?{query}")
     }
 }
 
