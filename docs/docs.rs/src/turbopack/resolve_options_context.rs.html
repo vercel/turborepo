@@ -106,6 +106,22 @@
 <span id="106">106</span>
 <span id="107">107</span>
 <span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
@@ -121,43 +137,59 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ResolveOptionsContext {
-    <span class="kw">pub </span>emulate_environment: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
-    <span class="kw">pub </span>enable_types: bool,
-    <span class="kw">pub </span>enable_typescript: bool,
-    <span class="kw">pub </span>enable_react: bool,
-    <span class="kw">pub </span>enable_node_native_modules: bool,
-    <span class="doccomment">/// Enable resolving of the node_modules folder when within the provided
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>emulate_environment: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_types: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_typescript: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_react: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_node_native_modules: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// Enable resolving of the node_modules folder when within the provided
     /// directory
     </span><span class="kw">pub </span>enable_node_modules: <span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;,
-    <span class="doccomment">/// Mark well-known Node.js modules as external imports and load them using
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// Mark well-known Node.js modules as external imports and load them using
     /// native `require`. e.g. url, querystring, os
     </span><span class="kw">pub </span>enable_node_externals: bool,
-    <span class="doccomment">/// Enables the &quot;browser&quot; field and export condition in package.json
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// Enables the &quot;browser&quot; field and export condition in package.json
     </span><span class="kw">pub </span>browser: bool,
-    <span class="doccomment">/// Enables the &quot;module&quot; field and export condition in package.json
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// Enables the &quot;module&quot; field and export condition in package.json
     </span><span class="kw">pub </span>module: bool,
-    <span class="kw">pub </span>custom_conditions: Vec&lt;String&gt;,
-    <span class="doccomment">/// An additional import map to use when resolving modules.
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>custom_conditions: Vec&lt;String&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// An additional import map to use when resolving modules.
     ///
     /// If set, this import map will be applied to `ResolveOption::import_map`.
     /// It is always applied last, so any mapping defined within will take
     /// precedence over any other (e.g. tsconfig.json `compilerOptions.paths`).
     </span><span class="kw">pub </span>import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
-    <span class="doccomment">/// An import map to fall back to when a request could not be resolved.
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// An import map to fall back to when a request could not be resolved.
     ///
     /// If set, this import map will be applied to
     /// `ResolveOption::fallback_import_map`. It is always applied last, so
     /// any mapping defined within will take precedence over any other.
     </span><span class="kw">pub </span>fallback_import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
-    <span class="doccomment">/// An additional resolved map to use after modules have been resolved.
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// An additional resolved map to use after modules have been resolved.
     </span><span class="kw">pub </span>resolved_map: <span class="prelude-ty">Option</span>&lt;ResolvedMapVc&gt;,
-    <span class="doccomment">/// A list of rules to use a different resolve option context for certain
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// A list of rules to use a different resolve option context for certain
     /// context paths. The first matching is used.
     </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ResolveOptionsContextVc)&gt;,
-    <span class="doccomment">/// A list of plugins which get applied before (in the future) and after
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// A list of plugins which get applied before (in the future) and after
     /// resolving.
     </span><span class="kw">pub </span>plugins: Vec&lt;ResolvePluginVc&gt;,
-    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

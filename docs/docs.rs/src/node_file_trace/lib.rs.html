@@ -631,6 +631,52 @@
 <span id="631">631</span>
 <span id="632">632</span>
 <span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -659,7 +705,8 @@
     NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc,
+    ReadGlobResultVc,
 };
 <span class="kw">use </span>turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -760,11 +807,6 @@
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
     #[cfg_attr(feature = <span class="string">&quot;node-api&quot;</span>, serde(default))]
     </span>exact: bool,
-
-    <span class="doccomment">/// Whether to enable mdx parsing while tracing dependencies
-    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;node-api&quot;</span>, serde(default))]
-    </span>enable_mdx: bool,
 
     <span class="doccomment">/// Enable experimental garbage collection with the provided memory limit in
     /// MB.
@@ -874,60 +916,20 @@
 </span><span class="kw">async fn </span>input_to_modules&lt;<span class="lifetime">&#39;a</span>&gt;(
     fs: FileSystemVc,
     input: Vec&lt;String&gt;,
-    process_cwd: <span class="prelude-ty">Option</span>&lt;String&gt;,
     exact: bool,
-    enable_mdx: bool,
+    process_cwd: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    context: String,
+    module_options: TransientInstance&lt;ModuleOptionsContext&gt;,
+    resolve_options: TransientInstance&lt;ResolveOptionsContext&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
     <span class="kw">let </span>root = fs.root();
-    <span class="kw">let </span>env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsLambda(
-            NodeJsEnvironment {
-                cwd: OptionStringVc::cell(process_cwd),
-                ..Default::default()
-            }
-            .into(),
-        )),
-        Value::new(EnvironmentIntention::Api),
-    );
-    <span class="kw">let </span>compile_time_info = CompileTimeInfo {
-        environment: env,
-        defines: CompileTimeDefinesVc::empty(),
-    }
-    .cell();
-    <span class="kw">let </span>glob_mappings = <span class="macro">vec!</span>[
-        (
-            root,
-            GlobVc::new(<span class="string">&quot;**/*/next/dist/server/next.js&quot;</span>),
-            ImportMapping::Ignore.into(),
-        ),
-        (
-            root,
-            GlobVc::new(<span class="string">&quot;**/*/next/dist/bin/next&quot;</span>),
-            ImportMapping::Ignore.into(),
-        ),
-    ];
-    <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(HashMap::new()),
-        compile_time_info,
-        ModuleOptionsContext {
-            enable_types: <span class="bool-val">true</span>,
-            enable_mdx,
-            ..Default::default()
-        }
-        .cell(),
-        ResolveOptionsContext {
-            emulate_environment: <span class="prelude-val">Some</span>(env),
-            resolved_map: <span class="prelude-val">Some</span>(
-                ResolvedMap {
-                    by_glob: glob_mappings,
-                }
-                .cell(),
-            ),
-            ..Default::default()
-        }
-        .cell(),
-    )
-    .into();
+    <span class="kw">let </span>process_cwd = process_cwd
+        .clone()
+        .map(|p| p.trim_start_matches(<span class="kw-2">&amp;</span>context).to_owned());
+
+    <span class="kw">let </span>context: AssetContextVc =
+        create_module_asset(root, process_cwd, module_options, resolve_options).into();
+
     <span class="kw">let </span><span class="kw-2">mut </span>list = Vec::new();
     <span class="kw">for </span>input <span class="kw">in </span>input.iter() {
         <span class="kw">if </span>exact {
@@ -986,6 +988,8 @@
 <span class="kw">pub async fn </span>start(
     args: Arc&lt;Args&gt;,
     turbo_tasks: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Arc&lt;TurboTasks&lt;MemoryBackend&gt;&gt;&gt;,
+    module_options: <span class="prelude-ty">Option</span>&lt;ModuleOptionsContext&gt;,
+    resolve_options: <span class="prelude-ty">Option</span>&lt;ResolveOptionsContext&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;String&gt;&gt; {
     register();
     <span class="kw">let </span><span class="kw-2">&amp;</span>CommonArgs {
@@ -1070,6 +1074,8 @@
                 <span class="macro">println!</span>(<span class="string">&quot;graph.html written&quot;</span>);
             }
         },
+        module_options,
+        resolve_options,
     )
     .<span class="kw">await
 </span>}
@@ -1078,6 +1084,8 @@
     args: Arc&lt;Args&gt;,
     create_tt: <span class="kw">impl </span>Fn() -&gt; Arc&lt;TurboTasks&lt;B&gt;&gt;,
     final_finish: <span class="kw">impl </span>FnOnce(Arc&lt;TurboTasks&lt;B&gt;&gt;, TaskId, Duration) -&gt; F,
+    module_options: <span class="prelude-ty">Option</span>&lt;ModuleOptionsContext&gt;,
+    resolve_options: <span class="prelude-ty">Option</span>&lt;ResolveOptionsContext&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;String&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">&amp;</span>CommonArgs {
         watch,
@@ -1130,8 +1138,15 @@
         <span class="kw">let </span>dir = dir.clone();
         <span class="kw">let </span>args = args.clone();
         <span class="kw">let </span>sender = sender.clone();
+        <span class="kw">let </span>module_options = TransientInstance::new(module_options.clone().unwrap_or_default());
+        <span class="kw">let </span>resolve_options = TransientInstance::new(resolve_options.clone().unwrap_or_default());
         Box::pin(<span class="kw">async move </span>{
-            <span class="kw">let </span>output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
+            <span class="kw">let </span>output = main_operation(
+                TransientValue::new(dir.clone()),
+                args.clone().into(),
+                module_options,
+                resolve_options,
+            );
 
             <span class="kw">let </span>source = TransientValue::new(output.into());
             <span class="kw">let </span>issues = IssueVc::peek_issues_with_path(output)
@@ -1171,6 +1186,8 @@
 </span><span class="kw">async fn </span>main_operation(
     current_dir: TransientValue&lt;PathBuf&gt;,
     args: TransientInstance&lt;Args&gt;,
+    module_options: TransientInstance&lt;ModuleOptionsContext&gt;,
+    resolve_options: TransientInstance&lt;ResolveOptionsContext&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;StringsVc&gt; {
     <span class="kw">let </span>dir = current_dir.into_value();
     <span class="kw">let </span>args = <span class="kw-2">&amp;*</span>args;
@@ -1178,21 +1195,27 @@
         <span class="kw-2">ref </span>input,
         watch,
         exact,
-        enable_mdx,
         <span class="kw-2">ref </span>context_directory,
         <span class="kw-2">ref </span>process_cwd,
         ..
     } = args.common();
     <span class="kw">let </span>context = process_context(<span class="kw-2">&amp;</span>dir, context_directory.as_ref()).unwrap();
-    <span class="kw">let </span>process_cwd = process_cwd
-        .clone()
-        .map(|p| p.trim_start_matches(<span class="kw-2">&amp;</span>context).to_owned());
+    <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">match </span><span class="kw-2">*</span>args {
         Args::Print { common: <span class="kw">_ </span>} =&gt; {
             <span class="kw">let </span>input = process_input(<span class="kw-2">&amp;</span>dir, <span class="kw-2">&amp;</span>context, input).unwrap();
             <span class="kw">let </span><span class="kw-2">mut </span>result = BTreeSet::new();
-            <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>modules = input_to_modules(fs, input, process_cwd, exact, enable_mdx).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>modules = input_to_modules(
+                fs,
+                input,
+                exact,
+                process_cwd.clone(),
+                context,
+                module_options,
+                resolve_options,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>module <span class="kw">in </span>modules.iter() {
                 <span class="kw">let </span>set = all_assets(<span class="kw-2">*</span>module);
                 IssueVc::attach_context(
@@ -1211,12 +1234,19 @@
         }
         Args::Annotate { common: <span class="kw">_ </span>} =&gt; {
             <span class="kw">let </span>input = process_input(<span class="kw-2">&amp;</span>dir, <span class="kw-2">&amp;</span>context, input).unwrap();
-            <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>output_nft_assets = Vec::new();
             <span class="kw">let </span><span class="kw-2">mut </span>emits = Vec::new();
-            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact, enable_mdx)
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
+            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(
+                fs,
+                input,
+                exact,
+                process_cwd.clone(),
+                context,
+                module_options,
+                resolve_options,
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
             {
                 <span class="kw">let </span>nft_asset = NftJsonAssetVc::new(<span class="kw-2">*</span>module);
                 <span class="kw">let </span>path = nft_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>.path.clone();
@@ -1235,14 +1265,21 @@
         } =&gt; {
             <span class="kw">let </span>output = process_context(<span class="kw-2">&amp;</span>dir, <span class="prelude-val">Some</span>(output_directory)).unwrap();
             <span class="kw">let </span>input = process_input(<span class="kw-2">&amp;</span>dir, <span class="kw-2">&amp;</span>context, input).unwrap();
-            <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>out_fs = create_fs(<span class="string">&quot;output directory&quot;</span>, <span class="kw-2">&amp;</span>output, watch).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>input_dir = fs.root();
             <span class="kw">let </span>output_dir = out_fs.root();
             <span class="kw">let </span><span class="kw-2">mut </span>emits = Vec::new();
-            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact, enable_mdx)
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
+            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(
+                fs,
+                input,
+                exact,
+                process_cwd.clone(),
+                context,
+                module_options,
+                resolve_options,
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
             {
                 <span class="kw">let </span>rebased = RebasedAssetVc::new(<span class="kw-2">*</span>module, input_dir, output_dir).into();
                 emits.push(emit_with_completion(rebased, output_dir));
@@ -1255,6 +1292,61 @@
         Args::Size { common: <span class="kw">_ </span>} =&gt; <span class="macro">todo!</span>(),
     }
     <span class="prelude-val">Ok</span>(StringsVc::cell(Vec::new()))
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>create_module_asset(
+    root: FileSystemPathVc,
+    process_cwd: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    module_options: TransientInstance&lt;ModuleOptionsContext&gt;,
+    resolve_options: TransientInstance&lt;ResolveOptionsContext&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleAssetContextVc&gt; {
+    <span class="kw">let </span>env = EnvironmentVc::new(
+        Value::new(ExecutionEnvironment::NodeJsLambda(
+            NodeJsEnvironment {
+                cwd: OptionStringVc::cell(process_cwd.clone()),
+                ..Default::default()
+            }
+            .into(),
+        )),
+        Value::new(EnvironmentIntention::Api),
+    );
+    <span class="kw">let </span>compile_time_info = CompileTimeInfo {
+        environment: env,
+        defines: CompileTimeDefinesVc::empty(),
+    }
+    .cell();
+    <span class="kw">let </span>glob_mappings = <span class="macro">vec!</span>[
+        (
+            root,
+            GlobVc::new(<span class="string">&quot;**/*/next/dist/server/next.js&quot;</span>),
+            ImportMapping::Ignore.into(),
+        ),
+        (
+            root,
+            GlobVc::new(<span class="string">&quot;**/*/next/dist/bin/next&quot;</span>),
+            ImportMapping::Ignore.into(),
+        ),
+    ];
+    <span class="kw">let </span><span class="kw-2">mut </span>resolve_options = ResolveOptionsContext::clone(<span class="kw-2">&amp;*</span>resolve_options);
+    <span class="kw">if </span>resolve_options.emulate_environment.is_none() {
+        resolve_options.emulate_environment = <span class="prelude-val">Some</span>(env);
+    }
+    <span class="kw">if </span>resolve_options.resolved_map.is_none() {
+        resolve_options.resolved_map = <span class="prelude-val">Some</span>(
+            ResolvedMap {
+                by_glob: glob_mappings,
+            }
+            .cell(),
+        );
+    }
+
+    <span class="prelude-val">Ok</span>(ModuleAssetContextVc::new(
+        TransitionsByNameVc::cell(HashMap::new()),
+        compile_time_info,
+        ModuleOptionsContext::clone(<span class="kw-2">&amp;*</span>module_options).cell(),
+        resolve_options.cell(),
+    ))
 }
 
 <span class="kw">fn </span>register() {

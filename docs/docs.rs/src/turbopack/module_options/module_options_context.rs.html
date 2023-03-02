@@ -76,6 +76,23 @@
 <span id="76">76</span>
 <span id="77">77</span>
 <span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -119,26 +136,43 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
-    <span class="kw">pub </span>enable_jsx: bool,
-    <span class="kw">pub </span>enable_emotion: bool,
-    <span class="kw">pub </span>enable_react_refresh: bool,
-    <span class="kw">pub </span>enable_styled_components: bool,
-    <span class="kw">pub </span>enable_styled_jsx: bool,
-    <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
-    <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
-    <span class="kw">pub </span>enable_types: bool,
-    <span class="kw">pub </span>enable_typescript_transform: bool,
-    <span class="kw">pub </span>enable_mdx: bool,
-    <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
-    <span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
-    <span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
-    <span class="doccomment">/// Custom rules to be applied after all default rules.
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_jsx: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_emotion: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_react_refresh: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_styled_components: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_styled_jsx: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_types: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_typescript_transform: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_mdx: bool,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// Custom rules to be applied after all default rules.
     </span><span class="kw">pub </span>custom_rules: Vec&lt;ModuleRule&gt;,
-    <span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
-    <span class="doccomment">/// A list of rules to use a different module option context for certain
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="doccomment">/// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
     </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ModuleOptionsContextVc)&gt;,
-    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
