@@ -1,4 +1,4 @@
-import { IPC } from "./index";
+import { IPC, StructuredError } from "./index";
 import type { Ipc as GenericIpc } from "./index";
 
 type IpcIncomingMessage = {
@@ -27,11 +27,7 @@ type IpcOutgoingMessage =
   | {
       type: "emittedError";
       severity: "warning" | "error";
-      error: {
-        name: string;
-        message: string;
-        stack: string[];
-      };
+      error: StructuredError;
     };
 
 export type Ipc = GenericIpc<IpcIncomingMessage, IpcOutgoingMessage>;
