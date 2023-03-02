@@ -356,7 +356,6 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 // walking the Task Graph (in graph.GetPackageTaskVisitor).
 func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 	th.mu.RLock()
-	envVars := th.packageTaskEnvVars[taskID]
-	th.mu.RUnlock()
-	return envVars
+	defer th.mu.RUnlock()
+	return th.packageTaskEnvVars[taskID]
 }
