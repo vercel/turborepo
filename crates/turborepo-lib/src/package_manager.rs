@@ -3,11 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct PnpmWorkspaces {
+struct PnpmWorkspace {
     pub packages: Vec<String>,
 }
 
@@ -60,6 +60,13 @@ pub struct Globs {
     exclusions: Vec<PathBuf>,
 }
 
+impl Globs {
+    pub fn test(&self, root: PathBuf, target: PathBuf) -> bool {
+        // TODO
+        true
+    }
+}
+
 impl PackageManager {
     /// Returns a list of globs for the package workspace.
     /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
@@ -70,25 +77,21 @@ impl PackageManager {
     ///
     /// * `root_path`:
     ///
-    /// returns: Result<Globs, Error>
+    /// returns: Result<Option<Globs>, Error>
     ///
     /// # Examples
     ///
     /// ```
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
+    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Option<Globs>> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
-                let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
-                if workspaces.packages.is_empty() {
-                    return Err(anyhow!(
-                        "pnpm-workspace.yaml: no packages found. Turborepo requires pnpm \
-                         workspaces and thus packages to be defined in the root \
-                         pnpm-workspace.yaml"
-                    ));
+                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
+                if pnpm_workspace.packages.is_empty() {
+                    return Ok(None);
                 } else {
-                    workspaces.packages
+                    pnpm_workspace.packages
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
@@ -96,10 +99,7 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.as_ref().is_empty() {
-                    return Err(anyhow!(
-                        "package.json: no packages found. Turborepo requires packages to be \
-                         defined in the root package.json"
-                    ));
+                    return Ok(None);
                 } else {
                     package_json.workspaces.into()
                 }
@@ -117,10 +117,10 @@ impl PackageManager {
             }
         }
 
-        Ok(Globs {
+        Ok(Some(Globs {
             inclusions,
             exclusions,
-        })
+        }))
     }
 }
 
@@ -135,6 +135,7 @@ mod tests {
         let package_manager = PackageManager::Npm;
         let globs = package_manager
             .get_workspace_globs(Path::new("../../examples/with-yarn"))
+            .unwrap()
             .unwrap();
 
         assert_eq!(

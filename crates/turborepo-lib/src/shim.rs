@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, PackageManager, Payload};
+use crate::{cli, get_version, package_manager::Globs, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 // all arguments that result in a stdout that much be directly parsable and
@@ -184,7 +184,7 @@ pub struct LocalTurboState {
 }
 
 impl LocalTurboState {
-    pub fn infer(repo_root: &Path) -> Option<Self> {
+    pub fn infer(repo_root: PathBuf) -> Option<Self> {
         let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
             #[cfg(windows)]
             {
@@ -227,6 +227,24 @@ pub struct RepoState {
     pub local_turbo_state: Option<LocalTurboState>,
 }
 
+#[derive(Debug)]
+struct InferInfo {
+    path: PathBuf,
+    has_package_json: bool,
+    has_turbo_json: bool,
+    package_has_workspaces: bool,
+    workspace_globs: Option<Globs>,
+}
+
+impl InferInfo {
+    pub fn is_workspace_root_of(&self, check_target: InferInfo) -> bool {
+        match self.workspace_globs {
+            Some(globs) => globs.test(self.path, check_target.path),
+            None => false,
+        }
+    }
+}
+
 impl RepoState {
     /// Infers `RepoState` from current directory.
     ///
@@ -235,106 +253,119 @@ impl RepoState {
     /// * `current_dir`: Current working directory
     ///
     /// returns: Result<RepoState, Error>
-    pub fn infer(current_dir: &Path) -> Result<Self> {
-        // What we look for first are all directories that contain both a `package.json`
-        // and a `turbo.json`.
-        let potential_turbo_roots = current_dir.ancestors().filter(|path| {
-            fs::metadata(path.join("package.json")).is_ok()
-                && fs::metadata(path.join("turbo.json")).is_ok()
-        });
-
-        let mut first_package_json_dir = None;
-
-        // We loop through these directories and see if there are workspaces defined in
-        // them, either in the `package.json` or `pnm-workspaces.yml`
-        for dir in potential_turbo_roots {
-            if first_package_json_dir.is_none() {
-                first_package_json_dir = Some(dir)
-            }
-
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace =
-                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
-
-            if is_workspace {
-                let local_turbo_state = LocalTurboState::infer(dir);
-
-                return Ok(Self {
-                    root: dir.to_path_buf(),
-                    mode: RepoMode::MultiPackage,
-                    local_turbo_state,
-                });
-            }
-        }
-
-        // No dice? Time to see if there is a `turbo.json` for this set.
-        if first_package_json_dir.is_some() {
-            let root = first_package_json_dir
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Unable to find `{}` or `package.json` in current path",
-                        TURBO_JSON
-                    )
-                })?
-                .to_path_buf();
-
-            let local_turbo_state = LocalTurboState::infer(&root);
-            return Ok(Self {
-                root,
-                mode: RepoMode::SinglePackage,
-                local_turbo_state,
-            });
-        }
-
-        // Well, you didn't create a turbo.json, so we're going to do the best we can
-        // from just package.json
-
-        // Now we try to find the closest workspace.
-        let potential_roots = current_dir
+    pub fn infer(reference_dir: &Path) -> Result<Self> {
+        // Find all directories that contain a `package.json` or a `turbo.json`.
+        // Gather a bit of additional metadata about them.
+        let potential_turbo_roots: Vec<_> = reference_dir
             .ancestors()
-            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
+            .map(|path| {
+                let workspace_globs = PackageManager::Pnpm
+                    .get_workspace_globs(path)
+                    .unwrap_or_else(|_| {
+                        PackageManager::Npm
+                            .get_workspace_globs(path)
+                            .unwrap_or_else(|_| None)
+                    });
 
-        // We loop through these directories and see if there are workspaces defined in
-        // them, either in the `package.json` or `pnm-workspaces.yml`
-        for dir in potential_roots {
-            if first_package_json_dir.is_none() {
-                first_package_json_dir = Some(dir)
-            }
+                InferInfo {
+                    path: path.to_owned(),
+                    has_package_json: fs::metadata(path.join("package.json")).is_ok(),
+                    has_turbo_json: fs::metadata(path.join("turbo.json")).is_ok(),
+                    package_has_workspaces: workspace_globs.is_some(),
+                    workspace_globs,
+                }
+            })
+            .filter(|info| info.has_package_json || info.has_turbo_json)
+            .collect();
 
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace =
-                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
+        // Potential improvements:
+        // - Detect invalid configuration where turbo.json isn't peer to package.json.
+        // - There are a couple of possible early exits to prevent traversing all the
+        //   way to root at significant code complexity increase.
+        //
+        //   1. [0].has_turbo_json && [0].package_has_workspaces
+        //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
 
-            if is_workspace {
-                let local_turbo_state = LocalTurboState::infer(dir);
+        // Things get interesting when there is more than one.
+        // We need to perform the same search strategy for _both_ turbo.json and _then_
+        // package.json.
+        let search_locations = [
+            |info: InferInfo| info.has_turbo_json,
+            |info: InferInfo| info.has_package_json,
+        ];
 
+        for check_set_comparator in search_locations {
+            let check_roots: Vec<InferInfo> = potential_turbo_roots
+                .iter()
+                .filter(check_set_comparator)
+                .collect();
+
+            // No potential roots checking by this comparator.
+            if check_roots.len() == 0 {
+                continue;
+
+            // If there is only one potential root, that's the winner.
+            } else if check_roots.len() == 1 {
+                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
                 return Ok(Self {
-                    root: dir.to_path_buf(),
+                    root: check_roots[0].path.to_path_buf(),
+                    mode: if check_roots[0].package_has_workspaces {
+                        RepoMode::MultiPackage
+                    } else {
+                        RepoMode::SinglePackage
+                    },
+                    local_turbo_state,
+                });
+
+            // More than one potential root. See if we can stop at the first
+            // one.
+            } else if check_roots[0].package_has_workspaces {
+                // If the closest one has workspaces then we stop there.
+                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                return Ok(Self {
+                    root: check_roots[0].path.to_path_buf(),
                     mode: RepoMode::MultiPackage,
+                    local_turbo_state,
+                });
+
+            // More than one potential root.
+            // We attempt to prove that the closest is a workspace of a parent.
+            // Failing that we just choose the closest.
+            } else {
+                for ancestor_infer in &check_roots[1..] {
+                    if ancestor_infer.is_workspace_root_of(check_roots[0]) {
+                        let local_turbo_state =
+                            LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                        return Ok(Self {
+                            root: ancestor_infer.path.to_path_buf(),
+                            mode: RepoMode::MultiPackage,
+                            local_turbo_state,
+                        });
+                    }
+                }
+
+                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                return Ok(Self {
+                    root: check_roots[0].path.to_path_buf(),
+                    mode: if check_roots[0].package_has_workspaces {
+                        RepoMode::MultiPackage
+                    } else {
+                        RepoMode::SinglePackage
+                    },
                     local_turbo_state,
                 });
             }
         }
 
-        // Finally, if we don't detect any workspaces, go to the first `package.json`
-        // and use that in single package mode.
-        let root = first_package_json_dir
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to find `{}` or `package.json` in current path",
-                    TURBO_JSON
-                )
-            })?
-            .to_path_buf();
-
-        let local_turbo_state = LocalTurboState::infer(&root);
-        Ok(Self {
-            root,
-            mode: RepoMode::SinglePackage,
+        // If we're here we didn't find a valid root.
+        // Doesn't matter what we put here, it's going to error out.
+        // We could choose to error here.
+        let local_turbo_state = LocalTurboState::infer(reference_dir.to_path_buf());
+        return Ok(Self {
+            root: reference_dir.to_path_buf(),
+            mode: RepoMode::MultiPackage,
             local_turbo_state,
-        })
+        });
     }
 
     /// Attempts to run correct turbo by finding nearest package.json,
@@ -571,6 +602,11 @@ pub fn run() -> Result<Payload> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_repo_state_infer() {
+        RepoState::infer(env::current_dir().unwrap().as_path());
+    }
 
     #[test]
     fn test_skip_infer_version_constraint() {
