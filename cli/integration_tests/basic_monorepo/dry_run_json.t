@@ -19,7 +19,9 @@ Setup
         "dependsOn": [],
         "inputs": [],
         "outputMode": "full",
-        "env": [],
+        "env": [
+          "NODE_ENV"
+        ],
         "persistent": false
       },
       "my-app#build": {
@@ -43,7 +45,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "8888a278aaecb070",
+    "hash": "e8ca4fc486de5b37",
     "cacheState": {
       "local": false,
       "remote": false
@@ -73,7 +75,11 @@ Setup
     "expandedInputs": {
       "package.json": "f2a5d2525f3996a57680180a7cd9ad7310e4dec0"
     },
-    "framework": "<NO FRAMEWORK DETECTED>"
+    "framework": "<NO FRAMEWORK DETECTED>",
+    "environmentVariables": {
+      "configured": [],
+      "inferred": []
+    }
   }
 
 # Validate output of util#build task
@@ -82,7 +88,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "d09a52ea72495c87",
+    "hash": "1a3651e1149bfaf7",
     "cacheState": {
       "local": false,
       "remote": false
@@ -100,13 +106,30 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
-      "env": [],
+      "env": [
+        "NODE_ENV"
+      ],
       "persistent": false
     },
     "expandedInputs": {
       "package.json": "8d3e121335e16dbd8d99c03522b892ec52416dda"
     },
-    "framework": "<NO FRAMEWORK DETECTED>"
+    "framework": "<NO FRAMEWORK DETECTED>",
+    "environmentVariables": {
+      "configured": [
+        "NODE_ENV=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "inferred": []
+    }
+  }
+
+Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller
+  $ NODE_ENV=banana ${TURBO} run build --dry=json --filter=util | jq '.tasks | map(select(.taskId == "util#build")) | .[0].environmentVariables'
+  {
+    "configured": [
+      "NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e"
+    ],
+    "inferred": []
   }
 
 Tasks that don't exist throw an error

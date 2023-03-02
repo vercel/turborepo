@@ -98,7 +98,7 @@ func RealRun(
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
 		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
 		expandedInputs := taskHashTracker.GetExpandedInputs(packageTask)
-		envPairs := taskHashTracker.HashableEnvPairs[packageTask.TaskID]
+		envPairs := taskHashTracker.GetEnvVars(packageTask.TaskID)
 		framework := taskHashTracker.PackageTaskFramework[packageTask.TaskID]
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
@@ -135,8 +135,11 @@ func RealRun(
 			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			ExpandedInputs:         expandedInputs,
-			Environment:            envPairs,
-			Framework:              framework,
+			EnvVars: taskEnvVarSummary{
+				Configured: envPairs.BySource.Explicit.ToSecretHashable(),
+				Inferred:   envPairs.BySource.Prefixed.ToSecretHashable(),
+			},
+			Framework: framework,
 		}
 		// End DRY RUN STOLEN
 

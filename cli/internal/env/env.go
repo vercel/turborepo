@@ -1,6 +1,7 @@
 package env
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"sort"
@@ -36,13 +37,13 @@ func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
 // EnvironmentVariablePairs is a list of "k=v" strings for env variables and their values
 type EnvironmentVariablePairs []string
 
-// ToHashable returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
-// This is the value that is used upstream as a task hash input, so we need it to be deterministic
-func (evm EnvironmentVariableMap) ToHashable() EnvironmentVariablePairs {
+// mapToPair returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
+// It takes a transformer value to operate on each key-value pair and return a string
+func (evm EnvironmentVariableMap) mapToPair(transformer func(k string, v string) string) EnvironmentVariablePairs {
+	// convert to set to eliminate duplicates
 	pairs := make([]string, 0, len(evm))
-
 	for k, v := range evm {
-		paired := fmt.Sprintf("%v=%v", k, v)
+		paired := transformer(k, v)
 		pairs = append(pairs, paired)
 	}
 
@@ -50,6 +51,23 @@ func (evm EnvironmentVariableMap) ToHashable() EnvironmentVariablePairs {
 	sort.Strings(pairs)
 
 	return pairs
+}
+
+// ToSecretHashable returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
+// This is the value used to print out the task hash input, so the values are cryptographically hashed
+func (evm EnvironmentVariableMap) ToSecretHashable() EnvironmentVariablePairs {
+	return evm.mapToPair(func(k, v string) string {
+		hashedValue := sha256.Sum256([]byte(v))
+		return fmt.Sprintf("%v=%x", k, hashedValue)
+	})
+}
+
+// ToHashable returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
+// This is the value that is used upstream as a task hash input, so we need it to be deterministic
+func (evm EnvironmentVariableMap) ToHashable() EnvironmentVariablePairs {
+	return evm.mapToPair(func(k, v string) string {
+		return fmt.Sprintf("%v=%v", k, v)
+	})
 }
 
 func getEnvMap() EnvironmentVariableMap {
