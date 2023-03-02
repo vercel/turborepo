@@ -7,8 +7,8 @@ import { join } from "path";
 
 import "next/dist/server/node-polyfill-fetch.js";
 
-("TURBOPACK { transition: next-edge }");
-import chunkGroup from ".";
+// @ts-expect-error INNER_EDGE_CHUNK_GROUP is provided by rust
+import chunkGroup from "INNER_EDGE_CHUNK_GROUP";
 
 import {
   NodeNextRequest,
@@ -22,7 +22,7 @@ startHandler(async ({ request, response, query, params, path }) => {
       join(process.cwd(), ".next/server/pages", chunk)
     ),
     wasm: [],
-    env: [],
+    env: Object.keys(process.env),
     assets: [],
   };
   await runEdgeFunction({

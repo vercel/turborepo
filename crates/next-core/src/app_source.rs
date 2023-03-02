@@ -4,9 +4,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use indexmap::IndexMap;
+use indexmap::indexmap;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString};
-use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
 use turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
@@ -46,7 +46,7 @@ use crate::{
         next_layout_entry_transition::NextLayoutEntryTransition, LayoutSegment, LayoutSegmentsVc,
     },
     app_structure::{AppStructure, AppStructureItem, AppStructureVc, OptionAppStructureVc},
-    embed_js::{next_js_file, wrap_with_next_js_fs},
+    embed_js::next_js_file,
     env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
@@ -318,8 +318,6 @@ pub async fn create_app_source(
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_path);
-
     let Some(app_structure) = *app_structure.await? else {
         return Ok(NoContentSourceVc::new().into());
     };
@@ -352,11 +350,11 @@ pub async fn create_app_source(
         output_path,
     );
 
+    let injected_env = env_for_js(EnvMapVc::empty().into(), false, next_config);
+    let env = CustomProcessEnvVc::new(env, next_config.env()).as_process_env();
+
     let server_runtime_entries =
-        vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
-                .as_ecmascript_chunk_placeable(),
-        ];
+        vec![ProcessEnvAssetVc::new(project_path, injected_env).as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(
         project_path,
@@ -367,16 +365,18 @@ pub async fn create_app_source(
         next_config,
     );
 
-    Ok(create_app_source_for_directory(
+    let source = create_app_source_for_directory(
         app_structure,
         context_ssr,
         context,
         project_path,
+        env,
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         output_path,
-    ))
+    );
+    Ok(source)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -386,6 +386,7 @@ async fn create_app_source_for_directory(
     context_ssr: AssetContextVc,
     context: AssetContextVc,
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_root: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
@@ -413,6 +414,7 @@ async fn create_app_source_for_directory(
 
                 sources.push(create_node_rendered_source(
                     project_path,
+                    env,
                     specificity,
                     server_root,
                     params_matcher.into(),
@@ -448,6 +450,7 @@ async fn create_app_source_for_directory(
 
                 sources.push(create_node_api_source(
                     project_path,
+                    env,
                     specificity,
                     server_root,
                     params_matcher.into(),
@@ -485,6 +488,7 @@ async fn create_app_source_for_directory(
             context_ssr,
             context,
             project_path,
+            env,
             server_root,
             runtime_entries,
             fallback_page,
@@ -721,7 +725,9 @@ impl AppRouteVc {
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
                 this.context.compile_time_info(),
-                InnerAssetsVc::cell(IndexMap::from([("ROUTE_CHUNK_GROUP".to_string(), entry)])),
+                InnerAssetsVc::cell(indexmap! {
+                    "ROUTE_CHUNK_GROUP".to_string() => entry
+                }),
             ),
             chunking_context,
             intermediate_output_path: this.intermediate_output_path,

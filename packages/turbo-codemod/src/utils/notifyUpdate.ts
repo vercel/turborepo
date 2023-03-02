@@ -10,7 +10,7 @@ export default async function notifyUpdate(): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
-      const ws = getWorkspaceImplementation(process.cwd());
+      const ws = getWorkspaceImplementation();
 
       console.log();
       console.log(
