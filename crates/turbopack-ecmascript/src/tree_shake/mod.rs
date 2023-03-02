@@ -21,7 +21,9 @@ use crate::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkVc, EcmascriptExportsVc,
     },
+    code_gen::{CodeGenerateable, CodeGenerateableVc},
     parse::ParseResult,
+    references::AnalyzeEcmascriptModuleResult,
     EcmascriptModuleAssetVc,
 };
 
@@ -476,15 +478,34 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn content(&self) -> EcmascriptChunkItemContentVc {
+    async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
         let split_data = self.split_data.await.unwrap();
 
-        EcmascriptChunkItemContent {
+        let context = self.context;
+
+        let AnalyzeEcmascriptModuleResult {
+            references,
+            code_generation,
+            ..
+        } = &*self.full_module.analyze().await?;
+
+        let mut code_gens = Vec::new();
+        for r in references.await?.iter() {
+            if let Some(code_gen) = CodeGenerateableVc::resolve_from(r).await? {
+                code_gens.push(code_gen.code_generation(context));
+            }
+        }
+        for c in code_generation.await?.iter() {
+            let c = c.resolve().await?;
+            code_gens.push(c.code_generation(context));
+        }
+
+        Ok(EcmascriptChunkItemContent {
             inner_code: format!("__turbopack_wip__({{ wip: true }});",).into(),
             ..Default::default()
         }
-        .cell()
+        .cell())
     }
 
     #[turbo_tasks::function]
