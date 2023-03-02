@@ -105,6 +105,7 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    tree_shake::split,
     typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
 };
@@ -227,7 +228,9 @@ pub(crate) async fn analyze_ecmascript_module(
 
     special_cases(&path.await?.path, &mut analysis);
 
+    let split_data = split(path, parsed);
     let parsed = parsed.await?;
+
     match &*parsed {
         ParseResult::Ok {
             program,
