@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use globset::{Glob, GlobSetBuilder};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -54,16 +55,33 @@ pub enum PackageManager {
 
 #[derive(Debug)]
 pub struct Globs {
-    #[allow(dead_code)]
-    pub inclusions: Vec<PathBuf>,
-    #[allow(dead_code)]
-    pub exclusions: Vec<PathBuf>,
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
 }
 
 impl Globs {
-    pub fn test(&self, _root: PathBuf, _target: PathBuf) -> bool {
-        // TODO
-        true
+    pub fn test(&self, root: PathBuf, target: PathBuf) -> Result<bool> {
+        let search_value = target.strip_prefix(root)?;
+
+        let mut inclusion_builder = GlobSetBuilder::new();
+        for inclusion in &self.inclusions {
+            inclusion_builder.add(Glob::new(inclusion)?);
+        }
+
+        let inclusion_globset = inclusion_builder.build()?;
+
+        let includes = inclusion_globset.is_match(search_value);
+
+        let mut exclusion_builder = GlobSetBuilder::new();
+        for exclusion in &self.exclusions {
+            exclusion_builder.add(Glob::new(exclusion)?);
+        }
+
+        let exclusion_globset = exclusion_builder.build()?;
+
+        let excludes = exclusion_globset.is_match(search_value);
+
+        return Ok(includes && !excludes);
     }
 }
 
@@ -111,9 +129,9 @@ impl PackageManager {
 
         for glob in globs {
             if let Some(exclusion) = glob.strip_prefix('!') {
-                exclusions.push(PathBuf::from(exclusion.to_string()));
+                exclusions.push(exclusion.to_string());
             } else {
-                inclusions.push(PathBuf::from(glob));
+                inclusions.push(glob);
             }
         }
 
@@ -138,10 +156,34 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(
-            globs.inclusions,
-            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
-        );
+        assert_eq!(globs.inclusions, vec!["apps/*", "packages/*"]);
+    }
+
+    #[test]
+    fn test_globs_test() {
+        struct TestCase {
+            globs: Globs,
+            root: PathBuf,
+            target: PathBuf,
+            output: Result<bool>,
+        }
+
+        let tests = [TestCase {
+            globs: Globs {
+                inclusions: vec!["d/**".to_string()],
+                exclusions: vec![],
+            },
+            root: PathBuf::from("/a/b/c"),
+            target: PathBuf::from("/a/b/c/d/e/f"),
+            output: Ok(true),
+        }];
+
+        for test in tests {
+            match test.globs.test(test.root, test.target) {
+                Ok(value) => assert_eq!(value, test.output.unwrap()),
+                Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
+            };
+        }
     }
 
     #[test]

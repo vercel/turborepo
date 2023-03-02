@@ -245,7 +245,9 @@ impl InferInfo {
 
     pub fn is_workspace_root_of(&self, target_path: PathBuf) -> bool {
         match &self.workspace_globs {
-            Some(globs) => globs.test(self.path.to_path_buf(), target_path),
+            Some(globs) => globs
+                .test(self.path.to_path_buf(), target_path)
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -616,19 +618,31 @@ mod test {
             output: PathBuf,
         }
 
-        let tests = [TestCase {
-            infer_infos: vec![InferInfo {
-                path: PathBuf::from("/a/b/c"),
-                has_package_json: true,
-                has_turbo_json: true,
-                package_has_workspaces: true,
-                workspace_globs: Some(Globs {
-                    inclusions: vec![PathBuf::from("packages/**")],
-                    exclusions: vec![],
-                }),
-            }],
-            output: PathBuf::from("/a/b/c"),
-        }];
+        let tests = [
+            TestCase {
+                infer_infos: vec![InferInfo {
+                    path: PathBuf::from("/a/b/c"),
+                    has_package_json: true,
+                    has_turbo_json: true,
+                    package_has_workspaces: true,
+                    workspace_globs: Some(Globs {
+                        inclusions: vec!["packages/**".to_string()],
+                        exclusions: vec![],
+                    }),
+                }],
+                output: PathBuf::from("/a/b/c"),
+            },
+            TestCase {
+                infer_infos: vec![InferInfo {
+                    path: PathBuf::from("/a/b/c"),
+                    has_package_json: true,
+                    has_turbo_json: true,
+                    package_has_workspaces: false,
+                    workspace_globs: None,
+                }],
+                output: PathBuf::from("/a/b/c"),
+            },
+        ];
 
         for test in tests {
             assert_eq!(
