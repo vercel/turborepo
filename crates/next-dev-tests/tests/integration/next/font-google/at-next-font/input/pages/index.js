@@ -17,7 +17,7 @@ function runTests() {
     expect(interNoArgs).toEqual({
       className: "className__inter_34ab8b4d__318bf44f",
       style: {
-        fontFamily: "'__Inter_34ab8b4d'",
+        fontFamily: "'__Inter_34ab8b'",
         fontStyle: "normal",
       },
     });
