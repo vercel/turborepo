@@ -872,6 +872,12 @@
 <span id="872">872</span>
 <span id="873">873</span>
 <span id="874">874</span>
+<span id="875">875</span>
+<span id="876">876</span>
+<span id="877">877</span>
+<span id="878">878</span>
+<span id="879">879</span>
+<span id="880">880</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::min,
@@ -912,8 +918,8 @@
 
 <span class="doccomment">/// An Arc container for ropes. This indirection allows for easily sharing the
 /// contents between Ropes (and also RopeBuilders/RopeReaders).
-</span><span class="attr">#[derive(Clone, Debug, Default)]
-</span><span class="kw">struct </span>InnerRope(Arc&lt;Box&lt;[RopeElem]&gt;&gt;);
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">struct </span>InnerRope(Arc&lt;[RopeElem]&gt;);
 
 <span class="doccomment">/// Differentiates the types of stored bytes in a rope.
 </span><span class="attr">#[derive(Clone, Debug)]
@@ -994,7 +1000,7 @@
         } <span class="kw">else </span>{
             Rope {
                 length: bytes.len(),
-                data: InnerRope::from(Box::from([Local(bytes)])),
+                data: InnerRope(Arc::from([Local(bytes)])),
             }
         }
     }
@@ -1076,7 +1082,7 @@
         <span class="self">self</span>.finish();
         Rope {
             length: <span class="self">self</span>.length,
-            data: InnerRope::from(<span class="self">self</span>.committed.into_boxed_slice()),
+            data: InnerRope::from(<span class="self">self</span>.committed),
         }
     }
 }
@@ -1327,6 +1333,12 @@
     }
 }
 
+<span class="kw">impl </span>Default <span class="kw">for </span>InnerRope {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        InnerRope(Arc::from([]))
+    }
+}
+
 <span class="kw">impl </span>DeterministicHash <span class="kw">for </span>InnerRope {
     <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
     /// structure. Notice the InnerRope does not contain a length (and any
@@ -1339,8 +1351,8 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;Box&lt;[RopeElem]&gt;&gt; <span class="kw">for </span>InnerRope {
-    <span class="kw">fn </span>from(els: Box&lt;[RopeElem]&gt;) -&gt; <span class="self">Self </span>{
+<span class="kw">impl </span>From&lt;Vec&lt;RopeElem&gt;&gt; <span class="kw">for </span>InnerRope {
+    <span class="kw">fn </span>from(els: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
             <span class="comment">// It&#39;s important that an InnerRope never contain an empty Bytes section.
             </span><span class="kw">for </span>el <span class="kw">in </span>els.iter() {
@@ -1356,12 +1368,12 @@
                 }
             }
         }
-        InnerRope(Arc::new(els))
+        InnerRope(Arc::from(els))
     }
 }
 
 <span class="kw">impl </span>Deref <span class="kw">for </span>InnerRope {
-    <span class="kw">type </span>Target = Arc&lt;Box&lt;[RopeElem]&gt;&gt;;
+    <span class="kw">type </span>Target = Arc&lt;[RopeElem]&gt;;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
@@ -1573,7 +1585,7 @@
     }
     <span class="kw">impl </span>From&lt;Vec&lt;RopeElem&gt;&gt; <span class="kw">for </span>RopeElem {
         <span class="kw">fn </span>from(value: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
-            RopeElem::Shared(InnerRope::from(value.into_boxed_slice()))
+            RopeElem::Shared(InnerRope::from(value))
         }
     }
     <span class="kw">impl </span>From&lt;Rope&gt; <span class="kw">for </span>RopeElem {
@@ -1583,7 +1595,7 @@
     }
     <span class="kw">impl </span>Rope {
         <span class="kw">fn </span>new(value: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
-            <span class="kw">let </span>data = InnerRope::from(value.into_boxed_slice());
+            <span class="kw">let </span>data = InnerRope::from(value);
             Rope {
                 length: data.len(),
                 data,
