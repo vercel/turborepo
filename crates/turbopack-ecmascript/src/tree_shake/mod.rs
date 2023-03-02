@@ -330,15 +330,9 @@ impl PartialEq for SplitResult {
 
 /// For caching
 #[turbo_tasks::function]
-async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
-    let filename = asset
-        .as_asset()
-        .path()
-        .await
-        .unwrap()
-        .file_name()
-        .to_string();
-    let parsed = asset.parse().await.unwrap();
+async fn split(asset: EcmascriptModuleAssetVc) -> Result<SplitResultVc> {
+    let filename = asset.as_asset().path().await?.file_name().to_string();
+    let parsed = asset.parse().await?;
 
     match &*parsed {
         ParseResult::Ok { program, .. } => {
@@ -350,12 +344,12 @@ async fn split(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
                 let (data, deps, modules) =
                     dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-                SplitResult {
+                Ok(SplitResult {
                     data,
                     deps,
                     modules,
                 }
-                .cell()
+                .cell())
             } else {
                 todo!("handle non-module")
             }
@@ -418,10 +412,10 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
     async fn as_chunk_item(
         self_vc: EcmascriptModulePartAssetVc,
         context: ChunkingContextVc,
-    ) -> EcmascriptChunkItemVc {
-        let s = self_vc.await.unwrap();
+    ) -> Result<EcmascriptChunkItemVc> {
+        let s = self_vc.await?;
 
-        EcmascriptModulePartChunkItem {
+        Ok(EcmascriptModulePartChunkItem {
             module: self_vc,
             context,
             chunk_id: s.chunk_id,
@@ -429,7 +423,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
             split_data: s.split_data,
         }
         .cell()
-        .into()
+        .into())
     }
 
     #[turbo_tasks::function]
@@ -480,7 +474,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
-        let split_data = self.split_data.await.unwrap();
+        let split_data = self.split_data.await?;
 
         let context = self.context;
 
@@ -522,11 +516,11 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
-    async fn references(&self) -> AssetReferencesVc {
-        let split_data = self.split_data.await.unwrap();
+    async fn references(&self) -> Result<AssetReferencesVc> {
+        let split_data = self.split_data.await?;
         let deps = match split_data.deps.get(&self.chunk_id) {
             Some(v) => v,
-            None => return AssetReferencesVc::cell(vec![]),
+            None => return Ok(self.full_module.references()),
         };
 
         let mut assets = deps
@@ -545,10 +539,10 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
             })
             .collect::<Vec<_>>();
 
-        let external = self.full_module.references().await.unwrap();
+        let external = self.full_module.references().await?;
 
         assets.extend(external.iter().cloned());
 
-        AssetReferencesVc::cell(assets)
+        Ok(AssetReferencesVc::cell(assets))
     }
 }
