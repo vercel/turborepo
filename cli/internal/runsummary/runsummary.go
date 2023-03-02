@@ -47,19 +47,13 @@ type GlobalHashSummary struct {
 // TODO(mehulkar): the upstream struct that is passed in cannot become a named struct
 // because it will change the global hash, invalidating all caches. We should do this
 // only when we are ok with invalidating the global hash.
-func NewGlobalHashSummary(globalHashable struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	hashedSortedEnvPairs []string
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-}) *GlobalHashSummary {
-	// TODO(mehulkar): Add globalHashable.hashedSortedEnvPairs in here, but redact the values
+func NewGlobalHashSummary(globalFileHashMap map[turbopath.AnchoredUnixPath]string, rootExternalDepsHash string, hashedSortedEnvPairs []string, globalCacheKey string, pipeline fs.PristinePipeline) *GlobalHashSummary {
+	// TODO(mehulkar): Add hashedSortedEnvPairs in here, but redact the values
 	return &GlobalHashSummary{
-		GlobalFileHashMap:    globalHashable.globalFileHashMap,
-		RootExternalDepsHash: globalHashable.rootExternalDepsHash,
-		GlobalCacheKey:       globalHashable.globalCacheKey,
-		Pipeline:             globalHashable.pipeline,
+		GlobalFileHashMap:    globalFileHashMap,
+		RootExternalDepsHash: rootExternalDepsHash,
+		GlobalCacheKey:       globalCacheKey,
+		Pipeline:             pipeline,
 	}
 }
 

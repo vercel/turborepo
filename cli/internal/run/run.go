@@ -348,11 +348,17 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// the tasks that we expect to run based on the user command.
 	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := &runsummary.DryRunSummary{
-		TurboVersion:      r.base.TurboVersion,
-		Packages:          packagesInScope,
-		GlobalHashSummary: runsummary.NewGlobalHashSummary(globalHashable),
-		PackageManager:    packageManager,
-		Tasks:             []runsummary.TaskSummary{},
+		TurboVersion: r.base.TurboVersion,
+		Packages:     packagesInScope,
+		GlobalHashSummary: runsummary.NewGlobalHashSummary(
+			globalHashable.globalFileHashMap,
+			globalHashable.rootExternalDepsHash,
+			globalHashable.hashedSortedEnvPairs,
+			globalHashable.globalCacheKey,
+			globalHashable.pipeline,
+		),
+		PackageManager: packageManager,
+		Tasks:          []runsummary.TaskSummary{},
 	}
 
 	// Dry Run
