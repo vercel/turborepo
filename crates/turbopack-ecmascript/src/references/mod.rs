@@ -93,7 +93,7 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::{orig_name, Reexport},
+        imports::Reexport,
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
@@ -105,7 +105,7 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
-    tree_shake::split,
+    tree_shake::{part_of_module, split},
     typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
 };
@@ -210,6 +210,8 @@ pub(crate) async fn analyze_ecmascript_module(
     };
 
     let parsed = parse(source, ty, transforms);
+    let split_data = split(path, parsed);
+    let parsed = part_of_module(split_data, chunk_id);
 
     match &*find_context_file(path.parent(), package_json()).await? {
         FindContextFileResult::Found(package_json, _) => {
@@ -229,7 +231,6 @@ pub(crate) async fn analyze_ecmascript_module(
 
     special_cases(&path.await?.path, &mut analysis);
 
-    let split_data = split(path, parsed).await?;
     let parsed = parsed.await?;
 
     match &*parsed {
@@ -241,11 +242,6 @@ pub(crate) async fn analyze_ecmascript_module(
             source_map,
             ..
         } => {
-            let program = match chunk_id {
-                Some(chunk_id) => Program::Module(split_data.modules[chunk_id as usize].clone()),
-                None => program.clone(),
-            };
-
             let mut import_references = Vec::new();
 
             let pos = program.span().lo;
@@ -314,7 +310,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 },
             );
             let var_graph = HANDLER.set(&handler, || {
-                GLOBALS.set(globals, || create_graph(&program, eval_context))
+                GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
             for (src, symbols, annotations) in eval_context.imports.references() {
@@ -375,30 +371,6 @@ pub(crate) async fn analyze_ecmascript_module(
                         &import_references,
                         &mut analysis,
                     );
-
-                    if let Program::Module(module) = &program {
-                        for i in module.body.iter() {
-                            let i = match i {
-                                ModuleItem::ModuleDecl(v) => v,
-                                _ => continue,
-                            };
-
-                            if let ModuleDecl::ExportNamed(export) = i {
-                                for specifier in export.specifiers.iter() {
-                                    if let ExportSpecifier::Named(named) = specifier {
-                                        if named.exported.is_none() {
-                                            visitor.esm_exports.insert(
-                                                orig_name(&named.orig).to_string(),
-                                                EsmExport::LocalBinding(
-                                                    orig_name(&named.orig).to_string(),
-                                                ),
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
 
                     for (i, reexport) in eval_context.imports.reexports() {
                         let import_ref = import_references[i];
