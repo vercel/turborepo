@@ -365,7 +365,6 @@ type taskSummary struct {
 	RunSummary             *BuildTargetState                     `json:"taskSummary"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOutputs"`
-	Environment            []string                              `json:"environmentVariables"`
 	Framework              string                                `json:"framework"`
 	EnvVars                taskEnvVarSummary                     `json:"environmentVariables"`
 }
