@@ -476,8 +476,10 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn content(&self) -> EcmascriptChunkItemContentVc {
+    async fn content(&self) -> EcmascriptChunkItemContentVc {
         // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
+        let split_data = self.split_data.await.unwrap();
+
         EcmascriptChunkItemContent {
             inner_code: format!("__turbopack_wip__({{ wip: true }});",).into(),
             ..Default::default()
@@ -506,14 +508,14 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
             None => return AssetReferencesVc::cell(vec![]),
         };
 
-        let assets = deps
+        let mut assets = deps
             .iter()
             .map(|&chunk_id| {
                 SingleAssetReferenceVc::new(
                     EcmascriptModulePartAssetVc::cell(EcmascriptModulePartAsset {
-                        full_module: self.full_module.clone(),
+                        full_module: self.full_module,
                         chunk_id,
-                        split_data: self.split_data.clone(),
+                        split_data: self.split_data,
                     })
                     .as_asset(),
                     StringVc::cell("ecmascript module part".to_string()),
@@ -521,6 +523,10 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
                 .as_asset_reference()
             })
             .collect::<Vec<_>>();
+
+        let external = self.full_module.references().await.unwrap();
+
+        assets.extend(external.iter().cloned());
 
         AssetReferencesVc::cell(assets)
     }
