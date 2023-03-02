@@ -75,12 +75,11 @@ impl DaemonConnector {
             let pid = self.get_or_start_daemon().await?;
             debug!("got daemon with pid: {}", pid);
 
-            let path = match self.wait_for_socket().await {
-                Ok(p) => p,
-                Err(_) => continue,
+            let conn = match self.get_connection(self.sock_file.clone()).await {
+                Err(DaemonConnectorError::Watcher(_) | DaemonConnectorError::Socket) => continue,
+                rest => rest?,
             };
 
-            let conn = Self::get_connection(path.into()).await?;
             let mut client = DaemonClient {
                 client: conn,
                 connect_settings: (),
@@ -135,7 +134,9 @@ impl DaemonConnector {
             .arg("daemon")
             .stderr(Stdio::null())
             .stdout(Stdio::null())
-            .group_spawn()
+            .group()
+            .kill_on_drop(false)
+            .spawn()
             .map_err(|_| DaemonConnectorError::Fork)?;
 
         group
@@ -145,9 +146,19 @@ impl DaemonConnector {
             .ok_or(DaemonConnectorError::Fork)
     }
 
+    /// Gets a connection to given path
+    ///
+    /// On Windows the socket file cannot be interacted with via any filesystem
+    /// apis, due to this we need to just naively attempt to connect on that
+    /// platform and retry in case of error.
     async fn get_connection(
+        &self,
         path: PathBuf,
     ) -> Result<TurbodClient<tonic::transport::Channel>, DaemonConnectorError> {
+        // windows doesn't treat sockets as files, so don't attempt to wait
+        #[cfg(not(target_os = "windows"))]
+        self.wait_for_socket().await?;
+
         debug!("connecting to socket: {}", path.to_string_lossy());
         let arc = Arc::new(path);
 
@@ -165,19 +176,12 @@ impl DaemonConnector {
         };
 
         // note, this endpoint is just a dummy. the actual path is passed in
-        let channel = match Endpoint::try_from("http://[::]:50051")
+        Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
             .connect_with_connector(tower::service_fn(closure))
             .await
-        {
-            Ok(c) => c,
-            Err(e) => {
-                error!("failed to connect to socket: {}", e);
-                return Err(DaemonConnectorError::Socket);
-            }
-        };
-
-        Ok(TurbodClient::new(channel))
+            .map(TurbodClient::new)
+            .map_err(|_| DaemonConnectorError::Socket)
     }
 
     /// Kills a currently active server but shutting it down and waiting for it
@@ -228,13 +232,12 @@ impl DaemonConnector {
         }
     }
 
-    async fn wait_for_socket(&self) -> Result<&Path, DaemonConnectorError> {
+    async fn wait_for_socket(&self) -> Result<(), DaemonConnectorError> {
         timeout(
             Self::SOCKET_TIMEOUT,
             wait_for_file(&self.sock_file, WaitAction::Exists),
         )
         .await?
-        .map(|_| self.sock_file.as_path())
         .map_err(Into::into)
     }
 
