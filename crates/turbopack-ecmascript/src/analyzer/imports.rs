@@ -359,7 +359,7 @@ impl Visit for Analyzer<'_> {
     }
 }
 
-fn orig_name(n: &ModuleExportName) -> JsWord {
+pub(crate) fn orig_name(n: &ModuleExportName) -> JsWord {
     match n {
         ModuleExportName::Ident(v) => v.sym.clone(),
         ModuleExportName::Str(v) => v.value.clone(),

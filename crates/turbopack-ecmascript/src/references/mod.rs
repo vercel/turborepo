@@ -93,7 +93,7 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::Reexport,
+        imports::{orig_name, Reexport},
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
@@ -375,6 +375,30 @@ pub(crate) async fn analyze_ecmascript_module(
                         &import_references,
                         &mut analysis,
                     );
+
+                    if let Program::Module(module) = &program {
+                        for i in module.body.iter() {
+                            let i = match i {
+                                ModuleItem::ModuleDecl(v) => v,
+                                _ => continue,
+                            };
+
+                            if let ModuleDecl::ExportNamed(export) = i {
+                                for specifier in export.specifiers.iter() {
+                                    if let ExportSpecifier::Named(named) = specifier {
+                                        if named.exported.is_none() {
+                                            visitor.esm_exports.insert(
+                                                orig_name(&named.orig).to_string(),
+                                                EsmExport::LocalBinding(
+                                                    orig_name(&named.orig).to_string(),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     for (i, reexport) in eval_context.imports.reexports() {
                         let import_ref = import_references[i];
