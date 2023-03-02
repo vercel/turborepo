@@ -452,11 +452,73 @@
 <span id="452">452</span>
 <span id="453">453</span>
 <span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     future::Future,
     mem::take,
     path::{Path, PathBuf},
+    pin::Pin,
     process::{ExitStatus, Stdio},
     sync::{Arc, Mutex},
     time::Duration,
@@ -471,7 +533,7 @@
         BufReader,
     },
     net::{TcpListener, TcpStream},
-    process::{Child, ChildStderr, ChildStdout, Command},
+    process::{Child, Command},
     select,
     sync::{OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout},
@@ -493,32 +555,40 @@
 <span class="kw">struct </span>RunningNodeJsPoolProcess {
     child: <span class="prelude-ty">Option</span>&lt;Child&gt;,
     connection: TcpStream,
-    stdout_buf: Vec&lt;u8&gt;,
-    stdout: BufReader&lt;ChildStdout&gt;,
-    shared_stdout: SharedOutputSet,
-    stdout_occurences: HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
-    stderr_buf: Vec&lt;u8&gt;,
-    stderr: BufReader&lt;ChildStderr&gt;,
-    shared_stderr: SharedOutputSet,
-    stderr_occurences: HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
+    stdout_future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send&gt;&gt;,
+    stderr_future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send&gt;&gt;,
 }
 
 <span class="kw">const </span>CONNECT_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
 
-<span class="kw">type </span>SharedOutputSet = Arc&lt;Mutex&lt;IndexSet&lt;(Arc&lt;[u8]&gt;, u32)&gt;&gt;&gt;;
+<span class="attr">#[derive(Clone, PartialEq, Eq, Hash)]
+</span><span class="kw">struct </span>OutputEntry {
+    data: Arc&lt;[u8]&gt;,
+    stack_trace: <span class="prelude-ty">Option</span>&lt;Arc&lt;[u8]&gt;&gt;,
+}
+
+<span class="kw">type </span>SharedOutputSet = Arc&lt;Mutex&lt;IndexSet&lt;(OutputEntry, u32)&gt;&gt;&gt;;
+
+<span class="kw">static </span>GLOBAL_OUTPUT_LOCK: tokio::sync::Mutex&lt;()&gt; = tokio::sync::Mutex::const_new(());
+<span class="kw">static </span>MARKER: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;TURBOPACK_OUTPUT_&quot;</span>;
+<span class="kw">static </span>MARKER_STR: <span class="kw-2">&amp;</span>str = <span class="string">&quot;TURBOPACK_OUTPUT_&quot;</span>;
 
 <span class="doccomment">/// Pipes the `stream` from `final_stream`, but uses `shared` to deduplicate
 /// lines that has beem emitted by other `handle_output_stream` instances with
 /// the same `shared` before.
 </span><span class="kw">async fn </span>handle_output_stream(
-    buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;,
-    stream: <span class="kw-2">&amp;mut </span>BufReader&lt;<span class="kw">impl </span>AsyncRead + Unpin&gt;,
-    shared: <span class="kw-2">&amp;mut </span>SharedOutputSet,
-    own_output: <span class="kw-2">&amp;mut </span>HashMap&lt;Arc&lt;[u8]&gt;, u32&gt;,
+    <span class="kw-2">mut </span>stream: BufReader&lt;<span class="kw">impl </span>AsyncRead + Unpin&gt;,
+    shared: SharedOutputSet,
     <span class="kw-2">mut </span>final_stream: <span class="kw">impl </span>AsyncWrite + Unpin,
 ) {
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>own_output = HashMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>nesting: u32 = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>in_stack = <span class="prelude-val">None</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>stack_trace_buffer = Vec::new();
     <span class="kw">loop </span>{
-        <span class="kw">match </span>stream.read_until(<span class="string">b&#39;\n&#39;</span>, buffer).<span class="kw">await </span>{
+        <span class="kw">let </span>start = buffer.len();
+        <span class="kw">match </span>stream.read_until(<span class="string">b&#39;\n&#39;</span>, <span class="kw-2">&amp;mut </span>buffer).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="number">0</span>) =&gt; {
                 <span class="kw">break</span>;
             }
@@ -528,19 +598,77 @@
             }
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
         }
-        <span class="kw">let </span>line = Arc::from(take(buffer).into_boxed_slice());
-        <span class="kw">let </span>occurance_number = <span class="kw-2">*</span>own_output
-            .entry(Arc::clone(<span class="kw-2">&amp;</span>line))
-            .and_modify(|c| <span class="kw-2">*</span>c += <span class="number">1</span>)
-            .or_insert(<span class="number">0</span>);
-        <span class="kw">let </span>new_line = {
-            <span class="kw">let </span><span class="kw-2">mut </span>shared = shared.lock().unwrap();
-            shared.insert((line.clone(), occurance_number))
-        };
-        <span class="kw">if </span>new_line &amp;&amp; final_stream.write(<span class="kw-2">&amp;</span>line).<span class="kw">await</span>.is_err() {
+        <span class="kw">if </span>buffer.len() - start == MARKER.len() + <span class="number">2 </span>&amp;&amp; <span class="kw-2">&amp;</span>buffer[start..buffer.len() - <span class="number">2</span>] == MARKER {
+            <span class="comment">// This is new line
+            </span>buffer.pop();
+            <span class="comment">// This is the type
+            </span><span class="kw">match </span>buffer.pop() {
+                <span class="prelude-val">Some</span>(<span class="string">b&#39;B&#39;</span>) =&gt; {
+                    stack_trace_buffer.clear();
+                    buffer.truncate(start);
+                    nesting += <span class="number">1</span>;
+                    in_stack = <span class="prelude-val">None</span>;
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Some</span>(<span class="string">b&#39;E&#39;</span>) =&gt; {
+                    buffer.truncate(start);
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(in_stack) = in_stack {
+                        <span class="kw">if </span>nesting != <span class="number">0 </span>{
+                            stack_trace_buffer = buffer[in_stack..].to_vec();
+                        }
+                        buffer.truncate(in_stack);
+                    }
+                    nesting = nesting.saturating_sub(<span class="number">1</span>);
+                    in_stack = <span class="prelude-val">None</span>;
+                    <span class="kw">if </span>nesting == <span class="number">0 </span>{
+                        <span class="kw">let </span>line = Arc::from(take(<span class="kw-2">&amp;mut </span>buffer).into_boxed_slice());
+                        <span class="kw">let </span>stack_trace = <span class="kw">if </span>stack_trace_buffer.is_empty() {
+                            <span class="prelude-val">None
+                        </span>} <span class="kw">else </span>{
+                            <span class="prelude-val">Some</span>(Arc::from(take(<span class="kw-2">&amp;mut </span>stack_trace_buffer).into_boxed_slice()))
+                        };
+                        <span class="kw">let </span>entry = OutputEntry {
+                            data: line,
+                            stack_trace,
+                        };
+                        <span class="kw">let </span>occurance_number = <span class="kw-2">*</span>own_output
+                            .entry(entry.clone())
+                            .and_modify(|c| <span class="kw-2">*</span>c += <span class="number">1</span>)
+                            .or_insert(<span class="number">0</span>);
+                        <span class="kw">let </span>new_entry = {
+                            <span class="kw">let </span><span class="kw-2">mut </span>shared = shared.lock().unwrap();
+                            shared.insert((entry.clone(), occurance_number))
+                        };
+                        <span class="kw">if </span>!new_entry {
+                            <span class="comment">// This line has been printed by another process, so we don&#39;t need to
+                            // print it again.
+                            </span><span class="kw">continue</span>;
+                        }
+                        <span class="kw">let </span>_lock = GLOBAL_OUTPUT_LOCK.lock().<span class="kw">await</span>;
+                        <span class="kw">if </span>final_stream.write(<span class="kw-2">&amp;</span>entry.data).<span class="kw">await</span>.is_err() {
+                            <span class="comment">// Whatever happened with stdout/stderr, we can&#39;t write to it anymore.
+                            </span><span class="kw">break</span>;
+                        }
+                    }
+                }
+                <span class="prelude-val">Some</span>(<span class="string">b&#39;S&#39;</span>) =&gt; {
+                    buffer.truncate(start);
+                    in_stack = <span class="prelude-val">Some</span>(start);
+                    <span class="kw">continue</span>;
+                }
+                <span class="kw">_ </span>=&gt; {}
+            }
+        }
+        <span class="kw">if </span>nesting != <span class="number">0 </span>{
+            <span class="comment">// When inside of a marked output we want to aggregate until the end marker
+            </span><span class="kw">continue</span>;
+        }
+        <span class="kw">let </span>_lock = GLOBAL_OUTPUT_LOCK.lock().<span class="kw">await</span>;
+        <span class="kw">if </span>final_stream.write(<span class="kw-2">&amp;</span>buffer).<span class="kw">await</span>.is_err() {
             <span class="comment">// Whatever happened with stdout/stderr, we can&#39;t write to it anymore.
             </span><span class="kw">break</span>;
         }
+        buffer.clear();
     }
 }
 
@@ -621,7 +749,16 @@
                         .unwrap()
                         .read_to_end(<span class="kw-2">&amp;mut </span>stderr)
                         .<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>((String::from_utf8(stdout)<span class="question-mark">?</span>, String::from_utf8(stderr)<span class="question-mark">?</span>))
+                    <span class="kw">fn </span>clean(buffer: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+                        <span class="prelude-val">Ok</span>(String::from_utf8(buffer)<span class="question-mark">?
+                            </span>.lines()
+                            .filter(|line| {
+                                line.len() != MARKER_STR.len() + <span class="number">1 </span>&amp;&amp; !line.starts_with(MARKER_STR)
+                            })
+                            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                            .join(<span class="string">&quot;\n&quot;</span>))
+                    }
+                    <span class="prelude-val">Ok</span>((clean(stdout)<span class="question-mark">?</span>, clean(stderr)<span class="question-mark">?</span>))
                 }
 
                 <span class="kw">let </span>(connection, <span class="kw">_</span>) = <span class="macro">select! </span>{
@@ -649,20 +786,19 @@
                     },
                 };
 
-                <span class="kw">let </span>stdout = BufReader::new(child.stdout.take().unwrap());
-                <span class="kw">let </span>stderr = BufReader::new(child.stderr.take().unwrap());
+                <span class="kw">let </span>child_stdout = BufReader::new(child.stdout.take().unwrap());
+                <span class="kw">let </span>child_stderr = BufReader::new(child.stderr.take().unwrap());
+
+                <span class="kw">let </span>stdout_future =
+                    Box::pin(handle_output_stream(child_stdout, shared_stdout, stdout()));
+                <span class="kw">let </span>stderr_future =
+                    Box::pin(handle_output_stream(child_stderr, shared_stderr, stderr()));
 
                 RunningNodeJsPoolProcess {
                     child: <span class="prelude-val">Some</span>(child),
                     connection,
-                    stdout,
-                    stdout_buf: Vec::new(),
-                    stdout_occurences: HashMap::new(),
-                    shared_stdout,
-                    stderr,
-                    stderr_buf: Vec::new(),
-                    stderr_occurences: HashMap::new(),
-                    shared_stderr,
+                    stdout_future,
+                    stderr_future,
                 }
             }
             NodeJsPoolProcess::Running(running) =&gt; running,
@@ -687,24 +823,10 @@
                 </span>.context(<span class="string">&quot;reading packet data&quot;</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(packet_data)
         };
-        <span class="kw">let </span>stdout_future = handle_output_stream(
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout_buf,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.shared_stdout,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout_occurences,
-            stdout(),
-        );
-        <span class="kw">let </span>stderr_future = handle_output_stream(
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr_buf,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.shared_stderr,
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr_occurences,
-            stderr(),
-        );
         <span class="macro">select! </span>{
             result = recv_future =&gt; result,
-            <span class="kw">_ </span>= stdout_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stdout stream ended unexpectedly&quot;</span>),
-            <span class="kw">_ </span>= stderr_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stderr stream ended unexpectedly&quot;</span>),
+            <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span><span class="self">self</span>.stdout_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stdout stream ended unexpectedly&quot;</span>),
+            <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span><span class="self">self</span>.stderr_future =&gt; <span class="macro">bail!</span>(<span class="string">&quot;stderr stream ended unexpectedly&quot;</span>),
         }
     }
 
