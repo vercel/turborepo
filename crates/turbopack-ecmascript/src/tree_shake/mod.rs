@@ -10,15 +10,16 @@ use swc_core::{
     },
 };
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{File, FileContent, FileContentVc, FileSystemPathVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
         ModuleId, ModuleIdVc,
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::{ModulePart, ModulePartVc},
+    virtual_asset::VirtualAssetVc,
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
@@ -463,16 +464,46 @@ pub struct EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptModulePartAssetVc {
     #[turbo_tasks::function]
-    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+    async fn analyze(self, split_data: SplitResultVc) -> Result<AnalyzeEcmascriptModuleResultVc> {
         let part = self.await?;
         let this = part.full_module.await?;
-        Ok(analyze_ecmascript_module(
-            this.source,
-            part.full_module.as_resolve_origin(),
-            Value::new(this.ty),
-            this.transforms,
-            this.compile_time_info,
-        ))
+        let parsed = part.full_module.parse().await?;
+        let split_data = split_data.await?;
+        if let ParseResult::Ok { source_map, .. } = &*parsed {
+            let mut program = split_data.modules[part.chunk_id as usize].clone();
+
+            let mut bytes: Vec<u8> = vec![];
+            {
+                let mut emitter = Emitter {
+                    cfg: swc_core::ecma::codegen::Config {
+                        ..Default::default()
+                    },
+                    cm: source_map.clone(),
+                    comments: None,
+                    wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, None),
+                };
+
+                emitter.emit_module(&program)?;
+            }
+
+            let content = AssetContent::File(FileContentVc::cell(FileContent::Content(File::new(
+                Default::default(),
+                bytes,
+            ))))
+            .cell();
+
+            let asset = VirtualAssetVc::new(this.source.path(), content);
+
+            Ok(analyze_ecmascript_module(
+                asset.as_asset(),
+                part.full_module.as_resolve_origin(),
+                Value::new(this.ty),
+                this.transforms,
+                this.compile_time_info,
+            ))
+        } else {
+            todo!()
+        }
     }
 }
 
@@ -506,7 +537,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             references,
             code_generation,
             ..
-        } = &*self.full_module.analyze().await?;
+        } = &*self.module.analyze(self.split_data).await?;
 
         let mut code_gens = Vec::new();
         for r in references.await?.iter() {
