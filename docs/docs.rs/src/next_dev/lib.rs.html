@@ -573,37 +573,6 @@
 <span id="573">573</span>
 <span id="574">574</span>
 <span id="575">575</span>
-<span id="576">576</span>
-<span id="577">577</span>
-<span id="578">578</span>
-<span id="579">579</span>
-<span id="580">580</span>
-<span id="581">581</span>
-<span id="582">582</span>
-<span id="583">583</span>
-<span id="584">584</span>
-<span id="585">585</span>
-<span id="586">586</span>
-<span id="587">587</span>
-<span id="588">588</span>
-<span id="589">589</span>
-<span id="590">590</span>
-<span id="591">591</span>
-<span id="592">592</span>
-<span id="593">593</span>
-<span id="594">594</span>
-<span id="595">595</span>
-<span id="596">596</span>
-<span id="597">597</span>
-<span id="598">598</span>
-<span id="599">599</span>
-<span id="600">600</span>
-<span id="601">601</span>
-<span id="602">602</span>
-<span id="603">603</span>
-<span id="604">604</span>
-<span id="605">605</span>
-<span id="606">606</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -621,7 +590,7 @@
     time::{Duration, Instant},
 };
 
-<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>dunce::canonicalize;
 <span class="kw">use </span>next_core::{
@@ -635,15 +604,14 @@
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
 <span class="kw">use </span>turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    CollectiblesSource, CompletionsVc, RawVc, StatsType, TransientInstance, TransientValue,
-    TurboTasks, TurboTasksBackendApi, Value,
+    CompletionsVc, StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
 <span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
 <span class="kw">use </span>turbopack_core::{
     environment::ServerAddr,
-    issue::{IssueReporter, IssueReporterVc, IssueSeverity, IssueVc},
+    issue::{IssueReporterVc, IssueSeverity},
     resolve::{parse::RequestVc, pattern::QueryMapVc},
     server_fs::ServerFileSystemVc,
 };
@@ -824,9 +792,7 @@
             <span class="comment">// Initialize a ConsoleUi reporter if no custom reporter was provided
             </span>Box::new(<span class="kw">move </span>|| ConsoleUiVc::new(log_options.clone().into()).into())
         });
-        <span class="kw">let </span>issue_reporter_arc = Arc::new(<span class="kw">move </span>|| issue_provider.get_issue_reporter());
 
-        <span class="kw">let </span>get_issue_reporter = issue_reporter_arc.clone();
         <span class="kw">let </span>source = <span class="kw">move </span>|| {
             source(
                 root_dir.clone(),
@@ -834,49 +800,26 @@
                 entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
-                get_issue_reporter(),
                 browserslist_query.clone(),
                 server_addr.clone().into(),
             )
         };
 
-        <span class="prelude-val">Ok</span>(server.serve(tasks, source, issue_reporter_arc.clone()))
-    }
-}
-
-<span class="kw">async fn </span>handle_issues&lt;T: Into&lt;RawVc&gt; + CollectiblesSource + Copy&gt;(
-    source: T,
-    issue_reporter: IssueReporterVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>issues = IssueVc::peek_issues_with_path(source)
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.strongly_consistent()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">let </span>has_fatal = issue_reporter.report_issues(
-        TransientInstance::new(issues.clone()),
-        TransientValue::new(source.into()),
-    );
-
-    <span class="kw">if </span><span class="kw-2">*</span>has_fatal.<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Fatal issue(s) occurred&quot;</span>))
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(())
+        <span class="kw">let </span>issue_reporter_arc = Arc::new(<span class="kw">move </span>|| issue_provider.get_issue_reporter());
+        <span class="prelude-val">Ok</span>(server.serve(tasks, source, issue_reporter_arc))
     }
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>project_fs(project_dir: <span class="kw-2">&amp;</span>str, issue_reporter: IssueReporterVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemVc&gt; {
+</span><span class="kw">async fn </span>project_fs(project_dir: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemVc&gt; {
     <span class="kw">let </span>disk_fs = DiskFileSystemVc::new(<span class="string">&quot;project&quot;</span>.to_string(), project_dir.to_string());
-    handle_issues(disk_fs, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
     disk_fs.<span class="kw">await</span><span class="question-mark">?</span>.start_watching()<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(disk_fs.into())
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>output_fs(project_dir: <span class="kw-2">&amp;</span>str, issue_reporter: IssueReporterVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemVc&gt; {
+</span><span class="kw">async fn </span>output_fs(project_dir: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemVc&gt; {
     <span class="kw">let </span>disk_fs = DiskFileSystemVc::new(<span class="string">&quot;output&quot;</span>.to_string(), project_dir.to_string());
-    handle_issues(disk_fs, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
     disk_fs.<span class="kw">await</span><span class="question-mark">?</span>.start_watching()<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(disk_fs.into())
 }
@@ -889,12 +832,11 @@
     entry_requests: TransientInstance&lt;Vec&lt;EntryRequest&gt;&gt;,
     eager_compile: bool,
     turbo_tasks: TransientInstance&lt;TurboTasks&lt;MemoryBackend&gt;&gt;,
-    issue_reporter: IssueReporterVc,
     browserslist_query: String,
     server_addr: TransientInstance&lt;SocketAddr&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
-    <span class="kw">let </span>output_fs = output_fs(<span class="kw-2">&amp;</span>project_dir, issue_reporter);
-    <span class="kw">let </span>fs = project_fs(<span class="kw-2">&amp;</span>root_dir, issue_reporter);
+    <span class="kw">let </span>output_fs = output_fs(<span class="kw-2">&amp;</span>project_dir);
+    <span class="kw">let </span>fs = project_fs(<span class="kw-2">&amp;</span>root_dir);
     <span class="kw">let </span>project_relative = project_dir.strip_prefix(<span class="kw-2">&amp;</span>root_dir).unwrap();
     <span class="kw">let </span>project_relative = project_relative
         .strip_prefix(MAIN_SEPARATOR)
@@ -1017,10 +959,6 @@
     }
     .cell()
     .into();
-
-    handle_issues(dev_server_fs, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
-    handle_issues(web_source, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
-    handle_issues(page_source, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(source)
 }
