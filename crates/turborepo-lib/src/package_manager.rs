@@ -55,13 +55,13 @@ pub enum PackageManager {
 #[derive(Debug)]
 pub struct Globs {
     #[allow(dead_code)]
-    inclusions: Vec<PathBuf>,
+    pub inclusions: Vec<PathBuf>,
     #[allow(dead_code)]
-    exclusions: Vec<PathBuf>,
+    pub exclusions: Vec<PathBuf>,
 }
 
 impl Globs {
-    pub fn test(&self, root: PathBuf, target: PathBuf) -> bool {
+    pub fn test(&self, _root: PathBuf, _target: PathBuf) -> bool {
         // TODO
         true
     }

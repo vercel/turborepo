@@ -21,7 +21,6 @@ use turbo_updater::check_for_updates;
 
 use crate::{cli, get_version, package_manager::Globs, PackageManager, Payload};
 
-static TURBO_JSON: &str = "turbo.json";
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
 // example)
@@ -237,23 +236,23 @@ struct InferInfo {
 }
 
 impl InferInfo {
-    pub fn is_workspace_root_of(&self, check_target: InferInfo) -> bool {
-        match self.workspace_globs {
-            Some(globs) => globs.test(self.path, check_target.path),
+    pub fn has_package_json<'a>(info: &'a &InferInfo) -> bool {
+        info.has_package_json
+    }
+    pub fn has_turbo_json<'a>(info: &'a &InferInfo) -> bool {
+        info.has_turbo_json
+    }
+
+    pub fn is_workspace_root_of(&self, target_path: PathBuf) -> bool {
+        match &self.workspace_globs {
+            Some(globs) => globs.test(self.path.to_path_buf(), target_path),
             None => false,
         }
     }
 }
 
 impl RepoState {
-    /// Infers `RepoState` from current directory.
-    ///
-    /// # Arguments
-    ///
-    /// * `current_dir`: Current working directory
-    ///
-    /// returns: Result<RepoState, Error>
-    pub fn infer(reference_dir: &Path) -> Result<Self> {
+    fn generate_potential_turbo_roots(reference_dir: &Path) -> Vec<InferInfo> {
         // Find all directories that contain a `package.json` or a `turbo.json`.
         // Gather a bit of additional metadata about them.
         let potential_turbo_roots: Vec<_> = reference_dir
@@ -278,6 +277,10 @@ impl RepoState {
             .filter(|info| info.has_package_json || info.has_turbo_json)
             .collect();
 
+        return potential_turbo_roots;
+    }
+
+    fn process_potential_turbo_roots(potential_turbo_roots: Vec<InferInfo>) -> Result<Self> {
         // Potential improvements:
         // - Detect invalid configuration where turbo.json isn't peer to package.json.
         // - There are a couple of possible early exits to prevent traversing all the
@@ -286,16 +289,12 @@ impl RepoState {
         //   1. [0].has_turbo_json && [0].package_has_workspaces
         //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
 
-        // Things get interesting when there is more than one.
         // We need to perform the same search strategy for _both_ turbo.json and _then_
         // package.json.
-        let search_locations = [
-            |info: InferInfo| info.has_turbo_json,
-            |info: InferInfo| info.has_package_json,
-        ];
+        let search_locations = [InferInfo::has_package_json, InferInfo::has_turbo_json];
 
         for check_set_comparator in search_locations {
-            let check_roots: Vec<InferInfo> = potential_turbo_roots
+            let check_roots: Vec<&InferInfo> = potential_turbo_roots
                 .iter()
                 .filter(check_set_comparator)
                 .collect();
@@ -333,7 +332,7 @@ impl RepoState {
             // Failing that we just choose the closest.
             } else {
                 for ancestor_infer in &check_roots[1..] {
-                    if ancestor_infer.is_workspace_root_of(check_roots[0]) {
+                    if ancestor_infer.is_workspace_root_of(check_roots[0].path.to_path_buf()) {
                         let local_turbo_state =
                             LocalTurboState::infer(check_roots[0].path.to_path_buf());
                         return Ok(Self {
@@ -360,12 +359,19 @@ impl RepoState {
         // If we're here we didn't find a valid root.
         // Doesn't matter what we put here, it's going to error out.
         // We could choose to error here.
-        let local_turbo_state = LocalTurboState::infer(reference_dir.to_path_buf());
-        return Ok(Self {
-            root: reference_dir.to_path_buf(),
-            mode: RepoMode::MultiPackage,
-            local_turbo_state,
-        });
+        return Err(anyhow!("thing"));
+    }
+
+    /// Infers `RepoState` from current directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_dir`: Current working directory
+    ///
+    /// returns: Result<RepoState, Error>
+    pub fn infer(reference_dir: &Path) -> Result<Self> {
+        let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
+        RepoState::process_potential_turbo_roots(potential_turbo_roots)
     }
 
     /// Attempts to run correct turbo by finding nearest package.json,
@@ -604,8 +610,34 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_repo_state_infer() {
-        RepoState::infer(env::current_dir().unwrap().as_path());
+    fn test_process_potential_turbo_roots() {
+        struct TestCase {
+            infer_infos: Vec<InferInfo>,
+            output: PathBuf,
+        }
+
+        let tests = [TestCase {
+            infer_infos: vec![InferInfo {
+                path: PathBuf::from("/a/b/c"),
+                has_package_json: true,
+                has_turbo_json: true,
+                package_has_workspaces: true,
+                workspace_globs: Some(Globs {
+                    inclusions: vec![PathBuf::from("packages/**")],
+                    exclusions: vec![],
+                }),
+            }],
+            output: PathBuf::from("/a/b/c"),
+        }];
+
+        for test in tests {
+            assert_eq!(
+                RepoState::process_potential_turbo_roots(test.infer_infos)
+                    .unwrap()
+                    .root,
+                test.output
+            );
+        }
     }
 
     #[test]
