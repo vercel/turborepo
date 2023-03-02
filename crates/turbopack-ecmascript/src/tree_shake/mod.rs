@@ -29,7 +29,7 @@ use crate::{
         EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExportsVc,
     },
     code_gen::{CodeGenerateable, CodeGenerateableVc},
-    parse::ParseResult,
+    parse::{ParseResult, ParseResultVc},
     path_visitor::ApplyVisitors,
     references::{analyze_ecmascript_module, AnalyzeEcmascriptModuleResult},
     AnalyzeEcmascriptModuleResultVc, EcmascriptModuleAssetVc, ParseResultSourceMap,
@@ -313,21 +313,21 @@ pub struct EcmascriptModulePartAsset {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Key {
+pub(crate) enum Key {
     ModuleEvaluation,
     Export(String),
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-struct SplitResult {
+pub(crate) struct SplitResult {
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    data: FxHashMap<Key, u32>,
+    pub data: FxHashMap<Key, u32>,
 
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    modules: Vec<Module>,
+    pub modules: Vec<Module>,
 
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    deps: FxHashMap<u32, Vec<u32>>,
+    pub deps: FxHashMap<u32, Vec<u32>>,
 }
 
 impl PartialEq for SplitResult {
@@ -336,11 +336,10 @@ impl PartialEq for SplitResult {
     }
 }
 
-/// For caching
 #[turbo_tasks::function]
-async fn split(asset: EcmascriptModuleAssetVc) -> Result<SplitResultVc> {
-    let filename = asset.as_asset().path().await?.file_name().to_string();
-    let parsed = asset.parse().await?;
+pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Result<SplitResultVc> {
+    let filename = path.await?.file_name().to_string();
+    let parsed = parsed.await?;
 
     match &*parsed {
         ParseResult::Ok { program, .. } => {
@@ -373,7 +372,7 @@ impl EcmascriptModulePartAssetVc {
         module: EcmascriptModuleAssetVc,
         part: ModulePartVc,
     ) -> Result<Self> {
-        let split_data = split(module);
+        let split_data = split(module.path(), module.parse());
         let result = split_data.await?;
         let part = part.await?;
 
