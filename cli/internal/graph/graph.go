@@ -10,7 +10,6 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
-	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -88,11 +87,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		packageTask.Hash = hash
 		packageTask.HashedEnvVars = g.TaskHashTracker.GetEnvVars(packageTask.TaskID)
 		packageTask.ExpandedInputs = g.TaskHashTracker.GetExpandedInputs(packageTask)
-		packageTask.Framework = runsummary.MissingFrameworkLabel
-
-		if g.TaskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
-			packageTask.Framework = g.TaskHashTracker.PackageTaskFramework[packageTask.TaskID]
-		}
+		packageTask.Framework = g.TaskHashTracker.GetFramework(packageTask.TaskID)
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd

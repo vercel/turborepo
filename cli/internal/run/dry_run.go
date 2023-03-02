@@ -98,6 +98,11 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			command = packageTask.Command
 		}
 
+		framework := runsummary.MissingFrameworkLabel
+		if packageTask.Framework != "" {
+			framework = packageTask.Framework
+		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
@@ -128,7 +133,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
-			Framework:              packageTask.Framework,
+			Framework:              framework,
 			ExpandedInputs:         packageTask.ExpandedInputs,
 			EnvVars:                envVars,
 

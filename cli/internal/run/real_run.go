@@ -94,11 +94,6 @@ func RealRun(
 
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		// COPY PASTE FROM DRY RUN!
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-
-		expandedInputs := taskHashTracker.GetExpandedInputs(packageTask)
-		framework := taskHashTracker.PackageTaskFramework[packageTask.TaskID]
-
 		itemStatus, err := turboCache.Exists(packageTask.Hash)
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
@@ -116,6 +111,11 @@ func RealRun(
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
 
+		framework := runsummary.MissingFrameworkLabel
+		if packageTask.Framework != "" {
+			framework = packageTask.Framework
+		}
+
 		ts := runsummary.TaskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
@@ -130,7 +130,7 @@ func RealRun(
 			Dependencies:           ancestors,
 			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
-			ExpandedInputs:         expandedInputs,
+			ExpandedInputs:         packageTask.ExpandedInputs,
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
@@ -140,6 +140,7 @@ func RealRun(
 		// End DRY RUN STOLEN
 
 		// deps here are passed in to calculate the task hash
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		expandedOutputs, err := ec.exec(ctx, packageTask, deps)
 		if err != nil {
 			return err
