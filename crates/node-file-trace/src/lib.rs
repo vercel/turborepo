@@ -459,14 +459,14 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         let dir = dir.clone();
         let args = args.clone();
         let sender = sender.clone();
-        let module_options = module_options.clone();
-        let resolve_options = resolve_options.clone();
+        let module_options = TransientInstance::new(module_options.clone().unwrap_or_default());
+        let resolve_options = TransientInstance::new(resolve_options.clone().unwrap_or_default());
         Box::pin(async move {
             let output = main_operation(
                 TransientValue::new(dir.clone()),
                 args.clone().into(),
-                TransientInstance::new(module_options.unwrap_or_default()),
-                TransientInstance::new(resolve_options.unwrap_or_default()),
+                module_options,
+                resolve_options,
             );
 
             let source = TransientValue::new(output.into());
