@@ -23,6 +23,7 @@ use turbopack_core::{
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
+    analyzer::graph::EvalContext,
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemOptions, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
@@ -328,6 +329,8 @@ pub(crate) struct SplitResult {
 
     #[turbo_tasks(debug_ignore, trace_ignore)]
     pub deps: FxHashMap<u32, Vec<u32>>,
+
+    parsed: ParseResultVc,
 }
 
 impl PartialEq for SplitResult {
@@ -339,9 +342,9 @@ impl PartialEq for SplitResult {
 #[turbo_tasks::function]
 pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Result<SplitResultVc> {
     let filename = path.await?.file_name().to_string();
-    let parsed = parsed.await?;
+    let parse_result = parsed.await?;
 
-    match &*parsed {
+    match &*parse_result {
         ParseResult::Ok { program, .. } => {
             if let Program::Module(module) = program {
                 let (mut dep_graph, items) = Analyzer::analyze(module);
@@ -355,6 +358,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                     data,
                     deps,
                     modules,
+                    parsed,
                 }
                 .cell())
             } else {
@@ -364,6 +368,44 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
         _ => {
             todo!("handle parse error")
         }
+    }
+}
+
+#[turbo_tasks::function]
+pub(super) async fn part_of_module(
+    split_data: SplitResultVc,
+    chunk_id: Option<u32>,
+) -> Result<ParseResultVc> {
+    let split_data = split_data.await?;
+
+    let chunk_id = match chunk_id {
+        Some(v) => v,
+        None => return Ok(split_data.parsed),
+    };
+
+    let parsed = split_data.parsed.await?;
+
+    match &*parsed {
+        ParseResult::Ok {
+            globals,
+            comments,
+            source_map,
+            eval_context,
+            ..
+        } => {
+            let program = Program::Module(split_data.modules[chunk_id as usize].clone());
+            let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
+
+            Ok(ParseResultVc::cell(ParseResult::Ok {
+                program,
+                globals: globals.clone(),
+                comments: comments.clone(),
+                source_map: source_map.clone(),
+                eval_context,
+            }))
+        }
+        ParseResult::Unparseable => Ok(ParseResultVc::cell(ParseResult::Unparseable)),
+        ParseResult::NotFound => Ok(ParseResultVc::cell(ParseResult::NotFound)),
     }
 }
 
