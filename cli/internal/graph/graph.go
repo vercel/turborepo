@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -42,7 +43,13 @@ type CompleteGraph struct {
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
 // during execution (or dry-runs). The function returned here does not execute any tasks itself,
 // but it helps curry some data from the Complete Graph and pass it into the visitor function.
-func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
+func (g *CompleteGraph) GetPackageTaskVisitor(
+	ctx gocontext.Context,
+	taskGraph *dag.AcyclicGraph,
+	getArgs func(taskID string) []string,
+	logger hclog.Logger,
+	visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error,
+) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.WorkspaceInfos.PackageJSONs[packageName]
@@ -66,6 +73,19 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
+		hash, err := g.TaskHashTracker.CalculateTaskHash(
+			packageTask,
+			taskGraph.DownEdges(taskID),
+			logger,
+			getArgs(taskName),
+		)
+
+		if err != nil {
+			return fmt.Errorf("Hashing error: %v", err)
+		}
+
+		packageTask.Hash = hash
+		packageTask.HashedEnvVars = g.TaskHashTracker.GetEnvVars(packageTask.TaskID)
 		packageTask.ExpandedInputs = g.TaskHashTracker.GetExpandedInputs(packageTask)
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {

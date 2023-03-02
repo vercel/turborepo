@@ -30,7 +30,7 @@ var _envVarPrefixes = []string{
 	"VUE_APP_",
 }
 
-func TestGetHashableEnvPairs(t *testing.T) {
+func TestGetHashableEnvVars(t *testing.T) {
 	type args struct {
 		envKeys     []string
 		envPrefixes []string
@@ -39,7 +39,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 		env  []string
 		name string
 		args args
-		want []string
+		want EnvironmentVariablePairs
 	}{
 		{
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
@@ -48,7 +48,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"myval"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"myval="},
+			want: EnvironmentVariablePairs{"myval="},
 		},
 		{
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
@@ -57,7 +57,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"lowercase"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"lowercase=stillcool"},
+			want: EnvironmentVariablePairs{"lowercase=stillcool"},
 		},
 		{
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "lowercase=notcool"},
@@ -66,7 +66,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"lowercase"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"lowercase=notcool"},
+			want: EnvironmentVariablePairs{"lowercase=notcool"},
 		},
 		{
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers"},
@@ -75,7 +75,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"lowercase", "MY_TEST_VAR"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"MY_TEST_VAR=cool", "lowercase=stillcool"},
+			want: EnvironmentVariablePairs{"MY_TEST_VAR=cool", "lowercase=stillcool"},
 		},
 		{
 			env:  []string{"lowercase=stillcool", "MY_TEST_VAR=cool", "12345=numbers", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
@@ -84,7 +84,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"lowercase", "MY_TEST_VAR"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"MY_TEST_VAR=cool", "NEXT_PUBLIC_MY_COOL_VAR=cool", "lowercase=stillcool"},
+			want: EnvironmentVariablePairs{"MY_TEST_VAR=cool", "NEXT_PUBLIC_MY_COOL_VAR=cool", "lowercase=stillcool"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
@@ -93,7 +93,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"NEXT_PUBLIC_MY_COOL_VAR"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
 		{
 			env:  []string{"a=1", "b=2", "c=3", "PUBLIC_myvar=4"},
@@ -102,7 +102,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"a", "b", "c"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"PUBLIC_myvar=4", "a=1", "b=2", "c=3"},
+			want: EnvironmentVariablePairs{"PUBLIC_myvar=4", "a=1", "b=2", "c=3"},
 		},
 		{
 			env:  []string{"a=1=2", "NEXT_PUBLIC_VALUE_TEST=do=not=do=this"},
@@ -111,7 +111,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"a"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"NEXT_PUBLIC_VALUE_TEST=do=not=do=this", "a=1=2"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_VALUE_TEST=do=not=do=this", "a=1=2"},
 		},
 		{
 			env:  []string{"a=1", "NEXT_PUBLIC_=weird"},
@@ -120,7 +120,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"a"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"NEXT_PUBLIC_=weird", "a=1"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_=weird", "a=1"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_EMOJI=😋"},
@@ -129,7 +129,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"NEXT_PUBLIC_EMOJI=😋"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_EMOJI=😋"},
 		},
 		{
 			env:  []string{"zero=0", "null=null", "nil=nil"},
@@ -138,7 +138,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"zero", "null", "nil"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"nil=nil", "null=null", "zero=0"},
+			want: EnvironmentVariablePairs{"nil=nil", "null=null", "zero=0"},
 		},
 		{
 			env: []string{"GATSBY_custom=GATSBY",
@@ -155,7 +155,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"GATSBY_custom=GATSBY",
+			want: EnvironmentVariablePairs{"GATSBY_custom=GATSBY",
 				"NEXT_PUBLIC_custom=NEXT_PUBLIC",
 				"NUXT_ENV_custom=NUXT_ENV",
 				"PUBLIC_custom=PUBLIC",
@@ -184,7 +184,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"FINAL", "CUSTOM", "ANOTHER"},
 				envPrefixes: _envVarPrefixes,
 			},
-			want: []string{"ANOTHER=neat", "CUSTOM=cool", "FINAL=great", "GATSBY_custom=GATSBY",
+			want: EnvironmentVariablePairs{"ANOTHER=neat", "CUSTOM=cool", "FINAL=great", "GATSBY_custom=GATSBY",
 				"NEXT_PUBLIC_custom=NEXT_PUBLIC",
 				"NUXT_ENV_custom=NUXT_ENV",
 				"PUBLIC_custom=PUBLIC",
@@ -201,7 +201,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: []string{},
 			},
-			want: []string{},
+			want: EnvironmentVariablePairs{},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
@@ -210,7 +210,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
 			},
-			want: []string{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_MY_COOL_VAR=cool", "MANUAL=true"},
@@ -219,7 +219,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"MANUAL"},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
 			},
-			want: []string{"MANUAL=true", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
+			want: EnvironmentVariablePairs{"MANUAL=true", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
 		{
 			env:  []string{"MANUAL=true"},
@@ -228,7 +228,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"MANUAL"},
 				envPrefixes: []string{},
 			},
-			want: []string{"MANUAL=true"},
+			want: EnvironmentVariablePairs{"MANUAL=true"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "MANUAL_VERCEL_ENV=true", "TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_"},
@@ -237,7 +237,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"MANUAL"},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
 			},
-			want: []string{"MANUAL=true"},
+			want: EnvironmentVariablePairs{"MANUAL=true"},
 		},
 		{
 			env:  []string{"TURBO_ENV=true", "MANUAL=true", "TURBOREPO=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_"},
@@ -246,7 +246,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: []string{"TURBO"},
 			},
-			want: []string{"TURBOREPO=true"},
+			want: EnvironmentVariablePairs{"TURBOREPO=true"},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true", "TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_"},
@@ -255,7 +255,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"TURBOREPO"},
 				envPrefixes: []string{"NEXT_PUBLIC"},
 			},
-			want: []string{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true"},
+			want: EnvironmentVariablePairs{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true"},
 		},
 		{
 			env:  []string{"TURBO_CI_VENDOR_ENV_KEY_VAL=true", "TURBO_CI_VENDOR_ENV_KEY=TURBO_CI_VENDOR_ENV_KEY"},
@@ -264,7 +264,7 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{},
 				envPrefixes: []string{"TURBO_"},
 			},
-			want: []string{},
+			want: EnvironmentVariablePairs{},
 		},
 		{
 			env:  []string{"NEXT_PUBLIC_VERCEL_ENV=true", "MANUAL=true", "TURBO_CI_VENDOR_ENV_KEY=_VERCEL_"},
@@ -273,16 +273,17 @@ func TestGetHashableEnvPairs(t *testing.T) {
 				envKeys:     []string{"NEXT_PUBLIC_VERCEL_ENV", "MANUAL"},
 				envPrefixes: []string{"NEXT_PUBLIC_"},
 			},
-			want: []string{"MANUAL=true", "NEXT_PUBLIC_VERCEL_ENV=true"},
+			want: EnvironmentVariablePairs{"MANUAL=true", "NEXT_PUBLIC_VERCEL_ENV=true"},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// set the env vars
 			setEnvs(tt.env)
 			// test
-			if got := GetHashableEnvPairs(tt.args.envKeys, tt.args.envPrefixes); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetHashableEnvPairs() = %v, want %v", got, tt.want)
+			if got := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes).All.ToHashable(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %#v, want %#v", got, tt.want)
 			}
 			// clean up the env for the next run
 			os.Clearenv()
