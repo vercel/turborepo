@@ -600,8 +600,10 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn id(&self) -> ModuleIdVc {
-        ModuleId::Number(self.chunk_id).into()
+    async fn id(&self) -> Result<ModuleIdVc> {
+        let module = self.full_module.path().await?;
+
+        Ok(ModuleId::String(format!("{}_({})", module.path, self.chunk_id)).into())
     }
 }
 
