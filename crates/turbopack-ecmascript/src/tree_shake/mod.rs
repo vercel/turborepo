@@ -1,8 +1,15 @@
 use anyhow::{anyhow, Result};
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
-use swc_core::ecma::ast::{Id, Module, Program};
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use swc_core::{
+    common::GLOBALS,
+    ecma::{
+        ast::{Id, Module, Program},
+        codegen::{text_writer::JsWriter, Emitter},
+        visit::{VisitMutWith, VisitMutWithPath},
+    },
+};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -18,13 +25,14 @@ use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
-        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExportsVc,
+        EcmascriptChunkItemOptions, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
+        EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExportsVc,
     },
     code_gen::{CodeGenerateable, CodeGenerateableVc},
     parse::ParseResult,
+    path_visitor::ApplyVisitors,
     references::AnalyzeEcmascriptModuleResult,
-    EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetVc, ParseResultSourceMap,
 };
 
 mod graph;
@@ -494,12 +502,96 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             let c = c.resolve().await?;
             code_gens.push(c.code_generation(context));
         }
-
-        Ok(EcmascriptChunkItemContent {
-            inner_code: format!("__turbopack_wip__({{ wip: true }});",).into(),
-            ..Default::default()
+        // need to keep that around to allow references into that
+        let code_gens = code_gens.into_iter().try_join().await?;
+        let code_gens = code_gens.iter().map(|cg| &**cg).collect::<Vec<_>>();
+        // TOOD use interval tree with references into "code_gens"
+        let mut visitors = Vec::new();
+        let mut root_visitors = Vec::new();
+        for code_gen in code_gens {
+            for (path, visitor) in code_gen.visitors.iter() {
+                if path.is_empty() {
+                    root_visitors.push(&**visitor);
+                } else {
+                    visitors.push((path, &**visitor));
+                }
+            }
         }
-        .cell())
+
+        let parsed = self.full_module.parse().await?;
+
+        if let ParseResult::Ok {
+            source_map,
+            globals,
+            eval_context,
+            ..
+        } = &*parsed
+        {
+            let mut program = split_data.modules[self.chunk_id as usize].clone();
+
+            GLOBALS.set(globals, || {
+                if !visitors.is_empty() {
+                    program.visit_mut_with_path(
+                        &mut ApplyVisitors::new(visitors),
+                        &mut Default::default(),
+                    );
+                }
+                for visitor in root_visitors {
+                    program.visit_mut_with(&mut visitor.create());
+                }
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
+
+                // we need to remove any shebang before bundling as it's only valid as the first
+                // line in a js file (not in a chunk item wrapped in the runtime)
+                program.shebang = None;
+            });
+
+            let mut bytes: Vec<u8> = vec![];
+            // TODO: Insert this as a sourceless segment so that sourcemaps aren't affected.
+            // = format!("/* {} */\n", self.module.path().to_string().await?).into_bytes();
+
+            let mut srcmap = vec![];
+
+            let mut emitter = Emitter {
+                cfg: swc_core::ecma::codegen::Config {
+                    ..Default::default()
+                },
+                cm: source_map.clone(),
+                comments: None,
+                wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut srcmap)),
+            };
+
+            emitter.emit_module(&program)?;
+
+            let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+
+            Ok(EcmascriptChunkItemContent {
+                inner_code: bytes.into(),
+                source_map: Some(srcmap),
+                options: if eval_context.is_esm() {
+                    EcmascriptChunkItemOptions {
+                        ..Default::default()
+                    }
+                } else {
+                    EcmascriptChunkItemOptions {
+                        // These things are not available in ESM
+                        module: true,
+                        exports: true,
+                        this: true,
+                        ..Default::default()
+                    }
+                },
+                ..Default::default()
+            }
+            .into())
+        } else {
+            Ok(EcmascriptChunkItemContent {
+                inner_code: format!("__turbopack_wip__({{ wip: true }});",).into(),
+                ..Default::default()
+            }
+            .cell())
+        }
     }
 
     #[turbo_tasks::function]
