@@ -259,7 +259,7 @@
         R: AsRef&lt;str&gt;,
     {
         <span class="self">self</span>.push_str(<span class="kw">if </span><span class="self">self</span>.include_slash() {
-            <span class="string">&quot;(/[^?]+)?&quot;
+            <span class="string">&quot;(?:/([^?]+))?&quot;
         </span>} <span class="kw">else </span>{
             <span class="string">&quot;([^?]+)?&quot;
         </span>});
