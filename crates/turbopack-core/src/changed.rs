@@ -27,7 +27,7 @@ pub async fn any_content_changed(root: AssetVc) -> Result<CompletionVc> {
     .await
     .completed()?
     .into_iter()
-    .map(|asset| content_changed(asset))
+    .map(content_changed)
     .collect();
 
     Ok(CompletionsVc::cell(completions).completed())

@@ -558,21 +558,18 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         FindContextFileResult::NotFound(_) => None,
     };
 
-    let config_changed = config_asset.map_or_else(
-        || CompletionVc::immutable(),
-        |config_asset| {
-            // This invalidates the execution when anything referenced by the config file
-            // changes
-            let config_asset = EcmascriptModuleAssetVc::new(
-                config_asset.into(),
-                context,
-                Value::new(EcmascriptModuleAssetType::Ecmascript),
-                EcmascriptInputTransformsVc::cell(vec![]),
-                context.compile_time_info(),
-            );
-            any_content_changed(config_asset.into())
-        },
-    );
+    let config_changed = config_asset.map_or_else(CompletionVc::immutable, |config_asset| {
+        // This invalidates the execution when anything referenced by the config file
+        // changes
+        let config_asset = EcmascriptModuleAssetVc::new(
+            config_asset.into(),
+            context,
+            Value::new(EcmascriptModuleAssetType::Ecmascript),
+            EcmascriptInputTransformsVc::cell(vec![]),
+            context.compile_time_info(),
+        );
+        any_content_changed(config_asset.into())
+    });
     let load_next_config_asset = context.process(
         next_asset("entry/config/next.js"),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
