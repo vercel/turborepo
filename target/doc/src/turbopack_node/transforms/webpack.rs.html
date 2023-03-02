@@ -188,22 +188,16 @@
 <span id="188">188</span>
 <span id="189">189</span>
 <span id="190">190</span>
-<span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
-<span class="kw">use </span>turbo_tasks_fs::{
-    json::parse_json_rope_with_source_context, File, FileContent, FileSystemPathVc,
-};
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_rope_with_source_context, File, FileContent};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -214,7 +208,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 <span class="kw">use crate</span>::{
-    embed_js::embed_file,
+    embed_js::embed_file_path,
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
@@ -311,13 +305,9 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>webpack_loaders_executor(project_path: FileSystemPathVc, context: AssetContextVc) -&gt; AssetVc {
+</span><span class="kw">fn </span>webpack_loaders_executor(context: AssetContextVc) -&gt; AssetVc {
     EcmascriptModuleAssetVc::new(
-        VirtualAssetVc::new(
-            project_path.join(<span class="string">&quot;__turbopack__/webpack-loaders-executor.ts&quot;</span>),
-            AssetContent::File(embed_file(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).cell(),
-        )
-        .into(),
+        SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
@@ -350,7 +340,7 @@
         <span class="kw">let </span>content = content.content().to_str()<span class="question-mark">?</span>;
         <span class="kw">let </span>context = this.evaluate_context;
 
-        <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(project_path, context);
+        <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(context);
         <span class="kw">let </span>resource_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
         <span class="kw">let </span>loaders = this.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
