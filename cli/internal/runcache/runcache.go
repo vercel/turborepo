@@ -235,6 +235,7 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 
 var _emptyIgnore []string
 
+// ExpandedOutputs contains a list of outputs that were cached after the task
 type ExpandedOutputs []turbopath.AnchoredSystemPath
 
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed

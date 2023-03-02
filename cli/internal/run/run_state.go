@@ -42,6 +42,23 @@ const (
 	TargetBuildFailed
 )
 
+func (rrs RunResultStatus) ToString() (string, error) {
+	switch rrs {
+	case TargetBuilding:
+		return "building", nil
+	case TargetBuildStopped:
+		return "stopped", nil
+	case TargetBuilt:
+		return "built", nil
+	case TargetCached:
+		return "cached", nil
+	case TargetBuildFailed:
+		return "failed", nil
+	}
+
+	return "", fmt.Errorf("invalid RunResultStatus: %v", rrs)
+}
+
 type BuildTargetState struct {
 	StartAt  time.Time       `json:"startAt"`
 	Duration time.Duration   `json:"duration"`

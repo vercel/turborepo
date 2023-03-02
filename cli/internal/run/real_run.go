@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -40,7 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
-	summary *dryRunSummary,
+	summary *runsummary.DryRunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -89,21 +90,16 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	taskSummaryMap := map[string]taskSummary{}
+	taskSummaryMap := map[string]runsummary.TaskSummary{}
 
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		// COPY PASTE FROM DRY RUN!
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 
-		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashTracker.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
 		expandedInputs := taskHashTracker.GetExpandedInputs(packageTask)
-		envPairs := taskHashTracker.GetEnvVars(packageTask.TaskID)
 		framework := taskHashTracker.PackageTaskFramework[packageTask.TaskID]
-		if err != nil {
-			fmt.Printf("Warning: error with collecting task summary: %s", err)
-		}
-		itemStatus, err := turboCache.Exists(hash)
+
+		itemStatus, err := turboCache.Exists(packageTask.Hash)
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
@@ -120,11 +116,11 @@ func RealRun(
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
 
-		ts := taskSummary{
+		ts := runsummary.TaskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
-			Hash:                   hash,
+			Hash:                   packageTask.Hash,
 			CacheState:             itemStatus,
 			Command:                command,
 			Dir:                    packageTask.Dir,
@@ -135,9 +131,9 @@ func RealRun(
 			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			ExpandedInputs:         expandedInputs,
-			EnvVars: taskEnvVarSummary{
-				Configured: envPairs.BySource.Explicit.ToSecretHashable(),
-				Inferred:   envPairs.BySource.Prefixed.ToSecretHashable(),
+			EnvVars: runsummary.TaskEnvVarSummary{
+				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
+				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
 			},
 			Framework: framework,
 		}
@@ -183,10 +179,22 @@ func RealRun(
 	}
 
 	runState.mu.Lock()
+
 	for taskID, state := range runState.state {
-		t, ok := taskSummaryMap[taskID]
-		if ok {
-			t.RunSummary = state
+		if t, ok := taskSummaryMap[taskID]; ok {
+			executionSummary := &runsummary.TaskExecutionSummary{
+				Start:    state.StartAt,
+				Duration: state.Duration,
+				Label:    state.Label,
+				Err:      state.Err,
+			}
+
+			// Catch the error if Status is somehow invalid
+			if status, err := state.Status.ToString(); err == nil {
+				executionSummary.Status = status
+			}
+
+			t.RunSummary = executionSummary
 		}
 	}
 
