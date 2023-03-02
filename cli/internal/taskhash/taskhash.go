@@ -30,10 +30,10 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode            string
-	globalHash          string
-	pipeline            fs.Pipeline
-	mu                  sync.RWMutex
+	rootNode   string
+	globalHash string
+	pipeline   fs.Pipeline
+
 	packageInputsHashes packageFileHashes
 
 	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
@@ -41,12 +41,12 @@ type Tracker struct {
 	// before walking the task graph, it does not need to be protected by a mutex.
 	packageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
 
-	// packageTaskEnvVars is a map of taskID to a set of env vars that affect its hash.
-	// Writes to this map happen during CalculateTaskHash, which happens while walking the Task Graph
-	// so reads and writes are protected by the mutux `mu`.
-	packageTaskEnvVars   map[string]env.DetailedMap // key is taskID
+	// mu is a mutex that we can lock/unlock to read/write from maps
+	// the fields below should be protected by the mutex.
+	mu                   sync.RWMutex
+	packageTaskEnvVars   map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
 	packageTaskHashes    map[string]string          // taskID -> hash
-	PackageTaskFramework map[string]string
+	packageTaskFramework map[string]string          // taskID -> inferred framework for package
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -56,7 +56,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		globalHash:           globalHash,
 		pipeline:             pipeline,
 		packageTaskHashes:    make(map[string]string),
-		PackageTaskFramework: make(map[string]string),
+		packageTaskFramework: make(map[string]string),
 		packageTaskEnvVars:   make(map[string]env.DetailedMap),
 	}
 }
@@ -336,7 +336,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	th.packageTaskEnvVars[packageTask.TaskID] = envVars
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	if framework != nil {
-		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
+		th.packageTaskFramework[packageTask.TaskID] = framework.Slug
 	}
 	th.mu.Unlock()
 	return hash, nil
@@ -364,5 +364,7 @@ func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 
 // GetFramework returns the inferred framework for a given taskID
 func (th *Tracker) GetFramework(taskID string) string {
-	return th.PackageTaskFramework[taskID]
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	return th.packageTaskFramework[taskID]
 }
