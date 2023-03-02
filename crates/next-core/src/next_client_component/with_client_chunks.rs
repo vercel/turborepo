@@ -76,7 +76,6 @@ impl EcmascriptChunkPlaceable for WithClientChunksAsset {
         Ok(WithClientChunksChunkItem {
             context: context.with_layer("rsc"),
             inner: self_vc,
-            chunk_item: this.asset.as_chunk_item(context),
         }
         .cell()
         .into())
@@ -93,7 +92,6 @@ impl EcmascriptChunkPlaceable for WithClientChunksAsset {
 struct WithClientChunksChunkItem {
     context: ChunkingContextVc,
     inner: WithClientChunksAssetVc,
-    chunk_item: EcmascriptChunkItemVc,
 }
 
 #[turbo_tasks::value_impl]
