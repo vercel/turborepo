@@ -33,6 +33,7 @@ use crate::{
     parse::{ParseResult, ParseResultVc},
     path_visitor::ApplyVisitors,
     references::{analyze_ecmascript_module, AnalyzeEcmascriptModuleResult},
+    transform::remove_shebang,
     AnalyzeEcmascriptModuleResultVc, EcmascriptModuleAssetVc, ParseResultSourceMap,
 };
 
@@ -539,9 +540,6 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
-        // TODO: Use self.split_data.modules[self.chunk_id] to generate the code
-        let split_data = self.split_data.await?;
-
         let context = self.context;
 
         let AnalyzeEcmascriptModuleResult {
@@ -576,16 +574,17 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             }
         }
 
-        let parsed = self.full_module.parse().await?;
+        let parsed = part_of_module(self.split_data, Some(self.chunk_id)).await?;
 
         if let ParseResult::Ok {
+            program,
             source_map,
             globals,
             eval_context,
             ..
         } = &*parsed
         {
-            let mut program = split_data.modules[self.chunk_id as usize].clone();
+            let mut program = program.clone();
 
             GLOBALS.set(globals, || {
                 if !visitors.is_empty() {
@@ -602,7 +601,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 
                 // we need to remove any shebang before bundling as it's only valid as the first
                 // line in a js file (not in a chunk item wrapped in the runtime)
-                program.shebang = None;
+                remove_shebang(&mut program);
             });
 
             let mut bytes: Vec<u8> = vec![];
@@ -620,7 +619,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
                 wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut srcmap)),
             };
 
-            emitter.emit_module(&program)?;
+            emitter.emit_program(&program)?;
 
             let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
 
