@@ -220,6 +220,7 @@ impl EcmascriptModuleAssetVc {
             Value::new(this.ty),
             this.transforms,
             this.compile_time_info,
+            None,
         ))
     }
 

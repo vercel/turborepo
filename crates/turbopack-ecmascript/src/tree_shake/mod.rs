@@ -471,6 +471,7 @@ impl EcmascriptModulePartAssetVc {
             Value::new(this.ty),
             this.transforms,
             this.compile_time_info,
+            Some(part.chunk_id),
         ))
     }
 }

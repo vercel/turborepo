@@ -197,6 +197,7 @@ pub(crate) async fn analyze_ecmascript_module(
     ty: Value<EcmascriptModuleAssetType>,
     transforms: EcmascriptInputTransformsVc,
     compile_time_info: CompileTimeInfoVc,
+    chunk_id: Option<u32>,
 ) -> Result<AnalyzeEcmascriptModuleResultVc> {
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = origin.origin_path();
@@ -228,7 +229,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
     special_cases(&path.await?.path, &mut analysis);
 
-    let split_data = split(path, parsed);
+    let split_data = split(path, parsed).await?;
     let parsed = parsed.await?;
 
     match &*parsed {
@@ -240,6 +241,11 @@ pub(crate) async fn analyze_ecmascript_module(
             source_map,
             ..
         } => {
+            let program = match chunk_id {
+                Some(chunk_id) => Program::Module(split_data.modules[chunk_id as usize].clone()),
+                None => program.clone(),
+            };
+
             let mut import_references = Vec::new();
 
             let pos = program.span().lo;
@@ -308,7 +314,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 },
             );
             let var_graph = HANDLER.set(&handler, || {
-                GLOBALS.set(globals, || create_graph(program, eval_context))
+                GLOBALS.set(globals, || create_graph(&program, eval_context))
             });
 
             for (src, symbols, annotations) in eval_context.imports.references() {
@@ -457,7 +463,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 .into();
                 analysis.add_code_gen(esm_exports);
                 EcmascriptExports::EsmExports(esm_exports)
-            } else if has_cjs_export(program) {
+            } else if has_cjs_export(&program) {
                 EcmascriptExports::CommonJs
             } else {
                 EcmascriptExports::None
