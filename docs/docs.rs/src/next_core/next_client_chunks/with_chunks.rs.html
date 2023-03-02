@@ -185,8 +185,6 @@
 <span id="185">185</span>
 <span id="186">186</span>
 <span id="187">187</span>
-<span id="188">188</span>
-<span id="189">189</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
@@ -263,7 +261,6 @@
             context,
             inner_context: this.chunking_context,
             inner: self_vc,
-            chunk_item: this.asset.as_chunk_item(context),
         }
         .cell()
         .into())
@@ -281,7 +278,6 @@
     context: ChunkingContextVc,
     inner_context: ChunkingContextVc,
     inner: WithChunksAssetVc,
-    chunk_item: EcmascriptChunkItemVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
