@@ -177,6 +177,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compression"
+version = "0.3.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "942c7cd7ae39e91bde4820d74132e9862e62c2f386c3aa90ccf55949f5bad63a"
+dependencies = [
+ "flate2",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "async-executor"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -260,6 +273,17 @@ dependencies = [
  "libc",
  "signal-hook",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "async-recursion"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b015a331cc64ebd1774ba119538573603427eaace0a1950c423ab971f903796"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -3802,7 +3826,6 @@ dependencies = [
  "mime",
  "next-core",
  "next-dev",
- "once_cell",
  "owo-colors",
  "parking_lot",
  "rand",
@@ -3822,6 +3845,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-dev-server",
  "turbopack-node",
+ "turbopack-test-utils",
  "url",
  "webbrowser 0.7.1",
 ]
@@ -7264,9 +7288,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.5"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e267c18a719545b481171952a79f8c25c80361463ba44bc7fa9eba7c742ef4f"
+checksum = "5427d89453009325de0d8f342c9490009f76e999cb7672d77e46267448f7e6b2"
 dependencies = [
  "bytes",
  "futures-core",
@@ -7717,6 +7741,7 @@ name = "turbopack"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "criterion 0.3.6",
  "difference",
  "futures",
@@ -7823,6 +7848,7 @@ name = "turbopack-dev-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-compression",
  "futures",
  "hyper",
  "hyper-tungstenite",
@@ -7837,6 +7863,7 @@ dependencies = [
  "serde_qs",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -7980,6 +8007,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-test-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "similar",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+]
+
+[[package]]
 name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
@@ -7988,18 +8029,17 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "similar",
  "test-generator",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
  "turbopack-env",
+ "turbopack-test-utils",
 ]
 
 [[package]]

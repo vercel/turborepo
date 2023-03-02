@@ -7,9 +7,7 @@ const cache: { [cwd: string]: PackageManager } = {};
 
 export default function getPackageManager({
   directory,
-}: {
-  directory?: string;
-}): PackageManager | undefined {
+}: { directory?: string } = {}): PackageManager | undefined {
   const cwd = directory || process.cwd();
   if (cache[cwd]) {
     return cache[cwd];

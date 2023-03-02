@@ -8,6 +8,7 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -98,8 +99,8 @@ struct WebpackLoadersProcessedAsset {
 #[turbo_tasks::value_impl]
 impl Asset for WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident()
     }
 
     #[turbo_tasks::function]
@@ -115,10 +116,10 @@ struct ProcessWebpackLoadersResult {
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContextVc) -> AssetVc {
+fn webpack_loaders_executor(project_path: FileSystemPathVc, context: AssetContextVc) -> AssetVc {
     EcmascriptModuleAssetVc::new(
         VirtualAssetVc::new(
-            project_root.join("__turbopack__/webpack-loaders-executor.ts"),
+            project_path.join("__turbopack__/webpack-loaders-executor.ts"),
             AssetContent::File(embed_file("transforms/webpack-loaders.ts")).cell(),
         )
         .into(),
@@ -137,7 +138,7 @@ impl WebpackLoadersProcessedAssetVc {
         let this = self.await?;
 
         let ExecutionContext {
-            project_root,
+            project_path,
             intermediate_output_path,
             env,
         } = *this.execution_context.await?;
@@ -154,16 +155,16 @@ impl WebpackLoadersProcessedAssetVc {
         let content = content.content().to_str()?;
         let context = this.evaluate_context;
 
-        let webpack_loaders_executor = webpack_loaders_executor(project_root, context);
-        let resource_fs_path = this.source.path().await?;
+        let webpack_loaders_executor = webpack_loaders_executor(project_path, context);
+        let resource_fs_path = this.source.ident().path().await?;
         let resource_path = resource_fs_path.path.as_str();
         let loaders = this.loaders.await?;
         let config_value = evaluate(
-            project_root,
+            project_path,
             webpack_loaders_executor,
-            project_root,
+            project_path,
             env,
-            this.source.path(),
+            this.source.ident(),
             context,
             intermediate_output_path,
             None,

@@ -152,9 +152,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            cli/**/*.go
-            cli/go.mod
-            cli/go.sum
+            examples_tests/**
             scripts/run-example.sh
             !**.md
             !**.mdx
@@ -266,6 +264,13 @@ jobs:
 
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli
+        env:
+          GO_TAG: go
+
+      - name: Integration Tests (with Rust FFI)
+        run: pnpm -- turbo run integration-tests --filter=cli
+        env:
+          GO_TAG: rust
 
   go_e2e:
     name: Go E2E Tests

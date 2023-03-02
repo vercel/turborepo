@@ -55,8 +55,8 @@ async fn emit(
             .await?
             .iter()
             .map(|a| async {
-                Ok(if *a.path().extension().await? != "map" {
-                    Some(a.content().write(a.path()))
+                Ok(if *a.ident().path().extension().await? != "map" {
+                    Some(a.content().write(a.ident().path()))
                 } else {
                     None
                 })
@@ -67,7 +67,7 @@ async fn emit(
             .flatten()
             .collect(),
     )
-    .all())
+    .completed())
 }
 
 /// List of the all assets of the "internal" subgraph and a list of boundary
@@ -138,7 +138,12 @@ async fn separate_assets(
             // others as "external". We follow references on "internal" assets, but do not
             // look into references of "external" assets, since there are no "internal"
             // assets behind "externals"
-            if asset.path().await?.is_inside(intermediate_output_path) {
+            if asset
+                .ident()
+                .path()
+                .await?
+                .is_inside(intermediate_output_path)
+            {
                 let mut assets = Vec::new();
                 for reference in asset.references().await?.iter() {
                     for asset in reference.resolve_reference().primary_assets().await?.iter() {
@@ -264,18 +269,17 @@ pub struct StructuredError {
 }
 
 impl StructuredError {
-    async fn print(
-        &self,
-        assets: HashMap<String, SourceMapVc>,
-        root: Option<String>,
-    ) -> Result<String> {
+    async fn print(&self, assets: HashMap<String, SourceMapVc>, root: &str) -> Result<String> {
         let mut message = String::new();
 
         writeln!(message, "{}: {}", self.name, self.message)?;
 
         for frame in &self.stack {
             if let Some((line, column)) = frame.get_pos() {
-                if let Some(path) = root.as_ref().and_then(|r| frame.file.strip_prefix(r)) {
+                if let Some(path) = frame.file.strip_prefix(
+                    // Add a trailing slash so paths don't lead with `/`.
+                    &format!("{}{}", root, std::path::MAIN_SEPARATOR),
+                ) {
                     if let Some(map) = assets.get(path) {
                         let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
                             .trace()
@@ -316,9 +320,9 @@ pub async fn trace_stack(
                 None => return Ok(None),
             };
 
-            let path = match to_sys_path(a.path()).await? {
+            let path = match to_sys_path(a.ident().path()).await? {
                 Some(p) => p,
-                None => PathBuf::from(&a.path().await?.path),
+                None => PathBuf::from(&a.ident().path().await?.path),
             };
 
             let p = path.strip_prefix(&root).unwrap();
@@ -333,7 +337,7 @@ pub async fn trace_stack(
         .flatten()
         .collect::<HashMap<_, _>>();
 
-    error.print(assets, Some(root)).await
+    error.print(assets, &root).await
 }
 
 pub fn register() {
