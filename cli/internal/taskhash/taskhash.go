@@ -46,7 +46,7 @@ type Tracker struct {
 	// so reads and writes are protected by the mutux `mu`.
 	packageTaskEnvVars   map[string]env.DetailedMap // key is taskID
 	packageTaskHashes    map[string]string          // taskID -> hash
-	PackageTaskFramework map[string]string
+	packageTaskFramework map[string]string
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -56,7 +56,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		globalHash:           globalHash,
 		pipeline:             pipeline,
 		packageTaskHashes:    make(map[string]string),
-		PackageTaskFramework: make(map[string]string),
+		packageTaskFramework: make(map[string]string),
 		packageTaskEnvVars:   make(map[string]env.DetailedMap),
 	}
 }
@@ -336,7 +336,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	th.packageTaskEnvVars[packageTask.TaskID] = envVars
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	if framework != nil {
-		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
+		th.packageTaskFramework[packageTask.TaskID] = framework.Slug
 	}
 	th.mu.Unlock()
 	return hash, nil
@@ -360,4 +360,9 @@ func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 	th.mu.RLock()
 	defer th.mu.RUnlock()
 	return th.packageTaskEnvVars[taskID]
+}
+
+// GetFramework returns the inferred framework for a given taskID
+func (th *Tracker) GetFramework(taskID string) string {
+	return th.packageTaskFramework[taskID]
 }
