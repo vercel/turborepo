@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -40,6 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
+	summary *runsummary.DryRunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -88,10 +90,60 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	taskSummaryMap := map[string]runsummary.TaskSummary{}
+
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		// COPY PASTE FROM DRY RUN!
+		itemStatus, err := turboCache.Exists(packageTask.Hash)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+		command := "<NONEXISTENT>"
+		if packageTask.Command != "" {
+			command = packageTask.Command
+		}
+		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+
+		ts := runsummary.TaskSummary{
+			TaskID:                 packageTask.TaskID,
+			Task:                   packageTask.Task,
+			Package:                packageTask.PackageName,
+			Hash:                   packageTask.Hash,
+			CacheState:             itemStatus,
+			Command:                command,
+			Dir:                    packageTask.Dir,
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:                packageTask.LogFile,
+			Dependencies:           ancestors,
+			Dependents:             descendents,
+			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			ExpandedInputs:         packageTask.ExpandedInputs,
+			EnvVars: runsummary.TaskEnvVarSummary{
+				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
+				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
+			},
+			Framework: packageTask.Framework,
+		}
+		// End DRY RUN STOLEN
+
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		expandedOutputs, err := ec.exec(ctx, packageTask, deps)
+		if err != nil {
+			return err
+		}
+
+		ts.ExpandedOutputs = expandedOutputs
+		taskSummaryMap[packageTask.TaskID] = ts
+		return nil
 	}
 
 	getArgs := func(taskID string) []string {
@@ -117,14 +169,48 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
+	// We gathered the info as a map, but we want to attach it as an array
+	for _, s := range taskSummaryMap {
+		summary.Tasks = append(summary.Tasks, s)
+	}
+
+	runState.mu.Lock()
+
+	for taskID, state := range runState.state {
+		if t, ok := taskSummaryMap[taskID]; ok {
+			executionSummary := &runsummary.TaskExecutionSummary{
+				Start:    state.StartAt,
+				Duration: state.Duration,
+				Label:    state.Label,
+				Err:      state.Err,
+			}
+
+			// Catch the error if Status is somehow invalid
+			if status, err := state.Status.ToString(); err == nil {
+				executionSummary.Status = status
+			}
+
+			t.RunSummary = executionSummary
+		}
+	}
+
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
+
 	if exitCode != 0 {
 		return &process.ChildExit{
 			ExitCode: exitCode,
 		}
 	}
+
+	summary.ExitCode = exitCode
+	rendered, err := renderDryRunFullJSON(summary, singlePackage)
+	if err != nil {
+		return err
+	}
+	base.UI.Output(rendered)
+
 	return nil
 }
 
@@ -152,7 +238,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runcache.ExpandedOutputs, error) {
 	cmdTime := time.Now()
 
 	progressLogger := ec.logger.Named("")
@@ -172,7 +258,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
+		return nil, nil
 	}
 
 	var prefix string
@@ -200,7 +286,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
-		return nil
+		return nil, nil
 	}
 
 	// Setup command execution
@@ -270,7 +356,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
-			return nil
+			return nil, nil
 		}
 		tracer(TargetBuildFailed, err)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
@@ -284,15 +370,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 
-		return err
+		return nil, err
 	}
+
+	var expandedOutputs runcache.ExpandedOutputs
 
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
 		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
+		if expandedOutputs, err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
 			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -300,5 +388,5 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
+	return &expandedOutputs, nil
 }

@@ -46,25 +46,25 @@ type PackageManager struct {
 	ArgSeparator []string
 
 	// Return the list of workspace glob
-	getWorkspaceGlobs func(rootpath turbopath.AbsoluteSystemPath) ([]string, error)
+	getWorkspaceGlobs func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) `json:"-"`
 
 	// Return the list of workspace ignore globs
-	getWorkspaceIgnores func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error)
+	getWorkspaceIgnores func(pm PackageManager, rootpath turbopath.AbsoluteSystemPath) ([]string, error) `json:"-"`
 
 	// Detect if Turbo knows how to produce a pruned workspace for the project
-	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error)
+	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error) `json:"-"`
 
 	// Test a manager and version tuple to see if it is the Package Manager.
-	Matches func(manager string, version string) (bool, error)
+	Matches func(manager string, version string) (bool, error) `json:"-"`
 
 	// Detect if the project is using the Package Manager by inspecting the system.
-	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error)
+	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) `json:"-"`
 
 	// Read a lockfile for a given package manager
-	UnmarshalLockfile func(contents []byte) (lockfile.Lockfile, error)
+	UnmarshalLockfile func(contents []byte) (lockfile.Lockfile, error) `json:"-"`
 
 	// Prune the given pkgJSON to only include references to the given patches
-	prunePatches func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error
+	prunePatches func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error `json:"-"`
 }
 
 var packageManagers = []PackageManager{

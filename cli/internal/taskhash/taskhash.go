@@ -361,3 +361,8 @@ func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 	defer th.mu.RUnlock()
 	return th.packageTaskEnvVars[taskID]
 }
+
+// GetFramework returns the inferred framework for a given taskID
+func (th *Tracker) GetFramework(taskID string) string {
+	return th.PackageTaskFramework[taskID]
+}

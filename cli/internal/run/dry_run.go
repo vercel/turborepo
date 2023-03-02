@@ -18,11 +18,10 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/taskhash"
-	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
@@ -31,45 +30,6 @@ import (
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
 // the DryRunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
-const missingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
-
-// DryRunSummary contains a summary of the packages and tasks that would run
-// if the --dry flag had not been passed
-type dryRunSummary struct {
-	GlobalHashSummary *globalHashSummary `json:"globalHashSummary"`
-	Packages          []string           `json:"packages"`
-	Tasks             []taskSummary      `json:"tasks"`
-}
-
-type globalHashSummary struct {
-	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
-	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
-	GlobalCacheKey       string                                `json:"globalCacheKey"`
-	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
-}
-
-func newGlobalHashSummary(ghInputs struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	hashedSortedEnvPairs []string
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-}) *globalHashSummary {
-	// TODO(mehulkar): Add ghInputs.hashedSortedEnvPairs in here, but redact the values
-	return &globalHashSummary{
-		GlobalFileHashMap:    ghInputs.globalFileHashMap,
-		RootExternalDepsHash: ghInputs.rootExternalDepsHash,
-		GlobalCacheKey:       ghInputs.globalCacheKey,
-		Pipeline:             ghInputs.pipeline,
-	}
-}
-
-// DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
-// to the internal struct for a single package. It's likely that we can use the
-// same struct for Single Package repos in the future.
-type singlePackageDryRunSummary struct {
-	Tasks []singlePackageTaskSummary `json:"tasks"`
-}
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
 // execute the task.
@@ -81,7 +41,7 @@ func DryRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
-	summary *dryRunSummary,
+	summary *runsummary.DryRunSummary,
 ) error {
 	defer turboCache.Shutdown()
 
@@ -123,12 +83,12 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
-	taskIDs := []taskSummary{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]runsummary.TaskSummary, error) {
+	taskIDs := []runsummary.TaskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		hash := packageTask.Hash
-		envVars := taskEnvVarSummary{
+		envVars := runsummary.TaskEnvVarSummary{
 			Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
 			Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
 		}
@@ -136,11 +96,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		command := missingTaskLabel
 		if packageTask.Command != "" {
 			command = packageTask.Command
-		}
-
-		framework := missingFrameworkLabel
-		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
-			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
 		}
 
 		isRootTask := packageTask.PackageName == util.RootPkgName
@@ -163,7 +118,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		taskIDs = append(taskIDs, taskSummary{
+		taskIDs = append(taskIDs, runsummary.TaskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -173,7 +128,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			Command:                command,
-			Framework:              framework,
+			Framework:              packageTask.Framework,
 			ExpandedInputs:         packageTask.ExpandedInputs,
 			EnvVars:                envVars,
 
@@ -210,14 +165,14 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	return taskIDs, nil
 }
 
-func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
+func renderDryRunSinglePackageJSON(summary *runsummary.DryRunSummary) (string, error) {
+	singlePackageTasks := make([]runsummary.SinglePackageTaskSummary, len(summary.Tasks))
 
 	for i, ht := range summary.Tasks {
-		singlePackageTasks[i] = ht.toSinglePackageTask()
+		singlePackageTasks[i] = ht.ToSinglePackageTask()
 	}
 
-	dryRun := &singlePackageDryRunSummary{singlePackageTasks}
+	dryRun := &runsummary.SinglePackageDryRunSummary{singlePackageTasks}
 
 	bytes, err := json.MarshalIndent(dryRun, "", "  ")
 	if err != nil {
@@ -226,7 +181,7 @@ func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
 	return string(bytes), nil
 }
 
-func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, error) {
+func renderDryRunFullJSON(summary *runsummary.DryRunSummary, singlePackage bool) (string, error) {
 	if singlePackage {
 		return renderDryRunSinglePackageJSON(summary)
 	}
@@ -238,7 +193,7 @@ func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, e
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, summary *runsummary.DryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
@@ -337,74 +292,4 @@ var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", rege
 
 func commandLooksLikeTurbo(command string) bool {
 	return _isTurbo.MatchString(command)
-}
-
-// TODO: put this somewhere else
-// TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
-// as the information is also available in ResolvedTaskDefinition. We could remove them
-// and favor a version of Outputs that is the fully expanded list of files.
-type taskSummary struct {
-	TaskID                 string                                `json:"taskId"`
-	Task                   string                                `json:"task"`
-	Package                string                                `json:"package"`
-	Hash                   string                                `json:"hash"`
-	CacheState             cache.ItemStatus                      `json:"cacheState"`
-	Command                string                                `json:"command"`
-	Outputs                []string                              `json:"outputs"`
-	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
-	Dir                    string                                `json:"directory"`
-	Dependencies           []string                              `json:"dependencies"`
-	Dependents             []string                              `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
-	Framework              string                                `json:"framework"`
-	EnvVars                taskEnvVarSummary                     `json:"environmentVariables"`
-}
-
-type singlePackageTaskSummary struct {
-	Task                   string                                `json:"task"`
-	Hash                   string                                `json:"hash"`
-	CacheState             cache.ItemStatus                      `json:"cacheState"`
-	Command                string                                `json:"command"`
-	Outputs                []string                              `json:"outputs"`
-	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
-	Dependencies           []string                              `json:"dependencies"`
-	Dependents             []string                              `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
-	Framework              string                                `json:"framework"`
-	EnvVars                taskEnvVarSummary                     `json:"environmentVariables"`
-}
-
-func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
-	dependencies := make([]string, len(ht.Dependencies))
-	for i, depencency := range ht.Dependencies {
-		dependencies[i] = util.StripPackageName(depencency)
-	}
-	dependents := make([]string, len(ht.Dependents))
-	for i, dependent := range ht.Dependents {
-		dependents[i] = util.StripPackageName(dependent)
-	}
-
-	return singlePackageTaskSummary{
-		Task:                   util.RootTaskTaskName(ht.TaskID),
-		Hash:                   ht.Hash,
-		CacheState:             ht.CacheState,
-		Command:                ht.Command,
-		Outputs:                ht.Outputs,
-		LogFile:                ht.LogFile,
-		Dependencies:           dependencies,
-		Dependents:             dependents,
-		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
-		Framework:              ht.Framework,
-		ExpandedInputs:         ht.ExpandedInputs,
-		EnvVars:                ht.EnvVars,
-	}
-}
-
-type taskEnvVarSummary struct {
-	Configured []string `json:"configured"`
-	Inferred   []string `json:"inferred"`
 }
