@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{anyhow, bail, Result};
+use indexmap::indexmap;
 use turbo_tasks::Value;
 use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileContentVc, FileSystemPathVc};
 use turbopack::{
@@ -29,6 +28,7 @@ pub struct NextEdgeTransition {
     pub output_path: FileSystemPathVc,
     pub base_path: FileSystemPathVc,
     pub bootstrap_file: FileContentVc,
+    pub entry_name: String,
 }
 
 #[turbo_tasks::value_impl]
@@ -66,7 +66,7 @@ impl Transition for NextEdgeTransition {
         let FileContent::Content(base) = &*self.bootstrap_file.await? else {
             bail!("runtime code not found");
         };
-        let path = asset.path().await?;
+        let path = asset.ident().path().await?;
         let path = self
             .base_path
             .await?
@@ -81,12 +81,18 @@ impl Transition for NextEdgeTransition {
         } else {
             path
         };
-        let mut new_content =
-            RopeBuilder::from(format!("const PAGE = {};\n", stringify_js(path)).into_bytes());
+        let mut new_content = RopeBuilder::from(
+            format!(
+                "const NAME={};\nconst PAGE = {};\n",
+                stringify_js(&self.entry_name),
+                stringify_js(path)
+            )
+            .into_bytes(),
+        );
         new_content.concat(base.content());
         let file = File::from(new_content.build());
         let virtual_asset = VirtualAssetVc::new(
-            asset.path().join("next-edge-bootstrap.ts"),
+            asset.ident().path().join("next-edge-bootstrap.ts"),
             FileContent::Content(file).cell().into(),
         );
 
@@ -96,7 +102,9 @@ impl Transition for NextEdgeTransition {
             Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
             context.compile_time_info(),
-            InnerAssetsVc::cell(HashMap::from([("ENTRY".to_string(), asset)])),
+            InnerAssetsVc::cell(indexmap! {
+                "ENTRY".to_string() => asset
+            }),
         );
 
         let asset = ChunkGroupFilesAsset {

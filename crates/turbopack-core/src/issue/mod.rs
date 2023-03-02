@@ -16,7 +16,7 @@ use auto_hash_map::AutoSet;
 use futures::FutureExt;
 use turbo_tasks::{
     emit,
-    primitives::{BoolVc, StringVc, U64Vc},
+    primitives::{BoolVc, StringReadRef, StringVc, U64Vc},
     CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
     ValueToString, ValueToStringVc,
 };
@@ -467,7 +467,7 @@ impl PlainIssue {
         hasher.write_ref(&self.title);
         hasher.write_ref(
             // Normalize syspaths from Windows. These appear in stack traces.
-            &self.description.replace("\\", "/"),
+            &self.description.replace('\\', "/"),
         );
         hasher.write_ref(&self.detail);
         hasher.write_ref(&self.documentation_link);
@@ -554,7 +554,7 @@ impl IssueSourceVc {
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainAsset {
-    pub path: String,
+    pub ident: StringReadRef,
     #[turbo_tasks(debug_ignore)]
     pub content: FileContentReadRef,
 }
@@ -570,7 +570,7 @@ impl PlainAssetVc {
         };
 
         Ok(PlainAsset {
-            path: asset.path().await?.to_string(),
+            ident: asset.ident().to_string().await?,
             content,
         }
         .cell())

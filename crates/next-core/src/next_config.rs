@@ -12,7 +12,9 @@ use turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileSystemPathVc
 use turbopack::evaluate_context::node_evaluate_asset_context;
 use turbopack_core::{
     asset::Asset,
+    changed::any_content_changed,
     context::AssetContext,
+    ident::AssetIdentVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -22,8 +24,7 @@ use turbopack_core::{
     source_asset::SourceAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
@@ -539,7 +540,7 @@ fn next_configs() -> StringsVc {
 #[turbo_tasks::function]
 pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<NextConfigVc> {
     let ExecutionContext {
-        project_root,
+        project_path,
         intermediate_output_path,
         env,
     } = *execution_context.await?;
@@ -550,43 +551,40 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
     import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
 
-    let context = node_evaluate_asset_context(Some(import_map.cell()), None);
-    let find_config_result = find_context_file(project_root, next_configs());
+    let context = node_evaluate_asset_context(project_path, Some(import_map.cell()), None);
+    let find_config_result = find_context_file(project_path, next_configs());
     let config_asset = match &*find_config_result.await? {
         FindContextFileResult::Found(config_path, _) => Some(SourceAssetVc::new(*config_path)),
         FindContextFileResult::NotFound(_) => None,
     };
 
-    let runtime_entries = config_asset.map(|config_asset| {
-        // TODO this is a hack to add the config to the bundling to make it watched
-        let config_chunk = EcmascriptModuleAssetVc::new(
+    let config_changed = config_asset.map_or_else(CompletionVc::immutable, |config_asset| {
+        // This invalidates the execution when anything referenced by the config file
+        // changes
+        let config_asset = EcmascriptModuleAssetVc::new(
             config_asset.into(),
             context,
             Value::new(EcmascriptModuleAssetType::Ecmascript),
             EcmascriptInputTransformsVc::cell(vec![]),
             context.compile_time_info(),
-        )
-        .as_ecmascript_chunk_placeable();
-        EcmascriptChunkPlaceablesVc::cell(vec![config_chunk])
+        );
+        any_content_changed(config_asset.into())
     });
-    let asset_path = config_asset
-        .map_or(project_root, |a| a.path())
-        .join("load-next-config.js");
     let load_next_config_asset = context.process(
-        next_asset(asset_path, "entry/config/next.js"),
+        next_asset("entry/config/next.js"),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
     let config_value = evaluate(
-        project_root,
+        project_path,
         load_next_config_asset,
-        project_root,
+        project_path,
         env,
-        config_asset.map_or(project_root, |c| c.path()),
+        config_asset.map_or_else(|| AssetIdentVc::from_path(project_path), |c| c.ident()),
         context,
         intermediate_output_path,
-        runtime_entries,
+        None,
         vec![],
-        CompletionVc::immutable(),
+        config_changed,
         /* debug */ false,
     )
     .await?;

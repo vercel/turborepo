@@ -4,7 +4,9 @@ package nodes
 import (
 	"fmt"
 
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // PackageTask represents running a particular task in a particular package
@@ -19,6 +21,9 @@ type PackageTask struct {
 	Outputs         []string
 	ExcludedOutputs []string
 	LogFile         string
+	ExpandedInputs  map[turbopath.AnchoredUnixPath]string
+	Hash            string
+	HashedEnvVars   env.DetailedMap
 }
 
 // OutputPrefix returns the prefix to be used for logging and ui for this task
