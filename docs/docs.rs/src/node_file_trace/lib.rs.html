@@ -677,6 +677,10 @@
 <span id="677">677</span>
 <span id="678">678</span>
 <span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -1134,12 +1138,21 @@
     <span class="kw">let </span>(sender, <span class="kw-2">mut </span>receiver) = channel(<span class="number">1</span>);
     <span class="kw">let </span>dir = current_dir().unwrap();
     <span class="kw">let </span>tt = create_tt();
+    <span class="kw">let </span>module_options = TransientInstance::new(module_options.unwrap_or_default());
+    <span class="kw">let </span>resolve_options = TransientInstance::new(resolve_options.unwrap_or_default());
+    <span class="kw">let </span>log_options = TransientInstance::new(LogOptions {
+        current_dir: dir.clone(),
+        show_all,
+        log_detail,
+        log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.<span class="number">0</span>),
+    });
     <span class="kw">let </span>task = tt.spawn_root_task(<span class="kw">move </span>|| {
         <span class="kw">let </span>dir = dir.clone();
         <span class="kw">let </span>args = args.clone();
         <span class="kw">let </span>sender = sender.clone();
-        <span class="kw">let </span>module_options = TransientInstance::new(module_options.clone().unwrap_or_default());
-        <span class="kw">let </span>resolve_options = TransientInstance::new(resolve_options.clone().unwrap_or_default());
+        <span class="kw">let </span>module_options = module_options.clone();
+        <span class="kw">let </span>resolve_options = resolve_options.clone();
+        <span class="kw">let </span>log_options = log_options.clone();
         Box::pin(<span class="kw">async move </span>{
             <span class="kw">let </span>output = main_operation(
                 TransientValue::new(dir.clone()),
@@ -1154,12 +1167,7 @@
                 </span>.strongly_consistent()
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>console_ui = ConsoleUiVc::new(TransientInstance::new(LogOptions {
-                current_dir: dir.clone(),
-                show_all,
-                log_detail,
-                log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.<span class="number">0</span>),
-            }));
+            <span class="kw">let </span>console_ui = ConsoleUiVc::new(log_options);
             console_ui
                 .as_issue_reporter()
                 .report_issues(TransientInstance::new(issues), source);
