@@ -506,7 +506,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             references,
             code_generation,
             ..
-        } = &*self.full_module.analyze().await?;
+        } = &*self.module.analyze().await?;
 
         let mut code_gens = Vec::new();
         for r in references.await?.iter() {
