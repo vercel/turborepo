@@ -247,7 +247,7 @@ mod tests {
                 font_family: "ABeeZee".to_owned(),
                 weights: FontWeights::Variable,
                 styles: indexset! {"normal".to_owned()},
-                display: "optional".to_owned(),
+                display: "swap".to_owned(),
                 preload: true,
                 selected_variable_axes: None,
                 fallback: None,
