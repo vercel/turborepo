@@ -110,11 +110,17 @@ function makeErrorEmitter(severity: "warning" | "error", ipc: Ipc) {
     ipc.send({
       type: "emittedError",
       severity: severity,
-      error: {
-        name: error instanceof Error ? error.name : "Error",
-        message: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? parseStackTrace(error.stack) : [],
-      },
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: parseStackTrace(error.stack),
+            }
+          : {
+              name: "Error",
+              message: error,
+              stack: [],
+            },
     });
   };
 }
