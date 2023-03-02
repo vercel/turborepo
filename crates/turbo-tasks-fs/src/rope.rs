@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use futures::Stream;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::io::{AsyncRead, ReadBuf};
@@ -22,7 +22,7 @@ static EMPTY_BUF: &[u8] = &[];
 
 /// A Rope provides an efficient structure for sharing bytes/strings between
 /// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
-/// the sharing contents of one Rope can be done by just cloning an Arc.
+/// sharing the contents of one Rope can be done by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
 #[turbo_tasks::value(shared, serialization = "custom", eq = "manual")]
@@ -100,9 +100,9 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
-    pub fn read(&self) -> RopeReader {
-        RopeReader::new(&self.data, 0)
+    /// Returns a [Read]/[AsyncRead]/[Iterator] instance over all bytes.
+    pub fn read(&self) -> RopeReader<'static> {
+        RopeReader::new(self)
     }
 
     /// Returns a String instance of all bytes.
@@ -388,9 +388,9 @@ impl PartialEq for Rope {
         }
 
         // At this point, we need to do slower contents equality. It's possible we'll
-        // still get some memory reference quality for Bytes.
-        let mut left = RopeReader::new(left, index);
-        let mut right = RopeReader::new(right, index);
+        // still get some memory reference equality for Bytes.
+        let mut left = RopeReader::new_borrow(left, index);
+        let mut right = RopeReader::new_borrow(right, index);
         loop {
             match (left.fill_buf(), right.fill_buf()) {
                 // fill_buf should always return Ok, with either some number of bytes or 0 bytes
@@ -443,7 +443,7 @@ impl InnerRope {
                     .map(Cow::Borrowed)
             }
             _ => {
-                let mut read = RopeReader::new(self, 0);
+                let mut read = RopeReader::new_borrow(self, 0);
                 let mut string = String::with_capacity(self.len());
                 let res = read.read_to_string(&mut string);
                 res.context("failed to convert rope into string")?;
@@ -538,31 +538,85 @@ impl DeterministicHash for RopeElem {
     }
 }
 
-/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
+/// Implements the [Read]/[AsyncRead]/[Iterator] trait over a [Rope].
 #[derive(Debug, Default)]
-pub struct RopeReader {
+pub struct RopeReader<'a> {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
-    stack: Vec<StackElem>,
+    stack: Vec<StackElem<'a>>,
+
+    /// The leaked root allows us to invert the ownership of Bytes. By leaking
+    /// the Rope's root, we're able to use a 'static lifetime and let the
+    /// RopeReader own the memory and cleanup. When the RopeReader is dropped,
+    /// the InnerRope's Arc will be manually decremented to free the memory.
+    leaked_root: Option<*mut InnerRope>,
 }
+
+// SAFETY: The RopeReader is neither Clone nor Copy, meaning this instance is
+// the only holder of our leaked root InnerRope. The pointer only ever accessed
+// when we drop, so that we can free the leaked memory.
+unsafe impl<'a> Send for RopeReader<'a> {}
+unsafe impl<'a> Sync for RopeReader<'a> {}
 
 /// A StackElem holds the current index into either a Bytes or a shared Rope.
 /// When the index reaches the end of the associated data, it is removed and we
 /// continue onto the next item in the stack.
 #[derive(Debug)]
-enum StackElem {
-    Local(Bytes),
-    Shared(InnerRope, usize),
+enum StackElem<'a> {
+    Local(&'a Bytes, usize),
+    Shared(&'a InnerRope, usize),
 }
 
-impl RopeReader {
-    fn new(inner: &InnerRope, index: usize) -> Self {
-        if index >= inner.len() {
-            Default::default()
+impl<'a> RopeReader<'a> {
+    /// Constructs a new RopeReader, taking ownership of the Rope's internal
+    /// memory and freeing us from the lifetime constraints of the Rope.
+    fn new(rope: &Rope) -> RopeReader<'static> {
+        // We leak a **cloned** InnerRope, which is essentially free to do. By cloning,
+        // we increment the Arc's reference counter, and by leaking we promote
+        // the clone into a 'static lifetime. This allows us to pretend that the
+        // RopeReader owns the Rope's memory.
+        let leak = Box::leak(Box::new(rope.data.clone()));
+        let root = Some(leak as *mut InnerRope);
+        let mut reader = RopeReader::new_borrow(leak, 0);
+        reader.leaked_root = root;
+        reader
+    }
+
+    /// Constructs a new RopeReader without taking ownership of the Rope's
+    /// internal memory.
+    fn new_borrow(inner: &'a InnerRope, index: usize) -> Self {
+        let stack = if index >= inner.len() {
+            vec![]
         } else {
-            RopeReader {
-                stack: vec![StackElem::Shared(inner.clone(), index)],
-            }
+            vec![StackElem::Shared(inner, index)]
+        };
+        RopeReader {
+            stack,
+            leaked_root: None,
+        }
+    }
+
+    /// Iterates the rope's elements recursively until we find the next Local
+    /// section, returning its Bytes.
+    fn next_internal(&mut self) -> Option<(&'a Bytes, usize)> {
+        loop {
+            match self.stack.last_mut() {
+                None => return None,
+                Some(StackElem::Local(b, o)) => {
+                    debug_assert!(*o < b.len(), "must not have empty Bytes section");
+                    return Some((b, *o));
+                }
+                Some(StackElem::Shared(inner, index)) => {
+                    let el = &inner[*index];
+                    if *index + 1 < inner.len() {
+                        *index += 1;
+                    } else {
+                        self.stack.pop();
+                    }
+
+                    self.stack.push(StackElem::from(el));
+                }
+            };
         }
     }
 
@@ -572,60 +626,50 @@ impl RopeReader {
         let mut remaining = want;
 
         while remaining > 0 {
-            let mut bytes = match self.next() {
+            let bytes = match self.next_internal() {
                 None => break,
-                Some(b) => b,
+                Some((b, o)) => &b[o..],
             };
 
-            let amount = min(bytes.len(), remaining);
-
-            buf.put_slice(&bytes[0..amount]);
-
-            if amount < bytes.len() {
-                bytes.advance(amount);
-                self.stack.push(StackElem::Local(bytes))
-            }
-            remaining -= amount;
+            let amt = min(bytes.len(), remaining);
+            buf.put_slice(&bytes[0..amt]);
+            self.consume(amt);
+            remaining -= amt;
         }
 
         want - remaining
     }
 }
 
-impl Iterator for RopeReader {
-    type Item = Bytes;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Iterates the rope's elements recursively until we find the next Local
-        // section, returning its Bytes.
-        loop {
-            let (inner, mut index) = match self.stack.pop() {
-                None => return None,
-                Some(StackElem::Local(b)) => {
-                    debug_assert!(!b.is_empty(), "must not have empty Bytes section");
-                    return Some(b);
-                }
-                Some(StackElem::Shared(r, i)) => (r, i),
-            };
-
-            let el = inner[index].clone();
-            index += 1;
-            if index < inner.len() {
-                self.stack.push(StackElem::Shared(inner, index));
-            }
-
-            self.stack.push(StackElem::from(el));
-        }
+impl<'a> Drop for RopeReader<'a> {
+    fn drop(&mut self) {
+        let root = mem::take(&mut self.leaked_root);
+        // SAFETY: We're the only holder of this pointer (RopeReader is neither clone
+        // nor copy), and it holds a cloned InnerRope and its Arc. By reconstituting a
+        // Box, we allow the Arc to decrement and avoid leaking the Rope permanently.
+        root.map(|ptr| unsafe { Box::from_raw(ptr) });
     }
 }
 
-impl Read for RopeReader {
+impl<'a> Iterator for RopeReader<'a> {
+    type Item = &'a Bytes;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_internal().map(|(bytes, offset)| {
+            debug_assert!(offset == 0, "cannot mix Iterator with Read/BufRead");
+            self.stack.pop();
+            bytes
+        })
+    }
+}
+
+impl<'a> Read for RopeReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         Ok(self.read_internal(buf.len(), &mut ReadBuf::new(buf)))
     }
 }
 
-impl AsyncRead for RopeReader {
+impl<'a> AsyncRead for RopeReader<'a> {
     fn poll_read(
         self: Pin<&mut Self>,
         _cx: &mut TaskContext<'_>,
@@ -637,40 +681,30 @@ impl AsyncRead for RopeReader {
     }
 }
 
-impl BufRead for RopeReader {
+impl<'a> BufRead for RopeReader<'a> {
     fn fill_buf(&mut self) -> IoResult<&[u8]> {
-        // Returns the full buffer without coping any data. The same bytes will
-        // continue to be returned until [consume] is called.
-        let bytes = match self.next() {
-            None => return Ok(EMPTY_BUF),
-            Some(b) => b,
-        };
-
-        // This is just so we can get a reference to the asset that is kept alive by the
-        // RopeReader itself. We can then auto-convert that reference into the needed u8
-        // slice reference.
-        self.stack.push(StackElem::Local(bytes));
-        let Some(StackElem::Local(bytes)) = self.stack.last() else {
-            unreachable!()
-        };
-
-        Ok(bytes)
+        Ok(match self.next_internal() {
+            None => EMPTY_BUF,
+            Some((bytes, offset)) => &bytes[offset..],
+        })
     }
 
     fn consume(&mut self, amt: usize) {
-        if let Some(StackElem::Local(b)) = self.stack.last_mut() {
-            if amt == b.len() {
-                self.stack.pop();
+        if let Some(StackElem::Local(bytes, offset)) = self.stack.last_mut() {
+            if *offset + amt < bytes.len() {
+                *offset += amt;
             } else {
-                // Consume some amount of bytes from the current Bytes instance, ensuring
-                // those bytes are not returned on the next call to [fill_buf].
-                b.advance(amt);
+                debug_assert!(
+                    *offset + amt == bytes.len(),
+                    "cannot over-consume RopeReader"
+                );
+                self.stack.pop();
             }
-        }
+        };
     }
 }
 
-impl Stream for RopeReader {
+impl<'a> Stream for RopeReader<'a> {
     // The Result<Bytes> item type is required for this to be streamable into a
     // [Hyper::Body].
     type Item = Result<Bytes>;
@@ -679,14 +713,14 @@ impl Stream for RopeReader {
     // differs from [Read::read] by not copying any memory.
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        Poll::Ready(this.next().map(Ok))
+        Poll::Ready(this.next().cloned().map(Ok))
     }
 }
 
-impl From<RopeElem> for StackElem {
-    fn from(el: RopeElem) -> Self {
+impl<'a> From<&'a RopeElem> for StackElem<'a> {
+    fn from(el: &'a RopeElem) -> Self {
         match el {
-            Local(bytes) => Self::Local(bytes),
+            Local(bytes) => Self::Local(bytes, 0),
             Shared(inner) => Self::Shared(inner, 0),
         }
     }
@@ -694,6 +728,13 @@ impl From<RopeElem> for StackElem {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        cmp::min,
+        io::{BufRead, Read},
+    };
+
+    use bytes::Bytes;
+
     use super::{InnerRope, Rope, RopeBuilder, RopeElem};
 
     // These are intentionally not exposed, because they do inefficient conversions
@@ -876,5 +917,75 @@ mod test {
         let b = Rope::new(vec!["abc".into(), shared.into(), "hhh".into()]);
 
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn iteration() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let chunks = rope.read().into_iter().collect::<Vec<&Bytes>>();
+
+        assert_eq!(chunks, vec!["abc", "def", "ghi"]);
+    }
+
+    #[test]
+    fn read() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut buf = [0_u8; 2];
+        let mut reader = rope.read();
+        loop {
+            let amt = reader.read(&mut buf).unwrap();
+            if amt == 0 {
+                break;
+            }
+            chunks.push(Vec::from(&buf[0..amt]));
+        }
+
+        assert_eq!(
+            chunks,
+            vec![
+                Vec::from(*b"ab"),
+                Vec::from(*b"cd"),
+                Vec::from(*b"ef"),
+                Vec::from(*b"gh"),
+                Vec::from(*b"i")
+            ]
+        );
+    }
+
+    #[test]
+    fn fill_buf() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut reader = rope.read();
+        loop {
+            let buf = reader.fill_buf().unwrap();
+            if buf.is_empty() {
+                break;
+            }
+            let c = min(2, buf.len());
+            chunks.push(Vec::from(buf));
+            reader.consume(c);
+        }
+
+        assert_eq!(
+            chunks,
+            // We're receiving a full buf, then only consuming 2 bytes, so we'll still get the
+            // third.
+            vec![
+                Vec::from(*b"abc"),
+                Vec::from(*b"c"),
+                Vec::from(*b"def"),
+                Vec::from(*b"f"),
+                Vec::from(*b"ghi"),
+                Vec::from(*b"i")
+            ]
+        );
     }
 }
