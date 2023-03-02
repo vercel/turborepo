@@ -69,6 +69,19 @@
 <span id="69">69</span>
 <span id="70">70</span>
 <span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>command_line;
@@ -95,6 +108,19 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
         EnvMap(IndexMap::new()).cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ProcessEnv <span class="kw">for </span>EnvMap {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>read_all(self_vc: EnvMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
+        <span class="prelude-val">Ok</span>(self_vc)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>read(self_vc: EnvMapVc, name: <span class="kw-2">&amp;</span>str) -&gt; OptionStringVc {
+        case_insensitive_read(self_vc, name)
     }
 }
 

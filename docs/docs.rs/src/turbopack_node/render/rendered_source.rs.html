@@ -277,9 +277,15 @@
 <span id="277">277</span>
 <span id="278">278</span>
 <span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
+<span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetsSetVc},
@@ -322,6 +328,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>create_node_rendered_source(
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
@@ -332,6 +339,7 @@
 ) -&gt; ContentSourceVc {
     <span class="kw">let </span>source = NodeRenderContentSource {
         cwd,
+        env,
         specificity,
         server_root,
         route_match,
@@ -356,6 +364,7 @@
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>NodeRenderContentSource {
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
@@ -481,6 +490,7 @@
         <span class="kw">let </span>entry = source.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = render_static(
             source.cwd,
+            source.env,
             source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
             source.runtime_entries,

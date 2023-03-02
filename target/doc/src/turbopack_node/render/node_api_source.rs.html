@@ -201,9 +201,15 @@
 <span id="201">201</span>
 <span id="202">202</span>
 <span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
+<span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::introspect::{
     asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -226,6 +232,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>create_node_api_source(
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
@@ -235,6 +242,7 @@
 ) -&gt; ContentSourceVc {
     NodeApiContentSource {
         cwd,
+        env,
         specificity,
         server_root,
         pathname,
@@ -255,6 +263,7 @@
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>NodeApiContentSource {
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     pathname: StringVc,
@@ -336,6 +345,7 @@
         <span class="kw">let </span>entry = source.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ContentSourceContent::HttpProxy(render_proxy(
             source.cwd,
+            source.env,
             source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
             source.runtime_entries,

@@ -347,6 +347,20 @@
 <span id="347">347</span>
 <span id="348">348</span>
 <span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -355,6 +369,7 @@
     collections::{HashMap, HashSet},
     fmt::Write <span class="kw">as _</span>,
     path::PathBuf,
+    thread::available_parallelism,
 };
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -366,6 +381,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
+<span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -537,6 +553,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>get_renderer_pool(
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -569,7 +586,18 @@
         <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `entrypoint = {}`&quot;</span>, entrypoint.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
     };
 
-    <span class="prelude-val">Ok</span>(NodeJsPool::new(cwd, entrypoint, HashMap::new(), <span class="number">4</span>, debug).cell())
+    <span class="prelude-val">Ok</span>(NodeJsPool::new(
+        cwd,
+        entrypoint,
+        env.read_all()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        available_parallelism().map_or(<span class="number">1</span>, |v| v.get()),
+        debug,
+    )
+    .cell())
 }
 
 <span class="doccomment">/// Converts a module graph into node.js executable assets

@@ -722,6 +722,19 @@
 <span id="722">722</span>
 <span id="723">723</span>
 <span id="724">724</span>
+<span id="725">725</span>
+<span id="726">726</span>
+<span id="727">727</span>
+<span id="728">728</span>
+<span id="729">729</span>
+<span id="730">730</span>
+<span id="731">731</span>
+<span id="732">732</span>
+<span id="733">733</span>
+<span id="734">734</span>
+<span id="735">735</span>
+<span id="736">736</span>
+<span id="737">737</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -730,7 +743,7 @@
     trace::TraceRawVcs,
     Value,
 };
-<span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
+<span class="kw">use </span>turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{rebase, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 <span class="kw">use </span>turbopack_core::{
@@ -939,11 +952,12 @@
     )
     .into();
 
+    <span class="kw">let </span>injected_env = env_for_js(EnvMapVc::empty().into(), <span class="bool-val">false</span>, next_config);
+    <span class="kw">let </span>env = CustomProcessEnvVc::new(env, next_config.env()).as_process_env();
+
     <span class="kw">let </span>server_runtime_entries =
-        <span class="macro">vec!</span>[
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, <span class="bool-val">false</span>, next_config))
-                .as_ecmascript_chunk_placeable(),
-        ];
+        <span class="macro">vec!</span>[ProcessEnvAssetVc::new(project_path, injected_env).as_ecmascript_chunk_placeable()];
+    <span class="kw">let </span>server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
 
     <span class="kw">let </span>fallback_page = get_fallback_page(
         project_path,
@@ -954,10 +968,10 @@
         next_config,
     );
 
-    <span class="kw">let </span>server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
     <span class="kw">let </span>page_extensions = next_config.page_extensions();
     <span class="kw">let </span>force_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -971,6 +985,7 @@
     );
     <span class="kw">let </span>fallback_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -985,6 +1000,7 @@
     <span class="kw">let </span>page_source = create_page_source_for_directory(
         pages_structure,
         project_path,
+        env,
         server_context,
         server_data_context,
         client_context,
@@ -1014,6 +1030,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>create_page_source_for_file(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -1067,6 +1084,7 @@
     <span class="prelude-val">Ok</span>(<span class="kw">if </span>is_api_path {
         create_node_api_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher.into(),
@@ -1112,6 +1130,7 @@
         CombinedContentSourceVc::new(<span class="macro">vec!</span>[
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 route_matcher.into(),
@@ -1122,6 +1141,7 @@
             ),
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 data_route_matcher.into(),
@@ -1160,6 +1180,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>create_not_found_page_source(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
@@ -1231,6 +1252,7 @@
     <span class="prelude-val">Ok</span>(CombinedContentSourceVc::new(<span class="macro">vec!</span>[
         create_node_rendered_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher,
@@ -1251,6 +1273,7 @@
 </span><span class="kw">async fn </span>create_page_source_for_directory(
     pages_structure: PagesStructureVc,
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -1276,6 +1299,7 @@
             } =&gt; {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -1298,6 +1322,7 @@
             } =&gt; {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -1320,6 +1345,7 @@
         sources.push(create_page_source_for_directory(
             <span class="kw-2">*</span>child,
             project_path,
+            env,
             server_context,
             server_data_context,
             client_context,
