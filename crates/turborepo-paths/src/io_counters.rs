@@ -78,6 +78,7 @@ impl IoCounterKey {
 
     const COUNT: usize = IoCounterKey::ALL.len();
 
+    #[allow(dead_code)]
     pub fn get(&self) -> u32 {
         IN_PROGRESS[*self as usize].load(Ordering::Relaxed)
     }
