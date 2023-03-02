@@ -30,15 +30,23 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode                    string
-	globalHash                  string
-	pipeline                    fs.Pipeline
-	mu                          sync.RWMutex
-	packageInputsHashes         packageFileHashes
+	rootNode            string
+	globalHash          string
+	pipeline            fs.Pipeline
+	mu                  sync.RWMutex
+	packageInputsHashes packageFileHashes
+
+	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
+	// Writes to this map happen during CalculateFileHash(). Since this happens synchronously
+	// before walking the task graph, it does not need to be protected by a mutex.
 	packageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
-	packageTaskEnvVars          map[string]env.DetailedMap // key is taskID
-	packageTaskHashes           map[string]string          // taskID -> hash
-	PackageTaskFramework        map[string]string
+
+	// packageTaskEnvVars is a map of taskID to a set of env vars that affect its hash.
+	// Writes to this map happen during CalculateTaskHash, which happens while walking the Task Graph
+	// so reads and writes are protected by the mutux `mu`.
+	packageTaskEnvVars   map[string]env.DetailedMap // key is taskID
+	packageTaskHashes    map[string]string          // taskID -> hash
+	PackageTaskFramework map[string]string
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -335,9 +343,6 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 }
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
-// Thes was stored during CalculateFilesHash(), so that method must run first.
-// Reads from the underlying map in this method do NOT need to be protected by a mutex
-// because CalculateFileHash() runs and finishes all writes to the map before walking the TaskGraph.
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
 	pfs := specFromPackageTask(packageTask)
 	expandedInputs := th.packageInputsExpandedHashes[pfs.ToKey()]
@@ -350,10 +355,7 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 	return inputsCopy
 }
 
-// GetEnvVars returns the hashed env vars for a given taskID.
-// This operation is protected by a mutex, because the underlying map where the
-// env vars are stored is written in CalculateTaskHash which runs while
-// walking the Task Graph (in graph.GetPackageTaskVisitor).
+// GetEnvVars returns the hashed env vars for a given taskID
 func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
 	th.mu.RLock()
 	defer th.mu.RUnlock()
