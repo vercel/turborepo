@@ -9,7 +9,7 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -31,8 +31,8 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc},
     parse::ParseResult,
     path_visitor::ApplyVisitors,
-    references::AnalyzeEcmascriptModuleResult,
-    EcmascriptModuleAssetVc, ParseResultSourceMap,
+    references::{analyze_ecmascript_module, AnalyzeEcmascriptModuleResult},
+    AnalyzeEcmascriptModuleResultVc, EcmascriptModuleAssetVc, ParseResultSourceMap,
 };
 
 mod graph;
@@ -458,6 +458,22 @@ pub struct EcmascriptModulePartChunkItem {
     context: ChunkingContextVc,
 
     chunk_id: u32,
+}
+
+#[turbo_tasks::value_impl]
+impl EcmascriptModulePartAssetVc {
+    #[turbo_tasks::function]
+    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        let part = self.await?;
+        let this = part.full_module.await?;
+        Ok(analyze_ecmascript_module(
+            this.source,
+            part.full_module.as_resolve_origin(),
+            Value::new(this.ty),
+            this.transforms,
+            this.compile_time_info,
+        ))
+    }
 }
 
 #[turbo_tasks::value_impl]
