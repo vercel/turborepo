@@ -660,7 +660,11 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     async fn id(&self) -> Result<ModuleIdVc> {
         let module = self.full_module.path().await?;
 
-        Ok(ModuleId::String(format!("{}_({})", module.path, self.chunk_id)).into())
+        Ok(ModuleId::String(format!(
+            "{} (ecmascript chunk {})",
+            module.path, self.chunk_id
+        ))
+        .into())
     }
 }
 
