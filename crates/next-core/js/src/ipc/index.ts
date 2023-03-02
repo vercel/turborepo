@@ -164,7 +164,6 @@ const improveConsole = (name: string, stream: string, addStack: boolean) => {
 improveConsole("error", "stderr", true);
 improveConsole("warn", "stderr", true);
 improveConsole("count", "stdout", true);
-improveConsole("count", "stdout", true);
 improveConsole("trace", "stderr", false);
 improveConsole("log", "stdout", true);
 improveConsole("group", "stdout", true);
