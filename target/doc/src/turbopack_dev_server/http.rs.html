@@ -204,6 +204,7 @@
 <span id="204">204</span>
 <span id="205">205</span>
 <span id="206">206</span>
+<span id="207">207</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
 <span class="kw">use </span>anyhow::Result;
@@ -308,18 +309,19 @@
 
                 <span class="comment">// naively checking if content is `compressible`.
                 </span><span class="kw">let </span><span class="kw-2">mut </span>should_compress = <span class="bool-val">false</span>;
-                <span class="kw">let </span>should_compress_predicate =
-                    |mime: <span class="kw-2">&amp;</span>Mime| <span class="kw">match </span>(mime.type_(), mime.subtype(), mime.suffix()) {
+                <span class="kw">let </span>should_compress_predicate = |mime: <span class="kw-2">&amp;</span>Mime| {
+                    <span class="macro">matches!</span>(
+                        (mime.type_(), mime.subtype(), mime.suffix()),
                         (<span class="kw">_</span>, mime::PLAIN, <span class="kw">_</span>)
-                        | (<span class="kw">_</span>, mime::JSON, <span class="kw">_</span>)
-                        | (mime::TEXT, <span class="kw">_</span>, <span class="kw">_</span>)
-                        | (mime::APPLICATION, mime::XML, <span class="kw">_</span>)
-                        | (mime::APPLICATION, mime::JAVASCRIPT, <span class="kw">_</span>)
-                        | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::XML))
-                        | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::JSON))
-                        | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::TEXT)) =&gt; <span class="bool-val">true</span>,
-                        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-                    };
+                            | (<span class="kw">_</span>, mime::JSON, <span class="kw">_</span>)
+                            | (mime::TEXT, <span class="kw">_</span>, <span class="kw">_</span>)
+                            | (mime::APPLICATION, mime::XML, <span class="kw">_</span>)
+                            | (mime::APPLICATION, mime::JAVASCRIPT, <span class="kw">_</span>)
+                            | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::XML))
+                            | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::JSON))
+                            | (<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Some</span>(mime::TEXT))
+                    )
+                };
 
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(content_type) = file.content_type() {
                     header_map.append(

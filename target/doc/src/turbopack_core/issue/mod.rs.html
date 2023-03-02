@@ -1054,7 +1054,7 @@
         hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.title);
         hasher.write_ref(
             <span class="comment">// Normalize syspaths from Windows. These appear in stack traces.
-            </span><span class="kw-2">&amp;</span><span class="self">self</span>.description.replace(<span class="string">&quot;\\&quot;</span>, <span class="string">&quot;/&quot;</span>),
+            </span><span class="kw-2">&amp;</span><span class="self">self</span>.description.replace(<span class="string">&#39;\\&#39;</span>, <span class="string">&quot;/&quot;</span>),
         );
         hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.detail);
         hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.documentation_link);

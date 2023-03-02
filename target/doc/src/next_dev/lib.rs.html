@@ -604,7 +604,6 @@
 <span id="604">604</span>
 <span id="605">605</span>
 <span id="606">606</span>
-<span id="607">607</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -996,11 +995,10 @@
         execution_context,
         next_config,
         server_addr,
-        CompletionsVc::cell(<span class="macro">vec!</span>[
+        CompletionsVc::all(<span class="macro">vec!</span>[
             app_structure.routes_changed(),
             pages_structure.routes_changed(),
-        ])
-        .all(),
+        ]),
     )
     .into();
     <span class="kw">let </span>source = RouterContentSource {

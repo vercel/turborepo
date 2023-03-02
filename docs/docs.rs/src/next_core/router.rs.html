@@ -363,13 +363,14 @@
 <span id="363">363</span>
 <span id="364">364</span>
 <span id="365">365</span>
+<span id="366">366</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    CompletionVc, Value,
+    CompletionVc, CompletionsVc, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, to_sys_path, File, FileSystemPathVc,
@@ -377,6 +378,7 @@
 <span class="kw">use </span>turbopack::{evaluate_context::node_evaluate_asset_context, transition::TransitionsByNameVc};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
+    changed::any_content_changed,
     chunk::dev::DevChunkingContextVc,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention::Middleware, ServerAddrVc},
@@ -387,9 +389,8 @@
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
-    OptionEcmascriptModuleAssetVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc, OptionEcmascriptModuleAssetVc,
 };
 <span class="kw">use </span>turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
@@ -537,14 +538,15 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>watch_files_hack(
+</span><span class="kw">async fn </span>next_config_changed(
     context: AssetContextVc,
     project_path: FileSystemPathVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceablesVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
     <span class="kw">let </span>next_config = get_config(context, project_path, next_configs()).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>next_config {
-        <span class="prelude-val">Some</span>(c) =&gt; EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[c.as_ecmascript_chunk_placeable()]),
-        <span class="prelude-val">None </span>=&gt; EcmascriptChunkPlaceablesVc::empty(),
+    <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(c) = <span class="kw-2">*</span>next_config {
+        any_content_changed(c.into())
+    } <span class="kw">else </span>{
+        CompletionVc::immutable()
     })
 }
 
@@ -692,8 +694,8 @@
     <span class="kw">let </span>configs = config_assets(context, project_path, next_config.page_extensions());
     <span class="kw">let </span>router_asset = route_executor(context, configs);
 
-    <span class="comment">// TODO this is a hack to get these files watched.
-    </span><span class="kw">let </span>next_config = watch_files_hack(context, project_path);
+    <span class="comment">// This invalidates the router when the next config changes
+    </span><span class="kw">let </span>next_config_changed = next_config_changed(context, project_path);
 
     <span class="kw">let </span>request = serde_json::value::to_value(<span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="prelude-val">Some</span>(dir) = to_sys_path(project_path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
@@ -707,12 +709,12 @@
         AssetIdentVc::from_path(project_path),
         context,
         intermediate_output_path,
-        <span class="prelude-val">Some</span>(next_config),
+        <span class="prelude-val">None</span>,
         <span class="macro">vec!</span>[
             JsonValueVc::cell(request),
             JsonValueVc::cell(dir.to_string_lossy().into()),
         ],
-        routes_changed,
+        CompletionsVc::all(<span class="macro">vec!</span>[next_config_changed, routes_changed]),
         <span class="bool-val">false</span>,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;

@@ -57,6 +57,17 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
 </pre><pre class="rust"><code><span class="kw">use crate</span>::{<span class="self">self </span><span class="kw">as </span>turbo_tasks, RawVc};
 
 <span class="doccomment">/// Just an empty type, but it&#39;s never equal to itself.
@@ -108,8 +119,19 @@
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CompletionsVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>all(<span class="self">self</span>) -&gt; anyhow::Result&lt;CompletionVc&gt; {
+    <span class="doccomment">/// Merges multiple completions into one. The passed list will be part of
+    /// the cache key, so this function should not be used with varying lists.
+    ///
+    /// Varying lists should use `CompletionsVc::cell(list).completed()`
+    /// instead.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>all(completions: Vec&lt;CompletionVc&gt;) -&gt; CompletionVc {
+        CompletionsVc::cell(completions).completed()
+    }
+
+    <span class="doccomment">/// Merges the list of completions into one.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>completed(<span class="self">self</span>) -&gt; anyhow::Result&lt;CompletionVc&gt; {
         <span class="kw">for </span>c <span class="kw">in </span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             c.<span class="kw">await</span><span class="question-mark">?</span>;
         }

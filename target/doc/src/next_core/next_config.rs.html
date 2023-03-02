@@ -623,6 +623,7 @@
 <span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
+    changed::any_content_changed,
     context::AssetContext,
     ident::AssetIdentVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
@@ -634,8 +635,7 @@
     source_asset::SourceAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 <span class="kw">use </span>turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
@@ -1169,17 +1169,17 @@
         FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
     };
 
-    <span class="kw">let </span>runtime_entries = config_asset.map(|config_asset| {
-        <span class="comment">// TODO this is a hack to add the config to the bundling to make it watched
-        </span><span class="kw">let </span>config_chunk = EcmascriptModuleAssetVc::new(
+    <span class="kw">let </span>config_changed = config_asset.map_or_else(CompletionVc::immutable, |config_asset| {
+        <span class="comment">// This invalidates the execution when anything referenced by the config file
+        // changes
+        </span><span class="kw">let </span>config_asset = EcmascriptModuleAssetVc::new(
             config_asset.into(),
             context,
             Value::new(EcmascriptModuleAssetType::Ecmascript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
             context.compile_time_info(),
-        )
-        .as_ecmascript_chunk_placeable();
-        EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[config_chunk])
+        );
+        any_content_changed(config_asset.into())
     });
     <span class="kw">let </span>load_next_config_asset = context.process(
         next_asset(<span class="string">&quot;entry/config/next.js&quot;</span>),
@@ -1193,9 +1193,9 @@
         config_asset.map_or_else(|| AssetIdentVc::from_path(project_path), |c| c.ident()),
         context,
         intermediate_output_path,
-        runtime_entries,
+        <span class="prelude-val">None</span>,
         <span class="macro">vec!</span>[],
-        CompletionVc::immutable(),
+        config_changed,
         <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
