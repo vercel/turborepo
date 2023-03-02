@@ -4,8 +4,7 @@
 
 __turbopack_export_value__([
   "output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_import_0d49f0.js",
-  "output/20803_foo_index_b32b98.js",
-  "output/20803_bar_index_b2b240.js"
+  "output/20803_foo_index_b32b98.js"
 ]);
 
 })()),
