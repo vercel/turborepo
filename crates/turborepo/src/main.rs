@@ -42,6 +42,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
     }
 
     let serialized_args = serde_json::to_string(&args)?;
+    debug!("Invoking go binary with {}", serialized_args);
     let mut command = process::Command::new(go_binary_path)
         .arg(serialized_args)
         .stdout(Stdio::inherit())
