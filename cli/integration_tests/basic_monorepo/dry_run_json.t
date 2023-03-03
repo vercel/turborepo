@@ -5,6 +5,10 @@ Setup
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
 
+# test with a regex that captures what release we usually have (1.x.y or 1.a.b-canary.c)
+  $ cat tmpjson.log | jq .turboVersion
+  "\d\.\d\.\d(-canary\.\d)?" (re)
+
   $ cat tmpjson.log | jq .globalHashSummary
   {
     "globalFileHashMap": {

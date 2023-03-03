@@ -36,6 +36,7 @@ const missingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
+	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *globalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
 	Tasks             []taskSummary      `json:"tasks"`
@@ -139,8 +140,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		framework := missingFrameworkLabel
-		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
-			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
+		if packageTask.Framework != "" {
+			framework = packageTask.Framework
 		}
 
 		isRootTask := packageTask.PackageName == util.RootPkgName
