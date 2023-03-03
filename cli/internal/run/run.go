@@ -361,7 +361,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 				globalHashable.globalCacheKey,
 				globalHashable.pipeline,
 			),
-			Tasks: []runsummary.TaskSummary{},
+			Tasks: []*runsummary.TaskSummary{},
 		}
 
 		return DryRun(

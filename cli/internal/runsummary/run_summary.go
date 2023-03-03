@@ -8,6 +8,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// MissingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the RunSummary will print this, instead of the script (e.g. `next build`).
+const MissingTaskLabel = "<NONEXISTENT>"
+
 // MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
@@ -16,7 +21,7 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
-	Tasks             []TaskSummary      `json:"tasks"`
+	Tasks             []*TaskSummary     `json:"tasks"`
 }
 
 // TaskSummary contains information about the task that was about to run

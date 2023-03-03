@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -88,7 +89,7 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)

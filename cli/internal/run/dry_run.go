@@ -19,11 +19,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
-// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
-// the RunSummary will print this, instead of the script (e.g. `next build`).
-const missingTaskLabel = "<NONEXISTENT>"
-
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
 // execute the task.
 func DryRun(
@@ -71,23 +66,13 @@ func DryRun(
 	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]runsummary.TaskSummary, error) {
-	taskIDs := []runsummary.TaskSummary{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]*runsummary.TaskSummary, error) {
+	taskIDs := []*runsummary.TaskSummary{}
 
-	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		command := missingTaskLabel
-		if packageTask.Command != "" {
-			command = packageTask.Command
-		}
-
-		framework := runsummary.MissingFrameworkLabel
-		if packageTask.Framework != "" {
-			framework = packageTask.Framework
-		}
-
+	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		isRootTask := packageTask.PackageName == util.RootPkgName
-		if isRootTask && commandLooksLikeTurbo(command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
+		if isRootTask && commandLooksLikeTurbo(taskSummary.Command) {
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, taskSummary.Command)
 		}
 
 		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
@@ -100,34 +85,25 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		hash := packageTask.Hash
-		itemStatus, err := turboCache.Exists(hash)
+		itemStatus, err := turboCache.Exists(packageTask.Hash)
 		if err != nil {
 			return err
 		}
 
-		taskIDs = append(taskIDs, runsummary.TaskSummary{
-			TaskID:                 packageTask.TaskID,
-			Task:                   packageTask.Task,
-			Package:                packageTask.PackageName,
-			Dir:                    packageTask.Dir,
-			Outputs:                packageTask.Outputs,
-			ExcludedOutputs:        packageTask.ExcludedOutputs,
-			LogFile:                packageTask.LogFile,
-			ResolvedTaskDefinition: packageTask.TaskDefinition,
-			ExpandedInputs:         packageTask.ExpandedInputs,
-			Command:                command,
-			Framework:              framework,
-			EnvVars: runsummary.TaskEnvVarSummary{
-				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
-			},
+		// Assign some fallbacks if they were missing
+		if taskSummary.Command == "" {
+			taskSummary.Command = runsummary.MissingTaskLabel
+		}
 
-			Hash:         hash,
-			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
-			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
-			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
-		})
+		if taskSummary.Framework == "" {
+			taskSummary.Framework = runsummary.MissingFrameworkLabel
+		}
+
+		taskSummary.CacheState = itemStatus  // TODO(mehulkar): Move this to PackageTask
+		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
+		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
+
+		taskIDs = append(taskIDs, taskSummary)
 
 		return nil
 	}
