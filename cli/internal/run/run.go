@@ -74,6 +74,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	scope.OptsFromArgs(&opts.scopeOpts, args)
 
 	// Cache flags
+	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
