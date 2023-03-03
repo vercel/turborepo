@@ -4,16 +4,10 @@ package run
 
 import (
 	gocontext "context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
-	"strings"
-	"text/tabwriter"
 
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -23,12 +17,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/util"
-	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
 // E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
-// the DryRunSummary will print this, instead of the script (e.g. `next build`).
+// the RunSummary will print this, instead of the script (e.g. `next build`).
 const missingTaskLabel = "<NONEXISTENT>"
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -41,7 +34,7 @@ func DryRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
-	summary *runsummary.DryRunSummary,
+	summary *runsummary.RunSummary,
 ) error {
 	defer turboCache.Shutdown()
 
@@ -67,7 +60,7 @@ func DryRun(
 
 	// Render the dry run as json
 	if dryRunJSON {
-		rendered, err := renderDryRunFullJSON(summary, singlePackage)
+		rendered, err := summary.FormatJSON(singlePackage)
 		if err != nil {
 			return err
 		}
@@ -75,24 +68,13 @@ func DryRun(
 		return nil
 	}
 
-	// Render the dry run as text
-	if err := displayDryTextRun(base.UI, summary, g.WorkspaceInfos, singlePackage); err != nil {
-		return err
-	}
-
-	return nil
+	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
 }
 
 func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]runsummary.TaskSummary, error) {
 	taskIDs := []runsummary.TaskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		hash := packageTask.Hash
-		envVars := runsummary.TaskEnvVarSummary{
-			Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
-			Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
-		}
-
 		command := missingTaskLabel
 		if packageTask.Command != "" {
 			command = packageTask.Command
@@ -118,6 +100,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
+		hash := packageTask.Hash
 		itemStatus, err := turboCache.Exists(hash)
 		if err != nil {
 			return err
@@ -132,12 +115,15 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			ExcludedOutputs:        packageTask.ExcludedOutputs,
 			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			ExpandedInputs:         packageTask.ExpandedInputs,
 			Command:                command,
 			Framework:              framework,
-			ExpandedInputs:         packageTask.ExpandedInputs,
-			EnvVars:                envVars,
+			EnvVars: runsummary.TaskEnvVarSummary{
+				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
+				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
+			},
 
-			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
+			Hash:         hash,
 			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
 			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
 			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
@@ -168,129 +154,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	}
 
 	return taskIDs, nil
-}
-
-func renderDryRunSinglePackageJSON(summary *runsummary.DryRunSummary) (string, error) {
-	singlePackageTasks := make([]runsummary.SinglePackageTaskSummary, len(summary.Tasks))
-
-	for i, ht := range summary.Tasks {
-		singlePackageTasks[i] = ht.ToSinglePackageTask()
-	}
-
-	dryRun := &runsummary.SinglePackageDryRunSummary{singlePackageTasks}
-
-	bytes, err := json.MarshalIndent(dryRun, "", "  ")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
-	}
-	return string(bytes), nil
-}
-
-func renderDryRunFullJSON(summary *runsummary.DryRunSummary, singlePackage bool) (string, error) {
-	if singlePackage {
-		return renderDryRunSinglePackageJSON(summary)
-	}
-
-	bytes, err := json.MarshalIndent(summary, "", "  ")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
-	}
-	return string(bytes), nil
-}
-
-func displayDryTextRun(ui cli.Ui, summary *runsummary.DryRunSummary, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
-	if !isSinglePackage {
-		ui.Output("")
-		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
-		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-		fmt.Fprintln(p, "Name\tPath\t")
-		for _, pkg := range summary.Packages {
-			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos.PackageJSONs[pkg].Dir)
-		}
-		if err := p.Flush(); err != nil {
-			return err
-		}
-	}
-
-	fileCount := 0
-	for range summary.GlobalHashSummary.GlobalFileHashMap {
-		fileCount = fileCount + 1
-	}
-	w1 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	ui.Output("")
-	ui.Info(util.Sprintf("${CYAN}${BOLD}Global Hash Inputs${RESET}"))
-	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
-	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
-	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
-	if bytes, err := json.Marshal(summary.GlobalHashSummary.Pipeline); err == nil {
-		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
-	}
-	if err := w1.Flush(); err != nil {
-		return err
-	}
-
-	ui.Output("")
-	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
-
-	for _, task := range summary.Tasks {
-		taskName := task.TaskID
-
-		if isSinglePackage {
-			taskName = util.RootTaskTaskName(taskName)
-		}
-
-		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
-
-		var dependencies []string
-		var dependents []string
-
-		if !isSinglePackage {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
-			dependencies = task.Dependencies
-			dependents = task.Dependents
-		} else {
-			dependencies = make([]string, len(task.Dependencies))
-			for i, dependency := range task.Dependencies {
-				dependencies[i] = util.StripPackageName(dependency)
-			}
-			dependents = make([]string, len(task.Dependents))
-			for i, dependent := range task.Dependents {
-				dependents[i] = util.StripPackageName(dependent)
-			}
-		}
-
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
-
-		if !isSinglePackage {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
-		}
-
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
-
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))
-
-		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
-		// If there's an error, we can silently ignore it, we don't need to block the entire print.
-		if err == nil {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
-		}
-
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Framework\t=\t%s\t${RESET}", task.Framework))
-		if err := w.Flush(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))

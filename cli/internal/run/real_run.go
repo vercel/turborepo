@@ -41,7 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
-	summary *runsummary.DryRunSummary,
+	summary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -210,7 +210,7 @@ func RealRun(
 	}
 
 	summary.ExitCode = exitCode
-	rendered, err := renderDryRunFullJSON(summary, singlePackage)
+	rendered, err := summary.FormatJSON(singlePackage)
 	if err != nil {
 		return err
 	}
