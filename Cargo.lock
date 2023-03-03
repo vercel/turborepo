@@ -2393,17 +2393,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
-name = "globset"
-version = "0.4.10"
+name = "glob-match"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
-dependencies = [
- "aho-corasick",
- "bstr 1.2.0",
- "fnv",
- "log",
- "regex",
-]
+checksum = "9985c9503b412198aa4197559e9a318524ebc4519c229bfa05a535828c950b9d"
 
 [[package]]
 name = "gloo-timers"
@@ -8084,7 +8077,7 @@ dependencies = [
  "dirs-next",
  "dunce",
  "env_logger 0.10.0",
- "globset",
+ "glob-match",
  "hostname",
  "indicatif",
  "itertools",

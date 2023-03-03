@@ -3,8 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
-use globset::{Glob, GlobSetBuilder};
+use anyhow::{anyhow, Result};
+use glob_match;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -61,27 +61,23 @@ pub struct Globs {
 
 impl Globs {
     pub fn test(&self, root: PathBuf, target: PathBuf) -> Result<bool> {
-        let search_value = target.strip_prefix(root)?;
+        let search_value = target
+            .strip_prefix(root)?
+            .to_str()
+            .ok_or(anyhow!("The relative path is not UTF8."))?;
 
-        let mut inclusion_builder = GlobSetBuilder::new();
-        for inclusion in &self.inclusions {
-            inclusion_builder.add(Glob::new(inclusion)?);
-        }
+        let includes = &self
+            .inclusions
+            .iter()
+            .find(|inclusion| glob_match::glob_match(inclusion, search_value))
+            .is_some();
+        let excludes = &self
+            .exclusions
+            .iter()
+            .find(|exclusion| glob_match::glob_match(exclusion, search_value))
+            .is_some();
 
-        let inclusion_globset = inclusion_builder.build()?;
-
-        let includes = inclusion_globset.is_match(search_value);
-
-        let mut exclusion_builder = GlobSetBuilder::new();
-        for exclusion in &self.exclusions {
-            exclusion_builder.add(Glob::new(exclusion)?);
-        }
-
-        let exclusion_globset = exclusion_builder.build()?;
-
-        let excludes = exclusion_globset.is_match(search_value);
-
-        return Ok(includes && !excludes);
+        return Ok(*includes && !excludes);
     }
 }
 
