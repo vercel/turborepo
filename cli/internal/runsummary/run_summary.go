@@ -37,7 +37,7 @@ func (summary *RunSummary) Save(singlePackage bool) error {
 	fmt.Printf("[debug] got my json for run summar\n")
 
 	nonce := "abcdef"
-	filename := fmt.Sprintf("turbo-run-%s-%s.json", nonce, time.Now().Format(time.RFC3339))
+	filename := fmt.Sprintf("vercel-turbo-run-%s-%s.json", nonce, time.Now().Format(time.RFC3339))
 	fmt.Printf("[debug] writing to %#v\n", filename)
 	return ioutil.WriteFile(filename, json, 0644)
 }
