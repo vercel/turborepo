@@ -68,9 +68,11 @@ describe("migrate", () => {
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -203,6 +205,8 @@ describe("migrate", () => {
         },
         dev: {
           cache: false,
+        },
+        test: {
           outputs: ["dist/**", "build/**"],
         },
         lint: {},
@@ -277,9 +281,11 @@ describe("migrate", () => {
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -435,9 +441,11 @@ describe("migrate", () => {
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -518,9 +526,11 @@ describe("migrate", () => {
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 

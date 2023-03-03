@@ -330,7 +330,6 @@ describe("set-default-outputs", () => {
         },
         "build-two": {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         "build-three": {
           persistent: true,
@@ -344,7 +343,7 @@ describe("set-default-outputs", () => {
       Object {
         "turbo.json": Object {
           "action": "modified",
-          "additions": 3,
+          "additions": 2,
           "deletions": 0,
         },
       }

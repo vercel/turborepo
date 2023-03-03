@@ -13,6 +13,7 @@ const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
+	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
 	Tasks             []TaskSummary      `json:"tasks"`
