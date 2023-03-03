@@ -178,7 +178,12 @@ pub fn previous_content(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, fs, path::Path};
+    use std::{
+        collections::HashSet,
+        env::set_current_dir,
+        fs,
+        path::{Path, PathBuf},
+    };
 
     use git2::{Oid, Repository};
 
@@ -326,6 +331,7 @@ mod tests {
             first_commit_oid.to_string().as_str(),
             file.clone(),
         )?;
+
         assert_eq!(content, b"let z = 0;");
 
         let content = previous_content(
@@ -334,6 +340,24 @@ mod tests {
             file,
         )?;
         assert_eq!(content, b"let z = 1;");
+
+        set_current_dir(repo_root.path())?;
+
+        // Check that relative paths work as well
+        let content = previous_content(
+            PathBuf::from("."),
+            second_commit_oid.to_string().as_str(),
+            PathBuf::from("./foo.js"),
+        )?;
+        assert_eq!(content, b"let z = 1;");
+
+        let content = previous_content(
+            repo_root.path().to_path_buf(),
+            second_commit_oid.to_string().as_str(),
+            PathBuf::from("./foo.js"),
+        )?;
+        assert_eq!(content, b"let z = 1;");
+
         Ok(())
     }
 
