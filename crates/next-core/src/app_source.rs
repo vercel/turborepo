@@ -489,7 +489,7 @@ async fn create_app_source_for_directory(
                     context,
                     project_path,
                     env,
-                server_root,
+                    server_root,
                     runtime_entries,
                     fallback_page,
                     intermediate_output_path_root,
