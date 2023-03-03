@@ -9,6 +9,9 @@ else
 	UNAME := $(shell uname -s)
 endif
 
+GOARCH:=$(shell go env GOARCH | xargs)
+GOOS:=$(shell go env GOOS | xargs)
+
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
 
@@ -31,14 +34,68 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
-turborepo-ffi-install: turborepo-ffi
-	cp -r ../crates/turborepo-ffi/bindings.h \
-	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
-	      ./internal/ffi
+turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && CARGO_TARGET_DIR=./target cargo build --release
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
+
+.PHONY: turborepo-ffi-copy-bindings
+turborepo-ffi-copy-bindings:
+	cp ../crates/turborepo-ffi/bindings.h ./internal/ffi/bindings.h
+
+#
+# ffi cross compiling
+#
+# these targets are used to build the ffi library for each platform
+# when doing a release. they _may_ work on your local machine, but
+# they're not intended to be used for development.
+#
+
+.PHONY: turborepo-ffi-install-windows-amd64
+turborepo-ffi-install-windows-amd64: turborepo-ffi-windows-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-pc-windows-gnu/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_windows_amd64.a
+
+.PHONY: turborepo-ffi-install-darwin-arm64
+turborepo-ffi-install-darwin-arm64: turborepo-ffi-darwin-arm64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/aarch64-apple-darwin/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_darwin_arm64.a
+
+.PHONY: turborepo-ffi-install-darwin-amd64
+turborepo-ffi-install-darwin-amd64: turborepo-ffi-darwin-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-apple-darwin/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_darwin_amd64.a
+
+.PHONY: turborepo-ffi-install-linux-arm64
+turborepo-ffi-install-linux-arm64: turborepo-ffi-linux-arm64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/aarch64-unknown-linux-musl/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_linux_arm64.a
+
+.PHONY: turborepo-ffi-install-linux-amd64
+turborepo-ffi-install-linux-amd64: turborepo-ffi-linux-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-unknown-linux-musl/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_linux_amd64.a
+
+.PHONY: turborepo-ffi-windows-amd64
+turborepo-ffi-windows-amd64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-pc-windows-gnu
+
+.PHONY: turborepo-ffi-darwin-arm64
+turborepo-ffi-darwin-arm64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-apple-darwin
+
+.PHONY: turborepo-ffi-darwin-amd64
+turborepo-ffi-darwin-amd64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-apple-darwin
+
+.PHONY: turborepo-ffi-linux-arm64
+turborepo-ffi-linux-arm64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+
+.PHONY: turborepo-ffi-linux-amd64
+turborepo-ffi-linux-amd64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+
+#
+# end
+#
 
 .PHONY: turborepo-ffi-proto
 turborepo-ffi-proto:
@@ -73,7 +130,7 @@ endif
 clean-go:
 	go clean -testcache ./...
 
-test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
+test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum turborepo-ffi-install
 	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
 
 # protos need to be compiled before linting, since linting needs to pick up

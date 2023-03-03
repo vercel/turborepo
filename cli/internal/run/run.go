@@ -75,6 +75,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	scope.OptsFromArgs(&opts.scopeOpts, args)
 
 	// Cache flags
+	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
@@ -344,11 +345,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	// dryRunSummary contains information that is statically analyzable about
+	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := &runsummary.RunSummary{
-		Packages: packagesInScope,
+		TurboVersion: r.base.TurboVersion,
+		Packages:     packagesInScope,
+		// TODO(mehulkar): passing the globalHashable struct directly caused a type mismatch compilation error
 		GlobalHashSummary: runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,

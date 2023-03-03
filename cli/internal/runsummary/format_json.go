@@ -22,15 +22,16 @@ func (summary *RunSummary) FormatJSON(singlePackage bool) (string, error) {
 func (summary *RunSummary) formatJSONSinglePackage() (string, error) {
 	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
 
-	for i, ht := range summary.Tasks {
-		singlePackageTasks[i] = ht.toSinglePackageTask()
+	for i, task := range summary.Tasks {
+		singlePackageTasks[i] = task.toSinglePackageTask()
 	}
 
-	dryRun := &singlePackageRunSummary{singlePackageTasks}
+	spSummary := &singlePackageRunSummary{Tasks: singlePackageTasks}
 
-	bytes, err := json.MarshalIndent(dryRun, "", "  ")
+	bytes, err := json.MarshalIndent(spSummary, "", "  ")
 	if err != nil {
 		return "", errors.Wrap(err, "failed to render JSON")
 	}
+
 	return string(bytes), nil
 }
