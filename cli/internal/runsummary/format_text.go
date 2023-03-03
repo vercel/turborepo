@@ -48,7 +48,7 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 	ui.Output("")
 	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
 
-	for _, task := range summary.Tasks {
+	for _, task := range *summary.Tasks {
 		taskName := task.TaskID
 
 		if isSinglePackage {

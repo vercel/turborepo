@@ -59,14 +59,14 @@ func DryRun(
 		if err != nil {
 			return err
 		}
-		base.UI.Output(rendered)
+		base.UI.Output(string(rendered))
 		return nil
 	}
 
 	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]*runsummary.TaskSummary, error) {
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) (*[]*runsummary.TaskSummary, error) {
 	taskIDs := []*runsummary.TaskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
@@ -129,7 +129,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		return nil, errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return taskIDs, nil
+	return &taskIDs, nil
 }
 
 var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))

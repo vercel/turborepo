@@ -41,6 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
+	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -89,11 +90,15 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
 	}
+
+	runSummary.Tasks = &taskSummaries
 
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
@@ -121,6 +126,20 @@ func RealRun(
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
+
+	// Write Run Summary if we wanted to
+	fmt.Printf("[debug] rs.Opts.runOpts %#v\n", rs.Opts.runOpts)
+	fmt.Printf("[debug] rs.Opts.runOpts.summarize %#v\n", rs.Opts.runOpts.summarize)
+
+	if rs.Opts.runOpts.summarize {
+		fmt.Printf("[debug] saving run summary\n")
+		fmt.Printf("[debug] tasks: %#v\n", runSummary.Tasks)
+		fmt.Printf("[debug] tss: %#v\n", taskSummaries)
+		if err := runSummary.Save(singlePackage); err != nil {
+			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
+		}
+	}
+
 	if exitCode != 0 {
 		return &process.ChildExit{
 			ExitCode: exitCode,

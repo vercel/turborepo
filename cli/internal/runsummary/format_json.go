@@ -7,22 +7,22 @@ import (
 )
 
 // FormatJSON returns a json string representing a RunSummary
-func (summary *RunSummary) FormatJSON(singlePackage bool) (string, error) {
+func (summary *RunSummary) FormatJSON(singlePackage bool) ([]byte, error) {
 	if singlePackage {
 		return summary.formatJSONSinglePackage()
 	}
 
 	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
+		return []byte{}, errors.Wrap(err, "failed to render JSON")
 	}
-	return string(bytes), nil
+	return bytes, nil
 }
 
-func (summary *RunSummary) formatJSONSinglePackage() (string, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
+func (summary *RunSummary) formatJSONSinglePackage() ([]byte, error) {
+	singlePackageTasks := make([]singlePackageTaskSummary, len(*summary.Tasks))
 
-	for i, task := range summary.Tasks {
+	for i, task := range *summary.Tasks {
 		singlePackageTasks[i] = task.toSinglePackageTask()
 	}
 
@@ -30,8 +30,8 @@ func (summary *RunSummary) formatJSONSinglePackage() (string, error) {
 
 	bytes, err := json.MarshalIndent(spSummary, "", "  ")
 	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
+		return []byte{}, errors.Wrap(err, "failed to render JSON")
 	}
 
-	return string(bytes), nil
+	return bytes, nil
 }

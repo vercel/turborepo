@@ -142,6 +142,13 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 		opts.cacheOpts.SkipFilesystem = true
 	}
 
+	if os.Getenv("TURBO_RUN_SUMMARY") == "true" {
+		fmt.Printf("[debug] Setting summarize=true\n")
+		opts.runOpts.summarize = true
+	}
+
+	fmt.Printf("[debug] summarize=%v\n", opts.runOpts.summarize)
+
 	processes := process.NewManager(base.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
@@ -345,25 +352,25 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	// RunSummary contains information that is statically analyzable about
+	// the tasks that we expect to run based on the user command.
+	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
+	summary := &runsummary.RunSummary{
+		TurboVersion: r.base.TurboVersion,
+		Packages:     packagesInScope,
+		// TODO(mehulkar): passing the globalHashable struct directly caused a type mismatch compilation error
+		GlobalHashSummary: runsummary.NewGlobalHashSummary(
+			globalHashable.globalFileHashMap,
+			globalHashable.rootExternalDepsHash,
+			globalHashable.hashedSortedEnvPairs,
+			globalHashable.globalCacheKey,
+			globalHashable.pipeline,
+		),
+		Tasks: &[]*runsummary.TaskSummary{},
+	}
+
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
-		// dryRunSummary contains information that is statically analyzable about
-		// the tasks that we expect to run based on the user command.
-		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
-		summary := &runsummary.RunSummary{
-			TurboVersion: r.base.TurboVersion,
-			Packages:     packagesInScope,
-			// TODO(mehulkar): passing the globalHashable struct directly caused a type mismatch compilation error
-			GlobalHashSummary: runsummary.NewGlobalHashSummary(
-				globalHashable.globalFileHashMap,
-				globalHashable.rootExternalDepsHash,
-				globalHashable.hashedSortedEnvPairs,
-				globalHashable.globalCacheKey,
-				globalHashable.pipeline,
-			),
-			Tasks: []*runsummary.TaskSummary{},
-		}
-
 		return DryRun(
 			ctx,
 			g,
@@ -388,6 +395,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboCache,
 		packagesInScope,
 		r.base,
+		summary,
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
 		r.processes,

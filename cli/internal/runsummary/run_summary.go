@@ -2,6 +2,10 @@
 package runsummary
 
 import (
+	"fmt"
+	"io/ioutil"
+	"time"
+
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -21,7 +25,21 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
-	Tasks             []*TaskSummary     `json:"tasks"`
+	Tasks             *[]*TaskSummary    `json:"tasks"`
+}
+
+// Save saves the run summary to a file
+func (summary *RunSummary) Save(singlePackage bool) error {
+	json, err := summary.FormatJSON(singlePackage)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("[debug] got my json for run summar\n")
+
+	nonce := "abcdef"
+	filename := fmt.Sprintf("turbo-run-%s-%s.json", nonce, time.Now().Format(time.RFC3339))
+	fmt.Printf("[debug] writing to %#v\n", filename)
+	return ioutil.WriteFile(filename, json, 0644)
 }
 
 // TaskSummary contains information about the task that was about to run
