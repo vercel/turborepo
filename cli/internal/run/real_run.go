@@ -128,13 +128,7 @@ func RealRun(
 	}
 
 	// Write Run Summary if we wanted to
-	fmt.Printf("[debug] rs.Opts.runOpts %#v\n", rs.Opts.runOpts)
-	fmt.Printf("[debug] rs.Opts.runOpts.summarize %#v\n", rs.Opts.runOpts.summarize)
-
 	if rs.Opts.runOpts.summarize {
-		fmt.Printf("[debug] saving run summary\n")
-		fmt.Printf("[debug] tasks: %#v\n", runSummary.Tasks)
-		fmt.Printf("[debug] tss: %#v\n", taskSummaries)
 		if err := runSummary.Save(singlePackage); err != nil {
 			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
 		}
