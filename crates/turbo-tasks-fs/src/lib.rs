@@ -74,6 +74,9 @@ pub trait FileSystem: ValueToString {
     fn read(&self, fs_path: FileSystemPathVc) -> FileContentVc;
     fn read_link(&self, fs_path: FileSystemPathVc) -> LinkContentVc;
     fn read_dir(&self, fs_path: FileSystemPathVc) -> DirectoryContentVc;
+    fn track(&self, _fs_path: FileSystemPathVc) -> CompletionVc {
+        CompletionVc::immutable()
+    }
     fn write(&self, fs_path: FileSystemPathVc, content: FileContentVc) -> CompletionVc;
     fn write_link(&self, fs_path: FileSystemPathVc, target: LinkContentVc) -> CompletionVc;
     fn metadata(&self, fs_path: FileSystemPathVc) -> FileMetaVc;
@@ -467,6 +470,13 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    async fn track(&self, fs_path: FileSystemPathVc) -> Result<CompletionVc> {
+        let full_path = self.to_sys_path(fs_path).await?;
+        self.register_invalidator(&full_path, true);
+        Ok(CompletionVc::new())
+    }
+
+    #[turbo_tasks::function]
     async fn write(
         &self,
         fs_path: FileSystemPathVc,
@@ -474,6 +484,13 @@ impl FileSystem for DiskFileSystem {
     ) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         let content = content.await?;
+
+        // Track the file, so that we will rewrite it if it ever changes.
+        fs_path.track().await?;
+
+        // We perform an untracked read here, so that this write is not dependent on the
+        // read value (and the memory it holds). It's possible the read can be freed if
+        // no other task tries to read it, which is entirely likely for a output file.
         let old_content = RawVc::from(fs_path.read())
             .into_read_untracked(&*turbo_tasks())
             .await
@@ -948,6 +965,11 @@ impl FileSystemPathVc {
     #[turbo_tasks::function]
     pub async fn read_dir(self) -> DirectoryContentVc {
         self.fs().read_dir(self)
+    }
+
+    #[turbo_tasks::function]
+    pub async fn track(self) -> CompletionVc {
+        self.fs().track(self)
     }
 
     #[turbo_tasks::function]
