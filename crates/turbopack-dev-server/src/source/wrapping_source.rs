@@ -141,7 +141,7 @@ impl GetContentSourceContent for WrappedGetContentSourceContent {
                         )
                         .into(),
                     ),
-                    response_headers: rewrite.response_headers.clone(),
+                    response_headers: rewrite.response_headers,
                 }
                 .cell(),
             )
