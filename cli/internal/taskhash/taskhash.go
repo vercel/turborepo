@@ -150,7 +150,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		}
 	}
 
-	fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
+	err = fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
 		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
@@ -188,6 +188,9 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return hashObject, nil
 }
 
