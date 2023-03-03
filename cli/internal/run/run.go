@@ -143,11 +143,8 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 	}
 
 	if os.Getenv("TURBO_RUN_SUMMARY") == "true" {
-		fmt.Printf("[debug] Setting summarize=true\n")
 		opts.runOpts.summarize = true
 	}
-
-	fmt.Printf("[debug] summarize=%v\n", opts.runOpts.summarize)
 
 	processes := process.NewManager(base.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
