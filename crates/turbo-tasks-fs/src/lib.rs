@@ -53,7 +53,7 @@ use turbo_tasks::{
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
-    turbo_tasks, CompletionVc, Invalidator, RawVc, ValueToString, ValueToStringVc,
+    CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
@@ -314,6 +314,18 @@ impl Debug for DiskFileSystem {
     }
 }
 
+/// Reads the file from disk, without converting the contents into a Vc.
+async fn read_file(path: PathBuf, mutex_map: &MutexMap<PathBuf>) -> Result<FileContent> {
+    let _lock = mutex_map.lock(path.clone()).await;
+    Ok(match retry_future(|| File::from_path(path.clone())).await {
+        Ok(file) => FileContent::new(file),
+        Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
+        Err(e) => {
+            bail!(anyhow!(e).context(format!("reading file {}", path.display())))
+        }
+    })
+}
+
 #[turbo_tasks::value_impl]
 impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
@@ -321,15 +333,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
-        let content = match retry_future(|| File::from_path(full_path.clone())).await {
-            Ok(file) => FileContent::new(file),
-            Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
-            Err(e) => {
-                bail!(anyhow!(e).context(format!("reading file {}", full_path.display())))
-            }
-        };
-
+        let content = read_file(full_path, &self.mutex_map).await?;
         Ok(content.cell())
     }
 
@@ -491,17 +495,14 @@ impl FileSystem for DiskFileSystem {
         // We perform an untracked read here, so that this write is not dependent on the
         // read value (and the memory it holds). It's possible the read can be freed if
         // no other task tries to read it, which is entirely likely for a output file.
-        let old_content = RawVc::from(fs_path.read())
-            .into_read_untracked(&*turbo_tasks())
-            .await
-            .with_context(|| format!("reading old content of {}", full_path.display()))?;
+        let old_content = read_file(full_path.clone(), &self.mutex_map).await?;
 
-        if *content == *old_content {
+        if *content == old_content {
             return Ok(CompletionVc::unchanged());
         }
         let _lock = self.mutex_map.lock(full_path.clone()).await;
 
-        let create_directory = *old_content == FileContent::NotFound;
+        let create_directory = old_content == FileContent::NotFound;
         match &*content {
             FileContent::Content(file) => {
                 if create_directory {
