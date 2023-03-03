@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use glob_match;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -64,20 +63,19 @@ impl Globs {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
-            .ok_or(anyhow!("The relative path is not UTF8."))?;
+            .ok_or_else(|| anyhow!("The relative path is not UTF8."))?;
 
         let includes = &self
             .inclusions
             .iter()
-            .find(|inclusion| glob_match::glob_match(inclusion, search_value))
-            .is_some();
+            .any(|inclusion| glob_match::glob_match(inclusion, search_value));
+
         let excludes = &self
             .exclusions
             .iter()
-            .find(|exclusion| glob_match::glob_match(exclusion, search_value))
-            .is_some();
+            .any(|exclusion| glob_match::glob_match(exclusion, search_value));
 
-        return Ok(*includes && !excludes);
+        Ok(*includes && !excludes)
     }
 }
 

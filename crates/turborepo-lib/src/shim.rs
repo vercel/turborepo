@@ -236,10 +236,10 @@ struct InferInfo {
 }
 
 impl InferInfo {
-    pub fn has_package_json<'a>(info: &'a &InferInfo) -> bool {
+    pub fn has_package_json(info: &'_ &InferInfo) -> bool {
         info.has_package_json
     }
-    pub fn has_turbo_json<'a>(info: &'a &InferInfo) -> bool {
+    pub fn has_turbo_json(info: &'_ &InferInfo) -> bool {
         info.has_turbo_json
     }
 
@@ -265,7 +265,7 @@ impl RepoState {
                     .unwrap_or_else(|_| {
                         PackageManager::Npm
                             .get_workspace_globs(path)
-                            .unwrap_or_else(|_| None)
+                            .unwrap_or(None)
                     });
 
                 InferInfo {
@@ -279,7 +279,7 @@ impl RepoState {
             .filter(|info| info.has_package_json || info.has_turbo_json)
             .collect();
 
-        return potential_turbo_roots;
+        potential_turbo_roots
     }
 
     fn process_potential_turbo_roots(potential_turbo_roots: Vec<InferInfo>) -> Result<Self> {
@@ -306,7 +306,7 @@ impl RepoState {
                 .collect();
 
             // No potential roots checking by this comparator.
-            if check_roots.len() == 0 {
+            if check_roots.is_empty() {
                 continue;
 
             // If there is only one potential root, that's the winner.
