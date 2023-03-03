@@ -23,6 +23,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	exitCode := cmd.RunWithArgs(args, turboVersion)
+	exitCode := cmd.RunWithArgs(&args, turboVersion)
 	os.Exit(exitCode)
 }
