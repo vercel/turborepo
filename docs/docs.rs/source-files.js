@@ -3,6 +3,7 @@ var sourcesIndex = JSON.parse('{\
 "next_binding":["",[],["lib.rs"]],\
 "next_core":["",[["app_render",[],["mod.rs","next_layout_entry_transition.rs"]],["next_client",[],["context.rs","mod.rs","runtime_entry.rs","transforms.rs","transition.rs"]],["next_client_chunks",[],["client_chunks_transition.rs","in_chunking_context_asset.rs","mod.rs","with_chunks.rs"]],["next_client_component",[],["mod.rs","server_to_client_transition.rs","ssr_client_module_transition.rs","with_chunking_context_scope_asset.rs","with_client_chunks.rs"]],["next_edge",[],["context.rs","mod.rs","transition.rs"]],["next_font_google",[],["mod.rs","options.rs","request.rs","util.rs"]],["next_image",[],["mod.rs"]],["next_route_matcher",[],["all.rs","mod.rs","path_regex.rs","prefix_suffix.rs"]],["next_server",[],["context.rs","mod.rs","resolve.rs","transforms.rs"]],["next_shared",[],["mod.rs","transforms.rs"]]],["app_source.rs","app_structure.rs","babel.rs","embed_js.rs","env.rs","fallback.rs","lib.rs","manifest.rs","next_build.rs","next_config.rs","next_import_map.rs","page_loader.rs","page_source.rs","pages_structure.rs","react_refresh.rs","router.rs","router_source.rs","runtime.rs","util.rs","web_entry_source.rs"]],\
 "next_dev":["",[],["devserver_options.rs","lib.rs","turbo_tasks_viz.rs"]],\
+"next_font":["",[],["find_functions_outside_module_scope.rs","font_functions_collector.rs","font_imports_generator.rs","lib.rs"]],\
 "next_transform_dynamic":["",[],["lib.rs"]],\
 "next_transform_strip_page_exports":["",[],["lib.rs"]],\
 "node_file_trace":["",[],["lib.rs","nft_json.rs"]],\
@@ -31,6 +32,7 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_node":["",[["render",[],["issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
 "turbopack_static":["",[],["lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
+"turbopack_test_utils":["",[],["lib.rs","snapshot.rs"]],\
 "xtask":["",[["summarize_bench",[],["data.rs","mod.rs"]]],["command.rs","main.rs","nft_bench.rs","publish.rs","visualize_bundler_bench.rs"]]\
 }');
 createSourceSidebar();
