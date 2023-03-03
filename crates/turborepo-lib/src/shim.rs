@@ -290,10 +290,14 @@ impl RepoState {
         //
         //   1. [0].has_turbo_json && [0].package_has_workspaces
         //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
+        //
+        //   If we elect to make any of the changes for early exits we need to expand
+        // the   test suite which presently relies on the fact that the
+        // selection runs in a   loop to avoid creating those test cases.
 
         // We need to perform the same search strategy for _both_ turbo.json and _then_
         // package.json.
-        let search_locations = [InferInfo::has_package_json, InferInfo::has_turbo_json];
+        let search_locations = [InferInfo::has_turbo_json, InferInfo::has_package_json];
 
         for check_set_comparator in search_locations {
             let check_roots: Vec<&InferInfo> = potential_turbo_roots
@@ -318,8 +322,9 @@ impl RepoState {
                     local_turbo_state,
                 });
 
-            // More than one potential root. See if we can stop at the first
-            // one.
+            // More than one potential root. See if we can stop at the first.
+            // This is a performance optimization. We could remove this case,
+            // and set the mode properly in the else and it would still work.
             } else if check_roots[0].package_has_workspaces {
                 // If the closest one has workspaces then we stop there.
                 let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
@@ -330,6 +335,7 @@ impl RepoState {
                 });
 
             // More than one potential root.
+            // Closest is not RepoMode::MultiPackage
             // We attempt to prove that the closest is a workspace of a parent.
             // Failing that we just choose the closest.
             } else {
@@ -345,23 +351,19 @@ impl RepoState {
                     }
                 }
 
+                // We have eliminated RepoMode::MultiPackage as an option.
+                // We must exhaustively check before this becomes the answer.
                 let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
                 return Ok(Self {
                     root: check_roots[0].path.to_path_buf(),
-                    mode: if check_roots[0].package_has_workspaces {
-                        RepoMode::MultiPackage
-                    } else {
-                        RepoMode::SinglePackage
-                    },
+                    mode: RepoMode::SinglePackage,
                     local_turbo_state,
                 });
             }
         }
 
         // If we're here we didn't find a valid root.
-        // Doesn't matter what we put here, it's going to error out.
-        // We could choose to error here.
-        return Err(anyhow!("thing"));
+        return Err(anyhow!("Root could not be inferred."));
     }
 
     /// Infers `RepoState` from current directory.
@@ -614,43 +616,338 @@ mod test {
     #[test]
     fn test_process_potential_turbo_roots() {
         struct TestCase {
+            description: &'static str,
             infer_infos: Vec<InferInfo>,
-            output: PathBuf,
+            output: Result<PathBuf>,
         }
 
         let tests = [
+            // Test for zero, exhaustive.
             TestCase {
+                description: "No matches found.",
+                infer_infos: vec![],
+                output: Err(anyhow!("Root could not be inferred.")),
+            },
+            // Test for one, exhaustive.
+            TestCase {
+                description: "Only one, is monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/a/b/c"),
+                    path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: true,
                     package_has_workspaces: true,
                     workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/**".to_string()],
+                        inclusions: vec!["packages/*".to_string()],
                         exclusions: vec![],
                     }),
                 }],
-                output: PathBuf::from("/a/b/c"),
+                output: Ok(PathBuf::from("/path/to/root")),
             },
             TestCase {
+                description: "Only one, is non-monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/a/b/c"),
+                    path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: true,
                     package_has_workspaces: false,
                     workspace_globs: None,
                 }],
-                output: PathBuf::from("/a/b/c"),
+                output: Ok(PathBuf::from("/path/to/root")),
+            },
+            TestCase {
+                description: "Only one, is monorepo without turbo.json.",
+                infer_infos: vec![InferInfo {
+                    path: PathBuf::from("/path/to/root"),
+                    has_package_json: true,
+                    has_turbo_json: false,
+                    package_has_workspaces: true,
+                    workspace_globs: Some(Globs {
+                        inclusions: vec!["packages/*".to_string()],
+                        exclusions: vec![],
+                    }),
+                }],
+                output: Ok(PathBuf::from("/path/to/root")),
+            },
+            TestCase {
+                description: "Only one, is non-monorepo without turbo.json.",
+                infer_infos: vec![InferInfo {
+                    path: PathBuf::from("/path/to/root"),
+                    has_package_json: true,
+                    has_turbo_json: false,
+                    package_has_workspaces: false,
+                    workspace_globs: None,
+                }],
+                output: Ok(PathBuf::from("/path/to/root")),
+            },
+            // Tests for how to choose what is closest.
+            TestCase {
+                description: "Execution in a workspace.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root/packages/ui-library"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root")),
+            },
+            TestCase {
+                description: "Execution in a workspace, weird package layout.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root/packages/ui-library/css"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root/packages/ui-library"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            // This `**` is important:
+                            inclusions: vec!["packages/**".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root")),
+            },
+            TestCase {
+                description: "Nested disjoint monorepo roots.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+            },
+            TestCase {
+                description: "Nested disjoint monorepo roots, execution in a workspace of the \
+                              closer root.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from(
+                            "/path/to/root-one/root-two/root-two-packages/ui-library",
+                        ),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["root-two-packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+            },
+            TestCase {
+                description: "Nested disjoint monorepo roots, execution in a workspace of the \
+                              farther root.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from(
+                            "/path/to/root-one/root-two/root-one-packages/ui-library",
+                        ),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["root-two-packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root-one")),
+            },
+            TestCase {
+                description: "Disjoint package.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root/some-other-project"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root/some-other-project")),
+            },
+            TestCase {
+                description: "Monorepo trying to point to a monorepo. We choose the closer one \
+                              and ignore the problem.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["packages/*".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/root-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: true,
+                        workspace_globs: Some(Globs {
+                            inclusions: vec!["root-two".to_string()],
+                            exclusions: vec![],
+                        }),
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+            },
+            TestCase {
+                description: "Nested non-monorepo packages.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/project-one/project-two"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/project-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/project-one/project-two")),
+            },
+            // The below test ensures that we privilege a valid `turbo.json` structure prior to
+            // evaluation of a valid `package.json` structure. If you include `turbo.json` you are
+            // able to "skip" deeper into the resolution by disregarding anything that does _not_
+            // have a `turbo.json`. This will matter _far_ more in a multi-language environment.
+
+            // Just one example test proves that the entire alternative chain construction works.
+            // The selection logic from within this set is identical. If we attempt to optimize the
+            // number of file system reads by early-exiting for matching we should expand this test
+            // set to mirror the above section.
+            TestCase {
+                description: "Nested non-monorepo packages, turbo.json primacy.",
+                infer_infos: vec![
+                    InferInfo {
+                        path: PathBuf::from("/path/to/project-one/project-two"),
+                        has_package_json: true,
+                        has_turbo_json: false,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                    InferInfo {
+                        path: PathBuf::from("/path/to/project-one"),
+                        has_package_json: true,
+                        has_turbo_json: true,
+                        package_has_workspaces: false,
+                        workspace_globs: None,
+                    },
+                ],
+                output: Ok(PathBuf::from("/path/to/project-one")),
             },
         ];
 
         for test in tests {
-            assert_eq!(
-                RepoState::process_potential_turbo_roots(test.infer_infos)
-                    .unwrap()
-                    .root,
-                test.output
-            );
+            match RepoState::process_potential_turbo_roots(test.infer_infos) {
+                Ok(repo_state) => assert_eq!(
+                    repo_state.root,
+                    test.output.unwrap(),
+                    "{}",
+                    test.description
+                ),
+                Err(err) => assert_eq!(
+                    err.to_string(),
+                    test.output.unwrap_err().to_string(),
+                    "{}",
+                    test.description
+                ),
+            };
         }
     }
 
