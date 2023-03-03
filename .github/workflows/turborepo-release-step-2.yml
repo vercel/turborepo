@@ -36,6 +36,10 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: actions-rs/toolchain@v1
+      - run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
         with:
@@ -68,6 +72,16 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - run: apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+      - uses: actions-rs/toolchain@v1
+      - run: |
+          rustup target add x86_64-pc-windows-gnu
+          rustup target add aarch64-unknown-linux-musl
+          rustup target add x86_64-unknown-linux-musl
+      - run: |
+          curl -L https://github.com/arlyon/turbo/releases/download/zlib/libz.a > /usr/x86_64-w64-mingw32/lib/libz.a
+          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-aarch64-linux-musl/libz.a > /usr/aarch64-linux-gnu/lib/libz.a
+          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-x86_64-linux-musl/libz.a > /usr/lib/libz.a
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
         with:
@@ -79,6 +93,7 @@ jobs:
       - name: Build Artifacts
         run: cd cli && make build-go-turbo-cross
         env:
+          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
