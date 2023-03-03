@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["foo.txt"],
+  "globalEnv": ["SOME_ENV_VAR"],
+  "pipeline": {
+    "build": {
+      "env": ["NODE_ENV"],
+      "outputs": []
+    },
+    // this comment verifies that turbo can read .json files with comments
+    "my-app#build": {
+      "inputs": ["*.txt", "!excluded.txt"],
+      "outputs": ["banana.txt", "apple.json"]
+    }
+  }
+}

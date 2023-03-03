@@ -42,6 +42,32 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
 		}
 		result = gitLsTreeOutput
+
+		// Update the checked in hashes with the current repo status
+		// The paths returned from this call are anchored at the package directory
+		gitStatusOutput, err := gitStatus(pkgPath, calculatedInputs)
+		if err != nil {
+			return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
+		}
+
+		var filesToHash []turbopath.AnchoredSystemPath
+		for filePath, status := range gitStatusOutput {
+			if status.isDelete() {
+				delete(result, filePath)
+			} else {
+				filesToHash = append(filesToHash, filePath.ToSystemPath())
+			}
+		}
+
+		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
+		if err != nil {
+			return nil, err
+		}
+
+		// Zip up file paths and hashes together
+		for filePath, hash := range hashes {
+			result[filePath] = hash
+		}
 	} else {
 		// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
 		//
@@ -57,16 +83,24 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 		// The input patterns are relative to the package.
 		// However, we need to change the globbing to be relative to the repo root.
 		// Prepend the package path to each of the input patterns.
-		prefixedInputPatterns := make([]string, len(calculatedInputs))
-		for index, pattern := range calculatedInputs {
-			rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
-			if err != nil {
-				return nil, err
+		prefixedInputPatterns := []string{}
+		prefixedExcludePatterns := []string{}
+		for _, pattern := range calculatedInputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern[1:]))
+				if err != nil {
+					return nil, err
+				}
+				prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
+			} else {
+				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
+				if err != nil {
+					return nil, err
+				}
+				prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
 			}
-			prefixedInputPatterns[index] = rerooted
 		}
-
-		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, nil)
+		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
 
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
@@ -88,32 +122,8 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 		}
 		result = hashes
-	}
-
-	// Update the checked in hashes with the current repo status
-	// The paths returned from this call are anchored at the package directory
-	gitStatusOutput, err := gitStatus(pkgPath, calculatedInputs)
-	if err != nil {
-		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
-	}
-
-	var filesToHash []turbopath.AnchoredSystemPath
-	for filePath, status := range gitStatusOutput {
-		if status.isDelete() {
-			delete(result, filePath)
-		} else {
-			filesToHash = append(filesToHash, filePath.ToSystemPath())
-		}
-	}
-
-	hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
-	if err != nil {
-		return nil, err
-	}
-
-	// Zip up file paths and hashes together
-	for filePath, hash := range hashes {
-		result[filePath] = hash
+		// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
+		// hashes the current state, not state at a commit
 	}
 
 	return result, nil

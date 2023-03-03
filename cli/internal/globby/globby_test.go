@@ -414,7 +414,6 @@ func TestGlobFilesFs(t *testing.T) {
 			wantAll: []string{
 				"/repos/some-app/dist",
 				"/repos/some-app/dist/index.html",
-				"/repos/some-app/dist/js",
 			},
 			wantFiles: []string{
 				"/repos/some-app/dist/index.html",
@@ -658,6 +657,24 @@ func TestGlobFilesFs(t *testing.T) {
 				"/repos/some-app/dist/js/index.js",
 				"/repos/some-app/dist/js/lib.js",
 				"/repos/some-app/dist/js/node_modules/browserify.js",
+			},
+		},
+		{
+			name: "exclude single file",
+			files: []string{
+				"/repos/some-app/included.txt",
+				"/repos/some-app/excluded.txt",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"*.txt"},
+				excludePatterns: []string{"excluded.txt"},
+			},
+			wantAll: []string{
+				"/repos/some-app/included.txt",
+			},
+			wantFiles: []string{
+				"/repos/some-app/included.txt",
 			},
 		},
 	}

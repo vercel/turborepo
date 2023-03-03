@@ -129,14 +129,28 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		return nil, err
 	}
 
+	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration())
 	includePattern := ""
+	excludePattern := ""
 	if len(inputs) > 0 {
-		includePattern = "{" + strings.Join(inputs, ",") + "}"
+		var includePatterns []string
+		var excludePatterns []string
+		for _, pattern := range inputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				excludePatterns = append(excludePatterns, pathPrefix.UntypedJoin(pattern[1:]).ToString())
+			} else {
+				includePatterns = append(includePatterns, pathPrefix.UntypedJoin(pattern).ToString())
+			}
+		}
+		if len(includePatterns) > 0 {
+			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
+		}
+		if len(excludePatterns) > 0 {
+			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
+		}
 	}
 
-	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration()).ToString()
-	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
-	fs.Walk(pathPrefix, func(name string, isDir bool) error {
+	fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
 		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
@@ -151,12 +165,21 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 						return nil
 					}
 				}
+				if excludePattern != "" {
+					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if val {
+						return nil
+					}
+				}
 				hash, err := fs.GitLikeHashFile(convertedName.ToString())
 				if err != nil {
 					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
 
-				relativePath, err := convertedName.RelativeTo(convertedPathPrefix)
+				relativePath, err := convertedName.RelativeTo(pathPrefix)
 				if err != nil {
 					return fmt.Errorf("File path cannot be made relative: %w", err)
 				}
