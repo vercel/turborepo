@@ -476,7 +476,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn track(&self, fs_path: FileSystemPathVc) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(&full_path, true);
+        self.register_invalidator(full_path, true);
         Ok(CompletionVc::new())
     }
 
