@@ -140,8 +140,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		framework := missingFrameworkLabel
-		if taskHashTracker.PackageTaskFramework[packageTask.TaskID] != "" {
-			framework = taskHashTracker.PackageTaskFramework[packageTask.TaskID]
+		if packageTask.Framework != "" {
+			framework = packageTask.Framework
 		}
 
 		isRootTask := packageTask.PackageName == util.RootPkgName
