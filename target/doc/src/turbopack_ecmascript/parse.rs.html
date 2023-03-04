@@ -318,6 +318,10 @@
 <span id="318">318</span>
 <span id="319">319</span>
 <span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -608,6 +612,10 @@
             <span class="kw">for </span>transform <span class="kw">in </span>transforms.iter() {
                 transform.apply(<span class="kw-2">&amp;mut </span>parsed_program, <span class="kw-2">&amp;</span>context).<span class="kw">await</span><span class="question-mark">?</span>;
             }
+
+            parsed_program.visit_mut_with(
+                <span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::helpers::inject_helpers(unresolved_mark),
+            );
 
             <span class="kw">let </span>eval_context = EvalContext::new(<span class="kw-2">&amp;</span>parsed_program, unresolved_mark);
 
