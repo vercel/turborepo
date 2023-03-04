@@ -87,6 +87,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		packageTask.Hash = hash
 		packageTask.HashedEnvVars = g.TaskHashTracker.GetEnvVars(packageTask.TaskID)
 		packageTask.ExpandedInputs = g.TaskHashTracker.GetExpandedInputs(packageTask)
+		packageTask.Framework = g.TaskHashTracker.GetFramework(packageTask.TaskID)
 
 		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd

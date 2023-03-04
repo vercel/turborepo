@@ -24,6 +24,7 @@ type PackageTask struct {
 	ExpandedInputs  map[turbopath.AnchoredUnixPath]string
 	Hash            string
 	HashedEnvVars   env.DetailedMap
+	Framework       string
 }
 
 // OutputPrefix returns the prefix to be used for logging and ui for this task
