@@ -547,4 +547,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://hash.dev/",
     pinned: true,
   },
+  {
+    caption: "Clinia",
+    image: "/images/logos/clinia.svg",
+    infoLink: "https://clinia.dev/",
+    pinned: true
+  }
 ];
