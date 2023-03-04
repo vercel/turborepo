@@ -539,24 +539,17 @@ impl DeterministicHash for RopeElem {
 }
 
 /// Implements the [Read]/[AsyncRead]/[Iterator] trait over a [Rope].
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RopeReader<'a> {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
     stack: Vec<StackElem<'a>>,
 
-    /// The leaked root allows us to invert the ownership of Bytes. By leaking
-    /// the Rope's root, we're able to use a 'static lifetime and let the
-    /// RopeReader own the memory and cleanup. When the RopeReader is dropped,
-    /// the InnerRope's Arc will be manually decremented to free the memory.
-    leaked_root: Option<*mut InnerRope>,
+    /// The held root allows us to invert the ownership of Bytes. By storing a
+    /// copy of Rope's root, we can ensure that our borrowed StackElems will
+    /// live at least as long as this RopeReader.
+    held_root: Option<InnerRope>,
 }
-
-// SAFETY: The RopeReader is neither Clone nor Copy, meaning this instance is
-// the only holder of our leaked root InnerRope. The pointer only ever accessed
-// when we drop, so that we can free the leaked memory.
-unsafe impl<'a> Send for RopeReader<'a> {}
-unsafe impl<'a> Sync for RopeReader<'a> {}
 
 /// A StackElem holds the current index into either a Bytes or a shared Rope.
 /// When the index reaches the end of the associated data, it is removed and we
@@ -571,14 +564,13 @@ impl<'a> RopeReader<'a> {
     /// Constructs a new RopeReader, taking ownership of the Rope's internal
     /// memory and freeing us from the lifetime constraints of the Rope.
     fn new(rope: &Rope) -> RopeReader<'static> {
-        // We leak a **cloned** InnerRope, which is essentially free to do. By cloning,
-        // we increment the Arc's reference counter, and by leaking we promote
-        // the clone into a 'static lifetime. This allows us to pretend that the
-        // RopeReader owns the Rope's memory.
-        let leak = Box::leak(Box::new(rope.data.clone()));
-        let root = Some(leak as *mut InnerRope);
-        let mut reader = RopeReader::new_borrow(leak, 0);
-        reader.leaked_root = root;
+        // SAFETY: We transmute the InnerRope into a 'static lifetime so that it is
+        // usable without keeping a reference to the Rope alive. This is safe because
+        // the RopeReader itself holds an Arc clone of the data, ensuring the data will
+        // live at least as long as the reader.
+        let borrow = unsafe { std::mem::transmute::<&InnerRope, &'static InnerRope>(&rope.data) };
+        let mut reader = RopeReader::new_borrow(borrow, 0);
+        reader.held_root = Some(borrow.clone());
         reader
     }
 
@@ -588,16 +580,18 @@ impl<'a> RopeReader<'a> {
         let stack = if index >= inner.len() {
             vec![]
         } else {
-            vec![StackElem::Shared(inner, index)]
+            let mut v = Vec::with_capacity(2);
+            v.push(StackElem::Shared(inner, index));
+            v
         };
         RopeReader {
             stack,
-            leaked_root: None,
+            held_root: None,
         }
     }
 
-    /// Iterates the rope's elements recursively until we find the next Local
-    /// section, returning its Bytes.
+    /// Iterates over the rope's elements recursively until we find the next
+    /// Local section, returning its Bytes.
     fn next_internal(&mut self) -> Option<(&'a Bytes, usize)> {
         loop {
             match self.stack.last_mut() {
@@ -638,16 +632,6 @@ impl<'a> RopeReader<'a> {
         }
 
         want - remaining
-    }
-}
-
-impl<'a> Drop for RopeReader<'a> {
-    fn drop(&mut self) {
-        let root = mem::take(&mut self.leaked_root);
-        // SAFETY: We're the only holder of this pointer (RopeReader is neither clone
-        // nor copy), and it holds a cloned InnerRope and its Arc. By reconstituting a
-        // Box, we allow the Arc to decrement and avoid leaking the Rope permanently.
-        root.map(|ptr| unsafe { Box::from_raw(ptr) });
     }
 }
 
@@ -700,7 +684,7 @@ impl<'a> BufRead for RopeReader<'a> {
                 );
                 self.stack.pop();
             }
-        };
+        }
     }
 }
 
