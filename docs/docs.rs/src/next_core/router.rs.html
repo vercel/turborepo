@@ -364,6 +364,9 @@
 <span id="364">364</span>
 <span id="365">365</span>
 <span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::Deserialize;
@@ -628,6 +631,7 @@
     project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; TransitionsByNameVc {
     <span class="kw">let </span>edge_compile_time_info = get_edge_compile_time_info(server_addr, Value::new(Middleware));
 
@@ -644,6 +648,7 @@
         project_path,
         Value::new(ServerContextType::Middleware),
         next_config,
+        execution_context,
     );
 
     <span class="kw">let </span>next_edge_transition = NextEdgeTransition {
@@ -688,6 +693,7 @@
             project_path,
             intermediate_output_path,
             next_config,
+            execution_context,
         )),
     );
 

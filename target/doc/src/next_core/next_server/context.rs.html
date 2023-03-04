@@ -336,6 +336,8 @@
 <span id="336">336</span>
 <span id="337">337</span>
 <span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -385,8 +387,10 @@
     project_path: FileSystemPathVc,
     ty: Value&lt;ServerContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsContextVc&gt; {
-    <span class="kw">let </span>next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
+    <span class="kw">let </span>next_server_import_map =
+        get_next_server_import_map(project_path, ty, next_config, execution_context);
     <span class="kw">let </span>foreign_code_context_condition = foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>root_dir = project_path.root().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
 

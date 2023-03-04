@@ -499,6 +499,14 @@
 <span id="499">499</span>
 <span id="500">500</span>
 <span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -517,6 +525,7 @@
         resolve, AliasPattern, ExportsValue, ResolveAliasMapVc,
     },
 };
+<span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use crate</span>::{
     embed_js::{next_js_fs, VIRTUAL_PACKAGE_NAME},
@@ -532,10 +541,11 @@
     project_path: FileSystemPathVc,
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path, execution_context).<span class="kw">await</span><span class="question-mark">?</span>;
 
     insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
@@ -667,10 +677,11 @@
     project_path: FileSystemPathVc,
     ty: Value&lt;ServerContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path, execution_context).<span class="kw">await</span><span class="question-mark">?</span>;
 
     insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
@@ -724,10 +735,11 @@
     project_path: FileSystemPathVc,
     ty: Value&lt;ServerContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path, execution_context).<span class="kw">await</span><span class="question-mark">?</span>;
 
     insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
@@ -855,6 +867,7 @@
 <span class="kw">pub async fn </span>insert_next_shared_aliases(
     import_map: <span class="kw-2">&amp;mut </span>ImportMap,
     project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>package_root = next_js_fs().root();
 
@@ -885,7 +898,10 @@
 
     import_map.insert_alias(
         AliasPattern::exact(<span class="string">&quot;@vercel/turbopack-next/internal/font/google/cssmodule.module.css&quot;</span>),
-        ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
+        ImportMapping::Dynamic(
+            NextFontGoogleCssModuleReplacerVc::new(project_path, execution_context).into(),
+        )
+        .into(),
     );
 
     import_map.insert_singleton_alias(<span class="string">&quot;@swc/helpers&quot;</span>, get_next_package(project_path));

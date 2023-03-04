@@ -378,16 +378,137 @@
 <span id="378">378</span>
 <span id="379">379</span>
 <span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
-<span class="kw">use </span>turbo_tasks_fetch::fetch;
 <span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
-    issue::IssueSeverity,
     resolve::{
         options::{
             ImportMapResult, ImportMapResultVc, ImportMapping, ImportMappingReplacement,
@@ -399,6 +520,7 @@
     },
     virtual_asset::VirtualAssetVc,
 };
+<span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use </span><span class="self">self</span>::options::FontWeights;
 <span class="kw">use crate</span>::{
@@ -503,13 +625,17 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NextFontGoogleCssModuleReplacer {
     project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>NextFontGoogleCssModuleReplacerVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(project_path: FileSystemPathVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(NextFontGoogleCssModuleReplacer { project_path })
+    </span><span class="kw">pub fn </span>new(project_path: FileSystemPathVc, execution_context: ExecutionContextVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(NextFontGoogleCssModuleReplacer {
+            project_path,
+            execution_context,
+        })
     }
 }
 
@@ -538,36 +664,55 @@
         <span class="kw">let </span>css_virtual_path = next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
             .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}.module.css&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>));
 
-        <span class="kw">let </span>stylesheet_res = fetch(
-            stylesheet_url,
-            OptionStringVc::cell(<span class="prelude-val">Some</span>(
-                <span class="string">&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like \
-                 Gecko) Chrome/104.0.0.0 Safari/537.36&quot;
-                    </span>.to_owned(),
-            )),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// When running Next.js integration tests, use the mock data available in
+        // process.env.NEXT_FONT_GOOGLE_MOCKED_RESPONSES instead of making real
+        // requests to Google Fonts.
+        </span><span class="attr">#[cfg(feature = <span class="string">&quot;__internal_nextjs_integration_test&quot;</span>)]
+        </span><span class="kw">let </span>stylesheet_str = get_mock_stylesheet(<span class="kw-2">&amp;</span>stylesheet_url.<span class="kw">await</span><span class="question-mark">?</span>, <span class="self">self</span>.execution_context)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.map(StringVc::cell);
 
-        <span class="kw">let </span>stylesheet = <span class="kw">match </span><span class="kw-2">&amp;*</span>stylesheet_res {
-            <span class="prelude-val">Ok</span>(r) =&gt; <span class="prelude-val">Some</span>(
-                update_stylesheet(r.<span class="kw">await</span><span class="question-mark">?</span>.body.to_string(), options, scoped_font_family)
+        <span class="attr">#[cfg(not(feature = <span class="string">&quot;__internal_nextjs_integration_test&quot;</span>))]
+        </span><span class="kw">let </span>stylesheet_str = {
+            <span class="kw">use </span>turbo_tasks_fetch::fetch;
+            <span class="kw">use </span>turbopack_core::issue::IssueSeverity;
+
+            <span class="kw">let </span>stylesheet_res = fetch(
+                stylesheet_url,
+                OptionStringVc::cell(<span class="prelude-val">Some</span>(
+                    <span class="string">&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, \
+                     like Gecko) Chrome/104.0.0.0 Safari/537.36&quot;
+                        </span>.to_owned(),
+                )),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>stylesheet_res {
+                <span class="prelude-val">Ok</span>(r) =&gt; <span class="prelude-val">Some</span>(r.<span class="kw">await</span><span class="question-mark">?</span>.body.to_string()),
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="comment">// Inform the user of the failure to retreive the stylesheet, but don&#39;t
+                    // propagate this error. We don&#39;t want e.g. offline connections to prevent page
+                    // renders during development. During production builds, however, this error
+                    // should propagate.
+                    //
+                    // TODO(WEB-283): Use fallback in dev in this case
+                    // TODO(WEB-293): Fail production builds (not dev) in this case
+                    </span>err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
+                        .as_issue()
+                        .emit();
+
+                    <span class="prelude-val">None
+                </span>}
+            }
+        };
+
+        <span class="kw">let </span>stylesheet = <span class="kw">match </span>stylesheet_str {
+            <span class="prelude-val">Some</span>(s) =&gt; <span class="prelude-val">Some</span>(
+                update_stylesheet(s, options, scoped_font_family)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.clone_value(),
             ),
-            <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="comment">// Inform the user of the failure to retreive the stylesheet, but don&#39;t
-                // propagate this error. We don&#39;t want e.g. offline connections to prevent page
-                // renders during development. During production builds, however, this error
-                // should propagate.
-                //
-                // TODO(WEB-283): Use fallback in dev in this case
-                // TODO(WEB-293): Fail production builds (not dev) in this case
-                </span>err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
-                    .as_issue()
-                    .emit();
-
-                <span class="prelude-val">None
-            </span>}
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
         };
 
         <span class="kw">let </span>properties = get_font_css_properties(scoped_font_family, options).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -632,12 +777,17 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>get_scoped_font_family(query_vc: QueryMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
     <span class="kw">let </span>options = font_options_from_query_map(query_vc).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>hash = {
+        <span class="kw">let </span><span class="kw-2">mut </span>hash = <span class="macro">format!</span>(<span class="string">&quot;{:x?}&quot;</span>, <span class="kw-2">*</span>get_request_hash(query_vc).<span class="kw">await</span><span class="question-mark">?</span>);
+        hash.truncate(<span class="number">6</span>);
+        hash
+    };
 
     <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-        <span class="string">&quot;__{}_{:x?}&quot;</span>,
+        <span class="string">&quot;__{}_{}&quot;</span>,
         options.font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;_&quot;</span>),
-        <span class="kw-2">*</span>get_request_hash(query_vc).<span class="kw">await</span><span class="question-mark">?
-    </span>)))
+        hash
+    )))
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -757,6 +907,102 @@
 
     <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>parse_json_with_source_context(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>FONT_DATA)
         .map(NextFontGoogleOptionsVc::cell)
+}
+
+<span class="attr">#[cfg(feature = <span class="string">&quot;__internal_nextjs_integration_test&quot;</span>)]
+</span><span class="kw">async fn </span>get_mock_stylesheet(
+    url: <span class="kw-2">&amp;</span>str,
+    execution_context: ExecutionContextVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt; {
+    <span class="kw">use </span>std::{collections::HashMap, path::Path};
+
+    <span class="kw">use </span>turbo_tasks::{CompletionVc, Value};
+    <span class="kw">use </span>turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
+    <span class="kw">use </span>turbo_tasks_fs::{
+        json::parse_json_rope_with_source_context, DiskFileSystemVc, File, FileSystem,
+    };
+    <span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
+    <span class="kw">use </span>turbopack_core::{context::AssetContext, ident::AssetIdentVc};
+    <span class="kw">use </span>turbopack_ecmascript::{
+        EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    };
+    <span class="kw">use </span>turbopack_node::{
+        evaluate::{evaluate, JavaScriptValue},
+        execution_context::ExecutionContext,
+    };
+
+    <span class="kw">let </span>env = CommandLineProcessEnvVc::new().as_process_env();
+    <span class="kw">let </span>mocked_response_js = <span class="kw-2">&amp;*</span>env.read(<span class="string">&quot;NEXT_FONT_GOOGLE_MOCKED_RESPONSES&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>mocked_response_js = mocked_response_js
+        .as_ref()
+        .context(<span class="string">&quot;Expected env NEXT_FONT_GOOGLE_MOCKED_RESPONSES&quot;</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>response_path = Path::new(<span class="kw-2">&amp;</span>mocked_response_js);
+    <span class="kw">let </span>mock_fs = DiskFileSystemVc::new(
+        <span class="string">&quot;mock&quot;</span>.to_string(),
+        response_path
+            .parent()
+            .context(<span class="string">&quot;Must be valid path&quot;</span>)<span class="question-mark">?
+            </span>.to_str()
+            .context(<span class="string">&quot;Must exist&quot;</span>)<span class="question-mark">?
+            </span>.to_string(),
+    )
+    .as_file_system();
+
+    <span class="kw">let </span>ExecutionContext {
+        env,
+        project_root: <span class="kw">_</span>,
+        intermediate_output_path,
+    } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+    <span class="kw">let </span>loader_path = mock_fs.root().join(<span class="string">&quot;loader.js&quot;</span>);
+    <span class="kw">let </span>mocked_response_asset = EcmascriptModuleAssetVc::new(
+        VirtualAssetVc::new(
+            loader_path,
+            File::from(<span class="macro">format!</span>(
+                <span class="string">&quot;import data from &#39;./{}&#39;; export default function load() {{ return data; }};&quot;</span>,
+                response_path
+                    .file_name()
+                    .context(<span class="string">&quot;Must exist&quot;</span>)<span class="question-mark">?
+                    </span>.to_string_lossy(),
+            ))
+            .into(),
+        )
+        .into(),
+        context,
+        Value::new(EcmascriptModuleAssetType::Ecmascript),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
+        context.compile_time_info(),
+    )
+    .into();
+
+    <span class="kw">let </span>root = mock_fs.root();
+    <span class="kw">let </span>val = evaluate(
+        loader_path,
+        mocked_response_asset,
+        root,
+        env,
+        AssetIdentVc::from_path(loader_path),
+        context,
+        intermediate_output_path,
+        <span class="prelude-val">None</span>,
+        <span class="macro">vec!</span>[],
+        CompletionVc::immutable(),
+        <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">match </span><span class="kw-2">&amp;*</span>val {
+        JavaScriptValue::Value(val) =&gt; {
+            <span class="kw">let </span>mock_map: HashMap&lt;String, <span class="prelude-ty">Option</span>&lt;String&gt;&gt; =
+                parse_json_rope_with_source_context(val)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>((mock_map.get(url).context(<span class="string">&quot;url not found&quot;</span>)<span class="question-mark">?</span>).clone())
+        }
+        JavaScriptValue::Error =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unexpected error evaluating JS&quot;</span>),
+        JavaScriptValue::Stream(<span class="kw">_</span>) =&gt; {
+            <span class="macro">unimplemented!</span>(<span class="string">&quot;Stream not supported now&quot;</span>);
+        }
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

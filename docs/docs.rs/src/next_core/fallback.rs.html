@@ -92,6 +92,7 @@
 <span id="92">92</span>
 <span id="93">93</span>
 <span id="94">94</span>
+<span id="95">95</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -130,7 +131,8 @@
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;DevHtmlAssetVc&gt; {
     <span class="kw">let </span>ty = Value::new(ClientContextType::Fallback);
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
+    <span class="kw">let </span>resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config, execution_context);
     <span class="kw">let </span>module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
@@ -144,10 +146,10 @@
         client_compile_time_info.environment(),
         ty,
     );
-    <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config);
+    <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config, execution_context);
 
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path, execution_context).<span class="kw">await</span><span class="question-mark">?</span>;
     insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
         project_path,

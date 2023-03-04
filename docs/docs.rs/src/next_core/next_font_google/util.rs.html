@@ -512,6 +512,61 @@
 <span id="512">512</span>
 <span id="513">513</span>
 <span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -630,11 +685,13 @@
     <span class="kw">if </span>axes.wght.is_empty() {
         <span class="kw">let </span><span class="kw-2">mut </span>variant = <span class="macro">vec!</span>[];
         <span class="kw">if let </span><span class="prelude-val">Some</span>(variable_axes) = <span class="kw-2">&amp;</span>axes.variable_axes {
-            <span class="kw">for </span>(key, val) <span class="kw">in </span>variable_axes {
-                variant.push((key.as_str(), <span class="kw-2">&amp;</span>val[..]));
+            <span class="kw">if </span>!variable_axes.is_empty() {
+                <span class="kw">for </span>(key, val) <span class="kw">in </span>variable_axes {
+                    variant.push((key.as_str(), <span class="kw-2">&amp;</span>val[..]));
+                }
+                variants.push(variant);
             }
         }
-        variants.push(variant);
     } <span class="kw">else </span>{
         <span class="kw">for </span>wght <span class="kw">in </span><span class="kw-2">&amp;</span>axes.wght {
             <span class="kw">if </span>axes.ital.is_empty() {
@@ -649,13 +706,19 @@
             } <span class="kw">else </span>{
                 <span class="kw">for </span>ital <span class="kw">in </span><span class="kw-2">&amp;</span>axes.ital {
                     <span class="kw">let </span><span class="kw-2">mut </span>variant = <span class="macro">vec!</span>[];
-                    variant.push((
-                        <span class="string">&quot;ital&quot;</span>,
-                        <span class="kw">match </span>ital {
-                            FontItal::Normal =&gt; <span class="string">&quot;0&quot;</span>,
-                            FontItal::Italic =&gt; <span class="string">&quot;1&quot;</span>,
-                        },
-                    ));
+
+                    <span class="comment">// If Normal is the only requested variant, it&#39;s safe to omit the ital axis
+                    // entirely. Otherwise, include all variants.
+                    </span><span class="kw">if </span><span class="macro">matches!</span>(ital, FontItal::Italic) || axes.ital.len() &gt; <span class="number">1 </span>{
+                        variant.push((
+                            <span class="string">&quot;ital&quot;</span>,
+                            <span class="kw">match </span>ital {
+                                FontItal::Normal =&gt; <span class="string">&quot;0&quot;</span>,
+                                FontItal::Italic =&gt; <span class="string">&quot;1&quot;</span>,
+                            },
+                        ));
+                    }
+
                     variant.push((<span class="string">&quot;wght&quot;</span>, <span class="kw-2">&amp;</span>wght[..]));
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(variable_axes) = <span class="kw-2">&amp;</span>axes.variable_axes {
                         <span class="kw">for </span>(key, val) <span class="kw">in </span>variable_axes {
@@ -684,44 +747,53 @@
         });
     }
 
-    <span class="kw">let </span>first_variant = variants
-        .first()
-        .context(<span class="string">&quot;Requires at least one font variant&quot;</span>)<span class="question-mark">?</span>;
-    <span class="comment">// Always use the first variant&#39;s keys. There&#39;s an implicit invariant from the
-    // code above that the keys across each variant are identical, and therefore
-    // will be sorted identically across variants.
-    //
-    // Generates a comma-separated list of axis names, e.g. `ital,opsz,wght`.
-    </span><span class="kw">let </span>variant_keys_str = first_variant
-        .iter()
-        .map(|pair| pair.<span class="number">0</span>)
-        .collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;()
-        .join(<span class="string">&quot;,&quot;</span>);
-
-    <span class="kw">let </span><span class="kw-2">mut </span>variant_values = variants
-        .iter()
-        .map(|variant| {
-            variant
+    <span class="kw">let </span>first_variant = variants.first();
+    <span class="kw">match </span>first_variant {
+        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+            <span class="string">&quot;{}?family={}&amp;display={}&quot;</span>,
+            root_url,
+            font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;+&quot;</span>),
+            display
+        )),
+        <span class="prelude-val">Some</span>(first_variant) =&gt; {
+            <span class="comment">// Always use the first variant&#39;s keys. There&#39;s an implicit invariant from the
+            // code above that the keys across each variant are identical, and therefore
+            // will be sorted identically across variants.
+            //
+            // Generates a comma-separated list of axis names, e.g. `ital,opsz,wght`.
+            </span><span class="kw">let </span>variant_keys_str = first_variant
                 .iter()
-                .map(|pair| pair.<span class="number">1</span>)
+                .map(|pair| pair.<span class="number">0</span>)
                 .collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;()
-                .join(<span class="string">&quot;,&quot;</span>)
-        })
-        .collect::&lt;Vec&lt;String&gt;&gt;();
-    variant_values.sort();
-    <span class="comment">// An encoding of the series of sorted variant values, with variants delimited
-    // by `;` and the values within a variant delimited by `,` e.g.
-    // `&quot;0,10..100,500;1,10.100;500&quot;`
-    </span><span class="kw">let </span>variant_values_str = variant_values.join(<span class="string">&quot;;&quot;</span>);
+                .join(<span class="string">&quot;,&quot;</span>);
 
-    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
-        <span class="string">&quot;{}?family={}:{}@{}&amp;display={}&quot;</span>,
-        root_url,
-        font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;+&quot;</span>),
-        variant_keys_str,
-        variant_values_str,
-        display
-    ))
+            <span class="kw">let </span><span class="kw-2">mut </span>variant_values = variants
+                .iter()
+                .map(|variant| {
+                    variant
+                        .iter()
+                        .map(|pair| pair.<span class="number">1</span>)
+                        .collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;()
+                        .join(<span class="string">&quot;,&quot;</span>)
+                })
+                .collect::&lt;Vec&lt;String&gt;&gt;();
+            variant_values.sort();
+
+            <span class="comment">// An encoding of the series of sorted variant values, with variants delimited
+            // by `;` and the values within a variant delimited by `,` e.g.
+            // `&quot;0,10..100,500;1,10.100;500&quot;`
+            </span><span class="kw">let </span>variant_values_str = variant_values.join(<span class="string">&quot;;&quot;</span>);
+
+            <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+                <span class="string">&quot;{}?family={}:{}@{}&amp;display={}&quot;</span>,
+                root_url,
+                font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;+&quot;</span>),
+                variant_keys_str,
+                variant_values_str,
+                display
+            ))
+        }
+    }
 }
 
 <span class="attr">#[cfg(test)]
@@ -932,7 +1004,7 @@
                 </span>},
                 <span class="string">&quot;optional&quot;
             </span>)<span class="question-mark">?</span>,
-            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,500&amp;display=optional&quot;
+            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@500&amp;display=optional&quot;
         </span>);
 
         <span class="prelude-val">Ok</span>(())
@@ -955,7 +1027,7 @@
                 },
                 <span class="string">&quot;optional&quot;
             </span>)<span class="question-mark">?</span>,
-            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Roboto+Serif:ital,opsz,wdth,wght,GRAD@0,8..144,50..150,500,-50..100&amp;display=optional&quot;
+            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Roboto+Serif:opsz,wdth,wght,GRAD@8..144,50..150,500,-50..100&amp;display=optional&quot;
         </span>);
 
         <span class="prelude-val">Ok</span>(())
@@ -1002,6 +1074,44 @@
                 <span class="string">&quot;optional&quot;
             </span>)<span class="question-mark">?</span>,
             <span class="string">&quot;https://fonts.googleapis.com/css2?family=Nabla:EDPT,EHLT@0..200,0..24&amp;display=optional&quot;
+        </span>);
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_stylesheet_url_variable_font_without_anything() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">assert_eq!</span>(
+            get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
+                <span class="string">&quot;Nabla&quot;</span>,
+                <span class="kw-2">&amp;</span>FontAxes {
+                    wght: <span class="macro">indexset! </span>{},
+                    ital: <span class="macro">indexset! </span>{},
+                    variable_axes: <span class="prelude-val">None</span>,
+                },
+                <span class="string">&quot;swap&quot;
+            </span>)<span class="question-mark">?</span>,
+            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Nabla&amp;display=swap&quot;
+        </span>);
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_stylesheet_url_variable_font_with_empty_variable_axes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">assert_eq!</span>(
+            get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
+                <span class="string">&quot;Nabla&quot;</span>,
+                <span class="kw-2">&amp;</span>FontAxes {
+                    wght: <span class="macro">indexset! </span>{},
+                    ital: <span class="macro">indexset! </span>{},
+                    variable_axes: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[]),
+                },
+                <span class="string">&quot;swap&quot;
+            </span>)<span class="question-mark">?</span>,
+            <span class="string">&quot;https://fonts.googleapis.com/css2?family=Nabla&amp;display=swap&quot;
         </span>);
 
         <span class="prelude-val">Ok</span>(())

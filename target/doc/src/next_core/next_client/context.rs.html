@@ -276,6 +276,12 @@
 <span id="276">276</span>
 <span id="277">277</span>
 <span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -362,8 +368,10 @@
     project_path: FileSystemPathVc,
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsContextVc&gt; {
-    <span class="kw">let </span>next_client_import_map = get_next_client_import_map(project_path, ty, next_config);
+    <span class="kw">let </span>next_client_import_map =
+        get_next_client_import_map(project_path, ty, next_config, execution_context);
     <span class="kw">let </span>next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     <span class="kw">let </span>next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
     <span class="kw">let </span>module_options_context = ResolveOptionsContext {
@@ -397,7 +405,8 @@
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
     <span class="kw">let </span>custom_rules = get_next_client_transforms_rules(ty.into_value()).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
+    <span class="kw">let </span>resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config, execution_context);
     <span class="kw">let </span>enable_react_refresh =
         assert_can_resolve_react_refresh(project_path, resolve_options_context)
             .<span class="kw">await</span><span class="question-mark">?
@@ -460,7 +469,8 @@
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
 ) -&gt; AssetContextVc {
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
+    <span class="kw">let </span>resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config, execution_context);
     <span class="kw">let </span>module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
@@ -522,8 +532,10 @@
     env: ProcessEnvVc,
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;RuntimeEntriesVc&gt; {
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_root, ty, next_config);
+    <span class="kw">let </span>resolve_options_context =
+        get_client_resolve_options_context(project_root, ty, next_config, execution_context);
     <span class="kw">let </span>enable_react_refresh =
         assert_can_resolve_react_refresh(project_root, resolve_options_context)
             .<span class="kw">await</span><span class="question-mark">?

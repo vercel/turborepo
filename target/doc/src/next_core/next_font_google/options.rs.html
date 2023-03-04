@@ -704,7 +704,7 @@
 
     <span class="kw">let </span>display = argument
         .and_then(|a| a.display.to_owned())
-        .unwrap_or_else(|| <span class="string">&quot;optional&quot;</span>.to_owned());
+        .unwrap_or_else(|| <span class="string">&quot;swap&quot;</span>.to_owned());
 
     <span class="kw">if </span>!ALLOWED_DISPLAY_VALUES.contains(<span class="kw-2">&amp;</span>display.as_ref()) {
         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
@@ -807,7 +807,7 @@
                 font_family: <span class="string">&quot;ABeeZee&quot;</span>.to_owned(),
                 weights: FontWeights::Variable,
                 styles: <span class="macro">indexset! </span>{<span class="string">&quot;normal&quot;</span>.to_owned()},
-                display: <span class="string">&quot;optional&quot;</span>.to_owned(),
+                display: <span class="string">&quot;swap&quot;</span>.to_owned(),
                 preload: <span class="bool-val">true</span>,
                 selected_variable_axes: <span class="prelude-val">None</span>,
                 fallback: <span class="prelude-val">None</span>,
