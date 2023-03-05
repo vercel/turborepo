@@ -257,7 +257,8 @@ impl PostCssTransformedAssetVc {
             .context("Unable to deserializate response from PostCSS transform operation")?;
         let source_map = processed_css
             .map
-            .and_then(|map| CrateMap::from_slice(map.as_bytes()).ok())
+            .map(|map| CrateMap::from_slice(map.as_bytes()))
+            .transpose()?
             .map(|map| SourceMapVc::new_regular(map));
         let file = File::from(processed_css.css);
         let assets = emitted_assets_to_virtual_assets(processed_css.assets);
