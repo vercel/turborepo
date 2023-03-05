@@ -259,7 +259,7 @@ impl PostCssTransformedAssetVc {
             .map
             .map(|map| CrateMap::from_slice(map.as_bytes()))
             .transpose()?
-            .map(|map| SourceMapVc::new_regular(map));
+            .map(SourceMapVc::new_regular);
         let file = File::from(processed_css.css);
         let assets = emitted_assets_to_virtual_assets(processed_css.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
