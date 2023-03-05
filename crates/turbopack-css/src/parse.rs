@@ -65,6 +65,9 @@ pub struct ParseResultSourceMap {
     /// SourceMap.
     #[turbo_tasks(debug_ignore, trace_ignore)]
     mappings: Vec<(BytePos, LineCol)>,
+
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    original_map: Option<SourceMapVc>,
 }
 
 impl PartialEq for ParseResultSourceMap {
@@ -74,10 +77,15 @@ impl PartialEq for ParseResultSourceMap {
 }
 
 impl ParseResultSourceMap {
-    pub fn new(source_map: Arc<SourceMap>, mappings: Vec<(BytePos, LineCol)>) -> Self {
+    pub fn new(
+        source_map: Arc<SourceMap>,
+        mappings: Vec<(BytePos, LineCol)>,
+        original_map: Option<SourceMapVc>,
+    ) -> Self {
         ParseResultSourceMap {
             source_map,
             mappings,
+            original_map,
         }
     }
 }
@@ -85,13 +93,18 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> SourceMapVc {
+    async fn generate_source_map(&self) -> Result<SourceMapVc> {
+        let original_map = if let Some(original_map) = self.original_map {
+            Some(original_map.to_crate_map().await?)
+        } else {
+            None
+        };
         let map = self.source_map.build_source_map_with_config(
             &self.mappings,
-            None,
+            original_map.as_ref(),
             InlineSourcesContentConfig {},
         );
-        SourceMapVc::new_regular(map)
+        Ok(SourceMapVc::new_regular(map))
     }
 }
 

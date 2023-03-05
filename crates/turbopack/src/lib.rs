@@ -45,6 +45,8 @@ use turbopack_core::{
         pattern::Pattern,
         resolve, ResolveResultVc,
     },
+    source_map::SourceMapVc,
+    source_transform::SourceTransformedVc,
 };
 
 use crate::transition::Transition;
@@ -108,6 +110,7 @@ impl Issue for ModuleIssue {
 #[turbo_tasks::function]
 async fn apply_module_type(
     source: AssetVc,
+    source_map: Option<SourceMapVc>,
     context: ModuleAssetContextVc,
     module_type: ModuleTypeVc,
 ) -> Result<AssetVc> {
@@ -147,10 +150,10 @@ async fn apply_module_type(
         ModuleType::Json => JsonModuleAssetVc::new(source).into(),
         ModuleType::Raw => source,
         ModuleType::Css(transforms) => {
-            CssModuleAssetVc::new(source, context.into(), *transforms).into()
+            CssModuleAssetVc::new(source, source_map, context.into(), *transforms).into()
         }
         ModuleType::CssModule(transforms) => {
-            ModuleCssModuleAssetVc::new(source, context.into(), *transforms).into()
+            ModuleCssModuleAssetVc::new(source, source_map, context.into(), *transforms).into()
         }
         ModuleType::Static => StaticModuleAssetVc::new(source, context.into()).into(),
         ModuleType::Mdx(transforms) => {
@@ -241,6 +244,7 @@ impl ModuleAssetContextVc {
     async fn process_default(
         self_vc: ModuleAssetContextVc,
         source: AssetVc,
+        source_map: Option<SourceMapVc>,
         reference_type: Value<ReferenceType>,
     ) -> Result<AssetVc> {
         let ident = source.ident().resolve().await?;
@@ -248,6 +252,7 @@ impl ModuleAssetContextVc {
 
         let reference_type = reference_type.into_value();
         let mut current_source = source;
+        let mut current_map = source_map;
         let mut current_module_type = None;
         for rule in options.await?.rules.iter() {
             if rule
@@ -257,11 +262,17 @@ impl ModuleAssetContextVc {
                 for effect in rule.effects() {
                     match effect {
                         ModuleRuleEffect::SourceTransforms(transforms) => {
-                            current_source = transforms.transform(current_source);
+                            let transformed = transforms
+                                .transform(SourceTransformedVc::new(current_source, current_map));
+                            current_source = transformed.await?.source;
+                            current_map = transformed.await?.source_map;
                             if current_source.ident().resolve().await? != ident {
                                 // The ident has been changed, so we need to apply new rules.
-                                return Ok(self_vc
-                                    .process_default(current_source, Value::new(reference_type)));
+                                return Ok(self_vc.process_default(
+                                    current_source,
+                                    current_map,
+                                    Value::new(reference_type),
+                                ));
                             }
                         }
                         ModuleRuleEffect::ModuleType(module) => {
@@ -326,7 +337,12 @@ impl ModuleAssetContextVc {
 
         let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
 
-        Ok(apply_module_type(current_source, self_vc, module_type))
+        Ok(apply_module_type(
+            current_source,
+            current_map,
+            self_vc,
+            module_type,
+        ))
     }
 }
 
@@ -402,7 +418,7 @@ impl AssetContext for ModuleAssetContext {
         if let Some(transition) = this.transition {
             Ok(transition.process(asset, self_vc, reference_type))
         } else {
-            Ok(self_vc.process_default(asset, reference_type))
+            Ok(self_vc.process_default(asset, None, reference_type))
         }
     }
 

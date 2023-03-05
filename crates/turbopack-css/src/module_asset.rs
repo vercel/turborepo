@@ -25,6 +25,7 @@ use turbopack_core::{
         parse::RequestVc,
         ResolveResult, ResolveResultVc,
     },
+    source_map::SourceMapVc,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -61,9 +62,14 @@ pub struct ModuleCssModuleAsset {
 #[turbo_tasks::value_impl]
 impl ModuleCssModuleAssetVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, context: AssetContextVc, transforms: CssInputTransformsVc) -> Self {
+    pub fn new(
+        source: AssetVc,
+        source_map: Option<SourceMapVc>,
+        context: AssetContextVc,
+        transforms: CssInputTransformsVc,
+    ) -> Self {
         Self::cell(ModuleCssModuleAsset {
-            inner: CssModuleAssetVc::new_module(source, context, transforms),
+            inner: CssModuleAssetVc::new_module(source, source_map, context, transforms),
         })
     }
 }

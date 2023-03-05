@@ -3,7 +3,7 @@ use std::{io::Write, ops::Deref, sync::Arc};
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sourcemap::SourceMap as CrateMap;
+pub use sourcemap::SourceMap as CrateMap;
 use turbo_tasks::TryJoinIterExt;
 use turbo_tasks_fs::rope::{Rope, RopeBuilder, RopeVc};
 
@@ -106,6 +106,13 @@ impl SourceMapVc {
     /// sections.
     pub fn new_sectioned(sections: Vec<SourceMapSection>) -> Self {
         SourceMap::Sectioned(SectionedSourceMap::new(sections)).cell()
+    }
+
+    pub async fn to_crate_map(&self) -> Result<CrateMap> {
+        match &*self.await? {
+            SourceMap::Regular(map) => Ok(map.to_crate_map()),
+            SourceMap::Sectioned(map) => Ok(map.to_crate_map()),
+        }
     }
 }
 
@@ -233,6 +240,10 @@ impl RegularSourceMap {
     fn new(map: CrateMap) -> Self {
         RegularSourceMap(Arc::new(CrateMapWrapper(map)))
     }
+
+    fn to_crate_map(&self) -> CrateMap {
+        self.0 .0.to_owned()
+    }
 }
 
 impl Deref for RegularSourceMap {
@@ -297,6 +308,10 @@ pub struct SectionedSourceMap {
 impl SectionedSourceMap {
     pub fn new(sections: Vec<SourceMapSection>) -> Self {
         Self { sections }
+    }
+
+    fn to_crate_map(&self) -> CrateMap {
+        todo!()
     }
 }
 

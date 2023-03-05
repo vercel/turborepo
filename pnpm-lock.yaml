@@ -181,6 +181,7 @@ importers:
       loader-runner: ^4.3.0
       next: 13.1.7-canary.28
       postcss: ^8.4.20
+      postcss-pxtorem: ^6.0.0
       react: ^18.2.0
       react-dom: ^18.2.0
       react-test-renderer: ^18.2.0
@@ -196,6 +197,7 @@ importers:
       loader-runner: 4.3.0
       next: 13.1.7-canary.28_pjwopsidmaokadturxaafygjp4
       postcss: 8.4.20
+      postcss-pxtorem: 6.0.0_postcss@8.4.20
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-test-renderer: 18.2.0_react@18.2.0
@@ -1113,14 +1115,6 @@ packages:
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
-
-  /@babel/types/7.20.7:
-    resolution: {integrity: sha512-69OnhBxSSgK0OzTJai4kyPDiKTIe3j+ctaHdIGVbRahTLAT7L3R9oeXHC2aVSuGYt3cVnoAMDmOCgJ2yaiLMvg==}
-    engines: {node: '>=6.9.0'}
-    dependencies:
-      '@babel/helper-string-parser': 7.19.4
-      '@babel/helper-validator-identifier': 7.19.1
-      to-fast-properties: 2.0.0
 
   /@babel/types/7.21.0:
     resolution: {integrity: sha512-uR7NWq2VNFnDi7EYqiRz2Jv/VQIu38tu64Zy8TX2nQFQ6etJ9V/Rr2msW8BS132mum2rL645qpDrLtAJtVpuow==}
@@ -2153,6 +2147,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
     requiresBuild: true
     optional: true
 
@@ -2161,6 +2156,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
     requiresBuild: true
     dev: true
     optional: true
@@ -2188,6 +2184,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
     requiresBuild: true
     optional: true
 
@@ -2196,6 +2193,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
     requiresBuild: true
     dev: true
     optional: true
@@ -2223,6 +2221,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
     requiresBuild: true
     optional: true
 
@@ -2231,6 +2230,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
     requiresBuild: true
     dev: true
     optional: true
@@ -2258,6 +2258,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
     requiresBuild: true
     optional: true
 
@@ -2266,6 +2267,7 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
     requiresBuild: true
     dev: true
     optional: true
@@ -3437,7 +3439,7 @@ packages:
     dev: true
 
   /@xtuc/long/4.2.2:
-    resolution: {integrity: sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==}
+    resolution: {integrity: sha1-0pHGpOl5ibXGHZrPOWrk/hM6cY0=}
     dev: true
 
   /abab/2.0.6:
@@ -4039,7 +4041,7 @@ packages:
     dev: true
 
   /bser/2.1.1:
-    resolution: {integrity: sha512-gQxTNE/GAfIIrmHLUE3oJyp5FO6HRBfhjnw4/wMmA63ZGDJnWBmgY/lyQBpnDUkGmAhbSe39tx2d/iTOAfglwQ==}
+    resolution: {integrity: sha1-5nh9og7OnQeZhTPP2d5vXDj0vAU=}
     dependencies:
       node-int64: 0.4.0
 
@@ -10688,6 +10690,14 @@ packages:
     dependencies:
       postcss: 8.4.20
       postcss-selector-parser: 6.0.10
+    dev: true
+
+  /postcss-pxtorem/6.0.0_postcss@8.4.20:
+    resolution: {integrity: sha512-ZRXrD7MLLjLk2RNGV6UA4f5Y7gy+a/j1EqjAfp9NdcNYVjUMvg5HTYduTjSkKBkRkfqbg/iKrjMO70V4g1LZeg==}
+    peerDependencies:
+      postcss: ^8.0.0
+    dependencies:
+      postcss: 8.4.20
     dev: true
 
   /postcss-selector-parser/6.0.10:

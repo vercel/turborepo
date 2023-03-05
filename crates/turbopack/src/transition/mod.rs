@@ -70,7 +70,7 @@ pub trait Transition {
     ) -> AssetVc {
         let asset = self_vc.process_source(asset);
         let context = self_vc.process_context(context);
-        let m = context.process_default(asset, reference_type);
+        let m = context.process_default(asset, None, reference_type);
         self_vc.process_module(m, context)
     }
 }

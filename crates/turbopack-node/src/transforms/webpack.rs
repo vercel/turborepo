@@ -8,7 +8,7 @@ use turbopack_core::{
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     source_asset::SourceAssetVc,
-    source_transform::{SourceTransform, SourceTransformVc},
+    source_transform::{SourceTransform, SourceTransformVc, SourceTransformedVc},
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
@@ -75,15 +75,16 @@ impl WebpackLoadersVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
-    fn transform(&self, source: AssetVc) -> AssetVc {
-        WebpackLoadersProcessedAsset {
+    async fn transform(&self, original: SourceTransformedVc) -> Result<SourceTransformedVc> {
+        let processed = WebpackLoadersProcessedAsset {
             evaluate_context: self.evaluate_context,
             execution_context: self.execution_context,
             loaders: self.loaders,
-            source,
+            source: original.await?.source,
         }
-        .cell()
-        .into()
+        .cell();
+        // TODO handle SourceMap
+        Ok(SourceTransformedVc::new(processed.into(), None))
     }
 }
 
