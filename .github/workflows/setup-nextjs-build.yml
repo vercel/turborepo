@@ -94,23 +94,21 @@ jobs:
       - uses: actions/cache/restore@v3
         id: restore-build
         with:
-          path: ./*
+          path: |
+            ./*
           key: ${{ inputs.version }}-${{ github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: pnpm
-
-      - name: Install dependencies
+      - name: Build next.js volume
         run: |
-          corepack disable
-          pnpm install
-          pnpm run build
+          docker volume create nextjs-test-volume
+          # Run a dummy container to cp checked out next.js to the volume
+          docker run --rm -d --mount src=nextjs-test-volume,dst=/work --name dummy mcr.microsoft.com/playwright:v1.28.1-focal tail -f /dev/null
+          docker cp ./ dummy:/work
+          docker stop dummy
+          # Build next.js
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "apt update && apt install build-essential libssl-dev zsh -y && apt-get install --reinstall pkg-config libfontconfig1-dev cmake-data -y && curl https://install-node.vercel.app/v16 | FORCE=1 bash && npm i -g pnpm@${PNPM_VERSION} && pnpm --version && git config --global --add safe.directory /work && cd /work && git status && pnpm install && pnpm run build"
+          # Backup named volume to tar. Named volume is created under /var/lib, which is not accessible by github action.
+          docker run --mount src=nextjs-test-volume,dst=/volume --rm --log-driver none loomchild/volume-backup backup > volume.tar.bz2
 
       - name: Check Next.js build version
         run: |
@@ -127,5 +125,6 @@ jobs:
         uses: actions/cache/save@v3
         id: cache-build
         with:
-          path: ./*
+          path: |
+            ./*
           key: ${{ inputs.version }}-${{ github.sha }}
