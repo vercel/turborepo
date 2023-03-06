@@ -169,9 +169,30 @@
 <span id="169">169</span>
 <span id="170">170</span>
 <span id="171">171</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, CompletionsVc, Value};
 <span class="kw">use </span>turbopack_core::{
     environment::ServerAddrVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
@@ -183,7 +204,9 @@
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use crate</span>::{
-    next_config::{has_next_config, NextConfigVc},
+    app_structure::OptionAppStructureVc,
+    next_config::NextConfigVc,
+    pages_structure::OptionPagesStructureVc,
     router::{route, RouterRequest, RouterResult},
 };
 
@@ -194,7 +217,8 @@
     execution_context: ExecutionContextVc,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
-    routes_changed: CompletionVc,
+    app_structure: OptionAppStructureVc,
+    pages_structure: OptionPagesStructureVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -205,14 +229,16 @@
         execution_context: ExecutionContextVc,
         next_config: NextConfigVc,
         server_addr: ServerAddrVc,
-        routes_changed: CompletionVc,
+        app_structure: OptionAppStructureVc,
+        pages_structure: OptionPagesStructureVc,
     ) -&gt; NextRouterContentSourceVc {
         NextRouterContentSource {
             inner,
             execution_context,
             next_config,
             server_addr,
-            routes_changed,
+            app_structure,
+            pages_structure,
         }
         .cell()
     }
@@ -235,6 +261,17 @@
     )
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>routes_changed(
+    app_structure: OptionAppStructureVc,
+    pages_structure: OptionPagesStructureVc,
+) -&gt; CompletionVc {
+    CompletionsVc::all(<span class="macro">vec!</span>[
+        app_structure.routes_changed(),
+        pages_structure.routes_changed(),
+    ])
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>NextRouterContentSource {
     <span class="attr">#[turbo_tasks::function]
@@ -248,8 +285,7 @@
         <span class="comment">// The next-dev server can currently run against projects as simple as
         // `index.js`. If this isn&#39;t a Next.js project, don&#39;t try to use the Next.js
         // router.
-        </span><span class="kw">let </span>project_root = this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>.project_path;
-        <span class="kw">if </span>!(<span class="kw-2">*</span>has_next_config(project_root).<span class="kw">await</span><span class="question-mark">?</span>) {
+        </span><span class="kw">if </span>this.app_structure.<span class="kw">await</span><span class="question-mark">?</span>.is_none() &amp;&amp; this.pages_structure.<span class="kw">await</span><span class="question-mark">?</span>.is_none() {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())));
@@ -277,20 +313,18 @@
             request,
             this.next_config,
             this.server_addr,
-            this.routes_changed,
+            routes_changed(this.app_structure, this.pages_structure),
         );
-        <span class="kw">let </span><span class="prelude-val">Ok</span>(res) = res.<span class="kw">await else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(this
-                .inner
-                .get(path, Value::new(ContentSourceData::default())));
-        };
+
+        <span class="kw">let </span>res = res
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;failed to fetch /{path}{}&quot;</span>, formated_query(raw_query)))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>res {
-            RouterResult::Error =&gt; {
-                <span class="comment">// TODO: emit error
-                </span>this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
-            }
+            RouterResult::Error =&gt; <span class="macro">bail!</span>(
+                <span class="string">&quot;error during Next.js routing for /{path}{}&quot;</span>,
+                formated_query(raw_query)
+            ),
             RouterResult::None =&gt; this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())),
@@ -316,6 +350,14 @@
                 .into(),
             ),
         })
+    }
+}
+
+<span class="kw">fn </span>formated_query(query: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="kw">if </span>query.is_empty() {
+        <span class="string">&quot;&quot;</span>.to_string()
+    } <span class="kw">else </span>{
+        <span class="macro">format!</span>(<span class="string">&quot;?{query}&quot;</span>)
     }
 }
 

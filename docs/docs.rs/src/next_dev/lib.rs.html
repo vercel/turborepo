@@ -571,8 +571,6 @@
 <span id="571">571</span>
 <span id="572">572</span>
 <span id="573">573</span>
-<span id="574">574</span>
-<span id="575">575</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -604,7 +602,7 @@
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
 <span class="kw">use </span>turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    CompletionsVc, StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, Value,
+    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
@@ -937,10 +935,8 @@
         execution_context,
         next_config,
         server_addr,
-        CompletionsVc::all(<span class="macro">vec!</span>[
-            app_structure.routes_changed(),
-            pages_structure.routes_changed(),
-        ]),
+        app_structure,
+        pages_structure,
     )
     .into();
     <span class="kw">let </span>source = RouterContentSource {
