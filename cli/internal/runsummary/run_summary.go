@@ -3,7 +3,6 @@ package runsummary
 
 import (
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"github.com/segmentio/ksuid"
@@ -46,10 +45,19 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 	if err != nil {
 		return err
 	}
-	timestamp := time.Now().UnixMilli()
-	filename := fmt.Sprintf("vercel-turbo-run-%s-%d.json", summary.ID, timestamp)
-	summaryPath := dir.Join(turbopath.MakeRelativeSystemPath(filename))
-	return ioutil.WriteFile(summaryPath.ToString(), json, 0644)
+
+	filename := fmt.Sprintf("%s-%d.json", summary.ID, time.Now().UnixMilli())
+	summaryPath := dir.Join(
+		".turbo",
+		"runs",
+		turbopath.MakeRelativeSystemPath(filename),
+	)
+
+	if err := summaryPath.EnsureDir(); err != nil {
+		return err
+	}
+
+	return summaryPath.WriteFile(json, 0644)
 }
 
 // TaskSummary contains information about the task that was about to run
