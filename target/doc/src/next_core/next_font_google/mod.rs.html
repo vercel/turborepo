@@ -951,10 +951,10 @@
 
     <span class="kw">let </span>ExecutionContext {
         env,
-        project_root: <span class="kw">_</span>,
+        project_path,
         intermediate_output_path,
     } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+    <span class="kw">let </span>context = node_evaluate_asset_context(project_path, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
     <span class="kw">let </span>loader_path = mock_fs.root().join(<span class="string">&quot;loader.js&quot;</span>);
     <span class="kw">let </span>mocked_response_asset = EcmascriptModuleAssetVc::new(
         VirtualAssetVc::new(
