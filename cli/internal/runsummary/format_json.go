@@ -20,9 +20,9 @@ func (summary *RunSummary) FormatJSON(singlePackage bool) ([]byte, error) {
 }
 
 func (summary *RunSummary) formatJSONSinglePackage() ([]byte, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(*summary.Tasks))
+	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
 
-	for i, task := range *summary.Tasks {
+	for i, task := range summary.Tasks {
 		singlePackageTasks[i] = task.toSinglePackageTask()
 	}
 

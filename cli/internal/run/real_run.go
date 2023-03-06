@@ -98,7 +98,7 @@ func RealRun(
 		return ec.exec(ctx, packageTask, deps)
 	}
 
-	runSummary.Tasks = &taskSummaries
+	runSummary.Tasks = taskSummaries
 
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
