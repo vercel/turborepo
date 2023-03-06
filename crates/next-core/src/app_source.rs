@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use indexmap::indexmap;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
-use turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
     transition::{TransitionVc, TransitionsByNameVc},
@@ -393,9 +393,7 @@ async fn create_app_source_for_directory(
     intermediate_output_path_root: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
     let AppStructure {
-        item,
-        ref children,
-        directory,
+        item, ref children, ..
     } = *app_structure.await?;
     let mut sources = Vec::new();
 
@@ -427,11 +425,7 @@ async fn create_app_source_for_directory(
                         page_path: page,
                         target,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                     }
                     .cell()
                     .into(),
@@ -460,11 +454,7 @@ async fn create_app_source_for_directory(
                         server_root,
                         entry_path: route,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                         output_root: intermediate_output_path_root,
                     }
                     .cell()
