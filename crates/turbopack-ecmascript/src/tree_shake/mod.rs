@@ -356,21 +356,25 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                 let (data, deps, modules) =
                     dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-                Ok(SplitResult {
+                return Ok(SplitResult {
                     data,
                     deps,
                     modules,
                     parsed,
                 }
-                .cell())
-            } else {
-                todo!("handle non-module")
+                .cell());
             }
         }
-        _ => {
-            todo!("handle parse error")
-        }
+        _ => {}
     }
+
+    Ok(SplitResult {
+        data: Default::default(),
+        deps: Default::default(),
+        modules: Default::default(),
+        parsed,
+    }
+    .cell())
 }
 
 #[turbo_tasks::function]
@@ -395,6 +399,11 @@ pub(super) async fn part_of_module(
             eval_context,
             ..
         } => {
+            // Not a module
+            if split_data.modules.is_empty() {
+                return Ok(split_data.parsed);
+            }
+
             let program = Program::Module(split_data.modules[chunk_id as usize].clone());
             let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
 
