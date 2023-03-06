@@ -351,7 +351,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
-	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := runsummary.NewRunSummary(
 		r.base.TurboVersion,
 		packagesInScope,
