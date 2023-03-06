@@ -183,7 +183,7 @@ pub struct LocalTurboState {
 }
 
 impl LocalTurboState {
-    pub fn infer(repo_root: PathBuf) -> Option<Self> {
+    pub fn infer(repo_root: &PathBuf) -> Option<Self> {
         let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
             #[cfg(windows)]
             {
@@ -231,7 +231,6 @@ struct InferInfo {
     path: PathBuf,
     has_package_json: bool,
     has_turbo_json: bool,
-    package_has_workspaces: bool,
     workspace_globs: Option<Globs>,
 }
 
@@ -243,10 +242,10 @@ impl InferInfo {
         info.has_turbo_json
     }
 
-    pub fn is_workspace_root_of(&self, target_path: PathBuf) -> bool {
+    pub fn is_workspace_root_of(&self, target_path: &Path) -> bool {
         match &self.workspace_globs {
             Some(globs) => globs
-                .test(self.path.to_path_buf(), target_path)
+                .test(self.path.to_path_buf(), target_path.to_path_buf())
                 .unwrap_or(false),
             None => false,
         }
@@ -257,9 +256,16 @@ impl RepoState {
     fn generate_potential_turbo_roots(reference_dir: &Path) -> Vec<InferInfo> {
         // Find all directories that contain a `package.json` or a `turbo.json`.
         // Gather a bit of additional metadata about them.
-        let potential_turbo_roots: Vec<_> = reference_dir
+        let potential_turbo_roots = reference_dir
             .ancestors()
-            .map(|path| {
+            .filter_map(|path| {
+                let has_package_json = fs::metadata(path.join("package.json")).is_ok();
+                let has_turbo_json = fs::metadata(path.join("turbo.json")).is_ok();
+
+                if !has_package_json && !has_turbo_json {
+                    return None;
+                }
+
                 let workspace_globs = PackageManager::Pnpm
                     .get_workspace_globs(path)
                     .unwrap_or_else(|_| {
@@ -268,15 +274,13 @@ impl RepoState {
                             .unwrap_or(None)
                     });
 
-                InferInfo {
+                Some(InferInfo {
                     path: path.to_owned(),
-                    has_package_json: fs::metadata(path.join("package.json")).is_ok(),
-                    has_turbo_json: fs::metadata(path.join("turbo.json")).is_ok(),
-                    package_has_workspaces: workspace_globs.is_some(),
+                    has_package_json,
+                    has_turbo_json,
                     workspace_globs,
-                }
+                })
             })
-            .filter(|info| info.has_package_json || info.has_turbo_json)
             .collect();
 
         potential_turbo_roots
@@ -288,7 +292,7 @@ impl RepoState {
         // - There are a couple of possible early exits to prevent traversing all the
         //   way to root at significant code complexity increase.
         //
-        //   1. [0].has_turbo_json && [0].package_has_workspaces
+        //   1. [0].has_turbo_json && [0].workspace_globs.is_some()
         //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
         //
         //   If we elect to make any of the changes for early exits we need to expand
@@ -300,21 +304,26 @@ impl RepoState {
         let search_locations = [InferInfo::has_turbo_json, InferInfo::has_package_json];
 
         for check_set_comparator in search_locations {
-            let check_roots: Vec<&InferInfo> = potential_turbo_roots
+            let mut check_roots = potential_turbo_roots
                 .iter()
                 .filter(check_set_comparator)
-                .collect();
+                .peekable();
+
+            let current_option = check_roots.next();
 
             // No potential roots checking by this comparator.
-            if check_roots.is_empty() {
+            if current_option.is_none() {
                 continue;
+            }
+
+            let current = current_option.unwrap();
 
             // If there is only one potential root, that's the winner.
-            } else if check_roots.len() == 1 {
-                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
+            if check_roots.peek().is_none() {
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
-                    root: check_roots[0].path.to_path_buf(),
-                    mode: if check_roots[0].package_has_workspaces {
+                    root: current.path.to_path_buf(),
+                    mode: if current.workspace_globs.is_some() {
                         RepoMode::MultiPackage
                     } else {
                         RepoMode::SinglePackage
@@ -325,11 +334,11 @@ impl RepoState {
             // More than one potential root. See if we can stop at the first.
             // This is a performance optimization. We could remove this case,
             // and set the mode properly in the else and it would still work.
-            } else if check_roots[0].package_has_workspaces {
+            } else if current.workspace_globs.is_some() {
                 // If the closest one has workspaces then we stop there.
-                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
-                    root: check_roots[0].path.to_path_buf(),
+                    root: current.path.to_path_buf(),
                     mode: RepoMode::MultiPackage,
                     local_turbo_state,
                 });
@@ -339,10 +348,9 @@ impl RepoState {
             // We attempt to prove that the closest is a workspace of a parent.
             // Failing that we just choose the closest.
             } else {
-                for ancestor_infer in &check_roots[1..] {
-                    if ancestor_infer.is_workspace_root_of(check_roots[0].path.to_path_buf()) {
-                        let local_turbo_state =
-                            LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                for ancestor_infer in check_roots {
+                    if ancestor_infer.is_workspace_root_of(&current.path) {
+                        let local_turbo_state = LocalTurboState::infer(&current.path);
                         return Ok(Self {
                             root: ancestor_infer.path.to_path_buf(),
                             mode: RepoMode::MultiPackage,
@@ -353,9 +361,9 @@ impl RepoState {
 
                 // We have eliminated RepoMode::MultiPackage as an option.
                 // We must exhaustively check before this becomes the answer.
-                let local_turbo_state = LocalTurboState::infer(check_roots[0].path.to_path_buf());
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
-                    root: check_roots[0].path.to_path_buf(),
+                    root: current.path.to_path_buf(),
                     mode: RepoMode::SinglePackage,
                     local_turbo_state,
                 });
@@ -363,7 +371,7 @@ impl RepoState {
         }
 
         // If we're here we didn't find a valid root.
-        return Err(anyhow!("Root could not be inferred."));
+        Err(anyhow!("Root could not be inferred."))
     }
 
     /// Infers `RepoState` from current directory.
@@ -635,7 +643,6 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: true,
-                    package_has_workspaces: true,
                     workspace_globs: Some(Globs {
                         inclusions: vec!["packages/*".to_string()],
                         exclusions: vec![],
@@ -649,7 +656,6 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: true,
-                    package_has_workspaces: false,
                     workspace_globs: None,
                 }],
                 output: Ok(PathBuf::from("/path/to/root")),
@@ -660,7 +666,6 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: false,
-                    package_has_workspaces: true,
                     workspace_globs: Some(Globs {
                         inclusions: vec!["packages/*".to_string()],
                         exclusions: vec![],
@@ -674,7 +679,6 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: false,
-                    package_has_workspaces: false,
                     workspace_globs: None,
                 }],
                 output: Ok(PathBuf::from("/path/to/root")),
@@ -687,14 +691,12 @@ mod test {
                         path: PathBuf::from("/path/to/root/packages/ui-library"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["packages/*".to_string()],
                             exclusions: vec![],
@@ -710,21 +712,18 @@ mod test {
                         path: PathBuf::from("/path/to/root/packages/ui-library/css"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root/packages/ui-library"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             // This `**` is important:
                             inclusions: vec!["packages/**".to_string()],
@@ -741,7 +740,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["packages/*".to_string()],
                             exclusions: vec![],
@@ -751,7 +749,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["packages/*".to_string()],
                             exclusions: vec![],
@@ -770,14 +767,12 @@ mod test {
                         ),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["root-two-packages/*".to_string()],
                             exclusions: vec![],
@@ -787,7 +782,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["root-two/root-one-packages/*".to_string()],
                             exclusions: vec![],
@@ -806,14 +800,12 @@ mod test {
                         ),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["root-two-packages/*".to_string()],
                             exclusions: vec![],
@@ -823,7 +815,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["root-two/root-one-packages/*".to_string()],
                             exclusions: vec![],
@@ -839,14 +830,12 @@ mod test {
                         path: PathBuf::from("/path/to/root/some-other-project"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["packages/*".to_string()],
                             exclusions: vec![],
@@ -863,7 +852,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["packages/*".to_string()],
                             exclusions: vec![],
@@ -873,7 +861,6 @@ mod test {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: true,
                         workspace_globs: Some(Globs {
                             inclusions: vec!["root-two".to_string()],
                             exclusions: vec![],
@@ -889,14 +876,12 @@ mod test {
                         path: PathBuf::from("/path/to/project-one/project-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/project-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                 ],
@@ -918,14 +903,12 @@ mod test {
                         path: PathBuf::from("/path/to/project-one/project-two"),
                         has_package_json: true,
                         has_turbo_json: false,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/project-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        package_has_workspaces: false,
                         workspace_globs: None,
                     },
                 ],
