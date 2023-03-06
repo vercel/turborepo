@@ -31,7 +31,7 @@ type RunSummary struct {
 	Tasks             *[]*TaskSummary    `json:"tasks"`
 }
 
-// NewRunSummary returns a RunSummary instance with some a ksuid for the ID
+// NewRunSummary returns a RunSummary instance
 func NewRunSummary(turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
 	return &RunSummary{
 		ID:                ksuid.New(),
