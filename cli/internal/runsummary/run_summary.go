@@ -47,7 +47,7 @@ func (summary *RunSummary) Save(singlePackage bool) error {
 		return err
 	}
 
-	filename := fmt.Sprintf("vercel-turbo-run-%s-%s.json", summary.ID, time.Now().Format(time.RFC3339))
+	filename := fmt.Sprintf("vercel-turbo-run-%s-%d.json", summary.ID, time.Now().UnixMilli())
 	return ioutil.WriteFile(filename, json, 0644)
 }
 
