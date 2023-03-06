@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import getTurboRoot from "./getTurboRoot";
 import yaml from "js-yaml";
-import globby from "globby";
+import { sync } from "fast-glob";
 import { Schema } from "turbo-types";
 import JSON5 from "json5";
 
@@ -14,6 +14,12 @@ export type TurboConfigs = Array<{
   workspacePath: string;
   isRootConfig: boolean;
 }>;
+
+interface Options {
+  cache?: boolean;
+}
+
+const configsCache: Record<string, TurboConfigs> = {};
 
 // A quick and dirty workspace parser
 // TODO: after @turbo/workspace-convert is merged, we can leverage those utils here
@@ -36,9 +42,14 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-function getTurboConfigs(cwd?: string): TurboConfigs {
-  const turboRoot = getTurboRoot(cwd);
+function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
+  const turboRoot = getTurboRoot(cwd, opts);
   const configs: TurboConfigs = [];
+
+  const cacheEnabled = opts?.cache ?? true;
+  if (cacheEnabled && cwd && configsCache[cwd]) {
+    return configsCache[cwd];
+  }
 
   // parse workspaces
   if (turboRoot) {
@@ -47,14 +58,13 @@ function getTurboConfigs(cwd?: string): TurboConfigs {
       (glob) => `${glob}/turbo.json`
     );
 
-    const configPaths = globby
-      .sync([ROOT_GLOB, ...workspaceConfigGlobs], {
-        cwd: turboRoot,
-        onlyFiles: true,
-        followSymbolicLinks: false,
-        gitignore: true,
-      })
-      .map((configPath) => path.join(turboRoot, configPath));
+    const configPaths = sync([ROOT_GLOB, ...workspaceConfigGlobs], {
+      cwd: turboRoot,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      // avoid throwing when encountering permission errors or unreadable paths
+      suppressErrors: true,
+    }).map((configPath) => path.join(turboRoot, configPath));
 
     configPaths.forEach((configPath) => {
       try {
@@ -77,13 +87,17 @@ function getTurboConfigs(cwd?: string): TurboConfigs {
           config: turboJsonContent,
           turboConfigPath: configPath,
           workspacePath: path.dirname(configPath),
-          isRootConfig: !("extends" in turboJsonContent),
+          isRootConfig,
         });
       } catch (e) {
-        // if we can't parse the config, just ignore it
-        console.error(e);
+        // if we can't read or parse the config, just ignore it with a warning
+        console.warn(e);
       }
     });
+  }
+
+  if (cacheEnabled && cwd) {
+    configsCache[cwd] = configs;
   }
 
   return configs;
