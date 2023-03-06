@@ -1,5 +1,5 @@
 use anyhow::Error;
-use fxhash::FxHashSet;
+use rustc_hash::FxHashSet;
 use swc_core::ecma::{
     ast::{Expr, KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, Prop, PropName, PropOrSpread},
     atoms::JsWord,

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use fxhash::FxHashMap;
 use indexmap::IndexSet;
+use rustc_hash::FxHashMap;
 use swc_core::{
     common::GLOBALS,
     ecma::{

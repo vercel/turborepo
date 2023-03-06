@@ -1,11 +1,14 @@
-use std::{fmt, hash::Hash};
+use std::{
+    fmt,
+    hash::{BuildHasherDefault, Hash},
+};
 
-use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
 use petgraph::{
     algo::{has_path_connecting, kosaraju_scc},
     prelude::DiGraphMap,
 };
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 use swc_core::{
     common::{util::take::Take, DUMMY_SP},
     ecma::{
@@ -134,7 +137,7 @@ where
 {
     /// `bool`: Strong
     pub(super) idx_graph: DiGraphMap<u32, bool>,
-    pub(super) graph_ix: IndexSet<T, FxBuildHasher>,
+    pub(super) graph_ix: IndexSet<T, BuildHasherDefault<FxHasher>>,
 }
 
 impl<T> Default for InternedGraph<T>
