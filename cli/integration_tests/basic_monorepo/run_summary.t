@@ -15,9 +15,3 @@ Setup
 # validate with exit code so the test works on macOS and linux
   $ test -d .turbo/runs
   [1]
-
-  $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY_DIR=".custom-turbo/runs" TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
-  $ test -d .custom-turbo/runs
-  $ ls .custom-turbo/runs/*.json | wc -l
-  \s*1 (re)

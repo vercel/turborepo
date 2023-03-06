@@ -3,7 +3,6 @@ package runsummary
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -53,22 +52,14 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 
 	// summaryPath will always be relative to the dir passsed in.
 	// We don't do a lot of validation, so `../../` paths are allowed
-	summaryPath := dir.UntypedJoin(summary.getOutputDirectory(), filename)
+	outputDir := filepath.Join(".turbo", "runs")
+	summaryPath := dir.UntypedJoin(outputDir, filename)
 
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
 	}
 
 	return summaryPath.WriteFile(json, 0644)
-}
-
-func (summary *RunSummary) getOutputDirectory() string {
-	fromEnv := os.Getenv("TURBO_RUN_SUMMARY_DIR")
-	if fromEnv != "" {
-		return fromEnv
-	}
-
-	return filepath.Join(".turbo", "runs")
 }
 
 // TaskSummary contains information about the task that was about to run
