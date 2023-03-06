@@ -531,7 +531,7 @@ impl ValueToString for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "{} (ecmascript) -> chunk {}",
+            "{} (ecmascript) -> part {}",
             self.full_module.await?.source.ident().to_string().await?,
             self.chunk_id
         )))
@@ -663,7 +663,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
         let module = self.full_module.origin_path().await?;
 
         Ok(ModuleId::String(format!(
-            "{} (ecmascript chunk {})",
+            "{} (ecmascript part {})",
             module.path, self.chunk_id
         ))
         .into())
