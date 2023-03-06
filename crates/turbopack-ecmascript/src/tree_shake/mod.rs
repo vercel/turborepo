@@ -17,6 +17,7 @@ use turbopack_core::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
         ModuleId, ModuleIdVc,
     },
+    ident::{AssetIdent, AssetIdentVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
@@ -449,6 +450,17 @@ impl Asset for EcmascriptModulePartAsset {
     fn references(&self) -> AssetReferencesVc {
         todo!()
     }
+
+    #[turbo_tasks::function]
+    async fn ident(&self) -> Result<AssetIdentVc> {
+        let inner = self.full_module.ident().await?;
+
+        let query = StringVc::cell(format!("part={}", self.chunk_id).into());
+        Ok(AssetIdentVc::new(Value::new(AssetIdent {
+            query: Some(query),
+            ..(*inner).clone()
+        })))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -689,5 +701,10 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
         assets.extend(external.iter().cloned());
 
         Ok(AssetReferencesVc::cell(assets))
+    }
+
+    #[turbo_tasks::function]
+    async fn asset_ident(&self) -> Result<AssetIdentVc> {
+        Ok(self.module.ident())
     }
 }
