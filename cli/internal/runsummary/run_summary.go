@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -22,10 +23,21 @@ const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
+	ID                ksuid.KSUID        `json:"id"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
 	Tasks             *[]*TaskSummary    `json:"tasks"`
+}
+
+// NewRunSummary returns a RunSummary instance with some a ksuid for the ID
+func NewRunSummary(turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+	return &RunSummary{
+		ID:                ksuid.New(),
+		TurboVersion:      turboVersion,
+		Tasks:             &[]*TaskSummary{},
+		GlobalHashSummary: globalHashSummary,
+	}
 }
 
 // Save saves the run summary to a file
@@ -35,8 +47,7 @@ func (summary *RunSummary) Save(singlePackage bool) error {
 		return err
 	}
 
-	nonce := "abcdef"
-	filename := fmt.Sprintf("vercel-turbo-run-%s-%s.json", nonce, time.Now().Format(time.RFC3339))
+	filename := fmt.Sprintf("vercel-turbo-run-%s-%s.json", summary.ID, time.Now().Format(time.RFC3339))
 	return ioutil.WriteFile(filename, json, 0644)
 }
 
