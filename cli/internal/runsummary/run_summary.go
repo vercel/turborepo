@@ -53,10 +53,7 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 
 	// summaryPath will always be relative to the dir passsed in.
 	// We don't do a lot of validation, so `../../` paths are allowed
-	summaryPath := dir.Join(
-		turbopath.MakeRelativeSystemPath(summary.getOutputDirectory()),
-		turbopath.MakeRelativeSystemPath(filename),
-	)
+	summaryPath := dir.UntypedJoin(summary.getOutputDirectory(), filename)
 
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
