@@ -3,12 +3,14 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+# no output, just check for 0 status code
+  $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
-         1
+  \s*1 (re)
 
 # Without env var, no summary file is generated
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null
-  $ find -d .turbo/runs
-  .* No such file or directory (re)
+# validate with exit code so the test works on macOS and linux
+  $ test -d .turbo/runs
   [1]
