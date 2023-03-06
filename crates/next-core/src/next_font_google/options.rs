@@ -257,7 +257,7 @@ mod tests {
                 preload: true,
                 selected_variable_axes: None,
                 fallback: None,
-                adjust_font_fallback: false,
+                adjust_font_fallback: true,
                 variable: None,
                 subsets: None,
             },
