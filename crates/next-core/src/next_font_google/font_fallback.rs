@@ -8,12 +8,10 @@ use turbo_tasks::{
     trace::TraceRawVcs,
 };
 use turbo_tasks_fs::FileSystemPathVc;
+use turbopack_core::issue::IssueSeverity;
 
-use super::{
-    get_scoped_font_family, options::NextFontGoogleOptionsVc, util::FontFamilyTypeVc,
-    FontFamilyType,
-};
-use crate::util::load_next_json;
+use super::{get_scoped_font_family, options::NextFontGoogleOptionsVc, FontFamilyType};
+use crate::{next_font_google::issue::NextFontIssue, util::load_next_json};
 
 struct DefaultFallbackFont {
     name: String,
@@ -101,21 +99,40 @@ pub(crate) async fn get_font_fallback(
                         &options.font_family,
                         metrics_json,
                         options.adjust_font_fallback,
-                    )?;
+                    );
 
-                    FontFallback::Automatic(
-                        AutomaticFontFallback {
-                            scoped_font_family: get_scoped_font_family(
-                                FontFamilyTypeVc::new(FontFamilyType::Fallback),
-                                options_vc,
-                                request_hash,
-                            ),
-                            local_font_family: StringVc::cell(fallback.font_family),
-                            adjustment: fallback.adjustment,
-                        }
+                    match fallback {
+                        Ok(fallback) => FontFallback::Automatic(
+                            AutomaticFontFallback {
+                                scoped_font_family: get_scoped_font_family(
+                                    FontFamilyType::Fallback.cell(),
+                                    options_vc,
+                                    request_hash,
+                                ),
+                                local_font_family: StringVc::cell(fallback.font_family),
+                                adjustment: fallback.adjustment,
+                            }
+                            .cell(),
+                        )
                         .cell(),
-                    )
-                    .cell()
+                        Err(_) => {
+                            NextFontIssue {
+                                path: context,
+                                title: StringVc::cell(format!(
+                                    "Failed to find font override values for font `{}`",
+                                    &options.font_family,
+                                )),
+                                description: StringVc::cell(
+                                    "Skipping generating a fallback font.".to_owned(),
+                                ),
+                                severity: IssueSeverity::Warning.cell(),
+                            }
+                            .cell()
+                            .as_issue()
+                            .emit();
+                            FontFallback::Error.cell()
+                        }
+                    }
                 }
                 Err(_) => FontFallback::Error.cell(),
             }

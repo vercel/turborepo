@@ -23,7 +23,7 @@ use self::{
     font_fallback::{get_font_fallback, FontFallback, FontFallbackVc},
     options::{FontWeights, NextFontGoogleOptionsVc},
     stylesheet::build_stylesheet,
-    util::{get_scoped_font_family, FontFamilyType, FontFamilyTypeVc},
+    util::{get_scoped_font_family, FontFamilyType},
 };
 use crate::{
     embed_js::next_js_file_path,
@@ -34,6 +34,7 @@ use crate::{
 };
 
 pub(crate) mod font_fallback;
+pub(crate) mod issue;
 pub(crate) mod options;
 pub(crate) mod request;
 pub(crate) mod stylesheet;
@@ -166,11 +167,8 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         let options = font_options_from_query_map(*query_vc);
         let stylesheet_url = get_stylesheet_url_from_options(options);
         let request_hash = get_request_hash(*query_vc);
-        let scoped_font_family = get_scoped_font_family(
-            FontFamilyTypeVc::new(FontFamilyType::WebFont),
-            options,
-            request_hash,
-        );
+        let scoped_font_family =
+            get_scoped_font_family(FontFamilyType::WebFont.cell(), options, request_hash);
         let css_virtual_path = next_js_file_path("internal/font/google")
             .join(&format!("/{}.module.css", get_request_id(*query_vc).await?));
 
@@ -330,12 +328,8 @@ async fn get_font_css_properties(
     request_hash: U32Vc,
 ) -> Result<FontCssPropertiesVc> {
     let options = &*options_vc.await?;
-    let scoped_font_family = &*get_scoped_font_family(
-        FontFamilyTypeVc::new(FontFamilyType::WebFont),
-        options_vc,
-        request_hash,
-    )
-    .await?;
+    let scoped_font_family =
+        &*get_scoped_font_family(FontFamilyType::WebFont.cell(), options_vc, request_hash).await?;
 
     let mut font_families = vec![scoped_font_family.clone()];
     let font_fallback = &*font_fallback.await?;
@@ -389,7 +383,7 @@ async fn font_options_from_query_map(query: QueryMapVc) -> Result<NextFontGoogle
         };
 
     self::options::options_from_request(&parse_json_with_source_context(json)?, &FONT_DATA)
-        .map(NextFontGoogleOptionsVc::new)
+        .map(NextFontGoogleOptionsVc::cell)
 }
 
 #[cfg(feature = "__internal_nextjs_integration_test")]

@@ -9,7 +9,7 @@ const ALLOWED_DISPLAY_VALUES: &[&str] = &["auto", "block", "swap", "fallback", "
 
 pub(crate) type FontData = IndexMap<String, FontDataEntry>;
 
-#[turbo_tasks::value(transparent)]
+#[turbo_tasks::value(shared)]
 #[derive(Debug)]
 pub(crate) struct NextFontGoogleOptions {
     /// Name of the requested font from Google. Contains literal spaces.
@@ -23,12 +23,6 @@ pub(crate) struct NextFontGoogleOptions {
     pub adjust_font_fallback: bool,
     pub variable: Option<String>,
     pub subsets: Option<Vec<String>>,
-}
-
-impl NextFontGoogleOptionsVc {
-    pub fn new(options: NextFontGoogleOptions) -> Self {
-        NextFontGoogleOptionsVc::cell(options)
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]

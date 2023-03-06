@@ -19,16 +19,10 @@ pub(crate) enum FontItal {
     Normal,
 }
 
-#[turbo_tasks::value(transparent)]
+#[turbo_tasks::value(shared)]
 pub(crate) enum FontFamilyType {
     WebFont,
     Fallback,
-}
-
-impl FontFamilyTypeVc {
-    pub fn new(font_family_type: FontFamilyType) -> Self {
-        FontFamilyTypeVc::cell(font_family_type)
-    }
 }
 
 #[turbo_tasks::function]
