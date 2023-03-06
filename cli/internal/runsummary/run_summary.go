@@ -4,7 +4,6 @@ package runsummary
 import (
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -48,12 +47,12 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 		return err
 	}
 
-	filename := fmt.Sprintf("%s-%d.json", summary.ID, time.Now().UnixMilli())
-
 	// summaryPath will always be relative to the dir passsed in.
 	// We don't do a lot of validation, so `../../` paths are allowed
-	outputDir := filepath.Join(".turbo", "runs")
-	summaryPath := dir.UntypedJoin(outputDir, filename)
+	summaryPath := dir.UntypedJoin(
+		filepath.Join(".turbo", "runs"),
+		fmt.Sprintf("%s.json", summary.ID),
+	)
 
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
