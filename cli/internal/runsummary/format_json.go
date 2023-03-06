@@ -14,7 +14,7 @@ func (summary *RunSummary) FormatJSON(singlePackage bool) ([]byte, error) {
 
 	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
-		return []byte{}, errors.Wrap(err, "failed to render JSON")
+		return nil, errors.Wrap(err, "failed to render JSON")
 	}
 	return bytes, nil
 }
@@ -30,7 +30,7 @@ func (summary *RunSummary) formatJSONSinglePackage() ([]byte, error) {
 
 	bytes, err := json.MarshalIndent(spSummary, "", "  ")
 	if err != nil {
-		return []byte{}, errors.Wrap(err, "failed to render JSON")
+		return nil, errors.Wrap(err, "failed to render JSON")
 	}
 
 	return bytes, nil
