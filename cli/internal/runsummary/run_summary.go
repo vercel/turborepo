@@ -34,6 +34,7 @@ func NewRunSummary(turboVersion string, packages []string, globalHashSummary *Gl
 	return &RunSummary{
 		ID:                ksuid.New(),
 		TurboVersion:      turboVersion,
+		Packages:          packages,
 		Tasks:             &[]*TaskSummary{},
 		GlobalHashSummary: globalHashSummary,
 	}
