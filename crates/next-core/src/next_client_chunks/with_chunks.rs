@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use indoc::formatdoc;
 use serde_json::Value;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::{
     chunk::{
@@ -14,18 +14,14 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetReference,
-        ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
-        ChunkingType, ChunkingTypeOptionVc,
+        available_assets::AvailableAssetsVc, Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem,
+        ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::utils::stringify_js_pretty;
-
-use super::in_chunking_context_asset::InChunkingContextAsset;
 
 #[turbo_tasks::function]
 fn modifier() -> StringVc {
@@ -55,16 +51,7 @@ impl Asset for WithChunksAsset {
     async fn references(self_vc: WithChunksAssetVc) -> Result<AssetReferencesVc> {
         let this = self_vc.await?;
         Ok(AssetReferencesVc::cell(vec![
-            WithChunksAssetReference {
-                asset: InChunkingContextAsset {
-                    asset: this.asset,
-                    chunking_context: this.chunking_context,
-                }
-                .cell()
-                .into(),
-            }
-            .cell()
-            .into(),
+            ChunkGroupReferenceVc::new(self_vc.chunk_group()).into(),
             ChunkListReferenceVc::new(
                 this.server_root,
                 self_vc.chunk_group(),
@@ -101,10 +88,8 @@ impl EcmascriptChunkPlaceable for WithChunksAsset {
         self_vc: WithChunksAssetVc,
         context: ChunkingContextVc,
     ) -> Result<EcmascriptChunkItemVc> {
-        let this = self_vc.await?;
         Ok(WithChunksChunkItem {
             context,
-            inner_context: this.chunking_context,
             inner: self_vc,
         }
         .cell()
@@ -141,7 +126,6 @@ impl WithChunksAssetVc {
 #[turbo_tasks::value]
 struct WithChunksChunkItem {
     context: ChunkingContextVc,
-    inner_context: ChunkingContextVc,
     inner: WithChunksAssetVc,
 }
 
@@ -153,15 +137,14 @@ impl EcmascriptChunkItem for WithChunksChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn content(self_vc: WithChunksChunkItemVc) -> Result<EcmascriptChunkItemContentVc> {
-        let this = self_vc.await?;
-        let inner = this.inner.await?;
-        let group = this.inner.chunk_group();
+    async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
+        let inner = self.inner.await?;
+        let group = self.inner.chunk_group();
         let chunks = group.chunks().await?;
         let server_root = inner.server_root.await?;
         let mut client_chunks = Vec::new();
 
-        let chunk_list_path = this.inner.chunk_list_path().await?;
+        let chunk_list_path = self.inner.chunk_list_path().await?;
         let chunk_list_path = if let Some(path) = server_root.get_path_to(&chunk_list_path) {
             path
         } else {
@@ -173,7 +156,13 @@ impl EcmascriptChunkItem for WithChunksChunkItem {
                 client_chunks.push(Value::String(path.to_string()));
             }
         }
-        let module_id = stringify_js(&*inner.asset.as_chunk_item(this.inner_context).id().await?);
+        let module_id = stringify_js(
+            &*inner
+                .asset
+                .as_chunk_item(inner.chunking_context)
+                .id()
+                .await?,
+        );
         Ok(EcmascriptChunkItemContent {
             inner_code: formatdoc! {
                 r#"
@@ -204,37 +193,5 @@ impl ChunkItem for WithChunksChunkItem {
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         self.inner.references()
-    }
-}
-
-#[turbo_tasks::value]
-struct WithChunksAssetReference {
-    asset: AssetVc,
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for WithChunksAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "referenced asset {}",
-            self.asset.ident().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl AssetReference for WithChunksAssetReference {
-    #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(self.asset).cell()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ChunkableAssetReference for WithChunksAssetReference {
-    #[turbo_tasks::function]
-    fn chunking_type(&self) -> ChunkingTypeOptionVc {
-        ChunkingTypeOptionVc::cell(Some(ChunkingType::Separate))
     }
 }
