@@ -3,6 +3,8 @@ package runsummary
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/segmentio/ksuid"
@@ -48,9 +50,11 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 	}
 
 	filename := fmt.Sprintf("%s-%d.json", summary.ID, time.Now().UnixMilli())
+
+	// summaryPath will always be relative to the dir passsed in.
+	// We don't do a lot of validation, so `../../` paths are allowed
 	summaryPath := dir.Join(
-		".turbo",
-		"runs",
+		turbopath.MakeRelativeSystemPath(summary.getOutputDirectory()),
 		turbopath.MakeRelativeSystemPath(filename),
 	)
 
@@ -59,6 +63,15 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 	}
 
 	return summaryPath.WriteFile(json, 0644)
+}
+
+func (summary *RunSummary) getOutputDirectory() string {
+	fromEnv := os.Getenv("TURBO_RUN_SUMMARY_DIR")
+	if fromEnv != "" {
+		return fromEnv
+	}
+
+	return filepath.Join(".turbo", "runs")
 }
 
 // TaskSummary contains information about the task that was about to run
