@@ -735,6 +735,7 @@
 <span id="735">735</span>
 <span id="736">736</span>
 <span id="737">737</span>
+<span id="738">738</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -886,6 +887,7 @@
     <span class="kw">let </span>next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: <span class="prelude-val">None</span>,
         edge_resolve_options_context,
         output_path,
         base_path: project_path,

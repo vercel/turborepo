@@ -117,6 +117,7 @@
 <span id="117">117</span>
 <span id="118">118</span>
 <span id="119">119</span>
+<span id="120">120</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -143,6 +144,7 @@
 </span><span class="kw">pub struct </span>NextEdgeTransition {
     <span class="kw">pub </span>edge_compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>edge_chunking_context: ChunkingContextVc,
+    <span class="kw">pub </span>edge_module_options_context: <span class="prelude-ty">Option</span>&lt;ModuleOptionsContextVc&gt;,
     <span class="kw">pub </span>edge_resolve_options_context: ResolveOptionsContextVc,
     <span class="kw">pub </span>output_path: FileSystemPathVc,
     <span class="kw">pub </span>base_path: FileSystemPathVc,
@@ -165,7 +167,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: ModuleOptionsContextVc,
     ) -&gt; ModuleOptionsContextVc {
-        context
+        <span class="self">self</span>.edge_module_options_context.unwrap_or(context)
     }
 
     <span class="attr">#[turbo_tasks::function]

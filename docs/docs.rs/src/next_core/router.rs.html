@@ -367,6 +367,14 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::Deserialize;
@@ -409,7 +417,7 @@
         transition::NextEdgeTransition,
     },
     next_import_map::get_next_build_import_map,
-    next_server::context::ServerContextType,
+    next_server::context::{get_server_module_options_context, ServerContextType},
     util::{parse_config_from_source, NextSourceConfigVc},
 };
 
@@ -651,9 +659,17 @@
         execution_context,
     );
 
+    <span class="kw">let </span>server_module_options_context = get_server_module_options_context(
+        project_path,
+        execution_context,
+        Value::new(ServerContextType::Middleware),
+        next_config,
+    );
+
     <span class="kw">let </span>next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: <span class="prelude-val">Some</span>(server_module_options_context),
         edge_resolve_options_context,
         output_path: output_path.root(),
         base_path: project_path,
