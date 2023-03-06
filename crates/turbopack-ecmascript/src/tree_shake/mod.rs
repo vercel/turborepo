@@ -18,7 +18,7 @@ use turbopack_core::{
         ModuleId, ModuleIdVc,
     },
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    resolve::{ModulePart, ModulePartVc},
+    resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
@@ -415,7 +415,7 @@ impl EcmascriptModulePartAssetVc {
         module: EcmascriptModuleAssetVc,
         part: ModulePartVc,
     ) -> Result<Self> {
-        let split_data = split(module.path(), module.parse());
+        let split_data = split(module.origin_path(), module.parse());
         let result = split_data.await?;
         let part = part.await?;
 
@@ -440,11 +440,6 @@ impl EcmascriptModulePartAssetVc {
 
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptModulePartAsset {
-    #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.full_module.path()
-    }
-
     #[turbo_tasks::function]
     fn content(&self) -> AssetContentVc {
         todo!()
@@ -525,7 +520,7 @@ impl ValueToString for EcmascriptModulePartChunkItem {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "{} (ecmascript) -> chunk {}",
-            self.full_module.await?.source.path().to_string().await?,
+            self.full_module.await?.source.ident().to_string().await?,
             self.chunk_id
         )))
     }
@@ -533,11 +528,6 @@ impl ValueToString for EcmascriptModulePartChunkItem {
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
-    #[turbo_tasks::function]
-    fn related_path(&self) -> FileSystemPathVc {
-        self.module.path()
-    }
-
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let context = self.context;
@@ -658,7 +648,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 
     #[turbo_tasks::function]
     async fn id(&self) -> Result<ModuleIdVc> {
-        let module = self.full_module.path().await?;
+        let module = self.full_module.origin_path().await?;
 
         Ok(ModuleId::String(format!(
             "{} (ecmascript chunk {})",
