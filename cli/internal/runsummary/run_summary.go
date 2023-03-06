@@ -41,14 +41,15 @@ func NewRunSummary(turboVersion string, packages []string, globalHashSummary *Gl
 }
 
 // Save saves the run summary to a file
-func (summary *RunSummary) Save(singlePackage bool) error {
+func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage bool) error {
 	json, err := summary.FormatJSON(singlePackage)
 	if err != nil {
 		return err
 	}
-
-	filename := fmt.Sprintf("vercel-turbo-run-%s-%d.json", summary.ID, time.Now().UnixMilli())
-	return ioutil.WriteFile(filename, json, 0644)
+	timestamp := time.Now().UnixMilli()
+	filename := fmt.Sprintf("vercel-turbo-run-%s-%d.json", summary.ID, timestamp)
+	summaryPath := dir.Join(turbopath.MakeRelativeSystemPath(filename))
+	return ioutil.WriteFile(summaryPath.ToString(), json, 0644)
 }
 
 // TaskSummary contains information about the task that was about to run

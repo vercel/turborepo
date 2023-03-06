@@ -129,7 +129,7 @@ func RealRun(
 
 	// Write Run Summary if we wanted to
 	if rs.Opts.runOpts.summarize {
-		if err := runSummary.Save(singlePackage); err != nil {
+		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
 			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
 		}
 	}
