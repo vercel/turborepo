@@ -103,7 +103,11 @@ impl ReferenceType {
             }
             ReferenceType::EcmaScriptModules(sub_type) => {
                 matches!(other, ReferenceType::EcmaScriptModules(_))
-                    && matches!(sub_type, EcmaScriptModulesReferenceSubType::Undefined)
+                    && matches!(
+                        sub_type,
+                        EcmaScriptModulesReferenceSubType::Undefined
+                            | EcmaScriptModulesReferenceSubType::ModulePart(_)
+                    )
             }
             ReferenceType::Css(sub_type) => {
                 matches!(other, ReferenceType::Css(_))
