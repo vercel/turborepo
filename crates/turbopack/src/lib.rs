@@ -179,19 +179,22 @@ async fn module(
     context: ModuleAssetContextVc,
     reference_type: Value<ReferenceType>,
 ) -> Result<AssetVc> {
-    let path = source.path().resolve().await?;
-    let options = ModuleOptionsVc::new(path.parent(), context.module_options_context());
+    let ident = source.ident().resolve().await?;
+    let options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
 
     let reference_type = reference_type.into_value();
     let mut current_source = source;
     let mut current_module_type = None;
     for rule in options.await?.rules.iter() {
-        if rule.matches(&*path.await?, &reference_type) {
+        if rule
+            .matches(source, &*ident.path().await?, &reference_type)
+            .await?
+        {
             for effect in rule.effects() {
                 match effect {
                     ModuleRuleEffect::SourceTransforms(transforms) => {
                         current_source = transforms.transform(current_source);
-                        if current_source.path().resolve().await? != path {
+                        if current_source.ident().resolve().await? != ident {
                             // The path has been changed, so we need to apply new rules.
                             return Ok(module(current_source, context, Value::new(reference_type)));
                         }
@@ -214,7 +217,7 @@ async fn module(
                             }
                             Some(module_type) => {
                                 ModuleIssue {
-                                    path,
+                                    ident,
                                     title: StringVc::cell("Invalid module type".to_string()),
                                     description: StringVc::cell(
                                         "The module type must be Ecmascript or Typescript to add \
@@ -229,7 +232,7 @@ async fn module(
                             }
                             None => {
                                 ModuleIssue {
-                                    path,
+                                    ident,
                                     title: StringVc::cell("Missing module type".to_string()),
                                     description: StringVc::cell(
                                         "The module type effect must be applied before adding \
@@ -428,7 +431,12 @@ impl ModuleAssetContextVc {
 
         let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
 
-        Ok(apply_module_type(current_source, self_vc, module_type))
+        Ok(apply_module_type(
+            current_source,
+            self_vc,
+            module_type,
+            Value::new(reference_type),
+        ))
     }
 }
 
