@@ -477,8 +477,7 @@ async fn create_app_source_for_directory(
     }
 
     let source = CombinedContentSource { sources }.cell().into();
-    let source =
-        IssueContextSourceVc::new_context(directory, "Next.js app directory", source).into();
+    let source = IssueContextSourceVc::new_context(directory, "Next.js App Router", source).into();
 
     Ok(CombinedContentSource {
         sources: once(source)
