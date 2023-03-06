@@ -266,6 +266,10 @@ pub enum ChunkingType {
     PlacedOrParallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     Parallel,
+    ///  Asset is always placed in a separate chunk that is loaded in parallel.
+    /// Referenced asset will not inherit the available modules, but form a
+    /// new availablility root.
+    IsolatedParallel,
     /// Asset is placed in a separate chunk group that is referenced from the
     /// referencing chunk group, but not loaded.
     /// Note: Separate chunks need to be loaded by something external to current
@@ -538,6 +542,17 @@ where
                     context.chunking_context,
                     context.available_assets,
                     context.current_availability_root,
+                );
+                graph_nodes.push((
+                    Some((asset, chunking_type)),
+                    ChunkContentGraphNode::Chunk(chunk),
+                ));
+            }
+            ChunkingType::IsolatedParallel => {
+                let chunk = chunkable_asset.as_chunk(
+                    context.chunking_context,
+                    None,
+                    Some(chunkable_asset.into()),
                 );
                 graph_nodes.push((
                     Some((asset, chunking_type)),

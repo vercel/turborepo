@@ -23,8 +23,6 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::utils::stringify_js_pretty;
 
-use crate::next_client_chunks::in_chunking_context_asset::InChunkingContextAsset;
-
 #[turbo_tasks::function]
 fn modifier() -> StringVc {
     StringVc::cell("client chunks".to_string())
@@ -50,7 +48,11 @@ impl Asset for WithClientChunksAsset {
 
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
-        unimplemented!()
+        AssetReferencesVc::cell(vec![WithClientChunksAssetReference {
+            asset: self.asset.into(),
+        }
+        .cell()
+        .into()])
     }
 }
 
@@ -111,7 +113,12 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let inner = self.inner.await?;
-        let group = ChunkGroupVc::from_asset(inner.asset.into(), self.context, None, None);
+        let group = ChunkGroupVc::from_asset(
+            inner.asset.into(),
+            self.context,
+            None,
+            Some(inner.asset.into()),
+        );
         let chunks = group.chunks().await?;
         let server_root = inner.server_root.await?;
 
@@ -164,21 +171,8 @@ impl ChunkItem for WithClientChunksChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: WithClientChunksChunkItemVc) -> Result<AssetReferencesVc> {
-        let this = self_vc.await?;
-        let inner = this.inner.await?;
-        Ok(AssetReferencesVc::cell(vec![
-            WithClientChunksAssetReference {
-                asset: InChunkingContextAsset {
-                    asset: inner.asset,
-                    chunking_context: this.context,
-                }
-                .cell()
-                .into(),
-            }
-            .cell()
-            .into(),
-        ]))
+    fn references(&self) -> AssetReferencesVc {
+        self.inner.references()
     }
 }
 
@@ -210,6 +204,6 @@ impl AssetReference for WithClientChunksAssetReference {
 impl ChunkableAssetReference for WithClientChunksAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self) -> ChunkingTypeOptionVc {
-        ChunkingTypeOptionVc::cell(Some(ChunkingType::PlacedOrParallel))
+        ChunkingTypeOptionVc::cell(Some(ChunkingType::IsolatedParallel))
     }
 }
