@@ -79,7 +79,10 @@ impl Display for ReferenceType {
         // TODO print sub types
         let str = match self {
             ReferenceType::CommonJs(_) => "commonjs",
-            ReferenceType::EcmaScriptModules(_) => "EcmaScript Modules",
+            ReferenceType::EcmaScriptModules(sub) => match sub {
+                EcmaScriptModulesReferenceSubType::ModulePart(_) => "EcmaScript Modules (part)",
+                _ => "EcmaScript Modules",
+            },
             ReferenceType::Css(_) => "css",
             ReferenceType::Url(_) => "url",
             ReferenceType::TypeScript(_) => "typescript",
