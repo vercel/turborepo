@@ -98,8 +98,6 @@ func RealRun(
 		return ec.exec(ctx, packageTask, deps)
 	}
 
-	runSummary.Tasks = taskSummaries
-
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
 	}
@@ -110,6 +108,9 @@ func RealRun(
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
+
+	// Assign tasks after execution
+	runSummary.Tasks = taskSummaries
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
