@@ -183,7 +183,7 @@ pub struct LocalTurboState {
 }
 
 impl LocalTurboState {
-    pub fn infer(repo_root: &PathBuf) -> Option<Self> {
+    pub fn infer(repo_root: &Path) -> Option<Self> {
         let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
             #[cfg(windows)]
             {
@@ -266,6 +266,9 @@ impl RepoState {
                     return None;
                 }
 
+                // FIXME: This should be based upon detecting the pacakage manager.
+                // However, we don't have that functionality implemented in Rust yet.
+                // PackageManager::detect(path).get_workspace_globs().unwrap_or(None)
                 let workspace_globs = PackageManager::Pnpm
                     .get_workspace_globs(path)
                     .unwrap_or_else(|_| {
@@ -295,9 +298,9 @@ impl RepoState {
         //   1. [0].has_turbo_json && [0].workspace_globs.is_some()
         //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
         //
-        //   If we elect to make any of the changes for early exits we need to expand
-        // the   test suite which presently relies on the fact that the
-        // selection runs in a   loop to avoid creating those test cases.
+        // If we elect to make any of the changes for early exits we need to expand test
+        // suite which presently relies on the fact that the selection runs in a loop to
+        // avoid creating those test cases.
 
         // We need to perform the same search strategy for _both_ turbo.json and _then_
         // package.json.
