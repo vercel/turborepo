@@ -74,9 +74,7 @@ pub trait FileSystem: ValueToString {
     fn read(&self, fs_path: FileSystemPathVc) -> FileContentVc;
     fn read_link(&self, fs_path: FileSystemPathVc) -> LinkContentVc;
     fn read_dir(&self, fs_path: FileSystemPathVc) -> DirectoryContentVc;
-    fn track(&self, _fs_path: FileSystemPathVc) -> CompletionVc {
-        CompletionVc::immutable()
-    }
+    fn track(&self, fs_path: FileSystemPathVc) -> CompletionVc;
     fn write(&self, fs_path: FileSystemPathVc, content: FileContentVc) -> CompletionVc;
     fn write_link(&self, fs_path: FileSystemPathVc, target: LinkContentVc) -> CompletionVc;
     fn metadata(&self, fs_path: FileSystemPathVc) -> FileMetaVc;
@@ -493,8 +491,10 @@ impl FileSystem for DiskFileSystem {
         fs_path.track().await?;
 
         // We perform an untracked read here, so that this write is not dependent on the
-        // read value (and the memory it holds). It's possible the read can be freed if
-        // no other task tries to read it, which is entirely likely for a output file.
+        // read's FileContent value (and the memory it holds). Our untracked read can be
+        // freed immediately. Given this is an output file, it's unlikely any Turbo code
+        // will need to read the file from disk into a FileContentVc, so we're not
+        // wasting cycles.
         let old_content = read_file(full_path.clone(), &self.mutex_map).await?;
 
         if *content == old_content {
@@ -1657,6 +1657,11 @@ impl FileSystem for NullFileSystem {
     #[turbo_tasks::function]
     fn read_dir(&self, _fs_path: FileSystemPathVc) -> DirectoryContentVc {
         DirectoryContentVc::not_found()
+    }
+
+    #[turbo_tasks::function]
+    fn track(&self, _fs_path: FileSystemPathVc) -> CompletionVc {
+        CompletionVc::immutable()
     }
 
     #[turbo_tasks::function]
