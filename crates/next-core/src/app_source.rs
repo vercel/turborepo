@@ -395,7 +395,9 @@ async fn create_app_source_for_directory(
     intermediate_output_path_root: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
     let AppStructure {
-        item, ref children, ..
+        item,
+        ref children,
+        directory,
     } = *app_structure.await?;
     let mut sources = Vec::new();
 
