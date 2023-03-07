@@ -41,6 +41,7 @@
 <span id="41">41</span>
 <span id="42">42</span>
 <span id="43">43</span>
+<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     graph::{GraphTraversal, NonDeterministic, SkipDuplicates},
@@ -63,13 +64,14 @@
 /// asset graph changes.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>any_content_changed(root: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
-    <span class="kw">let </span>completions = GraphTraversal::&lt;NonDeterministic&lt;<span class="kw">_</span>&gt;&gt;::visit(
+    <span class="kw">let </span>completions = GraphTraversal::&lt;SkipDuplicates&lt;NonDeterministic&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;::visit(
         [root],
-        SkipDuplicates::new(get_referenced_assets),
+        get_referenced_assets,
     )
     .<span class="kw">await
     </span>.completed()<span class="question-mark">?
-    </span>.into_iter()
+    </span>.into_inner()
+    .into_iter()
     .map(content_changed)
     .collect();
 

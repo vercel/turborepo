@@ -709,22 +709,6 @@
 <span id="709">709</span>
 <span id="710">710</span>
 <span id="711">711</span>
-<span id="712">712</span>
-<span id="713">713</span>
-<span id="714">714</span>
-<span id="715">715</span>
-<span id="716">716</span>
-<span id="717">717</span>
-<span id="718">718</span>
-<span id="719">719</span>
-<span id="720">720</span>
-<span id="721">721</span>
-<span id="722">722</span>
-<span id="723">723</span>
-<span id="724">724</span>
-<span id="725">725</span>
-<span id="726">726</span>
-<span id="727">727</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
 <span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
@@ -741,8 +725,8 @@
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{
-        GraphTraversal, GraphTraversalControlFlow, GraphTraversalResult, ReverseTopological,
-        SkipDuplicates, Visit,
+        GraphTraversal, GraphTraversalResult, ReverseTopological, SkipDuplicates, Visit,
+        VisitControlFlow,
     },
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
@@ -858,13 +842,14 @@
     /// All chunks should be loaded in parallel.
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-        <span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(
+        <span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;::visit(
             [<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.entry],
-            SkipDuplicates::new(get_chunk_children),
+            get_chunk_children,
         )
         .<span class="kw">await
         </span>.completed()<span class="question-mark">?
-        </span>.into_iter()
+        </span>.into_inner()
+        .into_iter()
         .collect();
 
         <span class="kw">let </span>chunks = ChunksVc::cell(chunks);
@@ -1262,24 +1247,6 @@
     <span class="prelude-val">Ok</span>(graph_nodes)
 }
 
-<span class="kw">async fn </span>chunk_item_to_graph_nodes&lt;I&gt;(
-    context: ChunkContentContext,
-    chunk_item: I,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesChildren&lt;I&gt;&gt;
-<span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
-{
-    <span class="prelude-val">Ok</span>(chunk_item
-        .references()
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .map(|reference| reference_to_graph_nodes::&lt;I&gt;(context, <span class="kw-2">*</span>reference))
-        .try_join()
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .flatten())
-}
-
 <span class="doccomment">/// The maximum number of chunk items that can be in a chunk before we split it
 /// into multiple chunks.
 </span><span class="kw">const </span>MAX_CHUNK_ITEMS_COUNT: usize = <span class="number">5000</span>;
@@ -1291,66 +1258,71 @@
     _phantom: PhantomData&lt;I&gt;,
 }
 
-<span class="kw">type </span>ChunkItemToGraphNodesChildren&lt;I&gt; =
+<span class="kw">type </span>ChunkItemToGraphNodesEdges&lt;I&gt; =
     <span class="kw">impl </span>Iterator&lt;Item = (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;)&gt;;
 
-<span class="kw">type </span>ChunkItemToGraphNodesFuture&lt;I&gt; =
-    <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesChildren&lt;I&gt;&gt;&gt;;
+<span class="kw">type </span>ChunkItemToGraphNodesFuture&lt;I: FromChunkableAsset + Eq + std::hash::Hash + Clone&gt; =
+    <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesEdges&lt;I&gt;&gt;&gt;;
 
 <span class="kw">impl</span>&lt;I&gt; Visit&lt;ChunkContentGraphNode&lt;I&gt;, ()&gt; <span class="kw">for </span>ChunkContentVisit&lt;I&gt;
 <span class="kw">where
     </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
 {
-    <span class="kw">type </span>Children = ChunkItemToGraphNodesChildren&lt;I&gt;;
-    <span class="kw">type </span>MapChildren = Vec&lt;ChunkContentGraphNode&lt;I&gt;&gt;;
-    <span class="kw">type </span>Future = ChunkItemToGraphNodesFuture&lt;I&gt;;
+    <span class="kw">type </span>Edge = (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;);
+    <span class="kw">type </span>EdgesIntoIter = ChunkItemToGraphNodesEdges&lt;I&gt;;
+    <span class="kw">type </span>EdgesFuture = ChunkItemToGraphNodesFuture&lt;I&gt;;
 
-    <span class="kw">fn </span>get_children(
+    <span class="kw">fn </span>visit(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        node: <span class="kw-2">&amp;</span>ChunkContentGraphNode&lt;I&gt;,
-    ) -&gt; GraphTraversalControlFlow&lt;<span class="self">Self</span>::Future, ()&gt; {
-        <span class="comment">// TODO(alexkirsz) Right now the output type of the traversal is the same as the
-        // input type. If we can have them be separate types, we wouldn&#39;t need
-        // to call `get_children` on graph nodes that we know not to have any children
-        // (i.e. anything that&#39;s not a chunk item).
-        </span><span class="kw">let </span>ChunkContentGraphNode::ChunkItem(chunk_item) = node <span class="kw">else </span>{
-            <span class="kw">return </span>GraphTraversalControlFlow::Skip;
+        (option_key, node): (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;),
+    ) -&gt; VisitControlFlow&lt;ChunkContentGraphNode&lt;I&gt;, ()&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>((asset, chunking_type)) = option_key <span class="kw">else </span>{
+            <span class="kw">return </span>VisitControlFlow::Continue(node);
         };
 
-        GraphTraversalControlFlow::Continue(chunk_item_to_graph_nodes::&lt;I&gt;(
-            <span class="self">self</span>.context,
-            chunk_item.clone(),
-        ))
-    }
+        <span class="kw">if </span>!<span class="self">self</span>.processed_assets.insert((chunking_type, asset)) {
+            <span class="kw">return </span>VisitControlFlow::Skip(node);
+        }
 
-    <span class="kw">fn </span>map_children(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        children: <span class="self">Self</span>::Children,
-    ) -&gt; GraphTraversalControlFlow&lt;<span class="self">Self</span>::MapChildren, ()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>map_children = <span class="macro">vec!</span>[];
+        <span class="kw">if let </span>ChunkContentGraphNode::ChunkItem(<span class="kw">_</span>) = <span class="kw-2">&amp;</span>node {
+            <span class="self">self</span>.chunk_items_count += <span class="number">1</span>;
 
-        <span class="kw">for </span>(option_key, child) <span class="kw">in </span>children {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((asset, chunking_type)) = option_key {
-                <span class="kw">if </span><span class="self">self</span>.processed_assets.insert((chunking_type, asset)) {
-                    <span class="kw">if let </span>ChunkContentGraphNode::ChunkItem(<span class="kw">_</span>) = <span class="kw-2">&amp;</span>child {
-                        <span class="self">self</span>.chunk_items_count += <span class="number">1</span>;
-                    }
-                    map_children.push(child);
-                }
-            } <span class="kw">else </span>{
-                map_children.push(child);
+            <span class="comment">// Make sure the chunk doesn&#39;t become too large.
+            // This will hurt performance in many aspects.
+            </span><span class="kw">if </span>!<span class="self">self</span>.context.split &amp;&amp; <span class="self">self</span>.chunk_items_count &gt;= MAX_CHUNK_ITEMS_COUNT {
+                <span class="comment">// Chunk is too large, cancel this algorithm and restart with splitting from the
+                // start.
+                </span><span class="kw">return </span>VisitControlFlow::Abort(());
             }
         }
 
-        <span class="comment">// Make sure the chunk doesn&#39;t become too large.
-        // This will hurt performance in many aspects.
-        </span><span class="kw">if </span>!<span class="self">self</span>.context.split &amp;&amp; <span class="self">self</span>.chunk_items_count &gt;= MAX_CHUNK_ITEMS_COUNT {
-            <span class="comment">// Chunk is too large, cancel this algorithm and restart with splitting from the
-            // start.
-            </span><span class="kw">return </span>GraphTraversalControlFlow::Abort(());
-        }
+        VisitControlFlow::Continue(node)
+    }
 
-        GraphTraversalControlFlow::Continue(map_children)
+    <span class="kw">fn </span>edges(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;</span>ChunkContentGraphNode&lt;I&gt;) -&gt; <span class="self">Self</span>::EdgesFuture {
+        <span class="kw">let </span>chunk_item = <span class="kw">if let </span>ChunkContentGraphNode::ChunkItem(chunk_item) = node {
+            <span class="prelude-val">Some</span>(chunk_item.clone())
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="kw">let </span>context = <span class="self">self</span>.context;
+
+        <span class="kw">async move </span>{
+            <span class="kw">let </span><span class="prelude-val">Some</span>(chunk_item) = chunk_item <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[].into_iter().flatten());
+            };
+
+            <span class="prelude-val">Ok</span>(chunk_item
+                .references()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into_iter()
+                .map(|reference| reference_to_graph_nodes::&lt;I&gt;(context, <span class="kw-2">*</span>reference))
+                .try_join()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into_iter()
+                .flatten())
+        }
     }
 }
 
@@ -1363,29 +1335,25 @@
 <span class="kw">where
     </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
 {
-    <span class="kw">let </span><span class="kw-2">mut </span>processed_assets: HashSet&lt;(ChunkingType, AssetVc)&gt; = HashSet::default();
-
     <span class="kw">let </span>additional_entries = <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_entries) = additional_entries {
         additional_entries.<span class="kw">await</span><span class="question-mark">?</span>.clone_value().into_iter()
     } <span class="kw">else </span>{
         <span class="macro">vec!</span>[].into_iter()
     };
 
-    <span class="kw">let </span>entries = [entry].into_iter().chain(additional_entries);
-    <span class="kw">for </span>entry <span class="kw">in </span>entries.clone() {
-        processed_assets.insert((ChunkingType::Placed, entry));
-    }
-
-    <span class="kw">let </span>root_graph_nodes = entries
+    <span class="kw">let </span>root_edges = [entry]
+        .into_iter()
+        .chain(additional_entries)
         .map(|entry| <span class="kw">async move </span>{
-            <span class="prelude-val">Ok</span>(ChunkContentGraphNode::ChunkItem(
-                I::from_asset(chunking_context, entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap(),
+            <span class="prelude-val">Ok</span>((
+                <span class="prelude-val">Some</span>((entry, ChunkingType::Placed)),
+                ChunkContentGraphNode::ChunkItem(
+                    I::from_asset(chunking_context, entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap(),
+                ),
             ))
         })
         .try_join()
         .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    processed_assets.insert((ChunkingType::Placed, entry));
 
     <span class="kw">let </span>context = ChunkContentContext {
         chunking_context,
@@ -1395,13 +1363,13 @@
 
     <span class="kw">let </span>visit = ChunkContentVisit {
         context,
-        chunk_items_count: root_graph_nodes.len(),
-        processed_assets,
+        chunk_items_count: <span class="number">0</span>,
+        processed_assets: Default::default(),
         _phantom: PhantomData,
     };
 
     <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) =
-        GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(root_graph_nodes, visit).<span class="kw">await else </span>{
+        GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(root_edges, visit).<span class="kw">await else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
         };
 

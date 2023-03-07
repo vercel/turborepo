@@ -29,6 +29,10 @@
 <span id="29">29</span>
 <span id="30">30</span>
 <span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::graph_store::GraphStore;
 
 <span class="doccomment">/// A graph traversal that does not guarantee any particular order, and may not
@@ -46,9 +50,13 @@
 <span class="kw">impl</span>&lt;T&gt; GraphStore&lt;T&gt; <span class="kw">for </span>NonDeterministic&lt;T&gt; {
     <span class="kw">type </span>Handle = ();
 
-    <span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _parent_handle: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Handle&gt;, node: T) -&gt; (<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T) {
+    <span class="kw">fn </span>insert(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        _from_handle: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Handle&gt;,
+        node: T,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T)&gt; {
         <span class="self">self</span>.output.push(node);
-        ((), <span class="self">self</span>.output.last().unwrap())
+        <span class="prelude-val">Some</span>(((), <span class="self">self</span>.output.last().unwrap()))
     }
 }
 

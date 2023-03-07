@@ -9,16 +9,22 @@
 <span id="9">9</span>
 <span id="10">10</span>
 <span id="11">11</span>
-</pre><pre class="rust"><code><span class="kw">mod </span>get_children;
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+</pre><pre class="rust"><code><span class="kw">mod </span>control_flow;
 <span class="kw">mod </span>graph_store;
 <span class="kw">mod </span>graph_traversal;
 <span class="kw">mod </span>non_deterministic;
 <span class="kw">mod </span>reverse_topological;
+<span class="kw">mod </span>visit;
 <span class="kw">mod </span>with_future;
 
-<span class="kw">pub use </span>get_children::{SkipDuplicates, Visit};
-<span class="kw">pub use </span>graph_traversal::{GraphTraversal, GraphTraversalControlFlow, GraphTraversalResult};
+<span class="kw">pub use </span>control_flow::VisitControlFlow;
+<span class="kw">pub use </span>graph_store::{GraphStore, SkipDuplicates};
+<span class="kw">pub use </span>graph_traversal::{GraphTraversal, GraphTraversalResult};
 <span class="kw">pub use </span>non_deterministic::NonDeterministic;
 <span class="kw">pub use </span>reverse_topological::ReverseTopological;
+<span class="kw">pub use </span>visit::Visit;
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbo_tasks" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

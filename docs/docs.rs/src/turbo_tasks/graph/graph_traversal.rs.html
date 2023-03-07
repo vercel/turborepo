@@ -189,81 +189,50 @@
 <span id="189">189</span>
 <span id="190">190</span>
 <span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
-<span id="199">199</span>
-<span id="200">200</span>
-<span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
-<span id="204">204</span>
-<span id="205">205</span>
-<span id="206">206</span>
-<span id="207">207</span>
-<span id="208">208</span>
-<span id="209">209</span>
-<span id="210">210</span>
-<span id="211">211</span>
-<span id="212">212</span>
-<span id="213">213</span>
-<span id="214">214</span>
-<span id="215">215</span>
-<span id="216">216</span>
-<span id="217">217</span>
-<span id="218">218</span>
-<span id="219">219</span>
-<span id="220">220</span>
-<span id="221">221</span>
-<span id="222">222</span>
-<span id="223">223</span>
-<span id="224">224</span>
-<span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{stream::FuturesUnordered, Stream};
 
-<span class="kw">use super</span>::{graph_store::GraphStore, with_future::With, Visit};
+<span class="kw">use super</span>::{graph_store::GraphStore, with_future::With, Visit, VisitControlFlow};
 
 <span class="doccomment">/// [`GraphTraversal`] is a utility type that can be used to traverse a graph of
-/// nodes, where each node can have a variable number of children. The traversal
-/// is done in parallel, and the order of the nodes in the traversal result is
-/// determined by the [`GraphStore`] parameter.
-</span><span class="kw">pub struct </span>GraphTraversal&lt;S&gt; {
-    _store: std::marker::PhantomData&lt;S&gt;,
+/// nodes, where each node can have a variable number of outgoing edges. The
+/// traversal is done in parallel, and the order of the nodes in the traversal
+/// result is determined by the [`GraphStore`] parameter.
+</span><span class="kw">pub struct </span>GraphTraversal&lt;Store&gt; {
+    _store: std::marker::PhantomData&lt;Store&gt;,
 }
 
-<span class="kw">impl</span>&lt;S&gt; GraphTraversal&lt;S&gt; {
+<span class="kw">impl</span>&lt;Store&gt; GraphTraversal&lt;Store&gt; {
     <span class="doccomment">/// Visits the graph starting from the given `roots`, and returns a future
     /// that will resolve to the traversal result.
-    </span><span class="kw">pub fn </span>visit&lt;T, I, C, A, Impl&gt;(roots: I, <span class="kw-2">mut </span>visit: C) -&gt; GraphTraversalFuture&lt;T, S, C, A, Impl&gt;
+    </span><span class="kw">pub fn </span>visit&lt;Node, RootEdgesIt, VisitImpl, Abort, Impl&gt;(
+        root_edges: RootEdgesIt,
+        <span class="kw-2">mut </span>visit: VisitImpl,
+    ) -&gt; GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
     <span class="kw">where
-        </span>S: GraphStore&lt;T&gt;,
-        I: IntoIterator&lt;Item = T&gt;,
-        C: Visit&lt;T, A, Impl&gt;,
+        </span>Store: GraphStore&lt;Node&gt;,
+        VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+        RootEdgesIt: IntoIterator&lt;Item = VisitImpl::Edge&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>store = S::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>store = Store::default();
         <span class="kw">let </span>futures = FuturesUnordered::new();
-        <span class="kw">for </span>item <span class="kw">in </span>roots {
-            <span class="kw">let </span>(parent_handle, item) = store.insert(<span class="prelude-val">None</span>, item);
-            <span class="kw">match </span>visit.get_children(item) {
-                GraphTraversalControlFlow::Continue(future) =&gt; {
-                    futures.push(With::new(future, parent_handle));
+        <span class="kw">for </span>edge <span class="kw">in </span>root_edges {
+            <span class="kw">match </span>visit.visit(edge) {
+                VisitControlFlow::Continue(node) =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((parent_handle, node_ref)) = store.insert(<span class="prelude-val">None</span>, node) {
+                        futures.push(With::new(visit.edges(node_ref), parent_handle));
+                    }
                 }
-                GraphTraversalControlFlow::Abort(abort) =&gt; {
+                VisitControlFlow::Skip(node) =&gt; {
+                    store.insert(<span class="prelude-val">None</span>, node);
+                }
+                VisitControlFlow::Abort(abort) =&gt; {
                     <span class="kw">return </span>GraphTraversalFuture {
                         state: GraphTraversalState::Aborted { abort },
                     };
                 }
-                GraphTraversalControlFlow::Skip =&gt; {}
             }
         }
         GraphTraversalFuture {
@@ -278,64 +247,66 @@
 
 <span class="doccomment">/// A future that resolves to a [`GraphStore`] containing the result of a graph
 /// traversal.
-</span><span class="kw">pub struct </span>GraphTraversalFuture&lt;T, S, C, A, Impl&gt;
+</span><span class="kw">pub struct </span>GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>S: GraphStore&lt;T&gt;,
-    C: Visit&lt;T, A, Impl&gt;,
+    </span>Store: GraphStore&lt;Node&gt;,
+    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
-    state: GraphTraversalState&lt;T, S, C, A, Impl&gt;,
+    state: GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;,
 }
 
-<span class="kw">enum </span>GraphTraversalState&lt;T, S, C, A, Impl&gt;
+<span class="kw">enum </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>S: GraphStore&lt;T&gt;,
-    C: Visit&lt;T, A, Impl&gt;,
+    </span>Store: GraphStore&lt;Node&gt;,
+    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
     Completed,
-    Aborted { abort: A },
-    Running(GraphTraversalRunningState&lt;T, S, C, A, Impl&gt;),
+    Aborted { abort: Abort },
+    Running(GraphTraversalRunningState&lt;Node, Store, VisitImpl, Abort, Impl&gt;),
 }
 
-<span class="kw">struct </span>GraphTraversalRunningState&lt;T, S, C, A, Impl&gt;
+<span class="kw">struct </span>GraphTraversalRunningState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>S: GraphStore&lt;T&gt;,
-    C: Visit&lt;T, A, Impl&gt;,
+    </span>Store: GraphStore&lt;Node&gt;,
+    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
-    store: S,
-    futures: FuturesUnordered&lt;With&lt;C::Future, S::Handle&gt;&gt;,
-    visit: C,
+    store: Store,
+    futures: FuturesUnordered&lt;With&lt;VisitImpl::EdgesFuture, Store::Handle&gt;&gt;,
+    visit: VisitImpl,
 }
 
-<span class="kw">impl</span>&lt;T, S, C, A, Impl&gt; Default <span class="kw">for </span>GraphTraversalState&lt;T, S, C, A, Impl&gt;
+<span class="kw">impl</span>&lt;Node, Store, VisitImpl, Abort, Impl&gt; Default
+    <span class="kw">for </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>S: GraphStore&lt;T&gt;,
-    C: Visit&lt;T, A, Impl&gt;,
+    </span>Store: GraphStore&lt;Node&gt;,
+    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         GraphTraversalState::Completed
     }
 }
 
-<span class="kw">pub enum </span>GraphTraversalResult&lt;R, A&gt; {
-    Completed(R),
-    Aborted(A),
+<span class="kw">pub enum </span>GraphTraversalResult&lt;Completed, Aborted&gt; {
+    Completed(Completed),
+    Aborted(Aborted),
 }
 
-<span class="kw">impl</span>&lt;R&gt; GraphTraversalResult&lt;R, !&gt; {
-    <span class="kw">pub fn </span>completed(<span class="self">self</span>) -&gt; R {
+<span class="kw">impl</span>&lt;Completed&gt; GraphTraversalResult&lt;Completed, !&gt; {
+    <span class="kw">pub fn </span>completed(<span class="self">self</span>) -&gt; Completed {
         <span class="kw">match </span><span class="self">self </span>{
-            GraphTraversalResult::Completed(result) =&gt; result,
-            GraphTraversalResult::Aborted(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;the type parameter `A` is `!`&quot;</span>),
+            GraphTraversalResult::Completed(completed) =&gt; completed,
+            GraphTraversalResult::Aborted(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;the type parameter `Aborted` is `!`&quot;</span>),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;T, S, C, A, Impl&gt; Future <span class="kw">for </span>GraphTraversalFuture&lt;T, S, C, A, Impl&gt;
+<span class="kw">impl</span>&lt;Node, Store, VisitImpl, Abort, Impl&gt; Future
+    <span class="kw">for </span>GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>S: GraphStore&lt;T&gt;,
-    C: Visit&lt;T, A, Impl&gt;,
+    </span>Store: GraphStore&lt;Node&gt;,
+    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
-    <span class="kw">type </span>Output = GraphTraversalResult&lt;<span class="prelude-ty">Result</span>&lt;S&gt;, A&gt;;
+    <span class="kw">type </span>Output = GraphTraversalResult&lt;<span class="prelude-ty">Result</span>&lt;Store&gt;, Abort&gt;;
 
     <span class="kw">fn </span>poll(
         <span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
@@ -355,35 +326,30 @@
             GraphTraversalState::Running(<span class="kw-2">mut </span>running) =&gt; <span class="lifetime">&#39;outer</span>: <span class="kw">loop </span>{
                 <span class="kw">let </span>futures_pin = <span class="kw">unsafe </span>{ Pin::new_unchecked(<span class="kw-2">&amp;mut </span>running.futures) };
                 <span class="kw">match </span>futures_pin.poll_next(cx) {
-                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((parent_handle, <span class="prelude-val">Ok</span>(children)))) =&gt; {
-                        <span class="kw">match </span>running.visit.map_children(children) {
-                            GraphTraversalControlFlow::Continue(children) =&gt; {
-                                <span class="kw">for </span>item <span class="kw">in </span>children {
-                                    <span class="kw">let </span>(child_handle, item) =
-                                        running.store.insert(<span class="prelude-val">Some</span>(parent_handle.clone()), item);
-
-                                    <span class="kw">match </span>running.visit.get_children(item) {
-                                        GraphTraversalControlFlow::Continue(future) =&gt; {
-                                            running.futures.push(With::new(future, child_handle));
-                                        }
-                                        GraphTraversalControlFlow::Skip =&gt; {}
-                                        GraphTraversalControlFlow::Abort(abort) =&gt; {
-                                            <span class="kw">break </span><span class="lifetime">&#39;outer </span>(
-                                                GraphTraversalState::Completed,
-                                                std::task::Poll::Ready(
-                                                    GraphTraversalResult::Aborted(abort),
-                                                ),
-                                            );
-                                        }
+                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((parent_handle, <span class="prelude-val">Ok</span>(edges)))) =&gt; {
+                        <span class="kw">for </span>edge <span class="kw">in </span>edges {
+                            <span class="kw">match </span>running.visit.visit(edge) {
+                                VisitControlFlow::Continue(node) =&gt; {
+                                    <span class="kw">if let </span><span class="prelude-val">Some</span>((node_handle, node_ref)) =
+                                        running.store.insert(<span class="prelude-val">Some</span>(parent_handle.clone()), node)
+                                    {
+                                        running.futures.push(With::new(
+                                            running.visit.edges(node_ref),
+                                            node_handle,
+                                        ));
                                     }
                                 }
-                            }
-                            GraphTraversalControlFlow::Skip =&gt; {}
-                            GraphTraversalControlFlow::Abort(abort) =&gt; {
-                                <span class="kw">break </span><span class="lifetime">&#39;outer </span>(
-                                    GraphTraversalState::Completed,
-                                    std::task::Poll::Ready(GraphTraversalResult::Aborted(abort)),
-                                );
+                                VisitControlFlow::Skip(node) =&gt; {
+                                    running.store.insert(<span class="prelude-val">Some</span>(parent_handle.clone()), node);
+                                }
+                                VisitControlFlow::Abort(abort) =&gt; {
+                                    <span class="kw">break </span><span class="lifetime">&#39;outer </span>(
+                                        GraphTraversalState::Completed,
+                                        std::task::Poll::Ready(GraphTraversalResult::Aborted(
+                                            abort,
+                                        )),
+                                    );
+                                }
                             }
                         }
                     }
@@ -412,46 +378,6 @@
         };
 
         result
-    }
-}
-
-<span class="doccomment">/// The control flow of a graph traversal.
-</span><span class="kw">pub enum </span>GraphTraversalControlFlow&lt;C, A = !&gt; {
-    <span class="doccomment">/// The traversal should continue with the given future.
-    </span>Continue(C),
-    <span class="doccomment">/// The traversal should abort and return immediately.
-    </span>Abort(A),
-    <span class="doccomment">/// The traversal should skip the current node.
-    </span>Skip,
-}
-
-<span class="kw">impl</span>&lt;C, A&gt; GraphTraversalControlFlow&lt;C, A&gt; {
-    <span class="doccomment">/// Map the continue value of this control flow.
-    </span><span class="kw">pub fn </span>map_continue&lt;Map, Mapped&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>map: Map) -&gt; GraphTraversalControlFlow&lt;Mapped, A&gt;
-    <span class="kw">where
-        </span>Map: FnMut(C) -&gt; Mapped,
-    {
-        <span class="kw">match </span><span class="self">self </span>{
-            GraphTraversalControlFlow::Continue(future) =&gt; {
-                GraphTraversalControlFlow::Continue(map(future))
-            }
-            GraphTraversalControlFlow::Abort(abort) =&gt; GraphTraversalControlFlow::Abort(abort),
-            GraphTraversalControlFlow::Skip =&gt; GraphTraversalControlFlow::Skip,
-        }
-    }
-
-    <span class="doccomment">/// Map the abort value of this control flow.
-    </span><span class="kw">pub fn </span>map_abort&lt;Map, Mapped&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>map: Map) -&gt; GraphTraversalControlFlow&lt;C, Mapped&gt;
-    <span class="kw">where
-        </span>Map: FnMut(A) -&gt; Mapped,
-    {
-        <span class="kw">match </span><span class="self">self </span>{
-            GraphTraversalControlFlow::Continue(future) =&gt; {
-                GraphTraversalControlFlow::Continue(future)
-            }
-            GraphTraversalControlFlow::Abort(abort) =&gt; GraphTraversalControlFlow::Abort(map(abort)),
-            GraphTraversalControlFlow::Skip =&gt; GraphTraversalControlFlow::Skip,
-        }
     }
 }
 </code></pre></div>

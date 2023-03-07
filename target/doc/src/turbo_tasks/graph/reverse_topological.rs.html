@@ -147,17 +147,17 @@
 {
     <span class="kw">type </span>Handle = T;
 
-    <span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, parent: <span class="prelude-ty">Option</span>&lt;T&gt;, node: T) -&gt; (<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T) {
-        <span class="kw">let </span>vec = <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = parent {
+    <span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, from_handle: <span class="prelude-ty">Option</span>&lt;T&gt;, node: T) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T)&gt; {
+        <span class="kw">let </span>vec = <span class="kw">if let </span><span class="prelude-val">Some</span>(from_handle) = from_handle {
             <span class="self">self</span>.adjacency_map
-                .entry(parent)
+                .entry(from_handle)
                 .or_insert_with(|| Vec::with_capacity(<span class="number">1</span>))
         } <span class="kw">else </span>{
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.roots
         };
 
         vec.push(node.clone());
-        (node, vec.last().unwrap())
+        <span class="prelude-val">Some</span>((node, vec.last().unwrap()))
     }
 }
 
@@ -217,15 +217,15 @@
 
                     <span class="self">self</span>.visited.insert(current.clone());
 
-                    <span class="kw">let </span><span class="prelude-val">Some</span>(children) = <span class="self">self</span>.adjacency_map.get(<span class="kw-2">&amp;</span>current) <span class="kw">else </span>{
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(neighbors) = <span class="self">self</span>.adjacency_map.get(<span class="kw-2">&amp;</span>current) <span class="kw">else </span>{
                         <span class="kw">break </span>current;
                     };
 
                     <span class="self">self</span>.stack.push((ReverseTopologicalPass::Post, current));
                     <span class="self">self</span>.stack.extend(
-                        children
+                        neighbors
                             .iter()
-                            .map(|child| (ReverseTopologicalPass::Pre, child.clone())),
+                            .map(|neighbor| (ReverseTopologicalPass::Pre, neighbor.clone())),
                     );
                 }
             }
