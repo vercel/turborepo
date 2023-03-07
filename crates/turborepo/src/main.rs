@@ -4,7 +4,7 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use dunce::canonicalize as fs_canonicalize;
 use log::{debug, error};
 use turborepo_lib::{Args, Payload};
@@ -36,7 +36,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
             go_turbo_bin = go_binary_path.display()
         );
         // return an error
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to execute turbo (Unable to locate Go binary)."
         ));
     }
@@ -47,7 +47,16 @@ fn run_go_binary(args: Args) -> Result<i32> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("Failed to execute turbo.");
+        .map_err(|err| {
+            if os_type::current_platform().os_type == os_type::OSType::Alpine {
+                anyhow!(
+                        "Failed to execute turbo. Did you remember to install libc6-compat? Go to https://turbo.build/repo/docs/installing for more information\n{}",
+                        err
+                    )
+            } else {
+                anyhow!(err)
+            }
+        })?;
 
     let exit_code = command.wait()?.code().unwrap_or(2);
 

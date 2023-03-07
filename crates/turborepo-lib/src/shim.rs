@@ -419,17 +419,7 @@ impl RepoState {
             .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|err| {
-                if os_type::current_platform().os_type == os_type::OSType::Alpine {
-                    anyhow!(
-                        "Failed to execute turbo. Did you remember to install libc6-compat? Go to https://turbo.build/repo/docs/installing for more information\n{}",
-                        err
-                    )
-                } else {
-                    anyhow!(err)
-                }
-            })?;
+            .spawn()?;
 
         Ok(command.wait()?.code().unwrap_or(2))
     }
