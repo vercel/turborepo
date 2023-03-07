@@ -375,6 +375,11 @@
 <span id="375">375</span>
 <span id="376">376</span>
 <span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -397,6 +402,7 @@
 <span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
@@ -592,7 +598,7 @@
 
     emit(intermediate_asset, output_root).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>entrypoint = intermediate_output_path.join(<span class="string">&quot;index.js&quot;</span>);
+    <span class="kw">let </span>entrypoint = intermediate_asset.ident().path();
 
     <span class="kw">let </span><span class="prelude-val">Some</span>(cwd) = to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
         <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `cwd = {}`&quot;</span>, cwd.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
@@ -622,8 +628,12 @@
     intermediate_output_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
     <span class="kw">let </span>chunk_group = ChunkGroupVc::from_chunk(entry_chunk);
+    <span class="kw">let </span><span class="kw-2">mut </span>hash = encode_hex(hash_xxh3_hash64(
+        entry_chunk.ident().path().to_string().<span class="kw">await</span><span class="question-mark">?</span>.as_str(),
+    ));
+    hash.push_str(<span class="string">&quot;.js&quot;</span>);
     <span class="prelude-val">Ok</span>(NodeJsBootstrapAsset {
-        path: intermediate_output_path.join(<span class="string">&quot;index.js&quot;</span>),
+        path: intermediate_output_path.join(<span class="kw-2">&amp;</span>hash),
         chunk_group,
     }
     .cell()

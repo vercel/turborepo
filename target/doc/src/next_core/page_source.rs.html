@@ -745,7 +745,7 @@
     Value,
 };
 <span class="kw">use </span>turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
-<span class="kw">use </span>turbo_tasks_fs::{rebase, FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
@@ -1313,7 +1313,7 @@
                     server_root,
                     url,
                     <span class="bool-val">false</span>,
-                    rebase(page, project_path, output_root),
+                    output_root,
                     output_root,
                 ));
             }
@@ -1336,7 +1336,7 @@
                     server_root,
                     url,
                     <span class="bool-val">true</span>,
-                    rebase(api, project_path, output_root),
+                    output_root,
                     output_root,
                 ));
             }

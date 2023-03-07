@@ -736,16 +736,6 @@
 <span id="736">736</span>
 <span id="737">737</span>
 <span id="738">738</span>
-<span id="739">739</span>
-<span id="740">740</span>
-<span id="741">741</span>
-<span id="742">742</span>
-<span id="743">743</span>
-<span id="744">744</span>
-<span id="745">745</span>
-<span id="746">746</span>
-<span id="747">747</span>
-<span id="748">748</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -755,7 +745,7 @@
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
-<span class="kw">use </span>turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack::{
     ecmascript::EcmascriptInputTransform,
     transition::{TransitionVc, TransitionsByNameVc},
@@ -1142,9 +1132,7 @@
     intermediate_output_path_root: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
     <span class="kw">let </span>AppStructure {
-        item,
-        <span class="kw-2">ref </span>children,
-        directory,
+        item, <span class="kw-2">ref </span>children, ..
     } = <span class="kw-2">*</span>app_structure.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>sources = Vec::new();
 
@@ -1176,11 +1164,7 @@
                         page_path: page,
                         target,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                     }
                     .cell()
                     .into(),
@@ -1209,11 +1193,7 @@
                         server_root,
                         entry_path: route,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                         output_root: intermediate_output_path_root,
                     }
                     .cell()
