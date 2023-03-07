@@ -80,6 +80,31 @@ pub trait FileSystem: ValueToString {
     fn metadata(&self, fs_path: FileSystemPathVc) -> FileMetaVc;
 }
 
+#[derive(Default)]
+struct DiskWatcher {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+    /// Keeps track of which directories are currently watched. This is only
+    /// used on a OS that doesn't support recursive watching.
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    watching: dashmap::DashSet<PathBuf>,
+}
+
+impl DiskWatcher {
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn ensure_watching(&self, dir_path: &Path) -> Result<()> {
+        if self.watching.contains(dir_path) {
+            return Ok(());
+        }
+        let mut watcher = self.watcher.lock().unwrap();
+        if self.watching.insert(dir_path.to_path_buf()) {
+            if let Some(watcher) = watcher.as_mut() {
+                watcher.watch(dir_path, RecursiveMode::NonRecursive)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct DiskFileSystem {
     pub name: String,
@@ -93,20 +118,31 @@ pub struct DiskFileSystem {
     dir_invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
-    watcher: Mutex<Option<RecommendedWatcher>>,
+    watcher: DiskWatcher,
 }
 
 impl DiskFileSystem {
     /// registers the path as an invalidator for the current task,
     /// has to be called within a turbo-tasks function
-    fn register_invalidator(&self, path: impl AsRef<Path>, file: bool) {
+    fn register_invalidator(&self, path: &Path) -> Result<()> {
         let invalidator = turbo_tasks::get_invalidator();
-        if file {
-            self.invalidator_map.insert(path_to_key(path), invalidator);
-        } else {
-            self.dir_invalidator_map
-                .insert(path_to_key(path), invalidator);
+        self.invalidator_map.insert(path_to_key(path), invalidator);
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        if let Some(dir) = path.parent() {
+            self.watcher.ensure_watching(dir)?;
         }
+        Ok(())
+    }
+
+    /// registers the path as an invalidator for the current task,
+    /// has to be called within a turbo-tasks function
+    fn register_dir_invalidator(&self, path: &Path) -> Result<()> {
+        let invalidator = turbo_tasks::get_invalidator();
+        self.dir_invalidator_map
+            .insert(path_to_key(path), invalidator);
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        self.watcher.ensure_watching(path)?;
+        Ok(())
     }
 
     pub fn invalidate(&self) {
@@ -119,7 +155,7 @@ impl DiskFileSystem {
     }
 
     pub fn start_watching(&self) -> Result<()> {
-        let mut watcher_guard = self.watcher.lock().unwrap();
+        let mut watcher_guard = self.watcher.watcher.lock().unwrap();
         if watcher_guard.is_some() {
             return Ok(());
         }
@@ -133,7 +169,12 @@ impl DiskFileSystem {
         let mut watcher = watcher(tx, Duration::from_millis(1))?;
         // Add a path to be watched. All files and directories at that path and
         // below will be monitored for changes.
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         watcher.watch(&root, RecursiveMode::Recursive)?;
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        for dir_path in self.watcher.watching.iter() {
+            watcher.watch(&*dir_path, RecursiveMode::NonRecursive)?;
+        }
 
         // We need to invalidate all reads that happened before watching
         // Best is to start_watching before starting to read
@@ -145,6 +186,7 @@ impl DiskFileSystem {
         }
 
         watcher_guard.replace(watcher);
+        drop(watcher_guard);
 
         spawn_thread(move || {
             let mut batched_invalidate_path = HashSet::new();
@@ -263,7 +305,7 @@ impl DiskFileSystem {
     }
 
     pub fn stop_watching(&self) {
-        if let Some(watcher) = self.watcher.lock().unwrap().take() {
+        if let Some(watcher) = self.watcher.watcher.lock().unwrap().take() {
             drop(watcher);
             // thread will detect the stop because the channel is disconnected
         }
@@ -299,7 +341,7 @@ impl DiskFileSystemVc {
             mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
-            watcher: Mutex::new(None),
+            watcher: DiskWatcher::default(),
         };
 
         Ok(Self::cell(instance))
@@ -329,7 +371,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn read(&self, fs_path: FileSystemPathVc) -> Result<FileContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(&full_path, true);
+        self.register_invalidator(&full_path)?;
 
         let content = read_file(full_path, &self.mutex_map).await?;
         Ok(content.cell())
@@ -338,7 +380,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn read_dir(&self, fs_path: FileSystemPathVc) -> Result<DirectoryContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(&full_path, false);
+        self.register_dir_invalidator(&full_path)?;
         let fs_path = fs_path.await?;
 
         // we use the sync std function here as it's a lot faster (600%) in
@@ -392,7 +434,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn read_link(&self, fs_path: FileSystemPathVc) -> Result<LinkContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(&full_path, true);
+        self.register_invalidator(&full_path)?;
 
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         let link_path = match retry_future(|| fs::read_link(&full_path)).await {
@@ -474,7 +516,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn track(&self, fs_path: FileSystemPathVc) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(full_path, true);
+        self.register_invalidator(&full_path)?;
         Ok(CompletionVc::new())
     }
 
@@ -629,7 +671,7 @@ impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
     async fn metadata(&self, fs_path: FileSystemPathVc) -> Result<FileMetaVc> {
         let full_path = self.to_sys_path(fs_path).await?;
-        self.register_invalidator(&full_path, true);
+        self.register_invalidator(&full_path)?;
 
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
