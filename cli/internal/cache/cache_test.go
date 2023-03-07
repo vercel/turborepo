@@ -29,15 +29,15 @@ func (tc *testCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, fil
 	return false, nil, 0, nil
 }
 
-func (tc *testCache) Exists(hash string) (ItemStatus, error) {
+func (tc *testCache) Exists(hash string) ItemStatus {
 	if tc.disabledErr != nil {
-		return ItemStatus{}, nil
+		return ItemStatus{}
 	}
 	_, ok := tc.entries[hash]
 	if ok {
-		return ItemStatus{Local: true}, nil
+		return ItemStatus{Local: true}
 	}
-	return ItemStatus{}, nil
+	return ItemStatus{}
 }
 
 func (tc *testCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
@@ -129,24 +129,18 @@ func TestExists(t *testing.T) {
 		caches: caches,
 	}
 
-	itemStatus, err := mplex.Exists("some-hash")
-	if err != nil {
-		t.Errorf("got error verifying files: %v", err)
-	}
+	itemStatus := mplex.Exists("some-hash")
 	if itemStatus.Local {
 		t.Error("did not expect file to exist")
 	}
 
-	err = mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
+	err := mplex.Put("unused-target", "some-hash", 5, []turbopath.AnchoredSystemPath{"a-file"})
 	if err != nil {
 		// don't leak the cache removal
 		t.Errorf("Put got error %v, want <nil>", err)
 	}
 
-	itemStatus, err = mplex.Exists("some-hash")
-	if err != nil {
-		t.Errorf("got error verifying files: %v", err)
-	}
+	itemStatus = mplex.Exists("some-hash")
 	if !itemStatus.Local {
 		t.Error("failed to find previously stored files")
 	}

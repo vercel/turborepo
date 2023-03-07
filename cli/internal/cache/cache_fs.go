@@ -74,15 +74,15 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unuse
 	return true, restoredFiles, meta.Duration, nil
 }
 
-func (f *fsCache) Exists(hash string) (ItemStatus, error) {
+func (f *fsCache) Exists(hash string) ItemStatus {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
 	if compressedCachePath.FileExists() || uncompressedCachePath.FileExists() {
-		return ItemStatus{Local: true}, nil
+		return ItemStatus{Local: true}
 	}
 
-	return ItemStatus{Local: false}, nil
+	return ItemStatus{Local: false}
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {

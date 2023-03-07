@@ -21,7 +21,7 @@ type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
 	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
-	Exists(hash string) (ItemStatus, error)
+	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
 	Clean(anchor turbopath.AbsoluteSystemPath)
@@ -268,18 +268,15 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	return false, nil, 0, nil
 }
 
-func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
+func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {
 	syncCacheState := ItemStatus{}
 	for _, cache := range mplex.caches {
-		itemStatus, err := cache.Exists(target)
-		if err != nil {
-			return syncCacheState, err
-		}
+		itemStatus := cache.Exists(target)
 		syncCacheState.Local = syncCacheState.Local || itemStatus.Local
 		syncCacheState.Remote = syncCacheState.Remote || itemStatus.Remote
 	}
 
-	return syncCacheState, nil
+	return syncCacheState
 }
 
 func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {
