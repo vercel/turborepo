@@ -878,6 +878,81 @@
 <span id="878">878</span>
 <span id="879">879</span>
 <span id="880">880</span>
+<span id="881">881</span>
+<span id="882">882</span>
+<span id="883">883</span>
+<span id="884">884</span>
+<span id="885">885</span>
+<span id="886">886</span>
+<span id="887">887</span>
+<span id="888">888</span>
+<span id="889">889</span>
+<span id="890">890</span>
+<span id="891">891</span>
+<span id="892">892</span>
+<span id="893">893</span>
+<span id="894">894</span>
+<span id="895">895</span>
+<span id="896">896</span>
+<span id="897">897</span>
+<span id="898">898</span>
+<span id="899">899</span>
+<span id="900">900</span>
+<span id="901">901</span>
+<span id="902">902</span>
+<span id="903">903</span>
+<span id="904">904</span>
+<span id="905">905</span>
+<span id="906">906</span>
+<span id="907">907</span>
+<span id="908">908</span>
+<span id="909">909</span>
+<span id="910">910</span>
+<span id="911">911</span>
+<span id="912">912</span>
+<span id="913">913</span>
+<span id="914">914</span>
+<span id="915">915</span>
+<span id="916">916</span>
+<span id="917">917</span>
+<span id="918">918</span>
+<span id="919">919</span>
+<span id="920">920</span>
+<span id="921">921</span>
+<span id="922">922</span>
+<span id="923">923</span>
+<span id="924">924</span>
+<span id="925">925</span>
+<span id="926">926</span>
+<span id="927">927</span>
+<span id="928">928</span>
+<span id="929">929</span>
+<span id="930">930</span>
+<span id="931">931</span>
+<span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
+<span id="936">936</span>
+<span id="937">937</span>
+<span id="938">938</span>
+<span id="939">939</span>
+<span id="940">940</span>
+<span id="941">941</span>
+<span id="942">942</span>
+<span id="943">943</span>
+<span id="944">944</span>
+<span id="945">945</span>
+<span id="946">946</span>
+<span id="947">947</span>
+<span id="948">948</span>
+<span id="949">949</span>
+<span id="950">950</span>
+<span id="951">951</span>
+<span id="952">952</span>
+<span id="953">953</span>
+<span id="954">954</span>
+<span id="955">955</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::min,
@@ -902,7 +977,7 @@
 
 <span class="doccomment">/// A Rope provides an efficient structure for sharing bytes/strings between
 /// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
-/// the sharing contents of one Rope can be done by just cloning an Arc.
+/// sharing the contents of one Rope can be done by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
 </span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;custom&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
@@ -980,7 +1055,7 @@
         <span class="self">self</span>.length == <span class="number">0
     </span>}
 
-    <span class="doccomment">/// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
+    <span class="doccomment">/// Returns a [Read]/[AsyncRead]/[Iterator] instance over all bytes.
     </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RopeReader {
         RopeReader::new(<span class="kw-2">&amp;</span><span class="self">self</span>.data, <span class="number">0</span>)
     }
@@ -1268,7 +1343,7 @@
         }
 
         <span class="comment">// At this point, we need to do slower contents equality. It&#39;s possible we&#39;ll
-        // still get some memory reference quality for Bytes.
+        // still get some memory reference equality for Bytes.
         </span><span class="kw">let </span><span class="kw-2">mut </span>left = RopeReader::new(left, index);
         <span class="kw">let </span><span class="kw-2">mut </span>right = RopeReader::new(right, index);
         <span class="kw">loop </span>{
@@ -1418,8 +1493,8 @@
     }
 }
 
-<span class="doccomment">/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
-</span><span class="attr">#[derive(Debug, Default)]
+<span class="attr">#[derive(Debug, Default)]
+</span><span class="doccomment">/// Implements the [Read]/[AsyncRead]/[Iterator] trait over a [Rope].
 </span><span class="kw">pub struct </span>RopeReader {
     <span class="doccomment">/// The Rope&#39;s tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
@@ -1574,6 +1649,11 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
+    <span class="kw">use </span>std::{
+        cmp::min,
+        io::{BufRead, Read},
+    };
+
     <span class="kw">use super</span>::{InnerRope, Rope, RopeBuilder, RopeElem};
 
     <span class="comment">// These are intentionally not exposed, because they do inefficient conversions
@@ -1756,6 +1836,76 @@
         <span class="kw">let </span>b = Rope::new(<span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>.into(), shared.into(), <span class="string">&quot;hhh&quot;</span>.into()]);
 
         <span class="macro">assert_ne!</span>(a, b);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>iteration() {
+        <span class="kw">let </span>shared = Rope::from(<span class="string">&quot;def&quot;</span>);
+        <span class="kw">let </span>rope = Rope::new(<span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>.into(), shared.into(), <span class="string">&quot;ghi&quot;</span>.into()]);
+
+        <span class="kw">let </span>chunks = rope.read().into_iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="macro">assert_eq!</span>(chunks, <span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>, <span class="string">&quot;def&quot;</span>, <span class="string">&quot;ghi&quot;</span>]);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>read() {
+        <span class="kw">let </span>shared = Rope::from(<span class="string">&quot;def&quot;</span>);
+        <span class="kw">let </span>rope = Rope::new(<span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>.into(), shared.into(), <span class="string">&quot;ghi&quot;</span>.into()]);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>chunks = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0_u8</span>; <span class="number">2</span>];
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = rope.read();
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>amt = reader.read(<span class="kw-2">&amp;mut </span>buf).unwrap();
+            <span class="kw">if </span>amt == <span class="number">0 </span>{
+                <span class="kw">break</span>;
+            }
+            chunks.push(Vec::from(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..amt]));
+        }
+
+        <span class="macro">assert_eq!</span>(
+            chunks,
+            <span class="macro">vec!</span>[
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;ab&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;cd&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;ef&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;gh&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;i&quot;</span>)
+            ]
+        );
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>fill_buf() {
+        <span class="kw">let </span>shared = Rope::from(<span class="string">&quot;def&quot;</span>);
+        <span class="kw">let </span>rope = Rope::new(<span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>.into(), shared.into(), <span class="string">&quot;ghi&quot;</span>.into()]);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>chunks = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = rope.read();
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>buf = reader.fill_buf().unwrap();
+            <span class="kw">if </span>buf.is_empty() {
+                <span class="kw">break</span>;
+            }
+            <span class="kw">let </span>c = min(<span class="number">2</span>, buf.len());
+            chunks.push(Vec::from(buf));
+            reader.consume(c);
+        }
+
+        <span class="macro">assert_eq!</span>(
+            chunks,
+            <span class="comment">// We&#39;re receiving a full buf, then only consuming 2 bytes, so we&#39;ll still get the
+            // third.
+            </span><span class="macro">vec!</span>[
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;abc&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;c&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;def&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;f&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;ghi&quot;</span>),
+                Vec::from(<span class="kw-2">*</span><span class="string">b&quot;i&quot;</span>)
+            ]
+        );
     }
 }
 </code></pre></div>
