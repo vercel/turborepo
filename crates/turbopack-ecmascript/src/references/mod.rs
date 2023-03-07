@@ -211,7 +211,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
     let parsed = parse(source, ty, transforms);
     let split_data = split(path, parsed);
-    let parsed = part_of_module(split_data, chunk_id);
+    let parsed = part_of_module(split_data, part_id);
 
     match &*find_context_file(path.parent(), package_json()).await? {
         FindContextFileResult::Found(package_json, _) => {
