@@ -104,7 +104,7 @@ fn run(input: PathBuf) {
             }
 
             if !item.eventual_write_vars.is_empty() {
-                writeln!(s, "- Write (eventual): {:?}", f(&item.eventual_write_vars)).unwrap();
+                writeln!(s, "- Write (eventual): {}", f(&item.eventual_write_vars)).unwrap();
             }
 
             writeln!(s).unwrap();
