@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -40,6 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
+	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -88,8 +90,10 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	taskSummaries := []*runsummary.TaskSummary{}
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
 	}
@@ -104,6 +108,9 @@ func RealRun(
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
+
+	// Assign tasks after execution
+	runSummary.Tasks = taskSummaries
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
@@ -120,6 +127,14 @@ func RealRun(
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
+
+	// Write Run Summary if we wanted to
+	if rs.Opts.runOpts.summarize {
+		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
+			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
+		}
+	}
+
 	if exitCode != 0 {
 		return &process.ChildExit{
 			ExitCode: exitCode,
