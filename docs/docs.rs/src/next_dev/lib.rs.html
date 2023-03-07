@@ -571,6 +571,7 @@
 <span id="571">571</span>
 <span id="572">572</span>
 <span id="573">573</span>
+<span id="574">574</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -583,7 +584,7 @@
     future::{join, Future},
     io::{stdout, Write},
     net::{IpAddr, SocketAddr},
-    path::MAIN_SEPARATOR,
+    path::{PathBuf, MAIN_SEPARATOR},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -779,6 +780,7 @@
         <span class="kw">let </span>browserslist_query = <span class="self">self</span>.browserslist_query;
         <span class="kw">let </span>log_options = Arc::new(LogOptions {
             current_dir: current_dir().unwrap(),
+            project_dir: PathBuf::from(project_dir.clone()),
             show_all,
             log_detail,
             log_level: <span class="self">self</span>.log_level,

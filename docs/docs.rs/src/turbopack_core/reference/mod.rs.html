@@ -139,9 +139,6 @@
 <span id="139">139</span>
 <span id="140">140</span>
 <span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
@@ -149,7 +146,7 @@
 
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
-    issue::IssueVc,
+    issue::IssueContextExt,
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
 <span class="kw">pub mod </span>source_map;
@@ -272,12 +269,9 @@
     <span class="kw">let </span><span class="kw-2">mut </span>assets = HashSet::new();
     assets.insert(asset);
     <span class="kw">while let </span><span class="prelude-val">Some</span>((parent, references)) = queue.pop_front() {
-        IssueVc::attach_context(
-            parent.ident().path(),
-            <span class="string">&quot;expanding references of asset&quot;</span>.to_string(),
-            references,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>references = references
+            .issue_context(parent.ident().path(), <span class="string">&quot;expanding references of asset&quot;</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>asset <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">if </span>assets.insert(<span class="kw-2">*</span>asset) {
                 queue.push_back((<span class="kw-2">*</span>asset, all_referenced_assets(<span class="kw-2">*</span>asset)));

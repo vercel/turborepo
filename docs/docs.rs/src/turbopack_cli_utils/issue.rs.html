@@ -657,13 +657,12 @@
 <span id="657">657</span>
 <span id="658">658</span>
 <span id="659">659</span>
-<span id="660">660</span>
-<span id="661">661</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
+    borrow::Cow,
     cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Write <span class="kw">as _</span>,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -673,16 +672,14 @@
 <span class="kw">use </span>owo_colors::{OwoColorize <span class="kw">as _</span>, Style};
 <span class="kw">use </span>turbo_tasks::{
     primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
-    ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
-    attach::AttachedFileSystemVc,
     source_context::{get_source_context, SourceContextLine},
-    to_sys_path, FileLinesContent, FileSystemPathVc,
+    FileLinesContent,
 };
 <span class="kw">use </span>turbopack_core::issue::{
-    CapturedIssues, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc, IssueSeverity,
-    OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
+    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
+    PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
 };
 
 <span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -834,32 +831,32 @@
     }
 }
 
-<span class="kw">async fn </span>format_optional_path(
-    path: <span class="kw-2">&amp;</span>OptionIssueProcessingPathItemsVc,
+<span class="kw">fn </span>format_optional_path(
+    path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;PlainIssueProcessingPathItemReadRef&gt;&gt;,
     formatted_issue: <span class="kw-2">&amp;mut </span>String,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = <span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path {
         <span class="kw">let </span><span class="kw-2">mut </span>last_context = <span class="prelude-val">None</span>;
         <span class="kw">for </span>item <span class="kw">in </span>path.iter().rev() {
-            <span class="kw">let </span>IssueProcessingPathItem {
-                context,
-                description,
-            } = <span class="kw-2">&amp;*</span>item.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>PlainIssueProcessingPathItem {
+                <span class="kw-2">ref </span>context,
+                <span class="kw-2">ref </span>description,
+            } = <span class="kw-2">**</span>item;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(context) = context {
-                <span class="kw">let </span>context = context.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>last_context == <span class="prelude-val">Some</span>(context) {
-                    <span class="macro">writeln!</span>(formatted_issue, <span class="string">&quot; at {}&quot;</span>, <span class="kw-2">&amp;*</span>description.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>option_context = <span class="prelude-val">Some</span>(context.clone());
+                <span class="kw">if </span>last_context == option_context {
+                    <span class="macro">writeln!</span>(formatted_issue, <span class="string">&quot; at {}&quot;</span>, description)<span class="question-mark">?</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">writeln!</span>(
                         formatted_issue,
                         <span class="string">&quot; at {} ({})&quot;</span>,
-                        context.to_string().<span class="kw">await</span><span class="question-mark">?</span>.bright_blue(),
-                        <span class="kw-2">&amp;*</span>description.<span class="kw">await</span><span class="question-mark">?
-                    </span>)<span class="question-mark">?</span>;
-                    last_context = <span class="prelude-val">Some</span>(context);
+                        context.to_string().bright_blue(),
+                        description
+                    )<span class="question-mark">?</span>;
+                    last_context = option_context;
                 }
             } <span class="kw">else </span>{
-                <span class="macro">writeln!</span>(formatted_issue, <span class="string">&quot; at {}&quot;</span>, <span class="kw-2">&amp;*</span>description.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(formatted_issue, <span class="string">&quot; at {}&quot;</span>, description)<span class="question-mark">?</span>;
                 last_context = <span class="prelude-val">None</span>;
             }
         }
@@ -962,6 +959,7 @@
 #[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>LogOptions {
     <span class="kw">pub </span>current_dir: PathBuf,
+    <span class="kw">pub </span>project_dir: PathBuf,
     <span class="kw">pub </span>show_all: bool,
     <span class="kw">pub </span>log_detail: bool,
     <span class="kw">pub </span>log_level: IssueSeverity,
@@ -1099,6 +1097,7 @@
         <span class="kw">let </span>issues = <span class="kw-2">&amp;*</span>issues;
         <span class="kw">let </span>LogOptions {
             <span class="kw-2">ref </span>current_dir,
+            <span class="kw-2">ref </span>project_dir,
             show_all,
             log_detail,
             log_level,
@@ -1109,18 +1108,14 @@
         <span class="kw">let </span>issues = issues
             .iter_with_shortest_path()
             .map(|(issue, path)| <span class="kw">async move </span>{
-                <span class="comment">// (issue.)
-                </span><span class="kw">let </span>plain_issue = issue.into_plain();
+                <span class="kw">let </span>plain_issue = issue.into_plain(path);
                 <span class="kw">let </span>id = plain_issue.internal_hash().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((plain_issue.<span class="kw">await</span><span class="question-mark">?</span>, path, issue.context(), <span class="kw-2">*</span>id))
+                <span class="prelude-val">Ok</span>((plain_issue.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">*</span>id))
             })
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>issue_ids = issues
-            .iter()
-            .map(|(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, id)| <span class="kw-2">*</span>id)
-            .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>issue_ids = issues.iter().map(|(<span class="kw">_</span>, id)| <span class="kw-2">*</span>id).collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span><span class="kw-2">mut </span>new_ids = <span class="self">self
             </span>.seen
             .lock()
@@ -1128,7 +1123,7 @@
             .new_ids(source.into_value(), issue_ids);
 
         <span class="kw">let </span><span class="kw-2">mut </span>has_fatal = <span class="bool-val">false</span>;
-        <span class="kw">for </span>(plain_issue, path, context, id) <span class="kw">in </span>issues {
+        <span class="kw">for </span>(plain_issue, id) <span class="kw">in </span>issues {
             <span class="kw">if </span>!new_ids.remove(<span class="kw-2">&amp;</span>id) {
                 <span class="kw">continue</span>;
             }
@@ -1138,9 +1133,10 @@
                 has_fatal = <span class="bool-val">true</span>;
             }
 
-            <span class="kw">let </span>context_path = make_relative_to_cwd(context, current_dir).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>context_path = make_relative_to_cwd(<span class="kw-2">&amp;</span>plain_issue.context, project_dir, current_dir);
             <span class="kw">let </span>category = <span class="kw-2">&amp;</span>plain_issue.category;
             <span class="kw">let </span>title = <span class="kw-2">&amp;</span>plain_issue.title;
+            <span class="kw">let </span>processing_path = <span class="kw-2">&amp;*</span>plain_issue.processing_path;
             <span class="kw">let </span>severity_map = grouped_issues
                 .entry(severity)
                 .or_insert_with(Default::default);
@@ -1148,7 +1144,7 @@
                 .entry(category.clone())
                 .or_insert_with(Default::default);
             <span class="kw">let </span>issues = category_map
-                .entry(context_path.clone())
+                .entry(context_path.to_string())
                 .or_insert_with(Default::default);
 
             <span class="kw">let </span><span class="kw-2">mut </span>styled_issue = <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">&amp;</span>plain_issue.source {
@@ -1183,7 +1179,7 @@
                 <span class="kw">if </span>!documentation_link.is_empty() {
                     <span class="macro">writeln!</span>(<span class="kw-2">&amp;mut </span>styled_issue, <span class="string">&quot;\ndocumentation: {documentation_link}&quot;</span>)<span class="question-mark">?</span>;
                 }
-                format_optional_path(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;mut </span>styled_issue).<span class="kw">await</span><span class="question-mark">?</span>;
+                format_optional_path(processing_path, <span class="kw-2">&amp;mut </span>styled_issue)<span class="question-mark">?</span>;
             }
             issues.push(styled_issue);
         }
@@ -1277,21 +1273,21 @@
     }
 }
 
-<span class="kw">async fn </span>make_relative_to_cwd(path: FileSystemPathVc, cwd: <span class="kw-2">&amp;</span>PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-    <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(fs) = AttachedFileSystemVc::resolve_from(path.fs()).<span class="kw">await</span><span class="question-mark">? </span>{
-        fs.get_inner_fs_path(path)
-    } <span class="kw">else </span>{
-        path
-    };
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(sys_path) = to_sys_path(path).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">let </span>relative = sys_path
+<span class="kw">fn </span>make_relative_to_cwd&lt;<span class="lifetime">&#39;a</span>&gt;(path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, project_dir: <span class="kw-2">&amp;</span>Path, cwd: <span class="kw-2">&amp;</span>Path) -&gt; Cow&lt;<span class="lifetime">&#39;a</span>, str&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(path_in_project) = path.strip_prefix(<span class="string">&quot;[project]/&quot;</span>) {
+        <span class="kw">let </span>abs_path = <span class="kw">if </span>std::path::MAIN_SEPARATOR != <span class="string">&#39;/&#39; </span>{
+            project_dir.join(path_in_project.replace(<span class="string">&#39;/&#39;</span>, std::path::MAIN_SEPARATOR_STR))
+        } <span class="kw">else </span>{
+            project_dir.join(path_in_project)
+        };
+        <span class="kw">let </span>relative = abs_path
             .strip_prefix(cwd)
-            .unwrap_or(<span class="kw-2">&amp;</span>sys_path)
+            .unwrap_or(<span class="kw-2">&amp;</span>abs_path)
             .to_string_lossy()
             .to_string();
-        <span class="prelude-val">Ok</span>(relative)
+        relative.into()
     } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(path.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone_value())
+        path.into()
     }
 }
 

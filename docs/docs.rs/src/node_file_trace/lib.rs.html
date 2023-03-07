@@ -678,9 +678,6 @@
 <span id="678">678</span>
 <span id="679">679</span>
 <span id="680">680</span>
-<span id="681">681</span>
-<span id="682">682</span>
-<span id="683">683</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -727,7 +724,7 @@
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueReporter, IssueSeverity, IssueVc},
+    issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -1142,6 +1139,7 @@
     <span class="kw">let </span>resolve_options = TransientInstance::new(resolve_options.unwrap_or_default());
     <span class="kw">let </span>log_options = TransientInstance::new(LogOptions {
         current_dir: dir.clone(),
+        project_dir: dir.clone(),
         show_all,
         log_detail,
         log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.<span class="number">0</span>),
@@ -1225,13 +1223,9 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>module <span class="kw">in </span>modules.iter() {
-                <span class="kw">let </span>set = all_assets(<span class="kw-2">*</span>module);
-                IssueVc::attach_context(
-                    module.ident().path(),
-                    <span class="string">&quot;gathering list of assets&quot;</span>.to_string(),
-                    set,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>set = all_assets(<span class="kw-2">*</span>module)
+                    .issue_context(module.ident().path(), <span class="string">&quot;gathering list of assets&quot;</span>)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">for </span>asset <span class="kw">in </span>set.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                     <span class="kw">let </span>path = asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
                     result.insert(path.path.to_string());

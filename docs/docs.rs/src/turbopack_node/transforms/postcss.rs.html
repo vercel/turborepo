@@ -256,6 +256,13 @@
 <span id="256">256</span>
 <span id="257">257</span>
 <span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -272,6 +279,7 @@
     changed::any_content_changed,
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    issue::IssueContextExt,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -376,7 +384,13 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(self_vc: PostCssTransformedAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
-        <span class="prelude-val">Ok</span>(self_vc.process().<span class="kw">await</span><span class="question-mark">?</span>.content)
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(self_vc
+            .process()
+            .issue_context(this.source.ident().path(), <span class="string">&quot;PostCSS processing&quot;</span>)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.<span class="kw">await</span><span class="question-mark">?
+            </span>.content)
     }
 }
 

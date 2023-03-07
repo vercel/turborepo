@@ -736,6 +736,9 @@
 <span id="736">736</span>
 <span id="737">737</span>
 <span id="738">738</span>
+<span id="739">739</span>
+<span id="740">740</span>
+<span id="741">741</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1015,17 +1018,21 @@
     <span class="kw">let </span>fallback_source =
         AssetGraphContentSourceVc::new_eager(server_root, fallback_page.as_asset());
 
-    <span class="prelude-val">Ok</span>(CombinedContentSource {
+    <span class="kw">let </span>source = CombinedContentSource {
         sources: <span class="macro">vec!</span>[
             <span class="comment">// Match _next/404 first to ensure rewrites work properly.
-            </span>force_not_found_source,
+            </span>force_not_found_source.issue_context(pages_dir, <span class="string">&quot;Next.js pages directory not found&quot;</span>),
             page_source,
-            fallback_source.into(),
-            fallback_not_found_source,
+            fallback_source
+                .as_content_source()
+                .issue_context(pages_dir, <span class="string">&quot;Next.js pages directory fallback&quot;</span>),
+            fallback_not_found_source
+                .issue_context(pages_dir, <span class="string">&quot;Next.js pages directory not found fallback&quot;</span>),
         ],
     }
     .cell()
-    .into())
+    .into();
+    <span class="prelude-val">Ok</span>(source)
 }
 
 <span class="doccomment">/// Handles a single page file in the pages directory
@@ -1293,54 +1300,53 @@
     <span class="kw">let </span><span class="kw-2">mut </span>sources = <span class="macro">vec!</span>[];
 
     <span class="kw">for </span>item <span class="kw">in </span>items.iter() {
-        <span class="kw">match </span><span class="kw-2">*</span>item.<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">let </span>source = <span class="kw">match </span><span class="kw-2">*</span>item.<span class="kw">await</span><span class="question-mark">? </span>{
             PagesStructureItem::Page {
                 page,
                 specificity,
                 url,
-            } =&gt; {
-                sources.push(create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(page).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    <span class="bool-val">false</span>,
-                    output_root,
-                    output_root,
-                ));
-            }
+            } =&gt; create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(page).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                <span class="bool-val">false</span>,
+                output_root,
+                output_root,
+            )
+            .issue_context(page, <span class="string">&quot;Next.js pages directory&quot;</span>),
             PagesStructureItem::Api {
                 api,
                 specificity,
                 url,
-            } =&gt; {
-                sources.push(create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(api).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    <span class="bool-val">true</span>,
-                    output_root,
-                    output_root,
-                ));
-            }
-        }
+            } =&gt; create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(api).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                <span class="bool-val">true</span>,
+                output_root,
+                output_root,
+            )
+            .issue_context(api, <span class="string">&quot;Next.js pages api directory&quot;</span>),
+        };
+        sources.push(source);
     }
 
     <span class="kw">for </span>child <span class="kw">in </span>children.iter() {

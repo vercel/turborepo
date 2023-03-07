@@ -585,6 +585,87 @@
 <span id="585">585</span>
 <span id="586">586</span>
 <span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>analyze;
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">pub mod </span>package_json;
@@ -594,13 +675,12 @@
 <span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::{Display, Formatter},
-    future::IntoFuture,
     sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>auto_hash_map::AutoSet;
-<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>turbo_tasks::{
     emit,
     primitives::{BoolVc, StringReadRef, StringVc, U64Vc},
@@ -746,8 +826,50 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>IssueProcessingPathItemVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>into_plain(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PlainIssueProcessingPathItemVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(PlainIssueProcessingPathItem {
+            context: <span class="kw">if let </span><span class="prelude-val">Some</span>(context) = this.context {
+                <span class="prelude-val">Some</span>(context.to_string().<span class="kw">await</span><span class="question-mark">?</span>)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>},
+            description: this.description.<span class="kw">await</span><span class="question-mark">?</span>,
+        }
+        .cell())
+    }
+}
+
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>OptionIssueProcessingPathItems(<span class="prelude-ty">Option</span>&lt;Vec&lt;IssueProcessingPathItemVc&gt;&gt;);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OptionIssueProcessingPathItemsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>none() -&gt; <span class="self">Self </span>{
+        OptionIssueProcessingPathItemsVc::cell(<span class="prelude-val">None</span>)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>into_plain(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PlainIssueProcessingPathVc&gt; {
+        <span class="prelude-val">Ok</span>(PlainIssueProcessingPathVc::cell(
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(items) = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="prelude-val">Some</span>(
+                    items
+                        .iter()
+                        .map(|item| item.into_plain())
+                        .try_join()
+                        .<span class="kw">await</span><span class="question-mark">?</span>,
+                )
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>},
+        ))
+    }
+}
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>RootIssueProcessingPath(IssueVc);
@@ -785,7 +907,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>shortest: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;<span class="kw">_</span>&gt;&gt; = <span class="prelude-val">None</span>;
         <span class="kw">for </span>path <span class="kw">in </span>paths.iter().filter_map(|p| p.as_ref()) {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(old) = shortest {
-                <span class="kw">match </span>old.cmp(path) {
+                <span class="kw">match </span>old.len().cmp(<span class="kw-2">&amp;</span>path.len()) {
                     Ordering::Greater =&gt; {
                         shortest = <span class="prelude-val">Some</span>(path);
                     }
@@ -833,9 +955,9 @@
 
 <span class="kw">impl </span>IssueVc {
     <span class="attr">#[allow(unused_variables, reason = <span class="string">&quot;behind feature flag&quot;</span>)]
-    </span><span class="kw">pub async fn </span>attach_context&lt;T: CollectiblesSource + Copy&gt;(
-        context: FileSystemPathVc,
-        description: String,
+    </span><span class="kw">pub async fn </span>attach_context&lt;T: CollectiblesSource + Copy + Send&gt;(
+        context: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;&gt; + Send,
+        description: <span class="kw">impl </span>Into&lt;String&gt; + Send,
         source: T,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
         <span class="attr">#[cfg(feature = <span class="string">&quot;issue_path&quot;</span>)]
@@ -845,8 +967,8 @@
                 emit(
                     ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
                         <span class="prelude-val">Some</span>(IssueProcessingPathItemVc::cell(IssueProcessingPathItem {
-                            context: <span class="prelude-val">Some</span>(context),
-                            description: StringVc::cell(description),
+                            context: context.into(),
+                            description: StringVc::cell(description.into()),
                         })),
                         children,
                     ))
@@ -858,28 +980,12 @@
     }
 
     <span class="attr">#[allow(unused_variables, reason = <span class="string">&quot;behind feature flag&quot;</span>)]
-    </span><span class="kw">pub async fn </span>attach_description&lt;T: CollectiblesSource + Copy&gt;(
-        description: String,
+    </span><span class="kw">pub async fn </span>attach_description&lt;T: CollectiblesSource + Copy + Send&gt;(
+        description: <span class="kw">impl </span>Into&lt;String&gt; + Send,
         source: T,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
-        <span class="attr">#[cfg(feature = <span class="string">&quot;issue_path&quot;</span>)]
-        </span>{
-            <span class="kw">let </span>children = source.take_collectibles().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if </span>!children.is_empty() {
-                emit(
-                    ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
-                        <span class="prelude-val">Some</span>(IssueProcessingPathItemVc::cell(IssueProcessingPathItem {
-                            context: <span class="prelude-val">None</span>,
-                            description: StringVc::cell(description),
-                        })),
-                        children,
-                    ))
-                    .as_issue_processing_path(),
-                );
-            }
-        }
-        <span class="prelude-val">Ok</span>(source)
-    }
+        <span class="self">Self</span>::attach_context(<span class="prelude-val">None</span>, description, source).<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Returns all issues from `source` in a list with their associated
     /// processing path.
@@ -960,7 +1066,7 @@
             <span class="attr">#[cfg(feature = <span class="string">&quot;issue_path&quot;</span>)]
             </span><span class="kw">let </span>path = <span class="self">self</span>.processing_path.shortest_path(<span class="kw-2">*</span>issue);
             <span class="attr">#[cfg(not(feature = <span class="string">&quot;issue_path&quot;</span>))]
-            </span><span class="kw">let </span>path = OptionIssueProcessingPathItemsVc::cell(<span class="prelude-val">None</span>);
+            </span><span class="kw">let </span>path = OptionIssueProcessingPathItemsVc::none();
             (<span class="kw-2">*</span>issue, path)
         })
     }
@@ -969,7 +1075,16 @@
         <span class="kw">let </span><span class="kw-2">mut </span>list = <span class="self">self
             </span>.issues
             .iter()
-            .map(|issue| issue.into_plain().into_future())
+            .map(|<span class="kw-2">&amp;</span>issue| <span class="kw">async move </span>{
+                <span class="attr">#[cfg(feature = <span class="string">&quot;issue_path&quot;</span>)]
+                </span><span class="kw">return </span>issue
+                    .into_plain(<span class="self">self</span>.processing_path.shortest_path(issue))
+                    .<span class="kw">await</span>;
+                <span class="attr">#[cfg(not(feature = <span class="string">&quot;issue_path&quot;</span>))]
+                </span><span class="kw">return </span>issue
+                    .into_plain(OptionIssueProcessingPathItemsVc::none())
+                    .<span class="kw">await</span>;
+            })
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         list.sort_by(|a, b| ReadRef::ptr_cmp(a, b));
@@ -1040,6 +1155,7 @@
 
     <span class="kw">pub </span>source: <span class="prelude-ty">Option</span>&lt;PlainIssueSourceReadRef&gt;,
     <span class="kw">pub </span>sub_issues: Vec&lt;PlainIssueReadRef&gt;,
+    <span class="kw">pub </span>processing_path: PlainIssueProcessingPathReadRef,
 }
 
 <span class="kw">impl </span>PlainIssue {
@@ -1084,7 +1200,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>IssueVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>into_plain(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PlainIssueVc&gt; {
+    </span><span class="kw">pub async fn </span>into_plain(
+        <span class="self">self</span>,
+        processing_path: OptionIssueProcessingPathItemsVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PlainIssueVc&gt; {
         <span class="prelude-val">Ok</span>(PlainIssue {
             severity: <span class="kw-2">*</span><span class="self">self</span>.severity().<span class="kw">await</span><span class="question-mark">?</span>,
             context: <span class="self">self</span>.context().to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
@@ -1093,24 +1212,26 @@
             description: <span class="self">self</span>.description().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
             detail: <span class="self">self</span>.detail().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
             documentation_link: <span class="self">self</span>.documentation_link().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
-            source: <span class="self">self
-                </span>.source()
-                .into_future()
-                .then(|s| <span class="kw">async </span>{
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = <span class="kw-2">*</span>s<span class="question-mark">? </span>{
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(s.into_plain().<span class="kw">await</span><span class="question-mark">?</span>));
-                    }
-
-                    anyhow::Ok(<span class="prelude-val">None</span>)
-                })
-                .<span class="kw">await</span><span class="question-mark">?</span>,
+            source: {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = <span class="kw-2">*</span><span class="self">self</span>.source().<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="prelude-val">Some</span>(s.into_plain().<span class="kw">await</span><span class="question-mark">?</span>)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
+            },
             sub_issues: <span class="self">self
                 </span>.sub_issues()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
-                .map(|i| <span class="kw">async move </span>{ anyhow::Ok(i.into_plain().<span class="kw">await</span><span class="question-mark">?</span>) })
+                .map(|i| <span class="kw">async move </span>{
+                    anyhow::Ok(
+                        i.into_plain(OptionIssueProcessingPathItemsVc::none())
+                            .<span class="kw">await</span><span class="question-mark">?</span>,
+                    )
+                })
                 .try_join()
                 .<span class="kw">await</span><span class="question-mark">?</span>,
+            processing_path: processing_path.into_plain().<span class="kw">await</span><span class="question-mark">?</span>,
         }
         .cell())
     }
@@ -1164,6 +1285,17 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;none&quot;</span>)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>PlainIssueProcessingPath(<span class="prelude-ty">Option</span>&lt;Vec&lt;PlainIssueProcessingPathItemReadRef&gt;&gt;);
+
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>PlainIssueProcessingPathItem {
+    <span class="kw">pub </span>context: <span class="prelude-ty">Option</span>&lt;StringReadRef&gt;,
+    <span class="kw">pub </span>description: StringReadRef,
+}
+
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>IssueReporter {
     <span class="kw">fn </span>report_issues(
@@ -1171,6 +1303,36 @@
         issues: TransientInstance&lt;ReadRef&lt;CapturedIssues&gt;&gt;,
         source: TransientValue&lt;RawVc&gt;,
     ) -&gt; BoolVc;
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>IssueContextExt
+<span class="kw">where
+    </span><span class="self">Self</span>: Sized,
+{
+    <span class="kw">async fn </span>issue_context(
+        <span class="self">self</span>,
+        context: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;&gt; + Send,
+        description: <span class="kw">impl </span>Into&lt;String&gt; + Send,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+    <span class="kw">async fn </span>issue_description(<span class="self">self</span>, description: <span class="kw">impl </span>Into&lt;String&gt; + Send) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;T&gt; IssueContextExt <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: CollectiblesSource + Copy + Send,
+{
+    <span class="kw">async fn </span>issue_context(
+        <span class="self">self</span>,
+        context: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;&gt; + Send,
+        description: <span class="kw">impl </span>Into&lt;String&gt; + Send,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        IssueVc::attach_context(context, description, <span class="self">self</span>).<span class="kw">await
+    </span>}
+    <span class="kw">async fn </span>issue_description(<span class="self">self</span>, description: <span class="kw">impl </span>Into&lt;String&gt; + Send) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        IssueVc::attach_description(description, <span class="self">self</span>).<span class="kw">await
+    </span>}
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

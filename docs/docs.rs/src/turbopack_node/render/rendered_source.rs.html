@@ -282,6 +282,12 @@
 <span id="282">282</span>
 <span id="283">283</span>
 <span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
@@ -292,6 +298,7 @@
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    issue::IssueContextExt,
     reference::AssetReference,
     resolve::PrimaryResolveResult,
 };
@@ -507,7 +514,12 @@
                 path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
-        );
+        )
+        .issue_context(
+            entry.module.ident().path(),
+            <span class="macro">format!</span>(<span class="string">&quot;server-side rendering /{}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">*</span>result.<span class="kw">await</span><span class="question-mark">? </span>{
             StaticResult::Content {
                 content,

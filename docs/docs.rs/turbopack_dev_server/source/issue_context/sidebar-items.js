@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["IssueContextContentSource",""],["IssueContextContentSourceVc","Vc for [`IssueContextContentSource`]"]],"type":[["IssueContextContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};

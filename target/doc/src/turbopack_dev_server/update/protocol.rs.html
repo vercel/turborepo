@@ -158,6 +158,10 @@
 <span id="158">158</span>
 <span id="159">159</span>
 <span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, ops::Deref, path::PathBuf};
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -305,11 +309,15 @@
             detail: <span class="kw-2">&amp;</span>plain.detail,
             source,
             sub_issues: plain.sub_issues.iter().map(|p| p.deref().into()).collect(),
-            formatted: format_issue(
+            <span class="comment">// TODO(WEB-691) formatting the issue should be handled by the error overlay.
+            // The browser could handle error formatting in a better way than the text only
+            // formatting here
+            </span>formatted: format_issue(
                 plain,
                 <span class="prelude-val">None</span>,
                 <span class="kw-2">&amp;</span>LogOptions {
                     current_dir: PathBuf::new(),
+                    project_dir: PathBuf::new(),
                     show_all: <span class="bool-val">true</span>,
                     log_detail: <span class="bool-val">true</span>,
                     log_level: IssueSeverity::Info,

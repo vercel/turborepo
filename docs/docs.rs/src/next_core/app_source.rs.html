@@ -736,9 +736,23 @@
 <span id="736">736</span>
 <span id="737">737</span>
 <span id="738">738</span>
+<span id="739">739</span>
+<span id="740">740</span>
+<span id="741">741</span>
+<span id="742">742</span>
+<span id="743">743</span>
+<span id="744">744</span>
+<span id="745">745</span>
+<span id="746">746</span>
+<span id="747">747</span>
+<span id="748">748</span>
+<span id="749">749</span>
+<span id="750">750</span>
+<span id="751">751</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
+    iter::once,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -1132,7 +1146,9 @@
     intermediate_output_path_root: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
     <span class="kw">let </span>AppStructure {
-        item, <span class="kw-2">ref </span>children, ..
+        item,
+        <span class="kw-2">ref </span>children,
+        directory,
     } = <span class="kw-2">*</span>app_structure.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>sources = Vec::new();
 
@@ -1211,21 +1227,31 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
         }
     }
-    <span class="kw">for </span>child <span class="kw">in </span>children.iter() {
-        sources.push(create_app_source_for_directory(
-            <span class="kw-2">*</span>child,
-            context_ssr,
-            context,
-            project_path,
-            env,
-            server_root,
-            runtime_entries,
-            fallback_page,
-            intermediate_output_path_root,
-        ));
-    }
 
-    <span class="prelude-val">Ok</span>(CombinedContentSource { sources }.cell().into())
+    <span class="kw">let </span>source = CombinedContentSource { sources }
+        .cell()
+        .as_content_source()
+        .issue_context(directory, <span class="string">&quot;Next.js App Router&quot;</span>);
+
+    <span class="prelude-val">Ok</span>(CombinedContentSource {
+        sources: once(source)
+            .chain(children.iter().map(|child| {
+                create_app_source_for_directory(
+                    <span class="kw-2">*</span>child,
+                    context_ssr,
+                    context,
+                    project_path,
+                    env,
+                    server_root,
+                    runtime_entries,
+                    fallback_page,
+                    intermediate_output_path_root,
+                )
+            }))
+            .collect(),
+    }
+    .cell()
+    .into())
 }
 
 <span class="doccomment">/// The renderer for pages in app directory
