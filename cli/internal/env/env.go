@@ -102,7 +102,7 @@ func fromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap 
 	return output
 }
 
-func fromMatching(all EnvironmentVariableMap, keyMatchers []string, excludePrefix string) (EnvironmentVariableMap, error) {
+func fromMatching(all EnvironmentVariableMap, keyMatchers []string, shouldExclude func(k, v string) bool) (EnvironmentVariableMap, error) {
 	output := EnvironmentVariableMap{}
 	compileFailures := []string{}
 
@@ -115,7 +115,7 @@ func fromMatching(all EnvironmentVariableMap, keyMatchers []string, excludePrefi
 
 		for k, v := range all {
 			// we can skip the keys that match the excludedPrefix
-			if excludePrefix != "" && strings.HasPrefix(k, excludePrefix) {
+			if shouldExclude(k, v) {
 				continue
 			}
 
@@ -133,7 +133,7 @@ func fromMatching(all EnvironmentVariableMap, keyMatchers []string, excludePrefi
 }
 
 // GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
-func GetHashableEnvVars(keys []string, matchers []string, excludePrefix string) (DetailedMap, error) {
+func GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
 	all := getEnvMap()
 
 	detailedMap := DetailedMap{
@@ -144,7 +144,20 @@ func GetHashableEnvVars(keys []string, matchers []string, excludePrefix string) 
 	detailedMap.BySource.Explicit = fromKeys(all, keys)
 	detailedMap.All.Merge(detailedMap.BySource.Explicit)
 
-	matchedEnvVars, err := fromMatching(all, matchers, all[excludePrefix])
+	// Create an excluder function to pass to matcher.
+	// We only do this when an envVarContainingExcludePrefix is passed.
+	// This isn't the greatest design, but we need this to be optional
+	shouldExclude := func(k, v string) bool {
+		return false
+	}
+	if envVarContainingExcludePrefix != "" {
+		excludedKeyName := all[envVarContainingExcludePrefix]
+		shouldExclude = func(k, v string) bool {
+			return excludedKeyName != "" && strings.HasPrefix(k, excludedKeyName)
+		}
+	}
+
+	matchedEnvVars, err := fromMatching(all, matchers, shouldExclude)
 
 	if err != nil {
 		return DetailedMap{}, err
