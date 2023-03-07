@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::Result;
+use async_trait::async_trait;
 use auto_hash_map::AutoSet;
 use turbo_tasks::{
     emit,
@@ -286,9 +287,9 @@ impl IssueVc {
 
 impl IssueVc {
     #[allow(unused_variables, reason = "behind feature flag")]
-    pub async fn attach_context_or_description<T: CollectiblesSource + Copy>(
-        context: Option<FileSystemPathVc>,
-        description: impl Into<String>,
+    pub async fn attach_context<T: CollectiblesSource + Copy + Send>(
+        context: impl Into<Option<FileSystemPathVc>> + Send,
+        description: impl Into<String> + Send,
         source: T,
     ) -> Result<T> {
         #[cfg(feature = "issue_path")]
@@ -298,7 +299,7 @@ impl IssueVc {
                 emit(
                     ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
                         Some(IssueProcessingPathItemVc::cell(IssueProcessingPathItem {
-                            context,
+                            context: context.into(),
                             description: StringVc::cell(description.into()),
                         })),
                         children,
@@ -311,20 +312,11 @@ impl IssueVc {
     }
 
     #[allow(unused_variables, reason = "behind feature flag")]
-    pub async fn attach_context<T: CollectiblesSource + Copy>(
-        context: FileSystemPathVc,
-        description: impl Into<String>,
+    pub async fn attach_description<T: CollectiblesSource + Copy + Send>(
+        description: impl Into<String> + Send,
         source: T,
     ) -> Result<T> {
-        Self::attach_context_or_description(Some(context), description, source).await
-    }
-
-    #[allow(unused_variables, reason = "behind feature flag")]
-    pub async fn attach_description<T: CollectiblesSource + Copy>(
-        description: impl Into<String>,
-        source: T,
-    ) -> Result<T> {
-        Self::attach_context_or_description(None, description, source).await
+        Self::attach_context(None, description, source).await
     }
 
     /// Returns all issues from `source` in a list with their associated
@@ -643,4 +635,34 @@ pub trait IssueReporter {
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
     ) -> BoolVc;
+}
+
+#[async_trait]
+pub trait IssueContextExt
+where
+    Self: Sized,
+{
+    async fn issue_context(
+        self,
+        context: impl Into<Option<FileSystemPathVc>> + Send,
+        description: impl Into<String> + Send,
+    ) -> Result<Self>;
+    async fn issue_description(self, description: impl Into<String> + Send) -> Result<Self>;
+}
+
+#[async_trait]
+impl<T> IssueContextExt for T
+where
+    T: CollectiblesSource + Copy + Send,
+{
+    async fn issue_context(
+        self,
+        context: impl Into<Option<FileSystemPathVc>> + Send,
+        description: impl Into<String> + Send,
+    ) -> Result<Self> {
+        IssueVc::attach_context(context, description, self).await
+    }
+    async fn issue_description(self, description: impl Into<String> + Send) -> Result<Self> {
+        IssueVc::attach_description(description, self).await
+    }
 }

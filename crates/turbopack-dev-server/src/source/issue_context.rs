@@ -1,7 +1,7 @@
 use anyhow::Result;
-use turbo_tasks::{CollectiblesSource, Value};
+use turbo_tasks::Value;
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::issue::IssueVc;
+use turbopack_core::issue::IssueContextExt;
 
 use super::{
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
@@ -14,12 +14,6 @@ pub struct IssueContextSource {
     context: Option<FileSystemPathVc>,
     description: String,
     source: ContentSourceVc,
-}
-
-impl IssueContextSource {
-    async fn attach<T: CollectiblesSource + Copy>(&self, source: T) -> Result<T> {
-        IssueVc::attach_context_or_description(self.context, &self.description, source).await
-    }
 }
 
 #[turbo_tasks::value_impl]
@@ -58,8 +52,11 @@ impl ContentSource for IssueContextSource {
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
-        let result = this.source.get(path, data);
-        let result = this.attach(result).await?;
+        let result = this
+            .source
+            .get(path, data)
+            .issue_context(this.context, &this.description)
+            .await?;
         if let ContentSourceResult::Result {
             get_content,
             specificity,
@@ -96,15 +93,23 @@ struct IssueContextGetContentSourceContent {
 impl GetContentSourceContent for IssueContextGetContentSourceContent {
     #[turbo_tasks::function]
     async fn vary(&self) -> Result<ContentSourceDataVaryVc> {
-        let result = self.get_content.vary();
-        let result = self.source.await?.attach(result).await?;
+        let source = self.source.await?;
+        let result = self
+            .get_content
+            .vary()
+            .issue_context(source.context, &source.description)
+            .await?;
         Ok(result)
     }
 
     #[turbo_tasks::function]
     async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
-        let result = self.get_content.get(data);
-        let result = self.source.await?.attach(result).await?;
+        let source = self.source.await?;
+        let result = self
+            .get_content
+            .get(data)
+            .issue_context(source.context, &source.description)
+            .await?;
         Ok(result)
     }
 }

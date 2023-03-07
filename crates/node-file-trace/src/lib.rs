@@ -44,7 +44,7 @@ use turbopack_core::{
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueReporter, IssueSeverity, IssueVc},
+    issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -543,8 +543,8 @@ async fn main_operation(
             )
             .await?;
             for module in modules.iter() {
-                let set = all_assets(*module);
-                IssueVc::attach_context(module.ident().path(), "gathering list of assets", set)
+                let set = all_assets(*module)
+                    .issue_context(module.ident().path(), "gathering list of assets")
                     .await?;
                 for asset in set.await?.iter() {
                     let path = asset.ident().path().await?;

@@ -15,7 +15,7 @@ use turbopack_core::{
     changed::any_content_changed,
     context::AssetContext,
     ident::AssetIdentVc,
-    issue::IssueVc,
+    issue::IssueContextExt,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -546,12 +546,9 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         FindContextFileResult::Found(config_path, _) => Some(*config_path),
         FindContextFileResult::NotFound(_) => None,
     };
-    IssueVc::attach_context_or_description(
-        config_file,
-        "Loading Next.js config",
-        load_next_config_internal(execution_context, config_file),
-    )
-    .await
+    load_next_config_internal(execution_context, config_file)
+        .issue_context(config_file, "Loading Next.js config")
+        .await
 }
 
 #[turbo_tasks::function]

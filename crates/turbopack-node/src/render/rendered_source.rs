@@ -8,7 +8,7 @@ use turbopack_core::{
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
-    issue::IssueVc,
+    issue::IssueContextExt,
     reference::AssetReference,
     resolve::PrimaryResolveResult,
 };
@@ -224,11 +224,10 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 path: format!("/{}", source.pathname.await?),
             }
             .cell(),
-        );
-        IssueVc::attach_context(
+        )
+        .issue_context(
             entry.module.ident().path(),
             format!("server-side rendering /{}", source.pathname.await?),
-            result,
         )
         .await?;
         Ok(match *result.await? {
