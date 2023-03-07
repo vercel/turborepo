@@ -18,8 +18,8 @@ pub enum CommonJsReferenceSubType {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmaScriptModulesReferenceSubType {
-    Custom(u8),
     ImportPart(ModulePartVc),
+    Custom(u8),
     Undefined,
 }
 
@@ -80,7 +80,7 @@ impl Display for ReferenceType {
         let str = match self {
             ReferenceType::CommonJs(_) => "commonjs",
             ReferenceType::EcmaScriptModules(sub) => match sub {
-                EcmaScriptModulesReferenceSubType::ModulePart(_) => "EcmaScript Modules (part)",
+                EcmaScriptModulesReferenceSubType::ImportPart(_) => "EcmaScript Modules (part)",
                 _ => "EcmaScript Modules",
             },
             ReferenceType::Css(_) => "css",

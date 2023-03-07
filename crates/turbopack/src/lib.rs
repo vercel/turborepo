@@ -123,7 +123,7 @@ async fn apply_module_type(
             );
 
             if let ReferenceType::EcmaScriptModules(
-                EcmaScriptModulesReferenceSubType::ModulePart(part),
+                EcmaScriptModulesReferenceSubType::ImportPart(part),
             ) = reference_type.into_value()
             {
                 if let Ok(v) = EcmascriptModulePartAssetVc::from_splitted(base, part).await {
