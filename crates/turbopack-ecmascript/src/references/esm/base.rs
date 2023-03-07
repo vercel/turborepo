@@ -132,49 +132,8 @@ impl EsmAssetReferenceVc {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl AssetReference for EsmAssetReference {
-    #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.get_origin(), self.request)
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for EsmAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "import {} {}",
-            self.request.to_string().await?,
-            self.annotations
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ChunkableAssetReference for EsmAssetReference {
-    #[turbo_tasks::function]
-    fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
-        Ok(ChunkingTypeOptionVc::cell(
-            if let Some(chunking_type) = self.annotations.chunking_type() {
-                match chunking_type {
-                    "separate" => Some(ChunkingType::Separate),
-                    "parallel" => Some(ChunkingType::Parallel),
-                    "none" => None,
-                    _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
-                }
-            } else {
-                Some(ChunkingType::default())
-            },
-        ))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl CodeGenerateable for EsmAssetReference {
-    #[turbo_tasks::function]
-    async fn code_generation(
+impl EsmAssetReferenceVc {
+    pub(crate) async fn code_generation_inline(
         self_vc: EsmAssetReferenceVc,
         context: ChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
@@ -237,6 +196,56 @@ impl CodeGenerateable for EsmAssetReference {
         }
 
         Ok(CodeGeneration { visitors }.into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl AssetReference for EsmAssetReference {
+    #[turbo_tasks::function]
+    fn resolve_reference(&self) -> ResolveResultVc {
+        esm_resolve(self.get_origin(), self.request)
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for EsmAssetReference {
+    #[turbo_tasks::function]
+    async fn to_string(&self) -> Result<StringVc> {
+        Ok(StringVc::cell(format!(
+            "import {} {}",
+            self.request.to_string().await?,
+            self.annotations
+        )))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ChunkableAssetReference for EsmAssetReference {
+    #[turbo_tasks::function]
+    fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
+        Ok(ChunkingTypeOptionVc::cell(
+            if let Some(chunking_type) = self.annotations.chunking_type() {
+                match chunking_type {
+                    "separate" => Some(ChunkingType::Separate),
+                    "parallel" => Some(ChunkingType::Parallel),
+                    "none" => None,
+                    _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
+                }
+            } else {
+                Some(ChunkingType::default())
+            },
+        ))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for EsmAssetReference {
+    #[turbo_tasks::function]
+    async fn code_generation(
+        self_vc: EsmAssetReferenceVc,
+        context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
+        EsmAssetReferenceVc::code_generation_inline(self_vc, context).await
     }
 }
 

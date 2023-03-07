@@ -26,18 +26,11 @@ pub struct EsmModuleItem {
     pub path: AstPathVc,
 }
 
-#[turbo_tasks::value_impl]
-impl EsmModuleItemVc {
-    #[turbo_tasks::function]
-    pub fn new(path: AstPathVc) -> Self {
-        Self::cell(EsmModuleItem { path })
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl CodeGenerateable for EsmModuleItem {
-    #[turbo_tasks::function]
-    async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+impl EsmModuleItem {
+    pub(crate) async fn code_generation_inline(
+        &self,
+        _context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
         let path = &self.path.await?;
@@ -97,5 +90,21 @@ impl CodeGenerateable for EsmModuleItem {
         );
 
         Ok(CodeGeneration { visitors }.into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl EsmModuleItemVc {
+    #[turbo_tasks::function]
+    pub fn new(path: AstPathVc) -> Self {
+        Self::cell(EsmModuleItem { path })
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for EsmModuleItem {
+    #[turbo_tasks::function]
+    async fn code_generation(&self, context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+        self.code_generation_inline(context).await
     }
 }

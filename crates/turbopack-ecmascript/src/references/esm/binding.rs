@@ -43,10 +43,8 @@ impl EsmBindingVc {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl CodeGenerateable for EsmBinding {
-    #[turbo_tasks::function]
-    async fn code_generation(
+impl EsmBindingVc {
+    pub(crate) async fn code_generation_inline(
         self_vc: EsmBindingVc,
         _context: ChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
@@ -114,5 +112,16 @@ impl CodeGenerateable for EsmBinding {
         }
 
         Ok(CodeGeneration { visitors }.into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for EsmBinding {
+    #[turbo_tasks::function]
+    async fn code_generation(
+        self_vc: EsmBindingVc,
+        context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
+        EsmBindingVc::code_generation_inline(self_vc, context).await
     }
 }

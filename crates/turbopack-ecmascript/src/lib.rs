@@ -65,6 +65,7 @@ use self::{
         EcmascriptExportsVc,
     },
     parse::ParseResultVc,
+    references::esm::{EsmAssetReferenceVc, EsmBindingVc, EsmModuleItem, EsmModuleItemVc},
 };
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
@@ -296,12 +297,29 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         let mut code_gens = Vec::new();
         for r in references.await?.iter() {
             if let Some(code_gen) = CodeGenerateableVc::resolve_from(r).await? {
-                code_gens.push(code_gen.code_generation(context));
+                // Fast path for some common code generations for improved performance
+                if let Some(esm_reference) = EsmAssetReferenceVc::resolve_from(code_gen).await? {
+                    code_gens.push(
+                        EsmAssetReferenceVc::code_generation_inline(esm_reference, context).await?,
+                    )
+                } else {
+                    code_gens.push(code_gen.code_generation(context));
+                }
             }
         }
-        for c in code_generation.await?.iter() {
-            let c = c.resolve().await?;
-            code_gens.push(c.code_generation(context));
+        for code_gen in code_generation.await?.iter() {
+            let code_gen = code_gen.resolve().await?;
+            // Fast path for some common code generations for improved performance
+            if let Some(esm_binding) = EsmBindingVc::resolve_from(code_gen).await? {
+                code_gens.push(EsmBindingVc::code_generation_inline(esm_binding, context).await?)
+            } else if let Some(esm_module_item) = EsmModuleItemVc::resolve_from(code_gen).await? {
+                code_gens.push(
+                    EsmModuleItem::code_generation_inline(&*esm_module_item.await?, context)
+                        .await?,
+                )
+            } else {
+                code_gens.push(code_gen.code_generation(context));
+            }
         }
         // need to keep that around to allow references into that
         let code_gens = code_gens.into_iter().try_join().await?;
