@@ -1,10 +1,12 @@
 use std::{
     borrow::Cow,
-    io::Result as IoResult,
+    io::{ErrorKind, Result as IoResult},
+    path::PathBuf,
     pin::Pin,
     task::{Context as TaskContext, Poll},
 };
 
+use anyhow::{anyhow, Result};
 use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
 
 // https://github.com/rust-lang/rust/blob/13471d3b2046cce78181dde6cfc146c09f55e29e/library/std/src/sys_common/io.rs#L1-L3
@@ -181,5 +183,16 @@ impl<'a, T: AsyncRead + Unpin + Sized> AsyncBufRead for AsyncBufReader<'a, T> {
 
     fn consume(self: Pin<&mut Self>, amt: usize) {
         self.get_mut().offset += amt;
+    }
+}
+
+/// Converts a disk access Result<T> into a Result<Some<T>>, where a NotFound
+/// error results in a None value. This is purely to reduce boilerplate code
+/// comparing against NotFound errors against all other errors.
+pub fn extract_disk_access<T>(value: IoResult<T>, path: &PathBuf) -> Result<Option<T>> {
+    match value {
+        Ok(v) => Ok(Some(v)),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(anyhow!(e).context(format!("reading file {}", path.display()))),
     }
 }

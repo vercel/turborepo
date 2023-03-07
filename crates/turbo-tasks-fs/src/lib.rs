@@ -61,7 +61,9 @@ use turbo_tasks::{
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
-use util::{join_path, normalize_path, sys_to_unix, unix_to_sys, AsyncBufReader};
+use util::{
+    extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys, AsyncBufReader,
+};
 
 use self::{json::UnparseableJson, mutex_map::MutexMap};
 use crate::{
@@ -1392,14 +1394,6 @@ pub struct File {
     meta: FileMeta,
     #[turbo_tasks(debug_ignore)]
     content: Rope,
-}
-
-fn extract_disk_access<T>(value: io::Result<T>, path: &PathBuf) -> Result<Option<T>> {
-    match value {
-        Ok(v) => Ok(Some(v)),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(anyhow!(e).context(format!("reading file {}", path.display()))),
-    }
 }
 
 impl File {
