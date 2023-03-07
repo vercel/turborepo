@@ -547,4 +547,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://hash.dev/",
     pinned: true,
   },
+  {
+    caption: "Chợ Tốt",
+    image: "/images/logos/chotot.svg",
+    infoLink: "https://chotot.com/",
+    pinned: true,
+  },
 ];
