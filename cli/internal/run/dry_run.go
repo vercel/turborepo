@@ -99,7 +99,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			taskSummary.Framework = runsummary.MissingFrameworkLabel
 		}
 
-		taskSummary.CacheState = itemStatus  // TODO(mehulkar): Move this to PackageTask
 		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
 		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
 
@@ -132,7 +131,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	return taskIDs, nil
 }
 
-func populateCacheState(turboCache cache.Cache, taskSummaries []*taskSummary) {
+func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
 	// We make at most 8 requests at a time for cache state.
 	maxParallelRequests := 8
 	taskCount := len(taskSummaries)
