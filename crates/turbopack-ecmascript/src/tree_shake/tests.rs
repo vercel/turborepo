@@ -88,7 +88,7 @@ fn run(input: PathBuf) {
             };
 
             if !item.var_decls.is_empty() {
-                writeln!(s, "- Declares: {:?}", f(&item.var_decls)).unwrap();
+                writeln!(s, "- Declares: {}", f(&item.var_decls)).unwrap();
             }
 
             if !item.read_vars.is_empty() {
