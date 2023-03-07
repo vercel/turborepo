@@ -2,8 +2,6 @@ use std::{
     borrow::Cow,
     io::{ErrorKind, Result as IoResult},
     path::Path,
-    pin::Pin,
-    task::{Context as TaskContext, Poll},
 };
 
 use anyhow::{anyhow, Result};
