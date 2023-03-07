@@ -595,7 +595,7 @@ where
             None
         };
 
-        let context = self.context.clone();
+        let context = self.context;
 
         async move {
             let Some(chunk_item) = chunk_item else {
