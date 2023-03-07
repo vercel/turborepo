@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{
     fs,
-    io::{AsyncBufReadExt, AsyncReadExt},
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
 };
 use turbo_tasks::{
     mark_stateful,
@@ -61,9 +61,7 @@ use turbo_tasks::{
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
-use util::{
-    extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys, AsyncBufReader,
-};
+use util::{extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys};
 
 use self::{json::UnparseableJson, mutex_map::MutexMap};
 use crate::{
@@ -1339,7 +1337,7 @@ impl FileContent {
         // So meta matches, and we have a file handle. Let's stream the contents to see
         // if they match.
         let mut new_contents = new_file.read();
-        let mut old_contents = AsyncBufReader::new(&mut old_file);
+        let mut old_contents = BufReader::new(&mut old_file);
         Ok(loop {
             let new_chunk = new_contents.fill_buf()?;
             let Ok(old_chunk) = old_contents.fill_buf().await else {

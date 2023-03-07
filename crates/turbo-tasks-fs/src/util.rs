@@ -7,14 +7,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
-
-// https://github.com/rust-lang/rust/blob/13471d3b2046cce78181dde6cfc146c09f55e29e/library/std/src/sys_common/io.rs#L1-L3
-const DEFAULT_BUF_SIZE: usize = if cfg!(target_os = "espidf") {
-    512
-} else {
-    8 * 1024
-};
 
 /// Joins two /-separated paths into a normalized path.
 /// Paths are concatenated with /.
@@ -127,68 +119,9 @@ pub fn normalize_request(str: &str) -> String {
     seqments.join("/")
 }
 
-/// AsyncBufReader adds buffering to any [AsyncRead].
-///
-/// This essentially just implements [AsyncBufRead] over an [AsyncRead], using a
-/// large buffer to store data. As the data is consumed, an offset buffer will
-/// continue to be returned until the full buffer has been consumed. This allows
-/// us to skip the overhead of, eg, repeated sys calls to read from disk as we
-/// process a smaller number of bytes.
-pub struct AsyncBufReader<'a, T: AsyncRead + Unpin + Sized> {
-    inner: &'a mut T,
-    offset: usize,
-    capacity: usize,
-    buffer: [u8; DEFAULT_BUF_SIZE],
-}
-
-impl<'a, T: AsyncRead + Unpin + Sized> AsyncBufReader<'a, T> {
-    pub fn new(inner: &'a mut T) -> Self {
-        AsyncBufReader {
-            inner,
-            offset: 0,
-            capacity: 0,
-            buffer: [0; DEFAULT_BUF_SIZE],
-        }
-    }
-}
-
-impl<'a, T: AsyncRead + Unpin + Sized> AsyncRead for AsyncBufReader<'a, T> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut TaskContext<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<IoResult<()>> {
-        let inner = Pin::new(&mut self.get_mut().inner);
-        inner.poll_read(cx, buf)
-    }
-}
-
-impl<'a, T: AsyncRead + Unpin + Sized> AsyncBufRead for AsyncBufReader<'a, T> {
-    fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<IoResult<&[u8]>> {
-        let this = self.get_mut();
-        if this.offset >= this.capacity {
-            let inner = Pin::new(&mut this.inner);
-            let mut buf = ReadBuf::new(&mut this.buffer);
-            match inner.poll_read(cx, &mut buf) {
-                Poll::Ready(Ok(())) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-                Poll::Pending => return Poll::Pending,
-            };
-
-            this.capacity = buf.filled().len();
-            this.offset = 0;
-        }
-        Poll::Ready(Ok(&this.buffer[this.offset..this.capacity]))
-    }
-
-    fn consume(self: Pin<&mut Self>, amt: usize) {
-        self.get_mut().offset += amt;
-    }
-}
-
 /// Converts a disk access Result<T> into a Result<Some<T>>, where a NotFound
 /// error results in a None value. This is purely to reduce boilerplate code
-/// comparing against NotFound errors against all other errors.
+/// comparing NotFound errors against all other errors.
 pub fn extract_disk_access<T>(value: IoResult<T>, path: &Path) -> Result<Option<T>> {
     match value {
         Ok(v) => Ok(Some(v)),
