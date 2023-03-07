@@ -21,7 +21,10 @@ use turbo_tasks::{trace::TraceRawVcs, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
-use self::{headers::Headers, query::Query, specificity::SpecificityVc};
+use self::{
+    headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
+    specificity::SpecificityVc,
+};
 
 /// The result of proxying a request to another HTTP server.
 #[turbo_tasks::value(shared)]
@@ -458,6 +461,14 @@ pub trait ContentSource {
     /// Gets any content sources wrapped in this content source.
     fn get_children(&self) -> ContentSourcesVc {
         ContentSourcesVc::empty()
+    }
+}
+
+#[turbo_tasks::value_trait]
+impl ContentSourceVc {
+    #[turbo_tasks::function]
+    pub fn issue_context(self, context: FileSystemPathVc, description: &str) -> ContentSourceVc {
+        IssueContextContentSourceVc::new_context(context, description, self).into()
     }
 }
 

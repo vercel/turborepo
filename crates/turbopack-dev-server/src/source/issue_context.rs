@@ -10,21 +10,21 @@ use super::{
 };
 
 #[turbo_tasks::value]
-pub struct IssueContextSource {
+pub struct IssueContextContentSource {
     context: Option<FileSystemPathVc>,
     description: String,
     source: ContentSourceVc,
 }
 
 #[turbo_tasks::value_impl]
-impl IssueContextSourceVc {
+impl IssueContextContentSourceVc {
     #[turbo_tasks::function]
     pub fn new_context(
         context: FileSystemPathVc,
         description: &str,
         source: ContentSourceVc,
     ) -> Self {
-        IssueContextSource {
+        IssueContextContentSource {
             context: Some(context),
             description: description.to_string(),
             source,
@@ -34,7 +34,7 @@ impl IssueContextSourceVc {
 
     #[turbo_tasks::function]
     pub fn new_description(description: &str, source: ContentSourceVc) -> Self {
-        IssueContextSource {
+        IssueContextContentSource {
             context: None,
             description: description.to_string(),
             source,
@@ -44,10 +44,10 @@ impl IssueContextSourceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl ContentSource for IssueContextSource {
+impl ContentSource for IssueContextContentSource {
     #[turbo_tasks::function]
     async fn get(
-        self_vc: IssueContextSourceVc,
+        self_vc: IssueContextContentSourceVc,
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
@@ -86,7 +86,7 @@ impl ContentSource for IssueContextSource {
 #[turbo_tasks::value]
 struct IssueContextGetContentSourceContent {
     get_content: GetContentSourceContentVc,
-    source: IssueContextSourceVc,
+    source: IssueContextContentSourceVc,
 }
 
 #[turbo_tasks::value_impl]

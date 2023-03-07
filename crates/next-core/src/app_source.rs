@@ -26,8 +26,7 @@ use turbopack_core::{
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{
-        combined::CombinedContentSource, issue_context::IssueContextSourceVc, ContentSourceData,
-        ContentSourceVc, NoContentSourceVc,
+        combined::CombinedContentSource, ContentSourceData, ContentSourceVc, NoContentSourceVc,
     },
 };
 use turbopack_ecmascript::{
@@ -476,8 +475,10 @@ async fn create_app_source_for_directory(
         }
     }
 
-    let source = CombinedContentSource { sources }.cell().into();
-    let source = IssueContextSourceVc::new_context(directory, "Next.js App Router", source).into();
+    let source = CombinedContentSource { sources }
+        .cell()
+        .as_content_source()
+        .issue_context(directory, "Next.js App Router");
 
     Ok(CombinedContentSource {
         sources: once(source)

@@ -22,7 +22,6 @@ use turbopack_dev_server::{
     source::{
         asset_graph::AssetGraphContentSourceVc,
         combined::{CombinedContentSource, CombinedContentSourceVc},
-        issue_context::IssueContextSourceVc,
         specificity::SpecificityVc,
         ContentSourceData, ContentSourceVc, NoContentSourceVc,
     },
@@ -281,25 +280,13 @@ pub async fn create_page_source(
     let source = CombinedContentSource {
         sources: vec![
             // Match _next/404 first to ensure rewrites work properly.
-            IssueContextSourceVc::new_context(
-                pages_dir,
-                "Next.js pages directory not found",
-                force_not_found_source,
-            )
-            .into(),
+            force_not_found_source.issue_context(pages_dir, "Next.js pages directory not found"),
             page_source,
-            IssueContextSourceVc::new_context(
-                pages_dir,
-                "Next.js pages directory fallback",
-                fallback_source.into(),
-            )
-            .into(),
-            IssueContextSourceVc::new_context(
-                pages_dir,
-                "Next.js pages directory not found fallback",
-                fallback_not_found_source,
-            )
-            .into(),
+            fallback_source
+                .as_content_source()
+                .issue_context(pages_dir, "Next.js pages directory fallback"),
+            fallback_not_found_source
+                .issue_context(pages_dir, "Next.js pages directory not found fallback"),
         ],
     }
     .cell()
@@ -577,54 +564,46 @@ async fn create_page_source_for_directory(
                 page,
                 specificity,
                 url,
-            } => IssueContextSourceVc::new_context(
-                page,
-                "Next.js pages directory",
-                create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(page).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    false,
-                    output_root,
-                    output_root,
-                ),
+            } => create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(page).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                false,
+                output_root,
+                output_root,
             )
-            .into(),
+            .issue_context(page, "Next.js pages directory"),
             PagesStructureItem::Api {
                 api,
                 specificity,
                 url,
-            } => IssueContextSourceVc::new_context(
-                api,
-                "Next.js pages api directory",
-                create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(api).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    true,
-                    output_root,
-                    output_root,
-                ),
+            } => create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(api).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                true,
+                output_root,
+                output_root,
             )
-            .into(),
+            .issue_context(api, "Next.js pages api directory"),
         };
         sources.push(source);
     }
