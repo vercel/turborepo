@@ -282,7 +282,12 @@ func TestGetHashableEnvVars(t *testing.T) {
 			// set the env vars
 			setEnvs(tt.env)
 			// test
-			if got := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes).All.ToHashable(); !reflect.DeepEqual(got, tt.want) {
+			res, err := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes, "TURBO_CI_VENDOR_ENV_KEY")
+			if err != nil {
+				t.Errorf("error setup failure: %s", err)
+			}
+			got := res.All.ToHashable()
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %#v, want %#v", got, tt.want)
 			}
 			// clean up the env for the next run
