@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::rope::Rope;
+use turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
 use turbopack_core::version::VersionedContentVc;
 
 use self::{
@@ -464,7 +464,7 @@ pub trait ContentSource {
     }
 }
 
-#[turbo_tasks::value_trait]
+#[turbo_tasks::value_impl]
 impl ContentSourceVc {
     #[turbo_tasks::function]
     pub fn issue_context(self, context: FileSystemPathVc, description: &str) -> ContentSourceVc {

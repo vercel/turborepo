@@ -1,7 +1,10 @@
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::issue::IssueContextExt;
+use turbopack_core::{
+    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    issue::IssueContextExt,
+};
 
 use super::{
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
@@ -111,5 +114,53 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
             .issue_context(source.context, &source.description)
             .await?;
         Ok(result)
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl Introspectable for IssueContextContentSource {
+    #[turbo_tasks::function]
+    async fn ty(&self) -> Result<StringVc> {
+        Ok(
+            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+                source.ty()
+            } else {
+                StringVc::cell("IssueContextContentSource".to_string())
+            },
+        )
+    }
+
+    #[turbo_tasks::function]
+    async fn title(&self) -> Result<StringVc> {
+        Ok(
+            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+                let title = source.title().await?;
+                StringVc::cell(format!("{}: {}", self.description, title))
+            } else {
+                StringVc::cell(self.description.clone())
+            },
+        )
+    }
+
+    #[turbo_tasks::function]
+    async fn details(&self) -> Result<StringVc> {
+        Ok(
+            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+                source.details()
+            } else {
+                StringVc::cell(String::new())
+            },
+        )
+    }
+
+    #[turbo_tasks::function]
+    async fn children(&self) -> Result<IntrospectableChildrenVc> {
+        Ok(
+            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+                source.children()
+            } else {
+                IntrospectableChildrenVc::cell(Default::default())
+            },
+        )
     }
 }
