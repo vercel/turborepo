@@ -31,7 +31,7 @@ type GlobalHashable struct {
 	pipeline             fs.PristinePipeline
 }
 
-// getGlobalHashable converts GlobalHashable into an anonmyous struct.
+// getGlobalHashable converts GlobalHashable into an anonymous struct.
 // This exists because the global hash was originally implemented with an anonymous
 // struct, and changing to a named struct changes the global hash (because the hash
 // is essentially a hash of `fmt.Sprint("%#v", thing)`, and the type is part of that string.
