@@ -19,7 +19,7 @@ pub enum CommonJsReferenceSubType {
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmaScriptModulesReferenceSubType {
     Custom(u8),
-    ModulePart(ModulePartVc),
+    ImportPart(ModulePartVc),
     Undefined,
 }
 
