@@ -51,15 +51,9 @@ impl Visit for IdentUsageCollector {
 
     fn visit_ident(&mut self, n: &Ident) {
         if self.is_read {
-            if self.reads.iter().any(|id| id == &n.to_id()) {
-                return;
-            }
-            self.reads.push(n.to_id());
+            self.vars.read.insert(n.to_id());
         } else {
-            if self.writes.iter().any(|id| id == &n.to_id()) {
-                return;
-            }
-            self.writes.push(n.to_id());
+            self.vars.write.insert(n.to_id());
         }
     }
 
@@ -138,15 +132,9 @@ impl Visit for CapturedIdCollector {
     fn visit_ident(&mut self, n: &Ident) {
         if self.is_nested {
             if self.is_read {
-                if self.reads.iter().any(|id| id == &n.to_id()) {
-                    return;
-                }
-                self.reads.push(n.to_id());
+                self.vars.read.insert(n.to_id());
             } else {
-                if self.writes.iter().any(|id| id == &n.to_id()) {
-                    return;
-                }
-                self.writes.push(n.to_id());
+                self.vars.write.insert(n.to_id());
             }
         }
     }
@@ -183,7 +171,9 @@ impl Visit for CapturedIdCollector {
 
 #[derive(Debug, Default)]
 pub(super) struct Vars {
+    /// Variables which are read.
     pub read: IndexSet<Id, BuildHasherDefault<FxHasher>>,
+    /// Variables which are written.
     pub write: IndexSet<Id, BuildHasherDefault<FxHasher>>,
 }
 

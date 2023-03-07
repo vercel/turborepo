@@ -68,6 +68,8 @@ pub(crate) enum ItemIdKind {
     Export(Id),
 }
 
+type FxBuildHasher = BuildHasherDefault<FxHasher>;
+
 /// Data about a module item
 #[derive(Debug)]
 pub(crate) struct ItemData {
@@ -77,10 +79,10 @@ pub(crate) struct ItemData {
     pub pure: bool,
 
     /// Variables declared or bound by this module item?
-    pub var_decls: Vec<Id>,
+    pub var_decls: IndexSet<Id, FxBuildHasher>,
 
     /// Variables read by this module item during evaluation?
-    pub read_vars: Vec<Id>,
+    pub read_vars: IndexSet<Id, FxBuildHasher>,
 
     /// Variables read by this module item eventually?
     ///
@@ -94,13 +96,13 @@ pub(crate) struct ItemData {
     ///   They might also be read “during” initial evaluation on any module item
     ///   with SIDE_EFFECTS. This kind of interaction is handled by the module
     ///   item with SIDE_EFFECTS.
-    pub eventual_read_vars: Vec<Id>,
+    pub eventual_read_vars: IndexSet<Id, FxBuildHasher>,
 
     /// Side effects that are triggered on local variables during evaluation?
-    pub write_vars: Vec<Id>,
+    pub write_vars: IndexSet<Id, FxBuildHasher>,
 
     /// Side effects that are triggered on local variables eventually?
-    pub eventual_write_vars: Vec<Id>,
+    pub eventual_write_vars: IndexSet<Id, FxBuildHasher>,
 
     /// Are other unknown side effects that are trigger during evaluation?
     pub side_effects: bool,
@@ -592,7 +594,12 @@ impl DepGraph {
                             id,
                             ItemData {
                                 is_hoisted: true,
-                                var_decls: vec![local],
+                                var_decls: {
+                                    let mut v =
+                                        IndexSet::with_capacity_and_hasher(1, Default::default());
+                                    v.insert(local);
+                                    v
+                                },
                                 pure: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                                     specifiers: vec![s.clone()],
@@ -616,14 +623,19 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
 
-                    let (read_vars, write_vars) = ids_used_by(&f.function);
+                    let vars = ids_used_by(&f.function);
                     items.insert(
                         id,
                         ItemData {
                             is_hoisted: true,
-                            eventual_read_vars: read_vars,
-                            eventual_write_vars: write_vars,
-                            var_decls: vec![f.ident.to_id()],
+                            eventual_read_vars: vars.read,
+                            eventual_write_vars: vars.write,
+                            var_decls: {
+                                let mut v =
+                                    IndexSet::with_capacity_and_hasher(1, Default::default());
+                                v.insert(f.ident.to_id());
+                                v
+                            },
                             content: ModuleItem::Stmt(Stmt::Decl(Decl::Fn(f.clone()))),
                             ..Default::default()
                         },
