@@ -139,18 +139,25 @@ async function runOperation(renderData: RenderData) {
 
   const proxyMethods = (): ProxyHandler<FlightManifest> => {
     return {
-      get(target, key) {
+      get(_target, key: string) {
         if (key === "__ssr_module_mapping__") {
           return manifest;
         }
         if (key === "__entry_css_files__") {
           return __entry_css_files__;
         }
-        const [file, name] = (key as string).split("#");
+
+        // The key is a `${file}#${name}`, but `file` can contain `#` itself.
+        let pos = key.lastIndexOf("#");
+        if (pos === -1) pos = key.length;
+
+        const file = key.slice(0, pos);
+        const name = key.slice(pos + 1);
+
         return {
           id: file,
           chunks: JSON.parse(file)[1],
-          name: name === undefined ? "*" : name,
+          name: name || "*",
         };
       },
     };
