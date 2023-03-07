@@ -39,7 +39,7 @@ type GlobalHashable struct {
 // struct, it would change the global hash for everyone, invalidating EVERY TURBO CACHE ON THE PLANET!
 // We can remove this converter when we are going to have to update the global hash for something
 // else anyway.
-func getGlobalHashable(named *GlobalHashable) struct {
+func getGlobalHashable(named GlobalHashable) struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
 	hashedSortedEnvPairs env.EnvironmentVariablePairs
@@ -70,14 +70,14 @@ func calculateGlobalHash(
 	packageManager *packagemanager.PackageManager,
 	lockFile lockfile.Lockfile,
 	logger hclog.Logger,
-) (*GlobalHashable, error) {
+) (GlobalHashable, error) {
 	// Calculate env var dependencies
 	envVars := []string{}
 	envVars = append(envVars, envVarDependencies...)
 	envVars = append(envVars, _defaultEnvVars...)
 	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
 	if err != nil {
-		return nil, err
+		return GlobalHashable{}, err
 	}
 
 	logger.Debug("global hash env vars", "vars", globalHashableEnvVars.All.Names())
@@ -87,12 +87,12 @@ func calculateGlobalHash(
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return nil, err
+			return GlobalHashable{}, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return nil, err
+			return GlobalHashable{}, err
 		}
 
 		for _, val := range f {
@@ -115,10 +115,10 @@ func calculateGlobalHash(
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return nil, fmt.Errorf("error hashing files: %w", err)
+		return GlobalHashable{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
-	return &GlobalHashable{
+	return GlobalHashable{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		envVars:              globalHashableEnvVars,
