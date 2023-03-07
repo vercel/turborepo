@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     io::{ErrorKind, Result as IoResult},
-    path::PathBuf,
+    path::Path,
     pin::Pin,
     task::{Context as TaskContext, Poll},
 };
@@ -189,7 +189,7 @@ impl<'a, T: AsyncRead + Unpin + Sized> AsyncBufRead for AsyncBufReader<'a, T> {
 /// Converts a disk access Result<T> into a Result<Some<T>>, where a NotFound
 /// error results in a None value. This is purely to reduce boilerplate code
 /// comparing against NotFound errors against all other errors.
-pub fn extract_disk_access<T>(value: IoResult<T>, path: &PathBuf) -> Result<Option<T>> {
+pub fn extract_disk_access<T>(value: IoResult<T>, path: &Path) -> Result<Option<T>> {
     match value {
         Ok(v) => Ok(Some(v)),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
