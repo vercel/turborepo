@@ -100,6 +100,7 @@ jobs:
 
       - name: Build next.js volume
         run: |
+          ./next-dev --version
           docker volume create nextjs-test-volume
           # Run a dummy container to cp checked out next.js to the volume
           docker run --rm -d --mount src=nextjs-test-volume,dst=/work --name dummy mcr.microsoft.com/playwright:v1.28.1-focal tail -f /dev/null
@@ -110,11 +111,11 @@ jobs:
           # Backup named volume to tar. Named volume is created under /var/lib, which is not accessible by github action.
           docker run --mount src=nextjs-test-volume,dst=/volume --rm --log-driver none loomchild/volume-backup backup > volume.tar.bz2
 
-      - name: Check Next.js build version
+      # If input version is published release, detect version by running next.js build.
+      - name: Detects Next.js build version
         run: |
-          ./next-dev --version
           # This is being used in github action to collect test results. Do not change it, or should update ./.github/actions/next-integration-test to match.
-          echo "RUNNING NEXTJS VERSION: $(packages/next/dist/bin/next --version)"
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c 'curl https://install-node.vercel.app/v16 | FORCE=1 bash && cd /work && echo RUNNING NEXTJS VERSION: $(packages/next/dist/bin/next --version)'
 
       # Once build completes, creates a cache of the build output
       # so subsequent job to actually execute tests can reuse it.
