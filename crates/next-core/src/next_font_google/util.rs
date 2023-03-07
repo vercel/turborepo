@@ -53,7 +53,7 @@ pub(crate) fn get_font_axes(
     font_data: &FontData,
     font_family: &str,
     weights: &FontWeights,
-    styles: &IndexSet<String>,
+    styles: &[String],
     selected_variable_axes: &Option<Vec<String>>,
 ) -> Result<FontAxes> {
     let all_axes = &font_data
@@ -62,8 +62,8 @@ pub(crate) fn get_font_axes(
         .axes;
 
     let ital = {
-        let has_italic = styles.contains("italic");
-        let has_normal = styles.contains("normal");
+        let has_italic = styles.contains(&"italic".to_owned());
+        let has_normal = styles.contains(&"normal".to_owned());
         let mut set = IndexSet::new();
         if has_normal {
             set.insert(FontItal::Normal);
@@ -283,13 +283,7 @@ mod tests {
   "#,
         )?;
 
-        match get_font_axes(
-            &data,
-            "foobar",
-            &FontWeights::Variable,
-            &indexset! {},
-            &None,
-        ) {
+        match get_font_axes(&data, "foobar", &FontWeights::Variable, &[], &None) {
             Ok(_) => panic!(),
             Err(err) => {
                 assert_eq!(err.to_string(), "Font family not found")
@@ -311,13 +305,7 @@ mod tests {
   "#,
         )?;
 
-        match get_font_axes(
-            &data,
-            "ABeeZee",
-            &FontWeights::Variable,
-            &indexset! {},
-            &None,
-        ) {
+        match get_font_axes(&data, "ABeeZee", &FontWeights::Variable, &[], &None) {
             Ok(_) => panic!(),
             Err(err) => {
                 assert_eq!(err.to_string(), "Font ABeeZee has no definable `axes`")
@@ -361,7 +349,7 @@ mod tests {
                 &data,
                 "Inter",
                 &FontWeights::Variable,
-                &indexset! {},
+                &[],
                 &Some(vec!["slnt".to_owned()]),
             )?,
             FontAxes {
@@ -402,7 +390,7 @@ mod tests {
                 &data,
                 "Inter",
                 &FontWeights::Variable,
-                &indexset! {},
+                &[],
                 &Some(vec!["slnt".to_owned()]),
             )?,
             FontAxes {
@@ -436,13 +424,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            get_font_axes(
-                &data,
-                "Hind",
-                &FontWeights::Fixed(indexset! {500}),
-                &indexset! {},
-                &None
-            )?,
+            get_font_axes(&data, "Hind", &FontWeights::Fixed(vec![500]), &[], &None)?,
             FontAxes {
                 wght: indexset! {"500".to_owned()},
                 ital: indexset! {},

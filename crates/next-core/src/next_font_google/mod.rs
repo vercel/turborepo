@@ -2,7 +2,10 @@ use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
-use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
+use turbo_tasks::{
+    primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc},
+    Value,
+};
 use turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
@@ -383,7 +386,7 @@ async fn font_options_from_query_map(query: QueryMapVc) -> Result<NextFontGoogle
         };
 
     self::options::options_from_request(&parse_json_with_source_context(json)?, &FONT_DATA)
-        .map(NextFontGoogleOptionsVc::cell)
+        .map(|o| NextFontGoogleOptionsVc::new(Value::new(o)))
 }
 
 #[cfg(feature = "__internal_nextjs_integration_test")]
