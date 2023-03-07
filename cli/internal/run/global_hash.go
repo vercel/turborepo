@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/hashing"
@@ -24,13 +25,56 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, pipeline fs.Pipeline, envVarDependencies []string, globalFileDependencies []string, packageManager *packagemanager.PackageManager, lockFile lockfile.Lockfile, logger hclog.Logger, env []string) (struct {
+// GlobalHashable represents all the things that we use to create the global hash
+type GlobalHashable struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
 	hashedSortedEnvPairs []string
 	globalCacheKey       string
 	pipeline             fs.PristinePipeline
-}, error) {
+}
+
+// getGlobalHashable converts GlobalHashable into an anonmyous struct.
+// This exists because the global hash was originally implemented with an anonymous
+// struct, and changing to a named struct changes the global hash (because the hash
+// is essentially a hash of `fmt.Sprint("%#v", thing)`, and the type is part of that string.
+// We keep this converter function around, because if we were to remove the anonymous
+// struct, it would change the global hash for everyone, invalidating EVERY TURBO CACHE ON THE PLANET!
+// We can remove this converter when we are going to have to update the global hash for something
+// else anyway.
+func getGlobalHashable(named *GlobalHashable) struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	hashedSortedEnvPairs env.EnvironmentVariablePairs
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+} {
+	return struct {
+		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+		rootExternalDepsHash string
+		hashedSortedEnvPairs env.EnvironmentVariablePairs
+		globalCacheKey       string
+		pipeline             fs.PristinePipeline
+	}{
+		globalFileHashMap:    named.globalFileHashMap,
+		rootExternalDepsHash: named.rootExternalDepsHash,
+		hashedSortedEnvPairs: named.hashedSortedEnvPairs,
+		globalCacheKey:       named.globalCacheKey,
+		pipeline:             named.pipeline,
+	}
+}
+
+func calculateGlobalHash(
+	rootpath turbopath.AbsoluteSystemPath,
+	rootPackageJSON *fs.PackageJSON,
+	pipeline fs.Pipeline,
+	envVarDependencies []string,
+	globalFileDependencies []string,
+	packageManager *packagemanager.PackageManager,
+	lockFile lockfile.Lockfile,
+	logger hclog.Logger,
+	env []string,
+) (*GlobalHashable, error) {
 	// Calculate env var dependencies
 	globalHashableEnvNames := []string{}
 	globalHashableEnvPairs := []string{}
@@ -50,24 +94,12 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return struct {
-				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-				rootExternalDepsHash string
-				hashedSortedEnvPairs []string
-				globalCacheKey       string
-				pipeline             fs.PristinePipeline
-			}{}, err
+			return nil, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return struct {
-				globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-				rootExternalDepsHash string
-				hashedSortedEnvPairs []string
-				globalCacheKey       string
-				pipeline             fs.PristinePipeline
-			}{}, err
+			return nil, err
 		}
 
 		for _, val := range f {
@@ -100,30 +132,16 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return struct {
-			globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-			rootExternalDepsHash string
-			hashedSortedEnvPairs []string
-			globalCacheKey       string
-			pipeline             fs.PristinePipeline
-		}{}, fmt.Errorf("error hashing files: %w", err)
+		return nil, fmt.Errorf("error hashing files: %w", err)
 	}
 
-	globalHashable := struct {
-		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-		rootExternalDepsHash string
-		hashedSortedEnvPairs []string
-		globalCacheKey       string
-		pipeline             fs.PristinePipeline
-	}{
+	return &GlobalHashable{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
 		globalCacheKey:       _globalCacheKey,
 		pipeline:             pipeline.Pristine(),
-	}
-
-	return globalHashable, nil
+	}, nil
 }
 
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and
