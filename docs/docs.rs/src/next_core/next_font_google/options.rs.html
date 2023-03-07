@@ -558,23 +558,34 @@
 <span id="558">558</span>
 <span id="559">559</span>
 <span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
+<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, Value};
 
 <span class="kw">use </span><span class="kw">super</span>::request::{NextFontRequest, OneOrManyStrings};
 
 <span class="kw">const </span>ALLOWED_DISPLAY_VALUES: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[<span class="string">&quot;auto&quot;</span>, <span class="string">&quot;block&quot;</span>, <span class="string">&quot;swap&quot;</span>, <span class="string">&quot;fallback&quot;</span>, <span class="string">&quot;optional&quot;</span>];
 
-<span class="kw">pub type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
 
-<span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
-</span><span class="kw">pub struct </span>NextFontGoogleOptions {
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+#[derive(Clone, Debug, PartialOrd, Ord, Hash)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>NextFontGoogleOptions {
     <span class="doccomment">/// Name of the requested font from Google. Contains literal spaces.
     </span><span class="kw">pub </span>font_family: String,
     <span class="kw">pub </span>weights: FontWeights,
-    <span class="kw">pub </span>styles: IndexSet&lt;String&gt;,
+    <span class="kw">pub </span>styles: Vec&lt;String&gt;,
     <span class="kw">pub </span>display: String,
     <span class="kw">pub </span>preload: bool,
     <span class="kw">pub </span>selected_variable_axes: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
@@ -584,14 +595,24 @@
     <span class="kw">pub </span>subsets: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 }
 
-<span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
-</span><span class="kw">pub enum </span>FontWeights {
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>NextFontGoogleOptionsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(options: Value&lt;NextFontGoogleOptions&gt;) -&gt; NextFontGoogleOptionsVc {
+        <span class="self">Self</span>::cell(options.into_value())
+    }
+}
+
+<span class="attr">#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
+)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>FontWeights {
     Variable,
-    Fixed(IndexSet&lt;u16&gt;),
+    Fixed(Vec&lt;u16&gt;),
 }
 
 <span class="attr">#[derive(Debug, Deserialize)]
-</span><span class="kw">pub struct </span>FontDataEntry {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>FontDataEntry {
     <span class="kw">pub </span>weights: Vec&lt;String&gt;,
     <span class="kw">pub </span>styles: Vec&lt;String&gt;,
     <span class="kw">pub </span>axes: <span class="prelude-ty">Option</span>&lt;Vec&lt;Axis&gt;&gt;,
@@ -599,17 +620,16 @@
 
 <span class="attr">#[derive(Debug, Deserialize)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">pub struct </span>Axis {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Axis {
     <span class="kw">pub </span>tag: String,
     <span class="kw">pub </span>min: f64,
     <span class="kw">pub </span>max: f64,
-    <span class="kw">pub </span>default_value: f64,
 }
 
 <span class="comment">// Transforms the request fields to a struct suitable for making requests to
 // Google Fonts. Similar to next/font/google&#39;s validateData:
 // https://github.com/vercel/next.js/blob/28454c6ddbc310419467e5415aee26e48d079b46/packages/font/src/google/utils.ts#L22
-</span><span class="kw">pub fn </span>options_from_request(
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>options_from_request(
     request: <span class="kw-2">&amp;</span>NextFontRequest,
     data: <span class="kw-2">&amp;</span>IndexMap&lt;String, FontDataEntry&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NextFontGoogleOptions&gt; {
@@ -637,11 +657,11 @@
     <span class="kw">let </span><span class="kw-2">mut </span>styles = argument
         .and_then(|argument| {
             argument.style.as_ref().map(|w| <span class="kw">match </span>w {
-                OneOrManyStrings::One(one) =&gt; <span class="macro">indexset! </span>{one.to_owned()},
-                OneOrManyStrings::Many(many) =&gt; IndexSet::from_iter(many.iter().cloned()),
+                OneOrManyStrings::One(one) =&gt; <span class="macro">vec!</span>[one.to_owned()],
+                OneOrManyStrings::Many(many) =&gt; many.clone(),
             })
         })
-        .unwrap_or_else(IndexSet::new);
+        .unwrap_or_default();
 
     <span class="kw">let </span>weights = <span class="kw">if </span>requested_weights.is_empty() {
         <span class="kw">if </span>!font_data.weights.contains(<span class="kw-2">&amp;</span><span class="string">&quot;variable&quot;</span>.to_owned()) {
@@ -675,9 +695,9 @@
             }
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>weights = <span class="macro">indexset! </span>{};
+        <span class="kw">let </span><span class="kw-2">mut </span>weights = <span class="macro">vec!</span>[];
         <span class="kw">for </span>weight <span class="kw">in </span>requested_weights {
-            weights.insert(weight.parse()<span class="question-mark">?</span>);
+            weights.push(weight.parse()<span class="question-mark">?</span>);
         }
 
         FontWeights::Fixed(weights)
@@ -685,9 +705,9 @@
 
     <span class="kw">if </span>styles.is_empty() {
         <span class="kw">if </span>font_data.styles.len() == <span class="number">1 </span>{
-            styles.insert(font_data.styles[<span class="number">0</span>].clone());
+            styles.push(font_data.styles[<span class="number">0</span>].clone());
         } <span class="kw">else </span>{
-            styles.insert(<span class="string">&quot;normal&quot;</span>.to_owned());
+            styles.push(<span class="string">&quot;normal&quot;</span>.to_owned());
         }
     }
 
@@ -729,7 +749,7 @@
         preload: argument.map(|a| a.preload).unwrap_or(<span class="bool-val">true</span>),
         selected_variable_axes: argument.and_then(|a| a.axes.clone()),
         fallback: argument.and_then(|a| a.fallback.clone()),
-        adjust_font_fallback: argument.map(|a| a.adjust_font_fallback).unwrap_or(<span class="bool-val">false</span>),
+        adjust_font_fallback: argument.map(|a| a.adjust_font_fallback).unwrap_or(<span class="bool-val">true</span>),
         variable: argument.and_then(|a| a.variable.clone()),
         subsets: argument.and_then(|a| a.subsets.clone()),
     })
@@ -738,7 +758,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>anyhow::Result;
-    <span class="kw">use </span>indexmap::{indexset, IndexMap};
+    <span class="kw">use </span>indexmap::IndexMap;
     <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 
     <span class="kw">use super</span>::{options_from_request, FontDataEntry, NextFontGoogleOptions};
@@ -806,12 +826,12 @@
             NextFontGoogleOptions {
                 font_family: <span class="string">&quot;ABeeZee&quot;</span>.to_owned(),
                 weights: FontWeights::Variable,
-                styles: <span class="macro">indexset! </span>{<span class="string">&quot;normal&quot;</span>.to_owned()},
+                styles: <span class="macro">vec!</span>[<span class="string">&quot;normal&quot;</span>.to_owned()],
                 display: <span class="string">&quot;swap&quot;</span>.to_owned(),
                 preload: <span class="bool-val">true</span>,
                 selected_variable_axes: <span class="prelude-val">None</span>,
                 fallback: <span class="prelude-val">None</span>,
-                adjust_font_fallback: <span class="bool-val">false</span>,
+                adjust_font_fallback: <span class="bool-val">true</span>,
                 variable: <span class="prelude-val">None</span>,
                 subsets: <span class="prelude-val">None</span>,
             },
@@ -960,7 +980,7 @@
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>options = options_from_request(<span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
-        <span class="macro">assert_eq!</span>(options.styles, <span class="macro">indexset! </span>{<span class="string">&quot;italic&quot;</span>.to_owned()});
+        <span class="macro">assert_eq!</span>(options.styles, <span class="macro">vec!</span>[<span class="string">&quot;italic&quot;</span>.to_owned()]);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -992,7 +1012,7 @@
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>options = options_from_request(<span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
-        <span class="macro">assert_eq!</span>(options.styles, <span class="macro">indexset! </span>{<span class="string">&quot;normal&quot;</span>.to_owned()});
+        <span class="macro">assert_eq!</span>(options.styles, <span class="macro">vec!</span>[<span class="string">&quot;normal&quot;</span>.to_owned()]);
 
         <span class="prelude-val">Ok</span>(())
     }

@@ -567,12 +567,25 @@
 <span id="567">567</span>
 <span id="568">568</span>
 <span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexSet};
+<span class="kw">use </span>turbo_tasks::primitives::{StringVc, U32Vc};
 
-<span class="kw">use </span><span class="kw">super</span>::options::{FontData, FontWeights};
+<span class="kw">use </span><span class="kw">super</span>::options::{FontData, FontWeights, NextFontGoogleOptionsVc};
 
 <span class="attr">#[derive(Debug, PartialEq)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>FontAxes {
@@ -587,12 +600,41 @@
     Normal,
 }
 
+<span class="attr">#[turbo_tasks::value(shared)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>FontFamilyType {
+    WebFont,
+    Fallback,
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_scoped_font_family(
+    ty: FontFamilyTypeVc,
+    options: NextFontGoogleOptionsVc,
+    request_hash: U32Vc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+    <span class="kw">let </span>options = options.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>hash = {
+        <span class="kw">let </span><span class="kw-2">mut </span>hash = <span class="macro">format!</span>(<span class="string">&quot;{:x?}&quot;</span>, request_hash.<span class="kw">await</span><span class="question-mark">?</span>);
+        hash.truncate(<span class="number">6</span>);
+        hash
+    };
+
+    <span class="kw">let </span>font_family_base = options.font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;_&quot;</span>);
+    <span class="kw">let </span>ty = <span class="kw-2">&amp;*</span>ty.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>font_family = <span class="kw">match </span>ty {
+        FontFamilyType::WebFont =&gt; font_family_base,
+        FontFamilyType::Fallback =&gt; <span class="macro">format!</span>(<span class="string">&quot;{}_Fallback&quot;</span>, font_family_base),
+    };
+
+    <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;__{}_{}&quot;</span>, font_family, hash)))
+}
+
 <span class="comment">// Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L232
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_font_axes(
     font_data: <span class="kw-2">&amp;</span>FontData,
     font_family: <span class="kw-2">&amp;</span>str,
     weights: <span class="kw-2">&amp;</span>FontWeights,
-    styles: <span class="kw-2">&amp;</span>IndexSet&lt;String&gt;,
+    styles: <span class="kw-2">&amp;</span>[String],
     selected_variable_axes: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;FontAxes&gt; {
     <span class="kw">let </span>all_axes = <span class="kw-2">&amp;</span>font_data
@@ -601,8 +643,8 @@
         </span>.axes;
 
     <span class="kw">let </span>ital = {
-        <span class="kw">let </span>has_italic = styles.contains(<span class="string">&quot;italic&quot;</span>);
-        <span class="kw">let </span>has_normal = styles.contains(<span class="string">&quot;normal&quot;</span>);
+        <span class="kw">let </span>has_italic = styles.contains(<span class="kw-2">&amp;</span><span class="string">&quot;italic&quot;</span>.to_owned());
+        <span class="kw">let </span>has_normal = styles.contains(<span class="kw-2">&amp;</span><span class="string">&quot;normal&quot;</span>.to_owned());
         <span class="kw">let </span><span class="kw-2">mut </span>set = IndexSet::new();
         <span class="kw">if </span>has_normal {
             set.insert(FontItal::Normal);
@@ -822,13 +864,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">match </span>get_font_axes(
-            <span class="kw-2">&amp;</span>data,
-            <span class="string">&quot;foobar&quot;</span>,
-            <span class="kw-2">&amp;</span>FontWeights::Variable,
-            <span class="kw-2">&amp;</span><span class="macro">indexset! </span>{},
-            <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
-        ) {
+        <span class="kw">match </span>get_font_axes(<span class="kw-2">&amp;</span>data, <span class="string">&quot;foobar&quot;</span>, <span class="kw-2">&amp;</span>FontWeights::Variable, <span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span><span class="prelude-val">None</span>) {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(),
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="macro">assert_eq!</span>(err.to_string(), <span class="string">&quot;Font family not found&quot;</span>)
@@ -850,13 +886,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">match </span>get_font_axes(
-            <span class="kw-2">&amp;</span>data,
-            <span class="string">&quot;ABeeZee&quot;</span>,
-            <span class="kw-2">&amp;</span>FontWeights::Variable,
-            <span class="kw-2">&amp;</span><span class="macro">indexset! </span>{},
-            <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
-        ) {
+        <span class="kw">match </span>get_font_axes(<span class="kw-2">&amp;</span>data, <span class="string">&quot;ABeeZee&quot;</span>, <span class="kw-2">&amp;</span>FontWeights::Variable, <span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span><span class="prelude-val">None</span>) {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(),
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="macro">assert_eq!</span>(err.to_string(), <span class="string">&quot;Font ABeeZee has no definable `axes`&quot;</span>)
@@ -900,7 +930,7 @@
                 <span class="kw-2">&amp;</span>data,
                 <span class="string">&quot;Inter&quot;</span>,
                 <span class="kw-2">&amp;</span>FontWeights::Variable,
-                <span class="kw-2">&amp;</span><span class="macro">indexset! </span>{},
+                <span class="kw-2">&amp;</span>[],
                 <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;slnt&quot;</span>.to_owned()]),
             )<span class="question-mark">?</span>,
             FontAxes {
@@ -941,7 +971,7 @@
                 <span class="kw-2">&amp;</span>data,
                 <span class="string">&quot;Inter&quot;</span>,
                 <span class="kw-2">&amp;</span>FontWeights::Variable,
-                <span class="kw-2">&amp;</span><span class="macro">indexset! </span>{},
+                <span class="kw-2">&amp;</span>[],
                 <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;slnt&quot;</span>.to_owned()]),
             )<span class="question-mark">?</span>,
             FontAxes {
@@ -975,13 +1005,7 @@
         )<span class="question-mark">?</span>;
 
         <span class="macro">assert_eq!</span>(
-            get_font_axes(
-                <span class="kw-2">&amp;</span>data,
-                <span class="string">&quot;Hind&quot;</span>,
-                <span class="kw-2">&amp;</span>FontWeights::Fixed(<span class="macro">indexset! </span>{<span class="number">500</span>}),
-                <span class="kw-2">&amp;</span><span class="macro">indexset! </span>{},
-                <span class="kw-2">&amp;</span><span class="prelude-val">None
-            </span>)<span class="question-mark">?</span>,
+            get_font_axes(<span class="kw-2">&amp;</span>data, <span class="string">&quot;Hind&quot;</span>, <span class="kw-2">&amp;</span>FontWeights::Fixed(<span class="macro">vec!</span>[<span class="number">500</span>]), <span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span><span class="prelude-val">None</span>)<span class="question-mark">?</span>,
             FontAxes {
                 wght: <span class="macro">indexset! </span>{<span class="string">&quot;500&quot;</span>.to_owned()},
                 ital: <span class="macro">indexset! </span>{},

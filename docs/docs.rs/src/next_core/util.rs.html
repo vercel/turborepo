@@ -293,16 +293,69 @@
 <span id="293">293</span>
 <span id="294">294</span>
 <span id="295">295</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>serde::{de::DeserializeOwned, Deserialize, Serialize};
 <span class="kw">use </span>swc_core::ecma::ast::Program;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, Value, ValueToString};
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack::condition::ContextCondition;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
+    resolve::{
+        <span class="self">self</span>, handle_resolve_error, node::node_cjs_resolve_options, parse::RequestVc,
+        pattern::QueryMapVc, PrimaryResolveResult,
+    },
 };
 <span class="kw">use </span>turbopack_ecmascript::{
     analyzer::{JsValue, ObjectPart},
@@ -587,6 +640,49 @@
     }
 
     config
+}
+
+<span class="kw">pub async fn </span>load_next_json&lt;T: DeserializeOwned&gt;(
+    context: FileSystemPathVc,
+    path: <span class="kw-2">&amp;</span>str,
+) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
+    <span class="kw">let </span>request = RequestVc::module(
+        <span class="string">&quot;next&quot;</span>.to_owned(),
+        Value::new(path.to_string().into()),
+        QueryMapVc::cell(<span class="prelude-val">None</span>),
+    );
+    <span class="kw">let </span>resolve_options = node_cjs_resolve_options(context.root());
+
+    <span class="kw">let </span>resolve_result = handle_resolve_error(
+        resolve::resolve(context, request, resolve_options),
+        Value::new(ReferenceType::EcmaScriptModules(
+            EcmaScriptModulesReferenceSubType::Undefined,
+        )),
+        context,
+        request,
+        resolve_options,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>resolve_result = <span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>primary = resolve_result
+        .primary
+        .first()
+        .context(<span class="string">&quot;Unable to resolve primary asset&quot;</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>PrimaryResolveResult::Asset(metrics_asset) = primary <span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;Expected to find asset&quot;</span>);
+    };
+
+    <span class="kw">let </span>content = <span class="kw-2">&amp;*</span>metrics_asset.content().file_content().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>FileContent::Content(file) = content <span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;Expected file content for metrics data&quot;</span>);
+    };
+
+    <span class="kw">let </span>result: T = parse_json_rope_with_source_context(file.content())<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(result)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

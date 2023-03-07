@@ -1282,8 +1282,6 @@
 <span id="1282">1282</span>
 <span id="1283">1283</span>
 <span id="1284">1284</span>
-<span id="1285">1285</span>
-<span id="1286">1286</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1308,7 +1306,6 @@
         resolve_modules_options, ImportMapResult, ResolveInPackage, ResolveIntoPackage,
         ResolveModules, ResolveModulesOptionsVc, ResolveOptionsVc,
     },
-    origin::ResolveOriginVc,
     parse::{Request, RequestVc},
     pattern::QueryMapVc,
 };
@@ -1322,7 +1319,6 @@
     reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
-        origin::ResolveOrigin,
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
         plugin::ResolvePlugin,
     },
@@ -2537,7 +2533,7 @@
 <span class="kw">pub async fn </span>handle_resolve_error(
     result: ResolveResultVc,
     reference_type: Value&lt;ReferenceType&gt;,
-    origin: ResolveOriginVc,
+    origin_path: FileSystemPathVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
@@ -2545,7 +2541,7 @@
         <span class="prelude-val">Ok</span>(unresolveable) =&gt; {
             <span class="kw">if </span><span class="kw-2">*</span>unresolveable {
                 <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
-                    context: origin.origin_path(),
+                    context: origin_path,
                     request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                     request,
                     resolve_options,
@@ -2558,7 +2554,7 @@
         }
         <span class="prelude-val">Err</span>(err) =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
-                context: origin.origin_path(),
+                context: origin_path,
                 request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                 request,
                 resolve_options,

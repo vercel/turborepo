@@ -484,28 +484,14 @@
 <span id="484">484</span>
 <span id="485">485</span>
 <span id="486">486</span>
-<span id="487">487</span>
-<span id="488">488</span>
-<span id="489">489</span>
-<span id="490">490</span>
-<span id="491">491</span>
-<span id="492">492</span>
-<span id="493">493</span>
-<span id="494">494</span>
-<span id="495">495</span>
-<span id="496">496</span>
-<span id="497">497</span>
-<span id="498">498</span>
-<span id="499">499</span>
-<span id="500">500</span>
-<span id="501">501</span>
-<span id="502">502</span>
-<span id="503">503</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>once_cell::sync::Lazy;
-<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc},
+    Value,
+};
 <span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
@@ -522,7 +508,12 @@
 };
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
-<span class="kw">use </span><span class="self">self</span>::options::FontWeights;
+<span class="kw">use </span><span class="self">self</span>::{
+    font_fallback::{get_font_fallback, FontFallback, FontFallbackVc},
+    options::{FontWeights, NextFontGoogleOptionsVc},
+    stylesheet::build_stylesheet,
+    util::{get_scoped_font_family, FontFamilyType},
+};
 <span class="kw">use crate</span>::{
     embed_js::next_js_file_path,
     next_font_google::{
@@ -531,9 +522,12 @@
     },
 };
 
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>font_fallback;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>issue;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>options;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>request;
-<span class="kw">mod </span>util;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>stylesheet;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>util;
 
 <span class="kw">pub const </span>GOOGLE_FONTS_STYLESHEET_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;https://fonts.googleapis.com/css2&quot;</span>;
 <span class="kw">static </span>FONT_DATA: Lazy&lt;FontData&gt; = Lazy::new(|| {
@@ -543,7 +537,7 @@
 <span class="kw">type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
 
 <span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub struct </span>NextFontGoogleReplacer {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>NextFontGoogleReplacer {
     project_path: FileSystemPathVc,
 }
 
@@ -575,8 +569,9 @@
 
         <span class="kw">let </span>query = <span class="kw-2">&amp;*</span>query_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
-        <span class="kw">let </span>properties =
-            get_font_css_properties(get_scoped_font_family(<span class="kw-2">*</span>query_vc), options).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>request_hash = get_request_hash(<span class="kw-2">*</span>query_vc);
+        <span class="kw">let </span>fallback = get_font_fallback(<span class="self">self</span>.project_path, options, request_hash);
+        <span class="kw">let </span>properties = get_font_css_properties(options, fallback, request_hash).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>js_asset = VirtualAssetVc::new(
                 next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
                     .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>)),
@@ -660,7 +655,9 @@
 
         <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options);
-        <span class="kw">let </span>scoped_font_family = get_scoped_font_family(<span class="kw-2">*</span>query_vc);
+        <span class="kw">let </span>request_hash = get_request_hash(<span class="kw-2">*</span>query_vc);
+        <span class="kw">let </span>scoped_font_family =
+            get_scoped_font_family(FontFamilyType::WebFont.cell(), options, request_hash);
         <span class="kw">let </span>css_virtual_path = next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
             .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}.module.css&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>));
 
@@ -715,43 +712,17 @@
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
         };
 
-        <span class="kw">let </span>properties = get_font_css_properties(scoped_font_family, options).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>font_family = properties.font_family.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>font_fallback = get_font_fallback(<span class="self">self</span>.project_path, options, request_hash);
         <span class="kw">let </span>css_asset = VirtualAssetVc::new(
             css_virtual_path,
             FileContent::Content(
-                <span class="macro">formatdoc!</span>(
-                    <span class="string">r#&quot;
-                        {}
-
-                        .className {{
-                            font-family: {};
-                            {}{}
-                        }}
-
-                        {}
-                        &quot;#</span>,
-                    stylesheet.unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
-                    font_family,
-                    properties
-                        .weight
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.map(|w| <span class="macro">format!</span>(<span class="string">&quot;font-weight: {};\n&quot;</span>, w))
-                        .unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
-                    properties
-                        .style
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.as_ref()
-                        .map(|s| <span class="macro">format!</span>(<span class="string">&quot;font-style: {};\n&quot;</span>, s))
-                        .unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
-                    properties
-                        .variable
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.as_ref()
-                        .map(|v| { <span class="macro">format!</span>(<span class="string">&quot;.variable {{ {}: {}; }} &quot;</span>, v, <span class="kw-2">*</span>font_family) })
-                        .unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned())
+                build_stylesheet(
+                    OptionStringVc::cell(stylesheet),
+                    get_font_css_properties(options, font_fallback, request_hash),
+                    font_fallback,
                 )
-                .into(),
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into(),
             )
             .into(),
         );
@@ -771,22 +742,6 @@
     </span><span class="prelude-val">Ok</span>(StringVc::cell(stylesheet.<span class="kw">await</span><span class="question-mark">?</span>.replace(
         <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;font-family: &#39;{}&#39;;&quot;</span>, <span class="kw-2">&amp;*</span>options.<span class="kw">await</span><span class="question-mark">?</span>.font_family),
         <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;font-family: &#39;{}&#39;;&quot;</span>, <span class="kw-2">&amp;*</span>scoped_font_family.<span class="kw">await</span><span class="question-mark">?</span>),
-    )))
-}
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_scoped_font_family(query_vc: QueryMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-    <span class="kw">let </span>options = font_options_from_query_map(query_vc).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>hash = {
-        <span class="kw">let </span><span class="kw-2">mut </span>hash = <span class="macro">format!</span>(<span class="string">&quot;{:x?}&quot;</span>, <span class="kw-2">*</span>get_request_hash(query_vc).<span class="kw">await</span><span class="question-mark">?</span>);
-        hash.truncate(<span class="number">6</span>);
-        hash
-    };
-
-    <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-        <span class="string">&quot;__{}_{}&quot;</span>,
-        options.font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;_&quot;</span>),
-        hash
     )))
 }
 
@@ -848,10 +803,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">struct </span>NextFontGoogleOptions(<span class="self">self</span>::options::NextFontGoogleOptions);
-
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">struct </span>FontCssProperties {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>FontCssProperties {
     font_family: StringVc,
     weight: OptionU16Vc,
     style: OptionStringVc,
@@ -860,13 +812,27 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>get_font_css_properties(
-    scoped_font_family: StringVc,
-    options: NextFontGoogleOptionsVc,
+    options_vc: NextFontGoogleOptionsVc,
+    font_fallback: FontFallbackVc,
+    request_hash: U32Vc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;FontCssPropertiesVc&gt; {
-    <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>options.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>scoped_font_family = <span class="kw-2">&amp;*</span>scoped_font_family.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>options_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>scoped_font_family =
+        <span class="kw-2">&amp;*</span>get_scoped_font_family(FontFamilyType::WebFont.cell(), options_vc, request_hash).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>font_families = <span class="macro">vec!</span>[scoped_font_family.clone()];
+    <span class="kw">let </span>font_fallback = <span class="kw-2">&amp;*</span>font_fallback.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">match </span>font_fallback {
+        FontFallback::Manual(fonts) =&gt; {
+            font_families.extend_from_slice(<span class="kw-2">&amp;</span>fonts.<span class="kw">await</span><span class="question-mark">?</span>);
+        }
+        FontFallback::Automatic(fallback) =&gt; {
+            <span class="kw">let </span>fallback = <span class="kw-2">&amp;*</span>fallback.<span class="kw">await</span><span class="question-mark">?</span>;
+            font_families.push((<span class="kw-2">*</span>fallback.scoped_font_family.<span class="kw">await</span><span class="question-mark">?</span>).clone());
+        }
+        FontFallback::Error =&gt; {}
+    }
+
     <span class="kw">if let </span><span class="prelude-val">Some</span>(fallback) = <span class="kw-2">&amp;</span>options.fallback {
         font_families.extend_from_slice(fallback);
     }
@@ -906,7 +872,7 @@
         };
 
     <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>parse_json_with_source_context(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>FONT_DATA)
-        .map(NextFontGoogleOptionsVc::cell)
+        .map(|o| NextFontGoogleOptionsVc::new(Value::new(o)))
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;__internal_nextjs_integration_test&quot;</span>)]

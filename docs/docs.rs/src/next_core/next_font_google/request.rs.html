@@ -33,6 +33,10 @@
 <span id="33">33</span>
 <span id="34">34</span>
 <span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
 </pre><pre class="rust"><code><span class="kw">use </span>serde::Deserialize;
 
 <span class="doccomment">/// The top-most structure encoded into the query param in requests to
@@ -57,7 +61,7 @@
     </span><span class="kw">pub </span>preload: bool,
     <span class="kw">pub </span>axes: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
     <span class="kw">pub </span>fallback: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
-    <span class="attr">#[serde(default)]
+    <span class="attr">#[serde(default = <span class="string">&quot;default_adjust_font_fallback&quot;</span>)]
     </span><span class="kw">pub </span>adjust_font_fallback: bool,
     <span class="kw">pub </span>variable: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
@@ -68,5 +72,9 @@
     One(String),
     Many(Vec&lt;String&gt;),
 }
+
+<span class="kw">fn </span>default_adjust_font_fallback() -&gt; bool {
+    <span class="bool-val">true
+</span>}
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

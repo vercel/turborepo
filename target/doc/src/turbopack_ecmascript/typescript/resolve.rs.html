@@ -695,7 +695,7 @@
         resolve(context_path, request, options)
     };
     <span class="kw">let </span>result = origin.context().process_resolve_result(result, ty.clone());
-    handle_resolve_error(result, ty, origin, request, options).<span class="kw">await
+    handle_resolve_error(result, ty, origin.origin_path(), request, options).<span class="kw">await
 </span>}
 
 <span class="attr">#[turbo_tasks::value]

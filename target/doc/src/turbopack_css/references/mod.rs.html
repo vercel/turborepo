@@ -163,6 +163,11 @@
 <span id="163">163</span>
 <span id="164">164</span>
 <span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{
@@ -179,7 +184,12 @@
     asset::AssetVc,
     reference::{AssetReferenceVc, AssetReferencesVc},
     reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::{handle_resolve_error, origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    resolve::{
+        handle_resolve_error,
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        ResolveResultVc,
+    },
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -322,7 +332,7 @@
     <span class="kw">let </span>options = origin.resolve_options(ty.clone());
     <span class="kw">let </span>result = origin.resolve_asset(request, options, ty.clone());
 
-    handle_resolve_error(result, ty, origin, request, options).<span class="kw">await
+    handle_resolve_error(result, ty, origin.origin_path(), request, options).<span class="kw">await
 </span>}
 
 <span class="comment">// TODO enable serialization

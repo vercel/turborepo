@@ -96,6 +96,20 @@
 <span id="96">96</span>
 <span id="97">97</span>
 <span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>node_native_binding;
 
 <span class="kw">use </span>anyhow::Result;
@@ -180,7 +194,14 @@
     } <span class="kw">else </span>{
         rel_result
     };
-    handle_resolve_error(result, ty.clone(), origin, request, resolve_options).<span class="kw">await</span><span class="question-mark">?</span>;
+    handle_resolve_error(
+        result,
+        ty.clone(),
+        origin.origin_path(),
+        request,
+        resolve_options,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(origin.context().process_resolve_result(result, ty))
 }
 
@@ -192,7 +213,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>result = origin.resolve_asset(request, options, reference_type.clone());
 
-    handle_resolve_error(result, reference_type, origin, request, options).<span class="kw">await
+    handle_resolve_error(
+        result,
+        reference_type,
+        origin.origin_path(),
+        request,
+        options,
+    )
+    .<span class="kw">await
 </span>}
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
