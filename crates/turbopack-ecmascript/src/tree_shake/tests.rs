@@ -100,7 +100,7 @@ fn run(input: PathBuf) {
             }
 
             if !item.write_vars.is_empty() {
-                writeln!(s, "- Write: {:?}", f(&item.write_vars)).unwrap();
+                writeln!(s, "- Write: {}", f(&item.write_vars)).unwrap();
             }
 
             if !item.eventual_write_vars.is_empty() {
