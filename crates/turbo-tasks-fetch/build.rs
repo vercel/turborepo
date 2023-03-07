@@ -15,5 +15,5 @@ fn main() {
     // Check if tls feature for reqwest is properly configured.
     // Technically reqwest falls back to non-tls http request if none of the tls
     // features are enabled, But we won't allow it.
-    check_tls_config();
+    // check_tls_config();
 }

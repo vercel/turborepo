@@ -264,7 +264,7 @@ mod tests {
     use turbo_tasks_fs::json::parse_json_with_source_context;
 
     use super::get_font_axes;
-    use crate::next_font_google::{
+    use crate::next_font::google::{
         options::{FontData, FontWeights},
         util::{get_stylesheet_url, FontAxes, FontItal},
         GOOGLE_FONTS_STYLESHEET_URL,

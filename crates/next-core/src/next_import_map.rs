@@ -22,7 +22,10 @@ use crate::{
     embed_js::{next_js_fs, VIRTUAL_PACKAGE_NAME},
     next_client::context::ClientContextType,
     next_config::NextConfigVc,
-    next_font_google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
+    next_font::{
+        google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
+        local::NextFontLocalReplacerVc,
+    },
     next_server::context::ServerContextType,
 };
 
@@ -373,6 +376,18 @@ pub async fn insert_next_shared_aliases(
         import_map,
         &format!("{VIRTUAL_PACKAGE_NAME}/"),
         package_root,
+    );
+
+    import_map.insert_alias(
+        // Request path from js via next-font swc transform
+        AliasPattern::exact("next/font/local/target.css"),
+        ImportMapping::Dynamic(NextFontLocalReplacerVc::new(project_path).into()).into(),
+    );
+
+    import_map.insert_alias(
+        // Request path from js via next-font swc transform
+        AliasPattern::exact("@next/font/local/target.css"),
+        ImportMapping::Dynamic(NextFontLocalReplacerVc::new(project_path).into()).into(),
     );
 
     import_map.insert_alias(

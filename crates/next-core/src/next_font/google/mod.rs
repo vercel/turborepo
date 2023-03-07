@@ -23,24 +23,15 @@ use turbopack_node::execution_context::ExecutionContextVc;
 
 use self::{
     font_fallback::{get_font_fallback, FontFallback, FontFallbackVc},
-    options::{FontWeights, NextFontGoogleOptionsVc},
-    stylesheet::build_stylesheet,
-    util::{get_scoped_font_family, FontFamilyType},
+    options::{options_from_request, FontDataEntry, FontWeights, NextFontGoogleOptionsVc},
+    util::{get_font_axes, get_scoped_font_family, get_stylesheet_url, FontFamilyType},
 };
-use crate::{
-    embed_js::next_js_file_path,
-    next_font_google::{
-        options::FontDataEntry,
-        util::{get_font_axes, get_stylesheet_url},
-    },
-    util::load_next_json,
-};
+use super::stylesheet::build_stylesheet;
+use crate::{embed_js::next_js_file_path, util::load_next_json};
 
 pub(crate) mod font_fallback;
-pub(crate) mod issue;
 pub(crate) mod options;
 pub(crate) mod request;
-pub(crate) mod stylesheet;
 pub(crate) mod util;
 
 pub const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
@@ -333,10 +324,10 @@ async fn get_stylesheet_url_from_options(
 
 #[turbo_tasks::value(transparent)]
 pub(crate) struct FontCssProperties {
-    font_family: StringVc,
-    weight: OptionU16Vc,
-    style: OptionStringVc,
-    variable: OptionStringVc,
+    pub font_family: StringVc,
+    pub weight: OptionU16Vc,
+    pub style: OptionStringVc,
+    pub variable: OptionStringVc,
 }
 
 #[turbo_tasks::function]
@@ -403,7 +394,7 @@ async fn font_options_from_query_map(
             bail!("Expected one entry");
         };
 
-    self::options::options_from_request(&parse_json_with_source_context(json)?, &*font_data.await?)
+    options_from_request(&parse_json_with_source_context(json)?, &*font_data.await?)
         .map(|o| NextFontGoogleOptionsVc::new(Value::new(o)))
 }
 

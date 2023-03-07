@@ -2,7 +2,7 @@ use anyhow::Result;
 use indoc::formatdoc;
 use turbo_tasks::primitives::{OptionStringVc, StringVc};
 
-use super::{
+use super::google::{
     font_fallback::{FontFallback, FontFallbackVc},
     FontCssProperties, FontCssPropertiesVc,
 };

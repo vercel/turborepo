@@ -5,6 +5,8 @@ use turbo_tasks::{trace::TraceRawVcs, Value};
 
 use super::request::{NextFontRequest, OneOrManyStrings};
 
+// use crate::next_font_google::request::{NextFontRequest, OneOrManyStrings};
+
 const ALLOWED_DISPLAY_VALUES: &[&str] = &["auto", "block", "swap", "fallback", "optional"];
 
 pub(crate) type FontData = IndexMap<String, FontDataEntry>;
@@ -194,7 +196,7 @@ mod tests {
     use turbo_tasks_fs::json::parse_json_with_source_context;
 
     use super::{options_from_request, FontDataEntry, NextFontGoogleOptions};
-    use crate::next_font_google::{options::FontWeights, request::NextFontRequest};
+    use crate::next_font::google::{options::FontWeights, request::NextFontRequest};
 
     #[test]
     fn test_errors_on_unknown_font() -> Result<()> {

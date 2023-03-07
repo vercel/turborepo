@@ -10,8 +10,11 @@ use turbo_tasks::{
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::issue::IssueSeverity;
 
-use super::{get_scoped_font_family, options::NextFontGoogleOptionsVc, FontFamilyType};
-use crate::{next_font_google::issue::NextFontIssue, util::load_next_json};
+use super::{
+    options::NextFontGoogleOptionsVc,
+    util::{get_scoped_font_family, FontFamilyType},
+};
+use crate::{next_font::issue::NextFontIssue, util::load_next_json};
 
 struct DefaultFallbackFont {
     name: String,
@@ -189,7 +192,7 @@ mod tests {
     use turbo_tasks_fs::json::parse_json_with_source_context;
 
     use super::{FontAdjustment, FontMetricsMap};
-    use crate::next_font_google::font_fallback::{lookup_fallback, Font};
+    use crate::next_font::google::font_fallback::{lookup_fallback, Font};
 
     #[test]
     fn test_fallback_from_metrics_sans_serif() -> Result<()> {
