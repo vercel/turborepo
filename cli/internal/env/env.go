@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -14,7 +15,7 @@ type EnvironmentVariableMap map[string]string
 // BySource contains a map of environment variables broken down by the source
 type BySource struct {
 	Explicit EnvironmentVariableMap
-	Prefixed EnvironmentVariableMap
+	Matching EnvironmentVariableMap
 }
 
 // DetailedMap contains the composite and the detailed maps of environment variables
@@ -32,6 +33,16 @@ func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
 	for k, v := range another {
 		evm[k] = v
 	}
+}
+
+// Names returns a sorted list of env var names for the EnvironmentVariableMap
+func (evm EnvironmentVariableMap) Names() []string {
+	names := []string{}
+	for k := range evm {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // EnvironmentVariablePairs is a list of "k=v" strings for env variables and their values
@@ -81,7 +92,7 @@ func getEnvMap() EnvironmentVariableMap {
 	return envMap
 }
 
-// fromPrefixes returns a map of env vars and their values based on include/exclude prefixes
+// fromKeys returns a map of env vars and their values from a given set of env var names
 func fromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap {
 	output := EnvironmentVariableMap{}
 	for _, key := range keys {
@@ -91,44 +102,68 @@ func fromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap 
 	return output
 }
 
-// fromPrefixes returns a map of env vars and their values based on include/exclude prefixes
-func fromPrefixes(all EnvironmentVariableMap, includes []string, exclude string) EnvironmentVariableMap {
+func fromMatching(all EnvironmentVariableMap, keyMatchers []string, shouldExclude func(k, v string) bool) (EnvironmentVariableMap, error) {
 	output := EnvironmentVariableMap{}
-	for _, prefix := range includes {
+	compileFailures := []string{}
+
+	for _, keyMatcher := range keyMatchers {
+		rex, err := regexp.Compile(keyMatcher)
+		if err != nil {
+			compileFailures = append(compileFailures, keyMatcher)
+			continue
+		}
+
 		for k, v := range all {
-			// Skip vars that have the exclude prefix
-			if exclude != "" && strings.HasPrefix(k, exclude) {
+			// we can skip keys based on a shouldExclude function passed in.
+			if shouldExclude(k, v) {
 				continue
 			}
 
-			// if it has the prefix, include it
-			if strings.HasPrefix(k, prefix) {
+			if rex.Match([]byte(k)) {
 				output[k] = v
 			}
 		}
 	}
-	return output
+
+	if len(compileFailures) > 0 {
+		return nil, fmt.Errorf("The following env prefixes failed to compile to regex: %s", strings.Join(compileFailures, ", "))
+	}
+
+	return output, nil
 }
 
 // GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
-func GetHashableEnvVars(keys []string, prefixes []string) DetailedMap {
+func GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
 	all := getEnvMap()
-	excludePrefix := all["TURBO_CI_VENDOR_ENV_KEY"] // this might not be set
-
-	explicit := fromKeys(all, keys)
-	prefixed := fromPrefixes(all, prefixes, excludePrefix)
-
-	// merge into a single one
-	envVars := EnvironmentVariableMap{}
-	envVars.Merge(explicit)
-	envVars.Merge(prefixed)
 
 	detailedMap := DetailedMap{
-		All: envVars,
-		BySource: BySource{
-			Explicit: explicit,
-			Prefixed: prefixed,
-		},
+		All:      EnvironmentVariableMap{},
+		BySource: BySource{},
 	}
-	return detailedMap
+
+	detailedMap.BySource.Explicit = fromKeys(all, keys)
+	detailedMap.All.Merge(detailedMap.BySource.Explicit)
+
+	// Create an excluder function to pass to matcher.
+	// We only do this when an envVarContainingExcludePrefix is passed.
+	// This isn't the greatest design, but we need this to be optional
+	shouldExclude := func(k, v string) bool {
+		return false
+	}
+	if envVarContainingExcludePrefix != "" {
+		excludedKeyName := all[envVarContainingExcludePrefix]
+		shouldExclude = func(k, v string) bool {
+			return excludedKeyName != "" && strings.HasPrefix(k, excludedKeyName)
+		}
+	}
+
+	matchedEnvVars, err := fromMatching(all, matchers, shouldExclude)
+
+	if err != nil {
+		return DetailedMap{}, err
+	}
+
+	detailedMap.BySource.Matching = matchedEnvVars
+	detailedMap.All.Merge(detailedMap.BySource.Matching)
+	return detailedMap, nil
 }

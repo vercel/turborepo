@@ -26,11 +26,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           commit_sha: ${{ steps.green_commit.outputs.result }}
           prefix: "turbopack-"
-
-      - name: Create GitHub release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.tag_version.outputs.new_tag }}
-          name: Turbopack Nightly Release ${{ steps.tag_version.outputs.new_tag }}
-          body: ${{ steps.tag_version.outputs.changelog }}
-          prerelease: true
