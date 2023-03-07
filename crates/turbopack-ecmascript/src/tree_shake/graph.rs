@@ -400,7 +400,6 @@ impl DepGraph {
             if id.index == usize::MAX {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
-                continue;
             }
         }
 
