@@ -82,6 +82,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
+        "expandedOutputs": null,
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
@@ -123,6 +124,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
+        "expandedOutputs": null,
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],

@@ -114,6 +114,12 @@ func RealRun(
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
 
+	// Gather expandedOutputs into task summaries
+	for _, taskSummary := range taskSummaries {
+		outputs := taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
+		taskSummary.ExpandedOutputs = outputs
+	}
+
 	// Assign tasks after execution
 	runSummary.Tasks = taskSummaries
 
@@ -217,6 +223,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
+		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		tracer(runsummary.TargetCached, nil)
 		return taskExecutionSummary, nil
 	}
@@ -314,6 +321,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	} else {
 		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
 			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
+		} else {
+			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		}
 	}
 

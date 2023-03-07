@@ -64,6 +64,7 @@ Check
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
+        "expandedOutputs": null,
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
