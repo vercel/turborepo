@@ -654,9 +654,9 @@ impl DepGraph {
                         };
                         ids.push(id.clone());
 
-                        let decl_ids = find_pat_ids(&decl.name);
-                        let (r, w) = ids_used_by_ignoring_nested(&decl.init);
-                        let (er, ew) = ids_captured_by(&decl.init);
+                        let decl_ids: Vec<Id> = find_pat_ids(&decl.name);
+                        let vars = ids_used_by_ignoring_nested(&decl.init);
+                        let eventual_vars = ids_captured_by(&decl.init);
 
                         let var_decl = Box::new(VarDecl {
                             decls: vec![decl.clone()],
@@ -666,11 +666,11 @@ impl DepGraph {
                         items.insert(
                             id,
                             ItemData {
-                                var_decls: decl_ids.clone(),
-                                read_vars: r,
-                                eventual_read_vars: er,
-                                write_vars: decl_ids.into_iter().chain(w).collect(),
-                                eventual_write_vars: ew,
+                                var_decls: decl_ids.clone().into_iter().collect(),
+                                read_vars: vars.read,
+                                eventual_read_vars: eventual_vars.read,
+                                write_vars: decl_ids.into_iter().chain(vars.write).collect(),
+                                eventual_write_vars: eventual_vars.write,
                                 content,
                                 ..Default::default()
                             },
@@ -689,15 +689,15 @@ impl DepGraph {
 
                     if assign.op != op!("=") {
                         let extra_ids = ids_used_by_ignoring_nested(&assign.left);
-                        used_ids.0.extend(extra_ids.0);
-                        used_ids.0.extend(extra_ids.1);
+                        used_ids.read.extend(extra_ids.read);
+                        used_ids.write.extend(extra_ids.write);
                     }
 
                     let data = ItemData {
-                        read_vars: used_ids.0,
-                        eventual_read_vars: captured_ids.0,
-                        write_vars: used_ids.1,
-                        eventual_write_vars: captured_ids.1,
+                        read_vars: used_ids.read,
+                        eventual_read_vars: captured_ids.read,
+                        write_vars: used_ids.write,
+                        eventual_write_vars: captured_ids.write,
                         content: item.clone(),
                         ..Default::default()
                     };
@@ -718,10 +718,10 @@ impl DepGraph {
             let used_ids = ids_used_by_ignoring_nested(item);
             let captured_ids = ids_captured_by(item);
             let data = ItemData {
-                read_vars: used_ids.0,
-                eventual_read_vars: captured_ids.0,
-                write_vars: used_ids.1,
-                eventual_write_vars: captured_ids.1,
+                read_vars: used_ids.read,
+                eventual_read_vars: captured_ids.read,
+                write_vars: used_ids.write,
+                eventual_write_vars: captured_ids.write,
                 side_effects: true,
                 content: item.clone(),
                 ..Default::default()

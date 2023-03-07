@@ -170,7 +170,7 @@ impl Visit for CapturedIdCollector {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Vars {
+pub(crate) struct Vars {
     /// Variables which are read.
     pub read: IndexSet<Id, BuildHasherDefault<FxHasher>>,
     /// Variables which are written.

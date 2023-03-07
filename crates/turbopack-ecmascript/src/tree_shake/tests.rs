@@ -1,6 +1,13 @@
-use std::{fmt::Write, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    fmt::Write,
+    hash::{BuildHasherDefault, Hash},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use anyhow::Error;
+use indexmap::IndexSet;
+use rustc_hash::FxHasher;
 use swc_core::{
     common::SourceMap,
     ecma::{
@@ -68,7 +75,7 @@ fn run(input: PathBuf) {
                 writeln!(s, "- Side effects").unwrap();
             }
 
-            let f = |ids: &[Id]| {
+            let f = |ids: &IndexSet<Id, BuildHasherDefault<FxHasher>>| {
                 let mut s = String::new();
                 for (i, id) in ids.iter().enumerate() {
                     if i == 0 {
