@@ -255,7 +255,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
 		r.base.Logger,
-		os.Environ(),
 	)
 
 	if err != nil {
@@ -357,7 +356,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,
-			globalHashable.hashedSortedEnvPairs,
+			globalHashable.envVars,
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),

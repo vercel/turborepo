@@ -35,6 +35,16 @@ func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
 	}
 }
 
+// Names returns a sorted list of env var names for the EnvironmentVariableMap
+func (evm EnvironmentVariableMap) Names() []string {
+	names := []string{}
+	for k := range evm {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // EnvironmentVariablePairs is a list of "k=v" strings for env variables and their values
 type EnvironmentVariablePairs []string
 
