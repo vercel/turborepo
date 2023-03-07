@@ -92,7 +92,7 @@ func getEnvMap() EnvironmentVariableMap {
 	return envMap
 }
 
-// fromKeys returns a map of env vars and their values based on include/exclude prefixes
+// fromKeys returns a map of env vars and their values from a given set of env var names
 func fromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap {
 	output := EnvironmentVariableMap{}
 	for _, key := range keys {
