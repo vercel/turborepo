@@ -60,6 +60,11 @@
 <span id="60">60</span>
 <span id="61">61</span>
 <span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{
@@ -93,6 +98,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>read_dir(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;DirectoryContentVc&gt; {
         <span class="macro">bail!</span>(<span class="string">&quot;Reading is not possible from the marker filesystem for the server&quot;</span>)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
+        <span class="macro">bail!</span>(<span class="string">&quot;Tracking is not possible to the marker filesystem for the server&quot;</span>)
     }
 
     <span class="attr">#[turbo_tasks::function]

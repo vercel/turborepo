@@ -1680,6 +1680,34 @@
 <span id="1680">1680</span>
 <span id="1681">1681</span>
 <span id="1682">1682</span>
+<span id="1683">1683</span>
+<span id="1684">1684</span>
+<span id="1685">1685</span>
+<span id="1686">1686</span>
+<span id="1687">1687</span>
+<span id="1688">1688</span>
+<span id="1689">1689</span>
+<span id="1690">1690</span>
+<span id="1691">1691</span>
+<span id="1692">1692</span>
+<span id="1693">1693</span>
+<span id="1694">1694</span>
+<span id="1695">1695</span>
+<span id="1696">1696</span>
+<span id="1697">1697</span>
+<span id="1698">1698</span>
+<span id="1699">1699</span>
+<span id="1700">1700</span>
+<span id="1701">1701</span>
+<span id="1702">1702</span>
+<span id="1703">1703</span>
+<span id="1704">1704</span>
+<span id="1705">1705</span>
+<span id="1706">1706</span>
+<span id="1707">1707</span>
+<span id="1708">1708</span>
+<span id="1709">1709</span>
+<span id="1710">1710</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1756,6 +1784,7 @@
     <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; FileContentVc;
     <span class="kw">fn </span>read_link(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; LinkContentVc;
     <span class="kw">fn </span>read_dir(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; DirectoryContentVc;
+    <span class="kw">fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; CompletionVc;
     <span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc, content: FileContentVc) -&gt; CompletionVc;
     <span class="kw">fn </span>write_link(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc, target: LinkContentVc) -&gt; CompletionVc;
     <span class="kw">fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; FileMetaVc;
@@ -1993,6 +2022,18 @@
     }
 }
 
+<span class="doccomment">/// Reads the file from disk, without converting the contents into a Vc.
+</span><span class="kw">async fn </span>read_file(path: PathBuf, mutex_map: <span class="kw-2">&amp;</span>MutexMap&lt;PathBuf&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;FileContent&gt; {
+    <span class="kw">let </span>_lock = mutex_map.lock(path.clone()).<span class="kw">await</span>;
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>retry_future(|| File::from_path(path.clone())).<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
+        <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
+        <span class="prelude-val">Err</span>(e) =&gt; {
+            <span class="macro">bail!</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading file {}&quot;</span>, path.display())))
+        }
+    })
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>FileSystem <span class="kw">for </span>DiskFileSystem {
     <span class="attr">#[turbo_tasks::function]
@@ -2000,15 +2041,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
 
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
-        <span class="kw">let </span>content = <span class="kw">match </span>retry_future(|| File::from_path(full_path.clone())).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
-            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">bail!</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading file {}&quot;</span>, full_path.display())))
-            }
-        };
-
+        <span class="kw">let </span>content = read_file(full_path, <span class="kw-2">&amp;</span><span class="self">self</span>.mutex_map).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(content.cell())
     }
 
@@ -2149,6 +2182,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
+        <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.register_invalidator(full_path, <span class="bool-val">true</span>);
+        <span class="prelude-val">Ok</span>(CompletionVc::new())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>write(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         fs_path: FileSystemPathVc,
@@ -2156,17 +2196,23 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>content = content.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>old_content = fs_path
-            .read()
-            .<span class="kw">await
-            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;reading old content of {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span><span class="kw-2">*</span>content == <span class="kw-2">*</span>old_content {
+        <span class="comment">// Track the file, so that we will rewrite it if it ever changes.
+        </span>fs_path.track().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// We perform an untracked read here, so that this write is not dependent on the
+        // read&#39;s FileContent value (and the memory it holds). Our untracked read can be
+        // freed immediately. Given this is an output file, it&#39;s unlikely any Turbo code
+        // will need to read the file from disk into a FileContentVc, so we&#39;re not
+        // wasting cycles.
+        </span><span class="kw">let </span>old_content = read_file(full_path.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.mutex_map).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span><span class="kw-2">*</span>content == old_content {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
         }
         <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>create_directory = <span class="kw-2">*</span>old_content == FileContent::NotFound;
+        <span class="kw">let </span>create_directory = old_content == FileContent::NotFound;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
             FileContent::Content(file) =&gt; {
                 <span class="kw">if </span>create_directory {
@@ -2630,6 +2676,11 @@
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>read_dir(<span class="self">self</span>) -&gt; DirectoryContentVc {
         <span class="self">self</span>.fs().read_dir(<span class="self">self</span>)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>track(<span class="self">self</span>) -&gt; CompletionVc {
+        <span class="self">self</span>.fs().track(<span class="self">self</span>)
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -3316,6 +3367,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>read_dir(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc) -&gt; DirectoryContentVc {
         DirectoryContentVc::not_found()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc) -&gt; CompletionVc {
+        CompletionVc::immutable()
     }
 
     <span class="attr">#[turbo_tasks::function]

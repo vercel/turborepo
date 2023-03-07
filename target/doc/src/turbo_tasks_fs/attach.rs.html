@@ -175,6 +175,11 @@
 <span id="175">175</span>
 <span id="176">176</span>
 <span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoMap;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, ValueToString, ValueToStringVc};
@@ -315,6 +320,11 @@
         }
 
         <span class="prelude-val">Ok</span>(DirectoryContentVc::new(converted_entries))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>track(self_vc: AttachedFileSystemVc, path: FileSystemPathVc) -&gt; CompletionVc {
+        self_vc.get_inner_fs_path(path).track()
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -100,6 +100,11 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>include_dir::{Dir, DirEntry};
 <span class="kw">use </span>turbo_tasks::{
@@ -173,6 +178,11 @@
             .collect();
 
         <span class="prelude-val">Ok</span>(DirectoryContentVc::new(entries))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, _path: FileSystemPathVc) -&gt; CompletionVc {
+        CompletionVc::immutable()
     }
 
     <span class="attr">#[turbo_tasks::function]

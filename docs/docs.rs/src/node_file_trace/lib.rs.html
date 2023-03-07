@@ -1312,7 +1312,7 @@
     <span class="kw">let </span>env = EnvironmentVc::new(
         Value::new(ExecutionEnvironment::NodeJsLambda(
             NodeJsEnvironment {
-                cwd: OptionStringVc::cell(process_cwd.clone()),
+                cwd: OptionStringVc::cell(process_cwd),
                 ..Default::default()
             }
             .into(),

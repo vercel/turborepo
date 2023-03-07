@@ -842,7 +842,7 @@ Changing this file or any dependency will not be recognized and might require re
         <span class="comment">// Reading all files to add itself as dependency
         </span><span class="kw">match </span><span class="kw-2">*</span>item {
             DirectoryEntry::File(file) =&gt; {
-                file.read().<span class="kw">await</span><span class="question-mark">?</span>;
+                file.track().<span class="kw">await</span><span class="question-mark">?</span>;
             }
             DirectoryEntry::Directory(dir) =&gt; {
                 dir_dependency(dir.read_glob(GlobVc::new(<span class="string">&quot;**&quot;</span>), <span class="bool-val">false</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
