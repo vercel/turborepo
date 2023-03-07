@@ -137,32 +137,25 @@ async function runOperation(renderData: RenderData) {
     tree = [info.segment, { children: tree }, components];
   }
 
-  const proxyMethodsForModule = (
-    id: string,
-    css: boolean
-  ): ProxyHandler<FlightManifest[""]> => ({
-    get(target, name, receiver) {
-      return {
-        id,
-        chunks: JSON.parse(id)[1],
-        name,
-      };
-    },
-  });
-  const proxyMethods = (css: boolean): ProxyHandler<FlightManifest> => {
+  const proxyMethods = (): ProxyHandler<FlightManifest> => {
     return {
-      get(target, name, receiver) {
-        if (name === "__ssr_module_mapping__") {
+      get(target, key) {
+        if (key === "__ssr_module_mapping__") {
           return manifest;
         }
-        if (name === "__entry_css_files__") {
+        if (key === "__entry_css_files__") {
           return __entry_css_files__;
         }
-        return new Proxy({}, proxyMethodsForModule(name as string, css));
+        const [file, name] = (key as string).split("#");
+        return {
+          id: file,
+          chunks: JSON.parse(file)[1],
+          name: name === undefined ? "*" : name,
+        };
       },
     };
   };
-  const manifest: FlightManifest = new Proxy({} as any, proxyMethods(false));
+  const manifest: FlightManifest = new Proxy({} as any, proxyMethods());
   const serverCSSManifest: FlightCSSManifest = {};
   const __entry_css_files__: FlightManifest["__entry_css_files__"] = {};
   for (const [key, chunks] of Object.entries(layoutInfoChunks)) {
