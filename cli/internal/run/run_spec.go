@@ -82,4 +82,7 @@ type runOpts struct {
 
 	// logPrefix controls whether we should print a prefix in task logs
 	logPrefix string
+
+	// Whether turbo should create a run summary
+	summarize bool
 }

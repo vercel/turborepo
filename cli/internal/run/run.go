@@ -18,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
@@ -139,6 +140,10 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 
 	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
 		opts.cacheOpts.SkipFilesystem = true
+	}
+
+	if os.Getenv("TURBO_RUN_SUMMARY") == "true" {
+		opts.runOpts.summarize = true
 	}
 
 	processes := process.NewManager(base.Logger.Named("processes"))
@@ -344,17 +349,22 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	// RunSummary contains information that is statically analyzable about
+	// the tasks that we expect to run based on the user command.
+	summary := runsummary.NewRunSummary(
+		r.base.TurboVersion,
+		packagesInScope,
+		runsummary.NewGlobalHashSummary(
+			globalHashable.globalFileHashMap,
+			globalHashable.rootExternalDepsHash,
+			globalHashable.hashedSortedEnvPairs,
+			globalHashable.globalCacheKey,
+			globalHashable.pipeline,
+		),
+	)
+
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
-		// dryRunSummary contains information that is statically analyzable about
-		// the tasks that we expect to run based on the user command.
-		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
-		summary := &dryRunSummary{
-			Packages:          packagesInScope,
-			GlobalHashSummary: newGlobalHashSummary(globalHashable),
-			Tasks:             []taskSummary{},
-		}
-
 		return DryRun(
 			ctx,
 			g,
@@ -379,6 +389,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboCache,
 		packagesInScope,
 		r.base,
+		summary,
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
 		r.processes,
