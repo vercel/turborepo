@@ -41,7 +41,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
-	summary *runsummary.RunSummary,
+	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -90,17 +90,12 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	taskSummaryMap := map[string]runsummary.TaskSummary{}
+	taskSummaryMap := map[string]*runsummary.TaskSummary{}
 
-	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		// COPY PASTE FROM DRY RUN!
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		itemStatus, err := turboCache.Exists(packageTask.Hash)
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
-		}
-		command := "<NONEXISTENT>"
-		if packageTask.Command != "" {
-			command = packageTask.Command
 		}
 		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
 		if err != nil {
@@ -111,33 +106,16 @@ func RealRun(
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
 
-		framework := runsummary.MissingFrameworkLabel
-		if packageTask.Framework != "" {
-			framework = packageTask.Framework
+		if taskSummary.Command == "" {
+			taskSummary.Command = runsummary.MissingTaskLabel
 		}
 
-		ts := runsummary.TaskSummary{
-			TaskID:                 packageTask.TaskID,
-			Task:                   packageTask.Task,
-			Package:                packageTask.PackageName,
-			Hash:                   packageTask.Hash,
-			CacheState:             itemStatus,
-			Command:                command,
-			Dir:                    packageTask.Dir,
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:                packageTask.LogFile,
-			Dependencies:           ancestors,
-			Dependents:             descendents,
-			ResolvedTaskDefinition: packageTask.TaskDefinition,
-			ExpandedInputs:         packageTask.ExpandedInputs,
-			EnvVars: runsummary.TaskEnvVarSummary{
-				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
-			},
-			Framework: framework,
+		if taskSummary.Framework == "" {
+			taskSummary.Framework = runsummary.MissingFrameworkLabel
 		}
-		// End DRY RUN STOLEN
+		taskSummary.CacheState = itemStatus  // TODO(mehulkar): Move this to PackageTask
+		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
+		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
 
 		// deps here are passed in to calculate the task hash
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -146,8 +124,8 @@ func RealRun(
 			return err
 		}
 
-		ts.ExpandedOutputs = expandedOutputs
-		taskSummaryMap[packageTask.TaskID] = ts
+		taskSummary.ExpandedOutputs = expandedOutputs
+		taskSummaryMap[packageTask.TaskID] = taskSummary
 		return nil
 	}
 
@@ -162,6 +140,11 @@ func RealRun(
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
 
+	// We gathered the info as a map, but we want to attach it as an array
+	for _, s := range taskSummaryMap {
+		runSummary.Tasks = append(runSummary.Tasks, s)
+	}
+
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
 			if exitCodeErr.ExitCode > exitCode {
@@ -172,11 +155,6 @@ func RealRun(
 			exitCode = 1
 		}
 		base.UI.Error(err.Error())
-	}
-
-	// We gathered the info as a map, but we want to attach it as an array
-	for _, s := range taskSummaryMap {
-		summary.Tasks = append(summary.Tasks, s)
 	}
 
 	runState.mu.Lock()
@@ -199,8 +177,17 @@ func RealRun(
 		}
 	}
 
+	runSummary.ExitCode = exitCode
+
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
+	}
+
+	// Write Run Summary if we wanted to
+	if rs.Opts.runOpts.summarize {
+		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
+			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
+		}
 	}
 
 	if exitCode != 0 {
@@ -208,14 +195,6 @@ func RealRun(
 			ExitCode: exitCode,
 		}
 	}
-
-	summary.ExitCode = exitCode
-	rendered, err := summary.FormatJSON(singlePackage)
-	if err != nil {
-		return err
-	}
-	base.UI.Output(rendered)
-
 	return nil
 }
 

@@ -4,6 +4,10 @@ package runsummary
 import (
 	"time"
 
+	"fmt"
+	"path/filepath"
+
+	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/runcache"
@@ -11,25 +15,64 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// MissingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the RunSummary will print this, instead of the script (e.g. `next build`).
+const MissingTaskLabel = "<NONEXISTENT>"
+
 // MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
+	ID                ksuid.KSUID        `json:"id"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
-	Tasks             []TaskSummary      `json:"tasks"`
+	Tasks             []*TaskSummary     `json:"tasks"`
 	ExitCode          int                `json:"exitCode"`
 }
 
 // TaskExecutionSummary contains data about the actual execution of a task
 type TaskExecutionSummary struct {
-	Start    time.Time     `json:"start"`
-	Duration time.Duration `json:"duration"`
-	Label    string        `json:"-"`      // Target which has just changed. Omit from JSOn
-	Status   string        `json:"status"` // Its current status
-	Err      error         `json:"error"`  // Error, only populated for failure statuses
+	Start    time.Time      `json:"start"`
+	Duration time.Duration  `json:"duration"`
+	Label    string         `json:"-"`      // Target which has just changed. Omit from JSOn
+	Status   string         `json:"status"` // Its current status
+	Err      error          `json:"error"`  // Error, only populated for failure statuses
+	Tasks    []*TaskSummary `json:"tasks"`
+}
+
+// NewRunSummary returns a RunSummary instance
+func NewRunSummary(turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+	return &RunSummary{
+		ID:                ksuid.New(),
+		TurboVersion:      turboVersion,
+		Packages:          packages,
+		Tasks:             []*TaskSummary{},
+		GlobalHashSummary: globalHashSummary,
+	}
+}
+
+// Save saves the run summary to a file
+func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage bool) error {
+	json, err := summary.FormatJSON(singlePackage)
+	if err != nil {
+		return err
+	}
+
+	// summaryPath will always be relative to the dir passsed in.
+	// We don't do a lot of validation, so `../../` paths are allowed
+	summaryPath := dir.UntypedJoin(
+		filepath.Join(".turbo", "runs"),
+		fmt.Sprintf("%s.json", summary.ID),
+	)
+
+	if err := summaryPath.EnsureDir(); err != nil {
+		return err
+	}
+
+	return summaryPath.WriteFile(json, 0644)
 }
 
 // TaskSummary contains information about the task that was about to run
