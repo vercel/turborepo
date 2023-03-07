@@ -1,21 +1,21 @@
 use anyhow::Result;
+use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{StringVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
-use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
 use turbo_tasks_fs::{rebase, FileContent, FileSystemPathVc};
 use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, ServerAddrVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
-    virtual_asset::VirtualAssetVc,
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
@@ -28,7 +28,7 @@ use turbopack_dev_server::{
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
@@ -41,7 +41,7 @@ use turbopack_node::{
 };
 
 use crate::{
-    embed_js::{attached_next_js_package_path, next_asset, next_js_file, wrap_with_next_js_fs},
+    embed_js::{next_asset, next_js_file},
     env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
@@ -78,7 +78,7 @@ use crate::{
 #[turbo_tasks::function]
 pub async fn create_page_source(
     pages_structure: OptionPagesStructureVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
@@ -87,8 +87,6 @@ pub async fn create_page_source(
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_root);
-
     let Some(pages_structure) = *pages_structure.await? else {
         return Ok(NoContentSourceVc::new().into());
     };
@@ -107,7 +105,7 @@ pub async fn create_page_source(
         next_config,
     );
     let client_resolve_options_context =
-        get_client_resolve_options_context(project_path, client_ty, next_config);
+        get_client_resolve_options_context(project_path, client_ty, next_config, execution_context);
 
     let client_chunking_context = get_client_chunking_context(
         project_path,
@@ -117,7 +115,7 @@ pub async fn create_page_source(
     );
 
     let client_runtime_entries =
-        get_client_runtime_entries(project_path, env, client_ty, next_config);
+        get_client_runtime_entries(project_path, env, client_ty, next_config, execution_context);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -146,22 +144,24 @@ pub async fn create_page_source(
     )
     .build();
     let edge_resolve_options_context =
-        get_edge_resolve_options_context(project_path, server_ty, next_config);
+        get_edge_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: None,
         edge_resolve_options_context,
         output_path,
         base_path: project_path,
         bootstrap_file: next_js_file("entry/edge-bootstrap.ts"),
+        entry_name: "edge".to_string(),
     }
     .cell()
     .into();
 
     let server_compile_time_info = get_server_compile_time_info(server_ty, env, server_addr);
     let server_resolve_options_context =
-        get_server_resolve_options_context(project_path, server_ty, next_config);
+        get_server_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let server_module_options_context =
         get_server_module_options_context(project_path, execution_context, server_ty, next_config);
@@ -216,11 +216,12 @@ pub async fn create_page_source(
     )
     .into();
 
+    let injected_env = env_for_js(EnvMapVc::empty().into(), false, next_config);
+    let env = CustomProcessEnvVc::new(env, next_config.env()).as_process_env();
+
     let server_runtime_entries =
-        vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
-                .as_ecmascript_chunk_placeable(),
-        ];
+        vec![ProcessEnvAssetVc::new(project_path, injected_env).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
 
     let fallback_page = get_fallback_page(
         project_path,
@@ -231,10 +232,10 @@ pub async fn create_page_source(
         next_config,
     );
 
-    let server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
     let page_extensions = next_config.page_extensions();
     let force_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -248,6 +249,7 @@ pub async fn create_page_source(
     );
     let fallback_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -262,6 +264,7 @@ pub async fn create_page_source(
     let page_source = create_page_source_for_directory(
         pages_structure,
         project_path,
+        env,
         server_context,
         server_data_context,
         client_context,
@@ -291,6 +294,7 @@ pub async fn create_page_source(
 #[turbo_tasks::function]
 async fn create_page_source_for_file(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -344,6 +348,7 @@ async fn create_page_source_for_file(
     Ok(if is_api_path {
         create_node_api_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher.into(),
@@ -389,6 +394,7 @@ async fn create_page_source_for_file(
         CombinedContentSourceVc::new(vec![
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 route_matcher.into(),
@@ -399,6 +405,7 @@ async fn create_page_source_for_file(
             ),
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 data_route_matcher.into(),
@@ -437,6 +444,7 @@ async fn get_not_found_page(
 #[turbo_tasks::function]
 async fn create_not_found_page_source(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
@@ -475,10 +483,7 @@ async fn create_not_found_page_source(
             (
                 // The error page asset must be within the context path so it can depend on the
                 // Next.js module.
-                next_asset(
-                    attached_next_js_package_path(project_path).join("entry/error.tsx"),
-                    "entry/error.tsx",
-                ),
+                next_asset("entry/error.tsx"),
                 // If no 404 page is defined, the pathname should be _error.
                 StringVc::cell("_error".to_string()),
             )
@@ -511,6 +516,7 @@ async fn create_not_found_page_source(
     Ok(CombinedContentSourceVc::new(vec![
         create_node_rendered_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher,
@@ -531,6 +537,7 @@ async fn create_not_found_page_source(
 async fn create_page_source_for_directory(
     pages_structure: PagesStructureVc,
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -556,6 +563,7 @@ async fn create_page_source_for_directory(
             } => {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -578,6 +586,7 @@ async fn create_page_source_for_directory(
             } => {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -600,6 +609,7 @@ async fn create_page_source_for_directory(
         sources.push(create_page_source_for_directory(
             *child,
             project_path,
+            env,
             server_context,
             server_data_context,
             client_context,
@@ -641,12 +651,12 @@ impl SsrEntryVc {
     #[turbo_tasks::function]
     async fn entry(self) -> Result<NodeRenderingEntryVc> {
         let this = self.await?;
+        let entry_asset_page = this.context.process(
+            this.entry_asset,
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+        );
         let ty = if this.ty == SsrType::AutoApi {
-            let entry_asset = this.context.process(
-                this.entry_asset,
-                Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
-            );
-            let page_config = parse_config_from_source(entry_asset);
+            let page_config = parse_config_from_source(entry_asset_page);
             if page_config.await?.runtime == NextRuntime::Edge {
                 SsrType::EdgeApi
             } else {
@@ -655,29 +665,52 @@ impl SsrEntryVc {
         } else {
             this.ty
         };
-        let virtual_asset = match ty {
+        let (internal_asset, inner_assets) = match ty {
             SsrType::AutoApi => unreachable!(),
-            SsrType::Api => VirtualAssetVc::new(
-                this.entry_asset.path().join("server-api.tsx"),
-                next_js_file("entry/server-api.tsx").into(),
+            SsrType::Api => (
+                next_asset("entry/server-api.tsx"),
+                indexmap! {
+                    "INNER".to_string() => entry_asset_page,
+                },
             ),
-            SsrType::EdgeApi => VirtualAssetVc::new(
-                this.entry_asset.path().join("server-edge-api.tsx"),
-                next_js_file("entry/server-edge-api.tsx").into(),
+            SsrType::EdgeApi => {
+                let entry_asset_edge_chunk_group =
+                    this.context.with_transition("next-edge").process(
+                        this.entry_asset,
+                        Value::new(ReferenceType::Entry(EntryReferenceSubType::PagesApi)),
+                    );
+                (
+                    next_asset("entry/server-edge-api.tsx"),
+                    indexmap! {
+                        "INNER_EDGE_CHUNK_GROUP".to_string() => entry_asset_edge_chunk_group,
+                    },
+                )
+            }
+            SsrType::Data => (
+                next_asset("entry/server-data.tsx"),
+                indexmap! {
+                    "INNER".to_string() => entry_asset_page,
+                },
             ),
-            SsrType::Data => VirtualAssetVc::new(
-                this.entry_asset.path().join("server-data.tsx"),
-                next_js_file("entry/server-data.tsx").into(),
-            ),
-            SsrType::Html => VirtualAssetVc::new(
-                this.entry_asset.path().join("server-renderer.tsx"),
-                next_js_file("entry/server-renderer.tsx").into(),
-            ),
+            SsrType::Html => {
+                let entry_asset_client_chunk_group =
+                    this.context.with_transition("next-client").process(
+                        this.entry_asset,
+                        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+                    );
+                (
+                    next_asset("entry/server-renderer.tsx"),
+                    indexmap! {
+                        "INNER".to_string() => entry_asset_page,
+                        "INNER_CLIENT_CHUNK_GROUP".to_string() => entry_asset_client_chunk_group,
+                    },
+                )
+            }
         };
 
         Ok(NodeRenderingEntry {
-            module: EcmascriptModuleAssetVc::new(
-                virtual_asset.into(),
+            module: EcmascriptModuleAssetVc::new_with_inner_assets(
+                internal_asset,
                 this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(vec![
@@ -685,6 +718,7 @@ impl SsrEntryVc {
                     EcmascriptInputTransform::React { refresh: false },
                 ]),
                 this.context.compile_time_info(),
+                InnerAssetsVc::cell(inner_assets),
             ),
             chunking_context: this.chunking_context,
             intermediate_output_path: this.intermediate_output_path,

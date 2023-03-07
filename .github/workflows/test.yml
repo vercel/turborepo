@@ -152,9 +152,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            cli/**/*.go
-            cli/go.mod
-            cli/go.sum
+            examples_tests/**
             scripts/run-example.sh
             !**.md
             !**.mdx
@@ -266,6 +264,13 @@ jobs:
 
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli
+        env:
+          GO_TAG: go
+
+      - name: Integration Tests (with Rust FFI)
+        run: pnpm -- turbo run integration-tests --filter=cli
+        env:
+          GO_TAG: rust
 
   go_e2e:
     name: Go E2E Tests
@@ -473,6 +478,8 @@ jobs:
           cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
+          # This is for next.js integration test
+          cargo check -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test
 
       - name: Run cargo check release
         run: |

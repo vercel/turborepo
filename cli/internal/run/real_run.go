@@ -24,6 +24,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -36,10 +37,11 @@ func RealRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	hashes *taskhash.Tracker,
+	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
+	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 	runState *RunState,
@@ -77,7 +79,7 @@ func RealRun(
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
-		taskHashes:      hashes,
+		taskHashTracker: taskHashTracker,
 		repoRoot:        base.RepoRoot,
 		isSinglePackage: singlePackage,
 	}
@@ -88,18 +90,27 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+	taskSummaries := []*runsummary.TaskSummary{}
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
+	getArgs := func(taskID string) []string {
+		return rs.ArgsForTask(taskID)
+	}
+
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
+
+	// Assign tasks after execution
+	runSummary.Tasks = taskSummaries
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
@@ -116,6 +127,14 @@ func RealRun(
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
+
+	// Write Run Summary if we wanted to
+	if rs.Opts.runOpts.summarize {
+		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
+			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
+		}
+	}
+
 	if exitCode != 0 {
 		return &process.ChildExit{
 			ExitCode: exitCode,
@@ -133,7 +152,7 @@ type execContext struct {
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
-	taskHashes      *taskhash.Tracker
+	taskHashTracker *taskhash.Tracker
 	repoRoot        turbopath.AbsoluteSystemPath
 	isSinglePackage bool
 }
@@ -158,12 +177,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
+	hash := packageTask.Hash
 	ec.logger.Debug("task hash", "value", hash)
-	if err != nil {
-		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
-		// @TODO probably should abort fatally???
-	}
 	// TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
 	// the following block should never get hit. In the meantime, keep it after hashing
 	// so that downstream tasks can count on the hash existing

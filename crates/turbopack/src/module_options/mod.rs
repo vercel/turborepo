@@ -153,7 +153,11 @@ impl ModuleOptionsVc {
                         };
                         Some(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(vec![PostCssTransformVc::new(
-                                node_evaluate_asset_context(Some(import_map), None),
+                                node_evaluate_asset_context(
+                                    execution_context.project_path(),
+                                    Some(import_map),
+                                    None,
+                                ),
                                 execution_context,
                             )
                             .into()]),
@@ -264,12 +268,19 @@ impl ModuleOptionsVc {
             };
             for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
                 rules.push(ModuleRule::new(
-                    ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                    ModuleRuleCondition::All(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
+                    ]),
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
-                                node_evaluate_asset_context(Some(import_map), None),
+                                node_evaluate_asset_context(
+                                    execution_context.project_path(),
+                                    Some(import_map),
+                                    None,
+                                ),
                                 execution_context,
                                 *loaders,
                             )

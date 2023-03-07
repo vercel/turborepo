@@ -12,6 +12,10 @@ builds:
     tags:
       - go
     binary: bin/go-turbo
+    hooks:
+      pre:
+        - cmd: make turborepo-ffi-install-{{ .Os }}-{{ .Arch }}
+          output: true
     flags:
       - -trimpath
     ldflags:

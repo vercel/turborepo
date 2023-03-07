@@ -19,7 +19,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
+func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs *turbostate.ParsedArgsFromRust) error {
 	if parsedArgs.Trace != "" {
 		cleanup, err := createTraceFile(parsedArgs.Trace)
 		if err != nil {
@@ -46,7 +46,7 @@ func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedA
 }
 
 // RunWithArgs runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
-func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
+func RunWithArgs(args *turbostate.ParsedArgsFromRust, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
@@ -58,18 +58,18 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 		fmt.Printf("%v", err)
 		return 1
 	}
-	defer helper.Cleanup(&args)
+	defer helper.Cleanup(args)
 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
 		command := args.Command
 		if command.Daemon != nil {
-			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &args)
+			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, args)
 		} else if command.Prune != nil {
-			execErr = prune.ExecutePrune(helper, &args)
+			execErr = prune.ExecutePrune(helper, args)
 		} else if command.Run != nil {
-			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &args)
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, args)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}

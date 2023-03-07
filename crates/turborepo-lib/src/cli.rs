@@ -65,6 +65,9 @@ pub struct Args {
     /// Skip any attempts to infer which version of Turbo the project is
     /// configured to use
     pub skip_infer: bool,
+    /// Disable the turbo update notification
+    #[clap(long, global = true)]
+    pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
     pub api: Option<String>,
@@ -90,6 +93,9 @@ pub struct Args {
     /// for authorization
     #[clap(long, global = true)]
     pub preflight: bool,
+    /// Set a timeout for all HTTP requests.
+    #[clap(long, value_name = "TIMEOUT", global = true, value_parser)]
+    pub remote_cache_timeout: Option<u64>,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
     pub team: Option<String>,
