@@ -1,3 +1,7 @@
+use std::hash::BuildHasherDefault;
+
+use indexmap::IndexSet;
+use rustc_hash::FxHasher;
 use swc_core::ecma::{
     ast::{
         BlockStmtOrExpr, Constructor, Expr, Function, Id, Ident, MemberProp, Pat, PatOrExpr,
@@ -8,8 +12,7 @@ use swc_core::ecma::{
 
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
-    reads: Vec<Id>,
-    writes: Vec<Id>,
+    vars: Vars,
     ignore_nested: bool,
     is_read: bool,
 }
@@ -98,8 +101,7 @@ impl Visit for IdentUsageCollector {
 
 #[derive(Default)]
 pub(crate) struct CapturedIdCollector {
-    reads: Vec<Id>,
-    writes: Vec<Id>,
+    vars: Vars,
     is_nested: bool,
     is_read: bool,
 }
@@ -179,8 +181,14 @@ impl Visit for CapturedIdCollector {
     visit_obj_and_computed!();
 }
 
+#[derive(Debug, Default)]
+pub(super) struct Vars {
+    pub read: IndexSet<Id, BuildHasherDefault<FxHasher>>,
+    pub write: IndexSet<Id, BuildHasherDefault<FxHasher>>,
+}
+
 /// Returns `(read, write)`
-pub(crate) fn ids_captured_by<N>(n: &N) -> (Vec<Id>, Vec<Id>)
+pub(crate) fn ids_captured_by<N>(n: &N) -> Vars
 where
     N: VisitWith<CapturedIdCollector>,
 {
@@ -189,11 +197,11 @@ where
         ..Default::default()
     };
     n.visit_with(&mut v);
-    (v.reads, v.writes)
+    v.vars
 }
 
 /// Returns `(read, write)`
-pub(crate) fn ids_used_by<N>(n: &N) -> (Vec<Id>, Vec<Id>)
+pub(crate) fn ids_used_by<N>(n: &N) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
@@ -202,11 +210,11 @@ where
         ..Default::default()
     };
     n.visit_with(&mut v);
-    (v.reads, v.writes)
+    v.vars
 }
 
 /// Returns `(read, write)`
-pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N) -> (Vec<Id>, Vec<Id>)
+pub(crate) fn ids_used_by_ignoring_nested<N>(n: &N) -> Vars
 where
     N: VisitWith<IdentUsageCollector>,
 {
@@ -215,5 +223,5 @@ where
         ..Default::default()
     };
     n.visit_with(&mut v);
-    (v.reads, v.writes)
+    v.vars
 }
