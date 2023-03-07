@@ -19,6 +19,7 @@ type PackageTask struct {
 	Outputs         []string
 	ExcludedOutputs []string
 	LogFile         string
+	Hash            string
 }
 
 // OutputPrefix returns the prefix to be used for logging and ui for this task

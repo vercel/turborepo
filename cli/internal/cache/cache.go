@@ -9,7 +9,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -81,14 +80,6 @@ func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.
 
 var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
 allow reading and caching artifacts using the remote cache.`
-
-// AddFlags adds cache-related flags to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	// skipping remote caching not currently a flag
-	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
-	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directory.")
-	flags.IntVar(&opts.Workers, "cache-workers", 10, "Set the number of concurrent cache operations")
-}
 
 // New creates a new cache
 func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {

@@ -6,18 +6,16 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/runsummary"
+	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
-
-// WorkspaceInfos holds information about each workspace in the monorepo.
-type WorkspaceInfos struct {
-	PackageJSONs map[string]*fs.PackageJSON
-	TurboConfigs map[string]*fs.TurboJSON
-}
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
@@ -29,7 +27,7 @@ type CompleteGraph struct {
 	Pipeline fs.Pipeline
 
 	// WorkspaceInfos stores the package.json contents by package name
-	WorkspaceInfos WorkspaceInfos
+	WorkspaceInfos workspace.Catalog
 
 	// GlobalHash is the hash of all global dependencies
 	GlobalHash string
@@ -39,12 +37,20 @@ type CompleteGraph struct {
 	// Map of TaskDefinitions by taskID
 	TaskDefinitions map[string]*fs.TaskDefinition
 	RepoRoot        turbopath.AbsoluteSystemPath
+
+	TaskHashTracker *taskhash.Tracker
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
 // during execution (or dry-runs). The function returned here does not execute any tasks itself,
 // but it helps curry some data from the Complete Graph and pass it into the visitor function.
-func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
+func (g *CompleteGraph) GetPackageTaskVisitor(
+	ctx gocontext.Context,
+	taskGraph *dag.AcyclicGraph,
+	getArgs func(taskID string) []string,
+	logger hclog.Logger,
+	visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error,
+) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
 		pkg, ok := g.WorkspaceInfos.PackageJSONs[packageName]
@@ -57,6 +63,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			return fmt.Errorf("Could not find definition for task")
 		}
 
+		// TODO: maybe we can remove this PackageTask struct at some point
 		packageTask := &nodes.PackageTask{
 			TaskID:          taskID,
 			Task:            taskName,
@@ -68,13 +75,54 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
-		if cmd, ok := pkg.Scripts[taskName]; ok {
-			packageTask.Command = cmd
+		hash, err := g.TaskHashTracker.CalculateTaskHash(
+			packageTask,
+			taskGraph.DownEdges(taskID),
+			logger,
+			getArgs(taskName),
+		)
+
+		// Not being able to construct the task hash is a hard error
+		if err != nil {
+			return fmt.Errorf("Hashing error: %v", err)
 		}
 
-		packageTask.LogFile = repoRelativeLogFile(packageTask)
+		pkgDir := pkg.Dir
+		packageTask.Hash = hash
+		envVars := g.TaskHashTracker.GetEnvVars(taskID)
+		expandedInputs := g.TaskHashTracker.GetExpandedInputs(packageTask)
+		framework := g.TaskHashTracker.GetFramework(taskID)
 
-		return visitor(ctx, packageTask)
+		// Assign remaining fields to packageTask
+		var command string
+		if cmd, ok := pkg.Scripts[taskName]; ok {
+			command = cmd
+		}
+
+		logFile := repoRelativeLogFile(pkgDir, taskName)
+		packageTask.LogFile = logFile
+		packageTask.Command = command
+
+		summary := &runsummary.TaskSummary{
+			TaskID:                 taskID,
+			Task:                   taskName,
+			Hash:                   hash,
+			Package:                packageName,
+			Dir:                    pkgDir.ToString(),
+			Outputs:                taskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        taskDefinition.Outputs.Exclusions,
+			LogFile:                logFile,
+			ResolvedTaskDefinition: taskDefinition,
+			ExpandedInputs:         expandedInputs,
+			Command:                command,
+			Framework:              framework,
+			EnvVars: runsummary.TaskEnvVarSummary{
+				Configured: envVars.BySource.Explicit.ToSecretHashable(),
+				Inferred:   envVars.BySource.Prefixed.ToSecretHashable(),
+			},
+		}
+
+		return visitor(ctx, packageTask, summary)
 	}
 }
 
@@ -131,6 +179,6 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 
 // repoRelativeLogFile returns the path to the log file for this task execution as a
 // relative path from the root of the monorepo.
-func repoRelativeLogFile(pt *nodes.PackageTask) string {
-	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
+func repoRelativeLogFile(dir turbopath.AnchoredSystemPath, taskName string) string {
+	return filepath.Join(dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", taskName))
 }

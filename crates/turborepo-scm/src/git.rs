@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use dunce::canonicalize as fs_canonicalize;
-use git2::{DiffFormat, DiffOptions, Oid, Repository};
+use git2::{DiffFormat, DiffOptions, Repository};
 
 use crate::Error;
 
@@ -25,6 +25,11 @@ pub fn changed_files(
     include_untracked: bool,
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
+    // If the relative_to is an absolute path we attempt to make it root relative
+    let relative_to = relative_to
+        .zip(repo_root.to_str())
+        .and_then(|(rel, root)| rel.strip_prefix(root))
+        .or(relative_to);
     let repo = Repository::open(repo_root)?;
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(&repo, &mut files, relative_to, include_untracked)?;
@@ -78,10 +83,10 @@ fn add_changed_files_from_commits(
     from_commit: &str,
     to_commit: &str,
 ) -> Result<(), Error> {
-    let from_commit_oid = Oid::from_str(from_commit)?;
-    let to_commit_oid = Oid::from_str(to_commit)?;
-    let from_commit = repo.find_commit(from_commit_oid)?;
-    let to_commit = repo.find_commit(to_commit_oid)?;
+    let from_commit_ref = repo.revparse_single(from_commit)?;
+    let to_commit_ref = repo.revparse_single(to_commit)?;
+    let from_commit = from_commit_ref.peel_to_commit()?;
+    let to_commit = to_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
     let to_tree = to_commit.tree()?;
     let mut options = relative_to.map(|relative_to| {
@@ -119,8 +124,8 @@ pub fn previous_content(
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
     let repo = Repository::open(repo_root)?;
-    let from_commit_oid = Oid::from_str(from_commit)?;
-    let from_commit = repo.find_commit(from_commit_oid)?;
+    let from_commit_ref = repo.revparse_single(from_commit)?;
+    let from_commit = from_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
 
     // Canonicalize so strip_prefix works properly
@@ -235,6 +240,38 @@ mod tests {
     }
 
     #[test]
+    fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+        let file = repo_root.path().join("foo.js");
+        fs::write(file, "let z = 0;")?;
+
+        // First commit (we need a base commit to compare against)
+        commit_file(&repo, Path::new("foo.js"), None)?;
+
+        // Now change another file
+        let new_file = repo_root.path().join("bar.js");
+        fs::write(new_file, "let y = 1;")?;
+
+        // Test that uncommitted file is marked as changed with
+        // include_untracked` with the parameters that Go wil pass
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            None,
+            true,
+            // Go will pass the absolute repo root as the relative_to if there
+            // isn't a more specific subdir that should be used
+            Some(repo_root.path().to_str().unwrap()),
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
     fn test_previous_content() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
@@ -262,6 +299,28 @@ mod tests {
             file,
         )?;
         assert_eq!(content, b"let z = 1;");
+        Ok(())
+    }
+
+    #[test]
+    fn test_revparse() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        let file = repo_root.path().join("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        fs::write(&file, "let z = 1;")?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+
+        let revparsed_head = repo.revparse_single("HEAD")?;
+        assert_eq!(revparsed_head.id(), second_commit_oid);
+        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1")?;
+        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
 
         Ok(())
     }

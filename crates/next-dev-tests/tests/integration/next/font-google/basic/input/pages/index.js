@@ -18,9 +18,9 @@ export default function Home() {
 function runTests() {
   it("returns structured data about the font styles from the font function", () => {
     expect(interNoArgs).toEqual({
-      className: "className__inter_34ab8b4d__64ed1f97",
+      className: "className__inter_34ab8b4d__7bdff866",
       style: {
-        fontFamily: "'__Inter_34ab8b4d'",
+        fontFamily: "'__Inter_34ab8b'",
         fontStyle: "normal",
       },
     });
@@ -29,25 +29,25 @@ function runTests() {
   it("includes a rule styling the exported className", async () => {
     const matchingRule = await getRuleMatchingClassName(interNoArgs.className);
     expect(matchingRule).toBeTruthy();
-    expect(matchingRule.style.fontFamily).toEqual("__Inter_34ab8b4d");
+    expect(matchingRule.style.fontFamily).toEqual("__Inter_34ab8b");
     expect(matchingRule.style.fontStyle).toEqual("normal");
   });
 
   it("supports declaring a css custom property (css variable)", async () => {
     expect(interWithVariableName).toEqual({
-      className: "className__inter_c6e282f1__a8cc5613",
+      className: "className__inter_c6e282f1__e152ac0c",
       style: {
-        fontFamily: "'__Inter_c6e282f1'",
+        fontFamily: "'__Inter_c6e282'",
         fontStyle: "normal",
       },
-      variable: "variable__inter_c6e282f1__a8cc5613",
+      variable: "variable__inter_c6e282f1__e152ac0c",
     });
 
     const matchingRule = await getRuleMatchingClassName(
       interWithVariableName.variable
     );
     expect(matchingRule.styleMap.get("--my-font").toString().trim()).toBe(
-      '"__Inter_c6e282f1"'
+      '"__Inter_c6e282"'
     );
   });
 }
