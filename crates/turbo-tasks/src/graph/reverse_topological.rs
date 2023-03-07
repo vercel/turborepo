@@ -99,15 +99,15 @@ where
 
                     self.visited.insert(current.clone());
 
-                    let Some(children) = self.adjacency_map.get(&current) else {
+                    let Some(neighbors) = self.adjacency_map.get(&current) else {
                         break current;
                     };
 
                     self.stack.push((ReverseTopologicalPass::Post, current));
                     self.stack.extend(
-                        children
+                        neighbors
                             .iter()
-                            .map(|child| (ReverseTopologicalPass::Pre, child.clone())),
+                            .map(|neighbor| (ReverseTopologicalPass::Pre, neighbor.clone())),
                     );
                 }
             }

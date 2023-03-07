@@ -24,7 +24,7 @@ pub trait Visit<Node, Abort = !, Impl = ()> {
 }
 
 // The different `Impl*` here are necessary in order to avoid the `Conflicting
-// implementations of trait` error when implementing `GetChildren` on different
+// implementations of trait` error when implementing `Visit` on different
 // kinds of `FnMut`.
 // See https://users.rust-lang.org/t/conflicting-implementation-when-implementing-traits-for-fn/53359/3
 

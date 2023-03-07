@@ -6,9 +6,9 @@ use futures::{stream::FuturesUnordered, Stream};
 use super::{graph_store::GraphStore, with_future::With, Visit, VisitControlFlow};
 
 /// [`GraphTraversal`] is a utility type that can be used to traverse a graph of
-/// nodes, where each node can have a variable number of children. The traversal
-/// is done in parallel, and the order of the nodes in the traversal result is
-/// determined by the [`GraphStore`] parameter.
+/// nodes, where each node can have a variable number of outgoing edges. The
+/// traversal is done in parallel, and the order of the nodes in the traversal
+/// result is determined by the [`GraphStore`] parameter.
 pub struct GraphTraversal<Store> {
     _store: std::marker::PhantomData<Store>,
 }
