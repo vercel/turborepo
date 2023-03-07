@@ -139,12 +139,12 @@ where
                         for edge in edges {
                             match running.visit.visit(edge) {
                                 VisitControlFlow::Continue(node) => {
-                                    if let Some((child_handle, node_ref)) =
+                                    if let Some((node_handle, node_ref)) =
                                         running.store.insert(Some(parent_handle.clone()), node)
                                     {
                                         running.futures.push(With::new(
                                             running.visit.edges(node_ref),
-                                            child_handle,
+                                            node_handle,
                                         ));
                                     }
                                 }
