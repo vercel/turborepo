@@ -296,6 +296,9 @@
 <span id="296">296</span>
 <span id="297">297</span>
 <span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -381,7 +384,10 @@
                 }
             }
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>transforms = custom_ecmascript_app_transforms.clone();
+        <span class="comment">// We apply decorators _before_ any ts transforms, as some of decorator requires
+        // type information.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>transforms = <span class="macro">vec!</span>[EcmascriptInputTransform::Decorators];
+        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         <span class="comment">// Order of transforms is important. e.g. if the React transform occurs before

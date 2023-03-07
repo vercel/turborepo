@@ -322,6 +322,25 @@
 <span id="322">322</span>
 <span id="323">323</span>
 <span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -347,10 +366,12 @@
     primitives::{StringVc, U64Vc},
     Value, ValueToString,
 };
-<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
+<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileJsonContentVc, FileSystemPath};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
+    resolve::{find_context_file, node::node_cjs_resolve_options, FindContextFileResult},
+    source_asset::SourceAssetVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
@@ -359,6 +380,7 @@
 <span class="kw">use crate</span>::{
     analyzer::graph::EvalContext,
     transform::{EcmascriptInputTransformsVc, TransformContext},
+    typescript::resolve::{read_tsconfigs, tsconfig},
     utils::WrapFuture,
     EcmascriptInputTransform,
 };
@@ -462,6 +484,19 @@
     <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_ident(source.ident().to_string()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
     <span class="kw">let </span>ty = ty.into_value();
+    <span class="kw">let </span>tsconfig = find_context_file(source.ident().path(), tsconfig());
+    <span class="kw">let </span>tsconfig = <span class="kw">match </span><span class="kw-2">*</span>tsconfig.<span class="kw">await</span><span class="question-mark">? </span>{
+        FindContextFileResult::Found(path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(
+            read_tsconfigs(
+                path.read(),
+                SourceAssetVc::new(path).into(),
+                node_cjs_resolve_options(path.root()),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>,
+        ),
+        FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+    };
+
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
         AssetContent::File(file) =&gt; <span class="kw">match </span><span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
             FileContent::NotFound =&gt; ParseResult::NotFound.cell(),
@@ -475,6 +510,7 @@
                         source,
                         ty,
                         transforms,
+                        tsconfig,
                     )
                     .<span class="kw">await
                     </span>{
@@ -502,6 +538,7 @@
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
     transforms: <span class="kw-2">&amp;</span>[EcmascriptInputTransform],
+    tsconfig: <span class="prelude-ty">Option</span>&lt;Vec&lt;(FileJsonContentVc, AssetVc)&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
     <span class="kw">let </span>source_map: Arc&lt;SourceMap&gt; = Default::default();
     <span class="kw">let </span>handler = Handler::with_emitter(
@@ -608,6 +645,7 @@
                 file_path_str: <span class="kw-2">&amp;</span>fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
+                tsconfig: <span class="kw-2">&amp;</span>tsconfig,
             };
             <span class="kw">for </span>transform <span class="kw">in </span>transforms.iter() {
                 transform.apply(<span class="kw-2">&amp;mut </span>parsed_program, <span class="kw-2">&amp;</span>context).<span class="kw">await</span><span class="question-mark">?</span>;

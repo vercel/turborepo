@@ -286,6 +286,68 @@
 <span id="286">286</span>
 <span id="287">287</span>
 <span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -303,6 +365,7 @@
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
+            proposal::decorators,
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
@@ -312,8 +375,10 @@
     primitives::{StringVc, StringsVc},
     trace::TraceRawVcs,
 };
-<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
-<span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
+<span class="kw">use </span>turbo_tasks_fs::{
+    json::parse_json_with_source_context, FileJsonContent, FileJsonContentVc, FileSystemPathVc,
+};
+<span class="kw">use </span>turbopack_core::{asset::AssetVc, environment::EnvironmentVc};
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
 
@@ -366,6 +431,9 @@
     StyledComponents,
     StyledJsx,
     TypeScript,
+    <span class="comment">// Apply ecma decorators transform. This is not part of Typescript transform, even though
+    // decorators can be ts-specific (legacy decorartors) since there&#39;s ecma decorators for js.
+    </span>Decorators,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -390,6 +458,7 @@
     <span class="kw">pub </span>file_path_str: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
     <span class="kw">pub </span>file_name_str: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
     <span class="kw">pub </span>file_name_hash: u128,
+    <span class="kw">pub </span>tsconfig: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="prelude-ty">Option</span>&lt;Vec&lt;(FileJsonContentVc, AssetVc)&gt;&gt;,
 }
 
 <span class="kw">impl </span>EcmascriptInputTransform {
@@ -404,6 +473,7 @@
             file_path_str,
             file_name_str,
             file_name_hash,
+            tsconfig,
         }: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
@@ -486,9 +556,63 @@
                     </span>FileName::Anon,
                 ));
             }
+            EcmascriptInputTransform::Decorators =&gt; {
+                <span class="comment">// TODO: Currently this only supports legacy decorators from tsconfig / jsconfig
+                // options.
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(tsconfig) = tsconfig {
+                    <span class="comment">// Selectively picks up tsconfig.json values to construct
+                    // swc transform&#39;s stripconfig. It doesn&#39;t account .swcrc config currently.
+                    </span><span class="kw">for </span>(value, <span class="kw">_</span>) <span class="kw">in </span>tsconfig {
+                        <span class="kw">let </span>value = <span class="kw-2">&amp;*</span>value.<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">if let </span>FileJsonContent::Content(value) = value {
+                            <span class="kw">let </span>legacy_decorators = value[<span class="string">&quot;compilerOptions&quot;</span>]
+                                [<span class="string">&quot;experimentalDecorators&quot;</span>]
+                                .as_bool()
+                                .unwrap_or(<span class="bool-val">false</span>);
+
+                            <span class="kw">if </span>legacy_decorators {
+                                <span class="comment">// TODO: `fn decorators` does not support visitMut yet
+                                </span><span class="kw">let </span>p =
+                                    std::mem::replace(program, Program::Module(Module::dummy()));
+                                <span class="kw-2">*</span>program = p.fold_with(<span class="kw-2">&amp;mut </span><span class="macro">chain!</span>(
+                                    decorators(decorators::Config {
+                                        legacy: <span class="bool-val">true</span>,
+                                        emit_metadata: <span class="bool-val">true</span>,
+                                        use_define_for_class_fields: value[<span class="string">&quot;compilerOptions&quot;</span>]
+                                            [<span class="string">&quot;useDefineForClassFields&quot;</span>]
+                                            .as_bool()
+                                            .unwrap_or(<span class="bool-val">false</span>),
+                                    }),
+                                    inject_helpers(unresolved_mark),
+                                ));
+                            }
+                        }
+                    }
+                };
+            }
             EcmascriptInputTransform::TypeScript =&gt; {
-                <span class="kw">use </span>swc_core::ecma::transforms::typescript::strip;
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip(top_level_mark));
+                <span class="kw">use </span>swc_core::ecma::transforms::typescript::{strip_with_config, Config};
+
+                <span class="kw">let </span>config = <span class="kw">if let </span><span class="prelude-val">Some</span>(tsconfig) = tsconfig {
+                    <span class="kw">let </span><span class="kw-2">mut </span>config = Config {
+                        ..Default::default()
+                    };
+
+                    <span class="kw">for </span>(value, <span class="kw">_</span>) <span class="kw">in </span>tsconfig {
+                        <span class="kw">let </span>value = <span class="kw-2">&amp;*</span>value.<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">if let </span>FileJsonContent::Content(value) = value {
+                            <span class="kw">let </span>use_define_for_class_fields =
+                                <span class="kw-2">&amp;</span>value[<span class="string">&quot;compilerOptions&quot;</span>][<span class="string">&quot;useDefineForClassFields&quot;</span>];
+                            config.use_define_for_class_fields =
+                                use_define_for_class_fields.as_bool().unwrap_or(<span class="bool-val">false</span>);
+                        }
+                    }
+                    config
+                } <span class="kw">else </span>{
+                    Default::default()
+                };
+
+                program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip_with_config(config, top_level_mark));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
                 <span class="kw">let </span>transition_name = <span class="kw-2">&amp;*</span>transition_name.<span class="kw">await</span><span class="question-mark">?</span>;
