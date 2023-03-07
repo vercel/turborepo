@@ -69,7 +69,8 @@ jobs:
       # Sets `NEXT_TEST_SKIP_RETRY_MANIFEST`, `NEXT_TEST_CONTINUE_ON_ERROR` to continue on error but do not retry on the known failed tests.
       # Do not set --timings flag
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/4 -c 1 >> /proc/1/fd/1"
+          docker run -i -v nextjs-test-volume:/volume --rm loomchild/volume-backup restore < volume.tar.bz2
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/4 -c 1 >> /proc/1/fd/1"
         name: Run test/development
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
@@ -109,7 +110,8 @@ jobs:
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
+          docker run -i -v nextjs-test-volume:/volume --rm loomchild/volume-backup restore < volume.tar.bz2
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
         name: Run test/e2e (dev)
         continue-on-error: true
         env:
@@ -209,12 +211,14 @@ jobs:
       - uses: actions/cache/restore@v3
         id: restore-build
         with:
-          path: ./*
+          path: |
+            ./*
           key: ${{ inputs.version }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/25 -c 1 >> /proc/1/fd/1"
+          docker run -i -v nextjs-test-volume:/volume --rm loomchild/volume-backup restore < volume.tar.bz2
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/25 -c 1 >> /proc/1/fd/1"
         name: Test Integration
         continue-on-error: true
         env:

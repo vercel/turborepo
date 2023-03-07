@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error};
+use log::{debug, error, trace};
 use turborepo_lib::{Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
@@ -42,6 +42,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
     }
 
     let serialized_args = serde_json::to_string(&args)?;
+    trace!("Invoking go binary with {}", serialized_args);
     let mut command = process::Command::new(go_binary_path)
         .arg(serialized_args)
         .stdout(Stdio::inherit())

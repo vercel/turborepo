@@ -10,7 +10,7 @@ crate-type = ["staticlib"]
 [dependencies]
 directories = "4.0.1"
 prost = "0.11.6"
-turborepo-scm = { path = "../turborepo-scm" }
+turborepo-scm = { workspace = true }
 
 [build-dependencies]
 cbindgen = "0.24.3"

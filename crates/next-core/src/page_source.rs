@@ -6,7 +6,7 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     Value,
 };
-use turbo_tasks_env::ProcessEnvVc;
+use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
 use turbo_tasks_fs::{rebase, FileContent, FileSystemPathVc};
 use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
@@ -105,7 +105,7 @@ pub async fn create_page_source(
         next_config,
     );
     let client_resolve_options_context =
-        get_client_resolve_options_context(project_path, client_ty, next_config);
+        get_client_resolve_options_context(project_path, client_ty, next_config, execution_context);
 
     let client_chunking_context = get_client_chunking_context(
         project_path,
@@ -115,7 +115,7 @@ pub async fn create_page_source(
     );
 
     let client_runtime_entries =
-        get_client_runtime_entries(project_path, env, client_ty, next_config);
+        get_client_runtime_entries(project_path, env, client_ty, next_config, execution_context);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -144,11 +144,12 @@ pub async fn create_page_source(
     )
     .build();
     let edge_resolve_options_context =
-        get_edge_resolve_options_context(project_path, server_ty, next_config);
+        get_edge_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: None,
         edge_resolve_options_context,
         output_path,
         base_path: project_path,
@@ -160,7 +161,7 @@ pub async fn create_page_source(
 
     let server_compile_time_info = get_server_compile_time_info(server_ty, env, server_addr);
     let server_resolve_options_context =
-        get_server_resolve_options_context(project_path, server_ty, next_config);
+        get_server_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let server_module_options_context =
         get_server_module_options_context(project_path, execution_context, server_ty, next_config);
@@ -215,11 +216,12 @@ pub async fn create_page_source(
     )
     .into();
 
+    let injected_env = env_for_js(EnvMapVc::empty().into(), false, next_config);
+    let env = CustomProcessEnvVc::new(env, next_config.env()).as_process_env();
+
     let server_runtime_entries =
-        vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
-                .as_ecmascript_chunk_placeable(),
-        ];
+        vec![ProcessEnvAssetVc::new(project_path, injected_env).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
 
     let fallback_page = get_fallback_page(
         project_path,
@@ -230,10 +232,10 @@ pub async fn create_page_source(
         next_config,
     );
 
-    let server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
     let page_extensions = next_config.page_extensions();
     let force_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -247,6 +249,7 @@ pub async fn create_page_source(
     );
     let fallback_not_found_source = create_not_found_page_source(
         project_path,
+        env,
         server_context,
         client_context,
         pages_dir,
@@ -261,6 +264,7 @@ pub async fn create_page_source(
     let page_source = create_page_source_for_directory(
         pages_structure,
         project_path,
+        env,
         server_context,
         server_data_context,
         client_context,
@@ -290,6 +294,7 @@ pub async fn create_page_source(
 #[turbo_tasks::function]
 async fn create_page_source_for_file(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -343,6 +348,7 @@ async fn create_page_source_for_file(
     Ok(if is_api_path {
         create_node_api_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher.into(),
@@ -388,6 +394,7 @@ async fn create_page_source_for_file(
         CombinedContentSourceVc::new(vec![
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 route_matcher.into(),
@@ -398,6 +405,7 @@ async fn create_page_source_for_file(
             ),
             create_node_rendered_source(
                 project_path,
+                env,
                 specificity,
                 server_root,
                 data_route_matcher.into(),
@@ -436,6 +444,7 @@ async fn get_not_found_page(
 #[turbo_tasks::function]
 async fn create_not_found_page_source(
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
@@ -507,6 +516,7 @@ async fn create_not_found_page_source(
     Ok(CombinedContentSourceVc::new(vec![
         create_node_rendered_source(
             project_path,
+            env,
             specificity,
             server_root,
             route_matcher,
@@ -527,6 +537,7 @@ async fn create_not_found_page_source(
 async fn create_page_source_for_directory(
     pages_structure: PagesStructureVc,
     project_path: FileSystemPathVc,
+    env: ProcessEnvVc,
     server_context: AssetContextVc,
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
@@ -552,6 +563,7 @@ async fn create_page_source_for_directory(
             } => {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -574,6 +586,7 @@ async fn create_page_source_for_directory(
             } => {
                 sources.push(create_page_source_for_file(
                     project_path,
+                    env,
                     server_context,
                     server_data_context,
                     client_context,
@@ -596,6 +609,7 @@ async fn create_page_source_for_directory(
         sources.push(create_page_source_for_directory(
             *child,
             project_path,
+            env,
             server_context,
             server_data_context,
             client_context,

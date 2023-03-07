@@ -40,7 +40,7 @@ use crate::{
         transition::NextEdgeTransition,
     },
     next_import_map::get_next_build_import_map,
-    next_server::context::ServerContextType,
+    next_server::context::{get_server_module_options_context, ServerContextType},
     util::{parse_config_from_source, NextSourceConfigVc},
 };
 
@@ -262,6 +262,7 @@ fn edge_transition_map(
     project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     next_config: NextConfigVc,
+    execution_context: ExecutionContextVc,
 ) -> TransitionsByNameVc {
     let edge_compile_time_info = get_edge_compile_time_info(server_addr, Value::new(Middleware));
 
@@ -278,11 +279,20 @@ fn edge_transition_map(
         project_path,
         Value::new(ServerContextType::Middleware),
         next_config,
+        execution_context,
+    );
+
+    let server_module_options_context = get_server_module_options_context(
+        project_path,
+        execution_context,
+        Value::new(ServerContextType::Middleware),
+        next_config,
     );
 
     let next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: Some(server_module_options_context),
         edge_resolve_options_context,
         output_path: output_path.root(),
         base_path: project_path,
@@ -322,6 +332,7 @@ pub async fn route(
             project_path,
             intermediate_output_path,
             next_config,
+            execution_context,
         )),
     );
 
@@ -349,7 +360,7 @@ pub async fn route(
             JsonValueVc::cell(dir.to_string_lossy().into()),
         ],
         CompletionsVc::all(vec![next_config_changed, routes_changed]),
-        false,
+        /* debug */ false,
     )
     .await?;
 
