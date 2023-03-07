@@ -82,7 +82,11 @@ Setup
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [],
-      "inferred": []
+      "inferred": [],
+      "global": [
+        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
     }
   }
 
@@ -123,7 +127,11 @@ Setup
       "configured": [
         "NODE_ENV=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ],
-      "inferred": []
+      "inferred": [],
+      "global": [
+        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
     }
   }
 
@@ -133,7 +141,11 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
     "configured": [
       "NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e"
     ],
-    "inferred": []
+    "inferred": [],
+    "global": [
+      "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ]
   }
 
 Tasks that don't exist throw an error

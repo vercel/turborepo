@@ -1,6 +1,7 @@
 package runsummary
 
 import (
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -11,13 +12,20 @@ type GlobalHashSummary struct {
 	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
 	GlobalCacheKey       string                                `json:"globalCacheKey"`
 	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
+	EnvVars              env.EnvironmentVariablePairs          `json:"-"`
 }
 
 // NewGlobalHashSummary creates a GlobalHashSummary struct from a set of fields.
-func NewGlobalHashSummary(globalFileHashMap map[turbopath.AnchoredUnixPath]string, rootExternalDepsHash string, hashedSortedEnvPairs []string, globalCacheKey string, pipeline fs.PristinePipeline) *GlobalHashSummary {
-	// TODO(mehulkar): Add hashedSortedEnvPairs in here, but redact the values
+func NewGlobalHashSummary(
+	fileHashMap map[turbopath.AnchoredUnixPath]string,
+	rootExternalDepsHash string,
+	envVars env.DetailedMap,
+	globalCacheKey string,
+	pipeline fs.PristinePipeline,
+) *GlobalHashSummary {
 	return &GlobalHashSummary{
-		GlobalFileHashMap:    globalFileHashMap,
+		EnvVars:              envVars.All.ToSecretHashable(),
+		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
 		GlobalCacheKey:       globalCacheKey,
 		Pipeline:             pipeline,

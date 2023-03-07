@@ -40,6 +40,12 @@ func NewRunSummary(turboVersion string, packages []string, globalHashSummary *Gl
 	}
 }
 
+func (summary *RunSummary) normalize() {
+	for _, t := range summary.Tasks {
+		t.EnvVars.Global = summary.GlobalHashSummary.EnvVars
+	}
+}
+
 // Save saves the run summary to a file
 func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage bool) error {
 	json, err := summary.FormatJSON(singlePackage)
@@ -88,6 +94,7 @@ type TaskSummary struct {
 type TaskEnvVarSummary struct {
 	Configured []string `json:"configured"`
 	Inferred   []string `json:"inferred"`
+	Global     []string `json:"global"`
 }
 
 // toSinglePackageTask converts a TaskSummary into a singlePackageTaskSummary

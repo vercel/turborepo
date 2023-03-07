@@ -8,6 +8,8 @@ import (
 
 // FormatJSON returns a json string representing a RunSummary
 func (summary *RunSummary) FormatJSON(singlePackage bool) ([]byte, error) {
+	summary.normalize() // normalize data
+
 	if singlePackage {
 		return summary.formatJSONSinglePackage()
 	}

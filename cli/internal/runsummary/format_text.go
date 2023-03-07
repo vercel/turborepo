@@ -15,6 +15,8 @@ import (
 
 // FormatAndPrintText prints a Run Summary to the Terminal UI
 func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
+	summary.normalize() // normalize data
+
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
@@ -94,6 +96,7 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Global Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Global, ", ")))
 
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
