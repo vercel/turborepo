@@ -1708,6 +1708,108 @@
 <span id="1708">1708</span>
 <span id="1709">1709</span>
 <span id="1710">1710</span>
+<span id="1711">1711</span>
+<span id="1712">1712</span>
+<span id="1713">1713</span>
+<span id="1714">1714</span>
+<span id="1715">1715</span>
+<span id="1716">1716</span>
+<span id="1717">1717</span>
+<span id="1718">1718</span>
+<span id="1719">1719</span>
+<span id="1720">1720</span>
+<span id="1721">1721</span>
+<span id="1722">1722</span>
+<span id="1723">1723</span>
+<span id="1724">1724</span>
+<span id="1725">1725</span>
+<span id="1726">1726</span>
+<span id="1727">1727</span>
+<span id="1728">1728</span>
+<span id="1729">1729</span>
+<span id="1730">1730</span>
+<span id="1731">1731</span>
+<span id="1732">1732</span>
+<span id="1733">1733</span>
+<span id="1734">1734</span>
+<span id="1735">1735</span>
+<span id="1736">1736</span>
+<span id="1737">1737</span>
+<span id="1738">1738</span>
+<span id="1739">1739</span>
+<span id="1740">1740</span>
+<span id="1741">1741</span>
+<span id="1742">1742</span>
+<span id="1743">1743</span>
+<span id="1744">1744</span>
+<span id="1745">1745</span>
+<span id="1746">1746</span>
+<span id="1747">1747</span>
+<span id="1748">1748</span>
+<span id="1749">1749</span>
+<span id="1750">1750</span>
+<span id="1751">1751</span>
+<span id="1752">1752</span>
+<span id="1753">1753</span>
+<span id="1754">1754</span>
+<span id="1755">1755</span>
+<span id="1756">1756</span>
+<span id="1757">1757</span>
+<span id="1758">1758</span>
+<span id="1759">1759</span>
+<span id="1760">1760</span>
+<span id="1761">1761</span>
+<span id="1762">1762</span>
+<span id="1763">1763</span>
+<span id="1764">1764</span>
+<span id="1765">1765</span>
+<span id="1766">1766</span>
+<span id="1767">1767</span>
+<span id="1768">1768</span>
+<span id="1769">1769</span>
+<span id="1770">1770</span>
+<span id="1771">1771</span>
+<span id="1772">1772</span>
+<span id="1773">1773</span>
+<span id="1774">1774</span>
+<span id="1775">1775</span>
+<span id="1776">1776</span>
+<span id="1777">1777</span>
+<span id="1778">1778</span>
+<span id="1779">1779</span>
+<span id="1780">1780</span>
+<span id="1781">1781</span>
+<span id="1782">1782</span>
+<span id="1783">1783</span>
+<span id="1784">1784</span>
+<span id="1785">1785</span>
+<span id="1786">1786</span>
+<span id="1787">1787</span>
+<span id="1788">1788</span>
+<span id="1789">1789</span>
+<span id="1790">1790</span>
+<span id="1791">1791</span>
+<span id="1792">1792</span>
+<span id="1793">1793</span>
+<span id="1794">1794</span>
+<span id="1795">1795</span>
+<span id="1796">1796</span>
+<span id="1797">1797</span>
+<span id="1798">1798</span>
+<span id="1799">1799</span>
+<span id="1800">1800</span>
+<span id="1801">1801</span>
+<span id="1802">1802</span>
+<span id="1803">1803</span>
+<span id="1804">1804</span>
+<span id="1805">1805</span>
+<span id="1806">1806</span>
+<span id="1807">1807</span>
+<span id="1808">1808</span>
+<span id="1809">1809</span>
+<span id="1810">1810</span>
+<span id="1811">1811</span>
+<span id="1812">1812</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1739,7 +1841,7 @@
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
         mpsc::{channel, RecvError, TryRecvError},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
     },
     time::Duration,
 };
@@ -1790,6 +1892,64 @@
     <span class="kw">fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; FileMetaVc;
 }
 
+<span class="attr">#[derive(Default)]
+</span><span class="kw">struct </span>DiskWatcher {
+    watcher: Mutex&lt;<span class="prelude-ty">Option</span>&lt;RecommendedWatcher&gt;&gt;,
+    <span class="doccomment">/// Keeps track of which directories are currently watched. This is only
+    /// used on a OS that doesn&#39;t support recursive watching.
+    </span><span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+    </span>watching: dashmap::DashSet&lt;PathBuf&gt;,
+}
+
+<span class="kw">impl </span>DiskWatcher {
+    <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+    </span><span class="kw">fn </span>restore_if_watching(<span class="kw-2">&amp;</span><span class="self">self</span>, dir_path: <span class="kw-2">&amp;</span>Path, root_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if </span><span class="self">self</span>.watching.contains(dir_path) {
+            <span class="kw">let </span><span class="kw-2">mut </span>watcher = <span class="self">self</span>.watcher.lock().unwrap();
+            <span class="self">self</span>.start_watching(<span class="kw-2">&amp;mut </span>watcher, dir_path, <span class="kw-2">&amp;</span>root_path)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+    </span><span class="kw">fn </span>ensure_watching(<span class="kw-2">&amp;</span><span class="self">self</span>, dir_path: <span class="kw-2">&amp;</span>Path, root_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if </span><span class="self">self</span>.watching.contains(dir_path) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+        <span class="kw">let </span><span class="kw-2">mut </span>watcher = <span class="self">self</span>.watcher.lock().unwrap();
+        <span class="kw">if </span><span class="self">self</span>.watching.insert(dir_path.to_path_buf()) {
+            <span class="self">self</span>.start_watching(<span class="kw-2">&amp;mut </span>watcher, dir_path, root_path)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+    </span><span class="kw">fn </span>start_watching(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        watcher: <span class="kw-2">&amp;mut </span>MutexGuard&lt;<span class="prelude-ty">Option</span>&lt;RecommendedWatcher&gt;&gt;,
+        dir_path: <span class="kw-2">&amp;</span>Path,
+        root_path: <span class="kw-2">&amp;</span>Path,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(watcher) = watcher.as_mut() {
+            <span class="kw">let </span><span class="kw-2">mut </span>path = dir_path;
+            <span class="kw">while let </span><span class="prelude-val">Err</span>(err) = watcher.watch(path, RecursiveMode::NonRecursive) {
+                <span class="kw">if </span>path == root_path {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(err).context(<span class="macro">format!</span>(
+                        <span class="string">&quot;Unable to watch {} (tried up to {})&quot;</span>,
+                        dir_path.display(),
+                        path.display()
+                    ));
+                }
+                <span class="kw">let </span><span class="prelude-val">Some</span>(parent_path) = path.parent() <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(err).context(<span class="macro">format!</span>(<span class="string">&quot;Unable to watch {} (tried up to {})&quot;</span>, dir_path.display(), path.display()));
+                };
+                path = parent_path;
+            }
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
 <span class="attr">#[turbo_tasks::value(cell = <span class="string">&quot;new&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
 </span><span class="kw">pub struct </span>DiskFileSystem {
     <span class="kw">pub </span>name: String,
@@ -1803,20 +1963,36 @@
     </span>dir_invalidator_map: Arc&lt;InvalidatorMap&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
-    </span>watcher: Mutex&lt;<span class="prelude-ty">Option</span>&lt;RecommendedWatcher&gt;&gt;,
+    </span>watcher: Arc&lt;DiskWatcher&gt;,
 }
 
 <span class="kw">impl </span>DiskFileSystem {
+    <span class="doccomment">/// Returns the root as Path
+    </span><span class="kw">fn </span>root_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
+        simplified(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root))
+    }
+
     <span class="doccomment">/// registers the path as an invalidator for the current task,
     /// has to be called within a turbo-tasks function
-    </span><span class="kw">fn </span>register_invalidator(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw">impl </span>AsRef&lt;Path&gt;, file: bool) {
+    </span><span class="kw">fn </span>register_invalidator(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>invalidator = turbo_tasks::get_invalidator();
-        <span class="kw">if </span>file {
-            <span class="self">self</span>.invalidator_map.insert(path_to_key(path), invalidator);
-        } <span class="kw">else </span>{
-            <span class="self">self</span>.dir_invalidator_map
-                .insert(path_to_key(path), invalidator);
+        <span class="self">self</span>.invalidator_map.insert(path_to_key(path), invalidator);
+        <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(dir) = path.parent() {
+            <span class="self">self</span>.watcher.ensure_watching(dir, <span class="self">self</span>.root_path())<span class="question-mark">?</span>;
         }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// registers the path as an invalidator for the current task,
+    /// has to be called within a turbo-tasks function
+    </span><span class="kw">fn </span>register_dir_invalidator(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>invalidator = turbo_tasks::get_invalidator();
+        <span class="self">self</span>.dir_invalidator_map
+            .insert(path_to_key(path), invalidator);
+        <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+        </span><span class="self">self</span>.watcher.ensure_watching(path, <span class="self">self</span>.root_path())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub fn </span>invalidate(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -1829,7 +2005,7 @@
     }
 
     <span class="kw">pub fn </span>start_watching(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>watcher_guard = <span class="self">self</span>.watcher.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>watcher_guard = <span class="self">self</span>.watcher.watcher.lock().unwrap();
         <span class="kw">if </span>watcher_guard.is_some() {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
@@ -1843,7 +2019,12 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>watcher = watcher(tx, Duration::from_millis(<span class="number">1</span>))<span class="question-mark">?</span>;
         <span class="comment">// Add a path to be watched. All files and directories at that path and
         // below will be monitored for changes.
+        </span><span class="attr">#[cfg(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>))]
         </span>watcher.watch(<span class="kw-2">&amp;</span>root, RecursiveMode::Recursive)<span class="question-mark">?</span>;
+        <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+        </span><span class="kw">for </span>dir_path <span class="kw">in </span><span class="self">self</span>.watcher.watching.iter() {
+            watcher.watch(<span class="kw-2">&amp;*</span>dir_path, RecursiveMode::NonRecursive)<span class="question-mark">?</span>;
+        }
 
         <span class="comment">// We need to invalidate all reads that happened before watching
         // Best is to start_watching before starting to read
@@ -1855,12 +2036,18 @@
         }
 
         watcher_guard.replace(watcher);
+        drop(watcher_guard);
+
+        <span class="kw">let </span>disk_watcher = <span class="self">self</span>.watcher.clone();
+        <span class="kw">let </span>root_path = <span class="self">self</span>.root_path().to_path_buf();
 
         spawn_thread(<span class="kw">move </span>|| {
             <span class="kw">let </span><span class="kw-2">mut </span>batched_invalidate_path = HashSet::new();
             <span class="kw">let </span><span class="kw-2">mut </span>batched_invalidate_path_dir = HashSet::new();
             <span class="kw">let </span><span class="kw-2">mut </span>batched_invalidate_path_and_children = HashSet::new();
             <span class="kw">let </span><span class="kw-2">mut </span>batched_invalidate_path_and_children_dir = HashSet::new();
+            <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+            </span><span class="kw">let </span><span class="kw-2">mut </span>batched_new_paths = HashSet::new();
 
             <span class="lifetime">&#39;outer</span>: <span class="kw">loop </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>event = rx.recv().map_err(|e| <span class="kw">match </span>e {
@@ -1871,7 +2058,16 @@
                         <span class="prelude-val">Ok</span>(DebouncedEvent::Write(path)) =&gt; {
                             batched_invalidate_path.insert(path);
                         }
-                        <span class="prelude-val">Ok</span>(DebouncedEvent::Create(path)) | <span class="prelude-val">Ok</span>(DebouncedEvent::Remove(path)) =&gt; {
+                        <span class="prelude-val">Ok</span>(DebouncedEvent::Create(path)) =&gt; {
+                            batched_invalidate_path_and_children.insert(path.clone());
+                            batched_invalidate_path_and_children_dir.insert(path.clone());
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = path.parent() {
+                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
+                            }
+                            <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+                            </span>batched_new_paths.insert(path.clone());
+                        }
+                        <span class="prelude-val">Ok</span>(DebouncedEvent::Remove(path)) =&gt; {
                             batched_invalidate_path_and_children.insert(path.clone());
                             batched_invalidate_path_and_children_dir.insert(path.clone());
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = path.parent() {
@@ -1887,6 +2083,8 @@
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = destination.parent() {
                                 batched_invalidate_path_dir.insert(PathBuf::from(parent));
                             }
+                            <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+                            </span>batched_new_paths.insert(destination.clone());
                         }
                         <span class="prelude-val">Ok</span>(DebouncedEvent::Rescan) =&gt; {
                             batched_invalidate_path_and_children.insert(PathBuf::from(<span class="kw-2">&amp;</span>root));
@@ -1967,13 +2165,19 @@
                         <span class="kw-2">&amp;mut </span>batched_invalidate_path_and_children_dir,
                     );
                 }
+                <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+                </span>{
+                    <span class="kw">for </span>path <span class="kw">in </span>batched_new_paths.drain() {
+                        <span class="kw">let _ </span>= disk_watcher.restore_if_watching(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>root_path);
+                    }
+                }
             }
         });
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub fn </span>stop_watching(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(watcher) = <span class="self">self</span>.watcher.lock().unwrap().take() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(watcher) = <span class="self">self</span>.watcher.watcher.lock().unwrap().take() {
             drop(watcher);
             <span class="comment">// thread will detect the stop because the channel is disconnected
         </span>}
@@ -1981,7 +2185,7 @@
 
     <span class="kw">pub async fn </span>to_sys_path(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf&gt; {
         <span class="comment">// just in case there&#39;s a windows unc path prefix we remove it with `dunce`
-        </span><span class="kw">let </span>path = simplified(Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root));
+        </span><span class="kw">let </span>path = <span class="self">self</span>.root_path();
         <span class="kw">let </span>fs_path = fs_path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">if </span>fs_path.path.is_empty() {
             path.to_path_buf()
@@ -2009,7 +2213,7 @@
             mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
-            watcher: Mutex::new(<span class="prelude-val">None</span>),
+            watcher: Default::default(),
         };
 
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(instance))
@@ -2039,7 +2243,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileContentVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
+        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>content = read_file(full_path, <span class="kw-2">&amp;</span><span class="self">self</span>.mutex_map).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(content.cell())
@@ -2048,7 +2252,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>read_dir(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;DirectoryContentVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">false</span>);
+        <span class="self">self</span>.register_dir_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
         <span class="kw">let </span>fs_path = fs_path.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// we use the sync std function here as it&#39;s a lot faster (600%) in
@@ -2102,7 +2306,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>read_link(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;LinkContentVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
+        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>link_path = <span class="kw">match </span>retry_future(|| fs::read_link(<span class="kw-2">&amp;</span>full_path)).<span class="kw">await </span>{
@@ -2184,7 +2388,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>track(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.register_invalidator(full_path, <span class="bool-val">true</span>);
+        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(CompletionVc::new())
     }
 
@@ -2339,7 +2543,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FileMetaVc&gt; {
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
+        <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>meta = retry_future(|| fs::metadata(full_path.clone()))
