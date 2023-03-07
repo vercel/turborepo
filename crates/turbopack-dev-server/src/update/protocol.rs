@@ -145,7 +145,7 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             detail: &plain.detail,
             source,
             sub_issues: plain.sub_issues.iter().map(|p| p.deref().into()).collect(),
-            // TODO formatting the issue should be handled by the error overlay.
+            // TODO(WEB-691) formatting the issue should be handled by the error overlay.
             // The browser could handle error formatting in a better way than the text only
             // formatting here
             formatted: format_issue(
