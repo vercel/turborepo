@@ -50,10 +50,32 @@ We have a multi step release process for Turborepo right now.
 
 **NOTE**: The steps below _must_ be run serially, in the order specified.
 
-1. Create a release branch by triggering the [1. Turborepo Release (release branch)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-1.yml) workflow
-   1. Specify the semver increment using the SemVer Increment field
-1. Build the Go Binary by triggering the [2. Turborepo Release (go binary)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-2.yml) workflow.
+1. Create a release branch by triggering the [1. Turborepo Release (release branch)][1] workflow
+
+   - Specify the semver increment using the SemVer Increment field (start with `prerelease`)
+
+2. Build the Go Binary by triggering the [2. Turborepo Release (go binary)][2] workflow.
+
    1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields.
-1. Build the Rust Wrapper by triggering the [3. Turborepo Release (rust binary & publish)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-3.yml) workflow.
+
+3. Build the Rust Wrapper by triggering the [3. Turborepo Release (rust binary & publish)][3] workflow.
    1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields. (this should match step 2.1 above)
-1. After publish, open a PR to merge the release branch created in step 1 back into `main`
+4. A PR is automatically opened to merge the release branch created in step 1 back into `main`
+
+   1. ⚠️ Merge this in! You don't need to wait for tests to pass.
+
+   It's important to merge this branch soon after the publish is succesful
+
+5. `turbo-orchestrator.yml` polls `npm` every 5 mins. When a new version is detected,
+   [`turborepo-smoke-published.yml`][4] runs against `@latest` and `@canary` tags.
+
+### Notes
+
+- Github Release Notes are published on their own using config from `turborepo-release.yml`,
+  triggered by the `turbo-orchestrator` bot.
+- `eslint-plugin-turbo` and `eslint-config-turbo` need to be published separately.
+
+[1]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-1.yml
+[2]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-2.yml
+[3]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-3.yml
+[3]: https://github.com/vercel/turbo/actions/workflows/turborepo-smoke-published.yml

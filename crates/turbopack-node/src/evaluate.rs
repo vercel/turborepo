@@ -1,7 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, thread::available_parallelism, time::Duration};
+use std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures_retry::{FutureRetry, RetryPolicy};
+use indexmap::indexmap;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -14,6 +15,7 @@ use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkGroupVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -72,17 +74,19 @@ pub async fn get_evaluate_pool(
     )
     .as_asset();
 
-    let module_path = module_asset.path().await?;
+    let module_path = module_asset.ident().path().await?;
     let file_name = module_path.file_name();
     let file_name = if file_name.ends_with(".js") {
         Cow::Borrowed(file_name)
+    } else if let Some(file_name) = file_name.strip_suffix(".ts") {
+        Cow::Owned(format!("{file_name}.js"))
     } else {
         Cow::Owned(format!("{file_name}.js"))
     };
     let path = intermediate_output_path.join(file_name.as_ref());
     let entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
-            runtime_asset.path().join("evaluate.js"),
+            runtime_asset.ident().path().join("evaluate.js"),
             File::from(
                 "import { run } from 'RUNTIME'; run((...args) => \
                  (require('INNER').default(...args)))",
@@ -94,10 +98,10 @@ pub async fn get_evaluate_pool(
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([
-            ("INNER".to_string(), module_asset),
-            ("RUNTIME".to_string(), runtime_asset),
-        ])),
+        InnerAssetsVc::cell(indexmap! {
+            "INNER".to_string() => module_asset,
+            "RUNTIME".to_string() => runtime_asset
+        }),
     );
 
     let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(path).await?) else {
@@ -175,7 +179,7 @@ pub async fn evaluate(
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
-    context_path_for_issue: FileSystemPathVc,
+    context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
@@ -225,7 +229,8 @@ pub async fn evaluate(
             EvalJavaScriptIncomingMessage::Error(error) => {
                 EvaluationIssue {
                     error,
-                    context_path: context_path_for_issue,
+                    context_ident: context_ident_for_issue,
+                    cwd,
                 }
                 .cell()
                 .as_issue()
@@ -249,7 +254,7 @@ pub async fn evaluate(
             EvalJavaScriptIncomingMessage::BuildDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 BuildDependencyIssue {
-                    context_path: context_path_for_issue,
+                    context_ident: context_ident_for_issue,
                     path: cwd.join(&path),
                 }
                 .cell()
@@ -261,6 +266,17 @@ pub async fn evaluate(
                 dir_dependencies.push(dir_dependency(
                     cwd.join(&path).read_glob(GlobVc::new(&glob), false),
                 ));
+            }
+            EvalJavaScriptIncomingMessage::EmittedError { error, severity } => {
+                EvaluateEmittedErrorIssue {
+                    context: context_ident_for_issue.path(),
+                    cwd,
+                    error,
+                    severity: severity.cell(),
+                }
+                .cell()
+                .as_issue()
+                .emit();
             }
         }
     };
@@ -278,7 +294,8 @@ pub async fn evaluate(
 /// An issue that occurred while evaluating node code.
 #[turbo_tasks::value(shared)]
 pub struct EvaluationIssue {
-    pub context_path: FileSystemPathVc,
+    pub context_ident: AssetIdentVc,
+    pub cwd: FileSystemPathVc,
     pub error: StructuredError,
 }
 
@@ -296,13 +313,19 @@ impl Issue for EvaluationIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> FileSystemPathVc {
-        self.context_path
+        self.context_ident.path()
     }
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<StringVc> {
+        let cwd = to_sys_path(self.cwd.root())
+            .await?
+            .context("Must have path on disk")?;
+
         Ok(StringVc::cell(
-            self.error.print(Default::default(), None).await?,
+            self.error
+                .print(Default::default(), &cwd.to_string_lossy())
+                .await?,
         ))
     }
 }
@@ -310,7 +333,7 @@ impl Issue for EvaluationIssue {
 /// An issue that occurred while evaluating node code.
 #[turbo_tasks::value(shared)]
 pub struct BuildDependencyIssue {
-    pub context_path: FileSystemPathVc,
+    pub context_ident: AssetIdentVc,
     pub path: FileSystemPathVc,
 }
 
@@ -333,7 +356,7 @@ impl Issue for BuildDependencyIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> FileSystemPathVc {
-        self.context_path
+        self.context_ident.path()
     }
 
     #[turbo_tasks::function]
@@ -367,7 +390,7 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
         // Reading all files to add itself as dependency
         match *item {
             DirectoryEntry::File(file) => {
-                file.read().await?;
+                file.track().await?;
             }
             DirectoryEntry::Directory(dir) => {
                 dir_dependency(dir.read_glob(GlobVc::new("**"), false)).await?;
@@ -382,4 +405,48 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
         }
     }
     Ok(CompletionVc::new())
+}
+
+#[turbo_tasks::value(shared)]
+pub struct EvaluateEmittedErrorIssue {
+    pub context: FileSystemPathVc,
+    pub cwd: FileSystemPathVc,
+    pub severity: IssueSeverityVc,
+    pub error: StructuredError,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for EvaluateEmittedErrorIssue {
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.context
+    }
+
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("loaders".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> StringVc {
+        StringVc::cell("Issue while running loader".to_string())
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<StringVc> {
+        let root = to_sys_path(self.cwd.root())
+            .await?
+            .context("Must have path on disk")?;
+
+        Ok(StringVc::cell(
+            self.error
+                .print(Default::default(), &root.to_string_lossy())
+                .await?,
+        ))
+    }
 }

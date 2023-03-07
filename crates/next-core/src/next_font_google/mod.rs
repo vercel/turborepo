@@ -2,12 +2,13 @@ use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
-use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
-use turbo_tasks_fetch::fetch;
+use turbo_tasks::{
+    primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc},
+    Value,
+};
 use turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
-    issue::IssueSeverity,
     resolve::{
         options::{
             ImportMapResult, ImportMapResultVc, ImportMapping, ImportMappingReplacement,
@@ -19,19 +20,28 @@ use turbopack_core::{
     },
     virtual_asset::VirtualAssetVc,
 };
+use turbopack_node::execution_context::ExecutionContextVc;
 
-use self::options::FontWeights;
+use self::{
+    font_fallback::{get_font_fallback, FontFallback, FontFallbackVc},
+    options::{FontWeights, NextFontGoogleOptionsVc},
+    stylesheet::build_stylesheet,
+    util::{get_scoped_font_family, FontFamilyType},
+};
 use crate::{
-    embed_js::attached_next_js_package_path,
+    embed_js::next_js_file_path,
     next_font_google::{
         options::FontDataEntry,
         util::{get_font_axes, get_stylesheet_url},
     },
 };
 
+pub(crate) mod font_fallback;
+pub(crate) mod issue;
 pub(crate) mod options;
 pub(crate) mod request;
-mod util;
+pub(crate) mod stylesheet;
+pub(crate) mod util;
 
 pub const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
 static FONT_DATA: Lazy<FontData> = Lazy::new(|| {
@@ -41,7 +51,7 @@ static FONT_DATA: Lazy<FontData> = Lazy::new(|| {
 type FontData = IndexMap<String, FontDataEntry>;
 
 #[turbo_tasks::value(shared)]
-pub struct NextFontGoogleReplacer {
+pub(crate) struct NextFontGoogleReplacer {
     project_path: FileSystemPathVc,
 }
 
@@ -73,11 +83,12 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
 
         let query = &*query_vc.await?;
         let options = font_options_from_query_map(*query_vc);
-        let properties =
-            get_font_css_properties(get_scoped_font_family(*query_vc), options).await?;
+        let request_hash = get_request_hash(*query_vc);
+        let fallback = get_font_fallback(self.project_path, options, request_hash);
+        let properties = get_font_css_properties(options, fallback, request_hash).await?;
         let js_asset = VirtualAssetVc::new(
-                attached_next_js_package_path(self.project_path)
-                    .join(&format!("internal/font/google/{}.js", get_request_id(*query_vc).await?)),
+                next_js_file_path("internal/font/google")
+                    .join(&format!("{}.js", get_request_id(*query_vc).await?)),
                 FileContent::Content(
                     formatdoc!(
                         r#"
@@ -123,13 +134,17 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
 #[turbo_tasks::value(shared)]
 pub struct NextFontGoogleCssModuleReplacer {
     project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
 }
 
 #[turbo_tasks::value_impl]
 impl NextFontGoogleCssModuleReplacerVc {
     #[turbo_tasks::function]
-    pub fn new(project_path: FileSystemPathVc) -> Self {
-        Self::cell(NextFontGoogleCssModuleReplacer { project_path })
+    pub fn new(project_path: FileSystemPathVc, execution_context: ExecutionContextVc) -> Self {
+        Self::cell(NextFontGoogleCssModuleReplacer {
+            project_path,
+            execution_context,
+        })
     }
 }
 
@@ -154,80 +169,73 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
         let options = font_options_from_query_map(*query_vc);
         let stylesheet_url = get_stylesheet_url_from_options(options);
-        let scoped_font_family = get_scoped_font_family(*query_vc);
-        let css_virtual_path = attached_next_js_package_path(self.project_path).join(&format!(
-            "internal/font/google/{}.module.css",
-            get_request_id(*query_vc).await?
-        ));
+        let request_hash = get_request_hash(*query_vc);
+        let scoped_font_family =
+            get_scoped_font_family(FontFamilyType::WebFont.cell(), options, request_hash);
+        let css_virtual_path = next_js_file_path("internal/font/google")
+            .join(&format!("/{}.module.css", get_request_id(*query_vc).await?));
 
-        let stylesheet_res = fetch(
-            stylesheet_url,
-            OptionStringVc::cell(Some(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like \
-                 Gecko) Chrome/104.0.0.0 Safari/537.36"
-                    .to_owned(),
-            )),
-        )
-        .await?;
+        // When running Next.js integration tests, use the mock data available in
+        // process.env.NEXT_FONT_GOOGLE_MOCKED_RESPONSES instead of making real
+        // requests to Google Fonts.
+        #[cfg(feature = "__internal_nextjs_integration_test")]
+        let stylesheet_str = get_mock_stylesheet(&stylesheet_url.await?, self.execution_context)
+            .await?
+            .map(StringVc::cell);
 
-        let stylesheet = match &*stylesheet_res {
-            Ok(r) => Some(
-                update_stylesheet(r.await?.body.to_string(), options, scoped_font_family)
-                    .await?
-                    .clone_value(),
-            ),
-            Err(err) => {
-                // Inform the user of the failure to retreive the stylesheet, but don't
-                // propagate this error. We don't want e.g. offline connections to prevent page
-                // renders during development. During production builds, however, this error
-                // should propagate.
-                //
-                // TODO(WEB-283): Use fallback in dev in this case
-                // TODO(WEB-293): Fail production builds (not dev) in this case
-                err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
-                    .as_issue()
-                    .emit();
+        #[cfg(not(feature = "__internal_nextjs_integration_test"))]
+        let stylesheet_str = {
+            use turbo_tasks_fetch::fetch;
+            use turbopack_core::issue::IssueSeverity;
 
-                None
+            let stylesheet_res = fetch(
+                stylesheet_url,
+                OptionStringVc::cell(Some(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, \
+                     like Gecko) Chrome/104.0.0.0 Safari/537.36"
+                        .to_owned(),
+                )),
+            )
+            .await?;
+
+            match &*stylesheet_res {
+                Ok(r) => Some(r.await?.body.to_string()),
+                Err(err) => {
+                    // Inform the user of the failure to retreive the stylesheet, but don't
+                    // propagate this error. We don't want e.g. offline connections to prevent page
+                    // renders during development. During production builds, however, this error
+                    // should propagate.
+                    //
+                    // TODO(WEB-283): Use fallback in dev in this case
+                    // TODO(WEB-293): Fail production builds (not dev) in this case
+                    err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
+                        .as_issue()
+                        .emit();
+
+                    None
+                }
             }
         };
 
-        let properties = get_font_css_properties(scoped_font_family, options).await?;
-        let font_family = properties.font_family.await?;
+        let stylesheet = match stylesheet_str {
+            Some(s) => Some(
+                update_stylesheet(s, options, scoped_font_family)
+                    .await?
+                    .clone_value(),
+            ),
+            None => None,
+        };
+
+        let font_fallback = get_font_fallback(self.project_path, options, request_hash);
         let css_asset = VirtualAssetVc::new(
             css_virtual_path,
             FileContent::Content(
-                formatdoc!(
-                    r#"
-                        {}
-
-                        .className {{
-                            font-family: {};
-                            {}{}
-                        }}
-
-                        {}
-                        "#,
-                    stylesheet.unwrap_or_else(|| "".to_owned()),
-                    font_family,
-                    properties
-                        .weight
-                        .await?
-                        .map(|w| format!("font-weight: {};\n", w))
-                        .unwrap_or_else(|| "".to_owned()),
-                    properties
-                        .style
-                        .await?
-                        .as_ref()
-                        .map(|s| format!("font-style: {};\n", s))
-                        .unwrap_or_else(|| "".to_owned()),
-                    properties
-                        .variable
-                        .await?
-                        .as_ref()
-                        .map(|v| { format!(".variable {{ {}: {}; }} ", v, *font_family) })
-                        .unwrap_or_else(|| "".to_owned())
+                build_stylesheet(
+                    OptionStringVc::cell(stylesheet),
+                    get_font_css_properties(options, font_fallback, request_hash),
+                    font_fallback,
                 )
+                .await?
                 .into(),
             )
             .into(),
@@ -248,17 +256,6 @@ async fn update_stylesheet(
     Ok(StringVc::cell(stylesheet.await?.replace(
         &format!("font-family: '{}';", &*options.await?.font_family),
         &format!("font-family: '{}';", &*scoped_font_family.await?),
-    )))
-}
-
-#[turbo_tasks::function]
-async fn get_scoped_font_family(query_vc: QueryMapVc) -> Result<StringVc> {
-    let options = font_options_from_query_map(query_vc).await?;
-
-    Ok(StringVc::cell(format!(
-        "__{}_{:x?}",
-        options.font_family.replace(' ', "_"),
-        *get_request_hash(query_vc).await?
     )))
 }
 
@@ -320,10 +317,7 @@ async fn get_stylesheet_url_from_options(options: NextFontGoogleOptionsVc) -> Re
 }
 
 #[turbo_tasks::value(transparent)]
-struct NextFontGoogleOptions(self::options::NextFontGoogleOptions);
-
-#[turbo_tasks::value(transparent)]
-struct FontCssProperties {
+pub(crate) struct FontCssProperties {
     font_family: StringVc,
     weight: OptionU16Vc,
     style: OptionStringVc,
@@ -332,13 +326,27 @@ struct FontCssProperties {
 
 #[turbo_tasks::function]
 async fn get_font_css_properties(
-    scoped_font_family: StringVc,
-    options: NextFontGoogleOptionsVc,
+    options_vc: NextFontGoogleOptionsVc,
+    font_fallback: FontFallbackVc,
+    request_hash: U32Vc,
 ) -> Result<FontCssPropertiesVc> {
-    let options = &*options.await?;
-    let scoped_font_family = &*scoped_font_family.await?;
+    let options = &*options_vc.await?;
+    let scoped_font_family =
+        &*get_scoped_font_family(FontFamilyType::WebFont.cell(), options_vc, request_hash).await?;
 
     let mut font_families = vec![scoped_font_family.clone()];
+    let font_fallback = &*font_fallback.await?;
+    match font_fallback {
+        FontFallback::Manual(fonts) => {
+            font_families.extend_from_slice(&fonts.await?);
+        }
+        FontFallback::Automatic(fallback) => {
+            let fallback = &*fallback.await?;
+            font_families.push((*fallback.scoped_font_family.await?).clone());
+        }
+        FontFallback::Error => {}
+    }
+
     if let Some(fallback) = &options.fallback {
         font_families.extend_from_slice(fallback);
     }
@@ -378,5 +386,101 @@ async fn font_options_from_query_map(query: QueryMapVc) -> Result<NextFontGoogle
         };
 
     self::options::options_from_request(&parse_json_with_source_context(json)?, &FONT_DATA)
-        .map(NextFontGoogleOptionsVc::cell)
+        .map(|o| NextFontGoogleOptionsVc::new(Value::new(o)))
+}
+
+#[cfg(feature = "__internal_nextjs_integration_test")]
+async fn get_mock_stylesheet(
+    url: &str,
+    execution_context: ExecutionContextVc,
+) -> Result<Option<String>> {
+    use std::{collections::HashMap, path::Path};
+
+    use turbo_tasks::{CompletionVc, Value};
+    use turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
+    use turbo_tasks_fs::{
+        json::parse_json_rope_with_source_context, DiskFileSystemVc, File, FileSystem,
+    };
+    use turbopack::evaluate_context::node_evaluate_asset_context;
+    use turbopack_core::{context::AssetContext, ident::AssetIdentVc};
+    use turbopack_ecmascript::{
+        EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    };
+    use turbopack_node::{
+        evaluate::{evaluate, JavaScriptValue},
+        execution_context::ExecutionContext,
+    };
+
+    let env = CommandLineProcessEnvVc::new().as_process_env();
+    let mocked_response_js = &*env.read("NEXT_FONT_GOOGLE_MOCKED_RESPONSES").await?;
+    let mocked_response_js = mocked_response_js
+        .as_ref()
+        .context("Expected env NEXT_FONT_GOOGLE_MOCKED_RESPONSES")?;
+
+    let response_path = Path::new(&mocked_response_js);
+    let mock_fs = DiskFileSystemVc::new(
+        "mock".to_string(),
+        response_path
+            .parent()
+            .context("Must be valid path")?
+            .to_str()
+            .context("Must exist")?
+            .to_string(),
+    )
+    .as_file_system();
+
+    let ExecutionContext {
+        env,
+        project_path,
+        intermediate_output_path,
+    } = *execution_context.await?;
+    let context = node_evaluate_asset_context(project_path, None, None);
+    let loader_path = mock_fs.root().join("loader.js");
+    let mocked_response_asset = EcmascriptModuleAssetVc::new(
+        VirtualAssetVc::new(
+            loader_path,
+            File::from(format!(
+                "import data from './{}'; export default function load() {{ return data; }};",
+                response_path
+                    .file_name()
+                    .context("Must exist")?
+                    .to_string_lossy(),
+            ))
+            .into(),
+        )
+        .into(),
+        context,
+        Value::new(EcmascriptModuleAssetType::Ecmascript),
+        EcmascriptInputTransformsVc::cell(vec![]),
+        context.compile_time_info(),
+    )
+    .into();
+
+    let root = mock_fs.root();
+    let val = evaluate(
+        loader_path,
+        mocked_response_asset,
+        root,
+        env,
+        AssetIdentVc::from_path(loader_path),
+        context,
+        intermediate_output_path,
+        None,
+        vec![],
+        CompletionVc::immutable(),
+        /* debug */ false,
+    )
+    .await?;
+
+    match &*val {
+        JavaScriptValue::Value(val) => {
+            let mock_map: HashMap<String, Option<String>> =
+                parse_json_rope_with_source_context(val)?;
+            Ok((mock_map.get(url).context("url not found")?).clone())
+        }
+        JavaScriptValue::Error => panic!("Unexpected error evaluating JS"),
+        JavaScriptValue::Stream(_) => {
+            unimplemented!("Stream not supported now");
+        }
+    }
 }

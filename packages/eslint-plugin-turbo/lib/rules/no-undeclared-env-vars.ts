@@ -1,4 +1,5 @@
 import type { Rule } from "eslint";
+import path from "path";
 import { Node, MemberExpression } from "estree";
 import { RULES } from "../constants";
 import getEnvVarDependencies from "../utils/getEnvVarDependencies";
@@ -76,12 +77,20 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     options
   );
   const filePath = getPhysicalFilename();
-  const allTurboVars =
-    getEnvVarDependencies({
-      cwd,
-    }) || {};
+  const allTurboVars = getEnvVarDependencies({
+    cwd,
+  });
+
+  // if allTurboVars is null, something went wrong reading from the turbo config
+  // (this is different from finding a config with no env vars present, which would
+  // return an empty set) - so there is no point continuing if we have nothing to check against
+  if (!allTurboVars) {
+    // return of {} bails early from a rule check
+    return {};
+  }
 
   const globalTurboVars = allTurboVars["//"];
+  const hasWorkspaceConfigs = Object.keys(allTurboVars).length > 1;
 
   // find any workspace configs that match the current file path
   // find workspace config (if any) that match the current file path
@@ -94,14 +103,6 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     workspaceTurboVars = allTurboVars[workspaceKey];
   }
 
-  // if this returns null, something went wrong reading from the turbo config
-  // (this is different from finding a config with no env vars present, which would
-  // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!globalTurboVars) {
-    // return of {} bails early from a rule check
-    return {};
-  }
-
   const checkKey = (node: Node, envKey?: string) => {
     if (
       envKey &&
@@ -112,10 +113,24 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       if (workspaceTurboVars && workspaceTurboVars.has(envKey)) {
         return {};
       } else {
+        let message = `{{ envKey }} is not listed as a dependency in ${
+          hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
+        }`;
+        if (workspaceKey && workspaceTurboVars) {
+          if (cwd) {
+            // if we have a cwd, we can provide a relative path to the workspace config
+            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+              cwd,
+              workspaceKey
+            )}) turbo.json`;
+          } else {
+            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+          }
+        }
+
         context.report({
           node,
-          message:
-            "${{ envKey }} is not listed as a dependency in any turbo.json",
+          message,
           data: { envKey },
         });
       }

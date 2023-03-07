@@ -1,4 +1,4 @@
-import { client } from "database";
+import { prisma } from "database";
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
@@ -17,7 +17,7 @@ export default async function handler(
   }
 
   try {
-    const users = await client.user.findMany();
+    const users = await prisma.user.findMany();
     if (!users)
       throw {
         message: "Failed to retrieve users",

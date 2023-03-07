@@ -1,8 +1,9 @@
 use std::{
+    borrow::Cow,
     cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Write as _,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -11,16 +12,15 @@ use anyhow::{anyhow, Result};
 use crossterm::style::{StyledContent, Stylize};
 use owo_colors::{OwoColorize as _, Style};
 use turbo_tasks::{
-    RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, ValueToString,
+    primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
 };
 use turbo_tasks_fs::{
-    attach::AttachedFileSystemVc,
     source_context::{get_source_context, SourceContextLine},
-    to_sys_path, FileLinesContent, FileSystemPathVc,
+    FileLinesContent,
 };
 use turbopack_core::issue::{
-    CapturedIssues, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc, IssueSeverity,
-    OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
+    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
+    PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -172,32 +172,32 @@ fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String
     }
 }
 
-async fn format_optional_path(
-    path: &OptionIssueProcessingPathItemsVc,
+fn format_optional_path(
+    path: &Option<Vec<PlainIssueProcessingPathItemReadRef>>,
     formatted_issue: &mut String,
 ) -> Result<()> {
-    if let Some(path) = &*path.await? {
+    if let Some(path) = path {
         let mut last_context = None;
         for item in path.iter().rev() {
-            let IssueProcessingPathItem {
-                context,
-                description,
-            } = &*item.await?;
+            let PlainIssueProcessingPathItem {
+                ref context,
+                ref description,
+            } = **item;
             if let Some(context) = context {
-                let context = context.resolve().await?;
-                if last_context == Some(context) {
-                    writeln!(formatted_issue, " at {}", &*description.await?)?;
+                let option_context = Some(context.clone());
+                if last_context == option_context {
+                    writeln!(formatted_issue, " at {}", description)?;
                 } else {
                     writeln!(
                         formatted_issue,
                         " at {} ({})",
-                        context.to_string().await?.bright_blue(),
-                        &*description.await?
+                        context.to_string().bright_blue(),
+                        description
                     )?;
-                    last_context = Some(context);
+                    last_context = option_context;
                 }
             } else {
-                writeln!(formatted_issue, " at {}", &*description.await?)?;
+                writeln!(formatted_issue, " at {}", description)?;
                 last_context = None;
             }
         }
@@ -300,6 +300,7 @@ const ORDERED_GROUPS: &[IssueSeverity] = &[
 #[derive(Debug, Clone)]
 pub struct LogOptions {
     pub current_dir: PathBuf,
+    pub project_dir: PathBuf,
     pub show_all: bool,
     pub log_detail: bool,
     pub log_level: IssueSeverity,
@@ -433,10 +434,11 @@ impl IssueReporter for ConsoleUi {
         &self,
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
-    ) -> Result<()> {
+    ) -> Result<BoolVc> {
         let issues = &*issues;
         let LogOptions {
             ref current_dir,
+            ref project_dir,
             show_all,
             log_detail,
             log_level,
@@ -447,33 +449,35 @@ impl IssueReporter for ConsoleUi {
         let issues = issues
             .iter_with_shortest_path()
             .map(|(issue, path)| async move {
-                // (issue.)
-                let plain_issue = issue.into_plain();
+                let plain_issue = issue.into_plain(path);
                 let id = plain_issue.internal_hash().await?;
-                Ok((plain_issue.await?, path, issue.context(), *id))
+                Ok((plain_issue.await?, *id))
             })
             .try_join()
             .await?;
 
-        let issue_ids = issues
-            .iter()
-            .map(|(_, _, _, id)| *id)
-            .collect::<HashSet<_>>();
+        let issue_ids = issues.iter().map(|(_, id)| *id).collect::<HashSet<_>>();
         let mut new_ids = self
             .seen
             .lock()
             .unwrap()
             .new_ids(source.into_value(), issue_ids);
 
-        for (plain_issue, path, context, id) in issues {
+        let mut has_fatal = false;
+        for (plain_issue, id) in issues {
             if !new_ids.remove(&id) {
                 continue;
             }
 
             let severity = plain_issue.severity;
-            let context_path = make_relative_to_cwd(context, current_dir).await?;
+            if severity == IssueSeverity::Fatal {
+                has_fatal = true;
+            }
+
+            let context_path = make_relative_to_cwd(&plain_issue.context, project_dir, current_dir);
             let category = &plain_issue.category;
             let title = &plain_issue.title;
+            let processing_path = &*plain_issue.processing_path;
             let severity_map = grouped_issues
                 .entry(severity)
                 .or_insert_with(Default::default);
@@ -481,7 +485,7 @@ impl IssueReporter for ConsoleUi {
                 .entry(category.clone())
                 .or_insert_with(Default::default);
             let issues = category_map
-                .entry(context_path.clone())
+                .entry(context_path.to_string())
                 .or_insert_with(Default::default);
 
             let mut styled_issue = if let Some(source) = &plain_issue.source {
@@ -516,7 +520,7 @@ impl IssueReporter for ConsoleUi {
                 if !documentation_link.is_empty() {
                     writeln!(&mut styled_issue, "\ndocumentation: {documentation_link}")?;
                 }
-                format_optional_path(&path, &mut styled_issue).await?;
+                format_optional_path(processing_path, &mut styled_issue)?;
             }
             issues.push(styled_issue);
         }
@@ -606,25 +610,25 @@ impl IssueReporter for ConsoleUi {
             }
         }
 
-        Ok(())
+        Ok(BoolVc::cell(has_fatal))
     }
 }
 
-async fn make_relative_to_cwd(path: FileSystemPathVc, cwd: &PathBuf) -> Result<String> {
-    let path = if let Some(fs) = AttachedFileSystemVc::resolve_from(path.fs()).await? {
-        fs.get_inner_fs_path(path)
-    } else {
-        path
-    };
-    if let Some(sys_path) = to_sys_path(path).await? {
-        let relative = sys_path
+fn make_relative_to_cwd<'a>(path: &'a str, project_dir: &Path, cwd: &Path) -> Cow<'a, str> {
+    if let Some(path_in_project) = path.strip_prefix("[project]/") {
+        let abs_path = if std::path::MAIN_SEPARATOR != '/' {
+            project_dir.join(path_in_project.replace('/', std::path::MAIN_SEPARATOR_STR))
+        } else {
+            project_dir.join(path_in_project)
+        };
+        let relative = abs_path
             .strip_prefix(cwd)
-            .unwrap_or(&sys_path)
+            .unwrap_or(&abs_path)
             .to_string_lossy()
             .to_string();
-        Ok(relative)
+        relative.into()
     } else {
-        Ok(path.to_string().await?.clone_value())
+        path.into()
     }
 }
 

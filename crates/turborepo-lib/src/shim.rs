@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, turbo_json::TurboJson, PackageManager, Payload};
+use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 // all arguments that result in a stdout that much be directly parsable and
@@ -34,7 +34,8 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
     "--dry-run=json",
 ];
 
-static TURBO_SKIP_NOTIFIER_ARGS: [&str; 4] = ["--help", "--h", "--version", "--v"];
+static TURBO_SKIP_NOTIFIER_ARGS: [&str; 5] =
+    ["--help", "--h", "--version", "--v", "--no-update-notifier"];
 
 fn turbo_version_has_shim(version: &str) -> bool {
     let version = Version::parse(version).unwrap();
@@ -235,41 +236,65 @@ impl RepoState {
     ///
     /// returns: Result<RepoState, Error>
     pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor
-        // that contains a `turbo.json` file.
-        let root_path = current_dir
-            .ancestors()
-            .find(|p| TurboJson::open(p.join(TURBO_JSON)).map_or(false, |t| t.no_extends()));
+        // What we look for first are all directories that contain both a `package.json`
+        // and a `turbo.json`.
+        let potential_turbo_roots = current_dir.ancestors().filter(|path| {
+            fs::metadata(path.join("package.json")).is_ok()
+                && fs::metadata(path.join("turbo.json")).is_ok()
+        });
 
-        // If that directory exists, then we figure out if there are workspaces defined
-        // in it NOTE: This may change with multiple `turbo.json` files
-        if let Some(root_path) = root_path {
+        let mut first_package_json_dir = None;
+
+        // We loop through these directories and see if there are workspaces defined in
+        // them, either in the `package.json` or `pnm-workspaces.yml`
+        for dir in potential_turbo_roots {
+            if first_package_json_dir.is_none() {
+                first_package_json_dir = Some(dir)
+            }
+
             let pnpm = PackageManager::Pnpm;
             let npm = PackageManager::Npm;
-            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
-                || npm.get_workspace_globs(root_path).is_ok();
+            let is_workspace =
+                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
 
-            let mode = if is_workspace {
-                RepoMode::MultiPackage
-            } else {
-                RepoMode::SinglePackage
-            };
+            if is_workspace {
+                let local_turbo_state = LocalTurboState::infer(dir);
 
-            let local_turbo_state = LocalTurboState::infer(root_path);
+                return Ok(Self {
+                    root: dir.to_path_buf(),
+                    mode: RepoMode::MultiPackage,
+                    local_turbo_state,
+                });
+            }
+        }
 
+        // No dice? Time to see if there is a `turbo.json` for this set.
+        if first_package_json_dir.is_some() {
+            let root = first_package_json_dir
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Unable to find `{}` or `package.json` in current path",
+                        TURBO_JSON
+                    )
+                })?
+                .to_path_buf();
+
+            let local_turbo_state = LocalTurboState::infer(&root);
             return Ok(Self {
-                root: root_path.to_path_buf(),
-                mode,
+                root,
+                mode: RepoMode::SinglePackage,
                 local_turbo_state,
             });
         }
 
-        // What we look for next is a directory that contains a `package.json`.
+        // Well, you didn't create a turbo.json, so we're going to do the best we can
+        // from just package.json
+
+        // Now we try to find the closest workspace.
         let potential_roots = current_dir
             .ancestors()
             .filter(|path| fs::metadata(path.join("package.json")).is_ok());
 
-        let mut first_package_json_dir = None;
         // We loop through these directories and see if there are workspaces defined in
         // them, either in the `package.json` or `pnm-workspaces.yml`
         for dir in potential_roots {
@@ -524,11 +549,15 @@ pub fn run() -> Result<Payload> {
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
+        debug!("Repository Root: {}", repo_state.root.to_string_lossy());
         return cli::run(Some(repo_state));
     }
 
     match RepoState::infer(&args.cwd) {
-        Ok(repo_state) => repo_state.run_correct_turbo(args),
+        Ok(repo_state) => {
+            debug!("Repository Root: {}", repo_state.root.to_string_lossy());
+            repo_state.run_correct_turbo(args)
+        }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work

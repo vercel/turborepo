@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-
 use anyhow::{bail, Context, Result};
+use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    CompletionVc, TryJoinIterExt, Value,
+    CompletionVc, CompletionsVc, TryJoinIterExt, Value,
 };
 use turbo_tasks_fs::{
     json::parse_json_rope_with_source_context, File, FileContent, FileSystemEntryType,
@@ -12,7 +11,10 @@ use turbo_tasks_fs::{
 };
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
+    changed::any_content_changed,
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
+    issue::IssueContextExt,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -20,8 +22,8 @@ use turbopack_core::{
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -111,13 +113,19 @@ struct PostCssTransformedAsset {
 #[turbo_tasks::value_impl]
 impl Asset for PostCssTransformedAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident()
     }
 
     #[turbo_tasks::function]
     async fn content(self_vc: PostCssTransformedAssetVc) -> Result<AssetContentVc> {
-        Ok(self_vc.process().await?.content)
+        let this = self_vc.await?;
+        Ok(self_vc
+            .process()
+            .issue_context(this.source.ident().path(), "PostCSS processing")
+            .await?
+            .await?
+            .content)
     }
 }
 
@@ -131,21 +139,23 @@ struct ProcessPostCssResult {
 async fn extra_configs(
     context: AssetContextVc,
     postcss_config_path: FileSystemPathVc,
-) -> Result<EcmascriptChunkPlaceablesVc> {
+) -> Result<CompletionVc> {
     let config_paths = [postcss_config_path.parent().join("tailwind.config.js")];
     let configs = config_paths
         .into_iter()
         .map(|path| async move {
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
-                    EcmascriptModuleAssetVc::new(
-                        SourceAssetVc::new(path).into(),
-                        context,
-                        Value::new(EcmascriptModuleAssetType::Ecmascript),
-                        EcmascriptInputTransformsVc::cell(vec![]),
-                        context.compile_time_info(),
+                    any_content_changed(
+                        EcmascriptModuleAssetVc::new(
+                            SourceAssetVc::new(path).into(),
+                            context,
+                            Value::new(EcmascriptModuleAssetType::Ecmascript),
+                            EcmascriptInputTransformsVc::cell(vec![]),
+                            context.compile_time_info(),
+                        )
+                        .into(),
                     )
-                    .as_ecmascript_chunk_placeable()
                 }),
             )
         })
@@ -155,7 +165,7 @@ async fn extra_configs(
         .flatten()
         .collect::<Vec<_>>();
 
-    Ok(EcmascriptChunkPlaceablesVc::cell(configs))
+    Ok(CompletionsVc::cell(configs).completed())
 }
 
 #[turbo_tasks::function]
@@ -175,7 +185,9 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
-        InnerAssetsVc::cell(HashMap::from([("CONFIG".to_string(), config_asset)])),
+        InnerAssetsVc::cell(indexmap! {
+            "CONFIG".to_string() => config_asset
+        }),
     )
     .into()
 }
@@ -185,7 +197,8 @@ impl PostCssTransformedAssetVc {
     #[turbo_tasks::function]
     async fn process(self) -> Result<ProcessPostCssResultVc> {
         let this = self.await?;
-        let find_config_result = find_context_file(this.source.path().parent(), postcss_configs());
+        let find_config_result =
+            find_context_file(this.source.ident().path().parent(), postcss_configs());
         let FindContextFileResult::Found(config_path, _) = *find_config_result.await? else {
             return Ok(ProcessPostCssResult {
                 content: this.source.content(),
@@ -194,7 +207,7 @@ impl PostCssTransformedAssetVc {
         };
 
         let ExecutionContext {
-            project_root,
+            project_path,
             intermediate_output_path,
             env,
         } = *this.execution_context.await?;
@@ -211,26 +224,26 @@ impl PostCssTransformedAssetVc {
         let content = content.content().to_str()?;
         let context = this.evaluate_context;
 
-        // TODO this is a hack to get these files watched.
-        let extra_configs = extra_configs(context, config_path);
+        // This invalidates the transform when the config changes.
+        let extra_configs_changed = extra_configs(context, config_path);
 
         let postcss_executor = postcss_executor(context, config_path);
-        let css_fs_path = this.source.path().await?;
+        let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
         let config_value = evaluate(
-            project_root,
+            project_path,
             postcss_executor,
-            project_root,
+            project_path,
             env,
-            this.source.path(),
+            this.source.ident(),
             context,
             intermediate_output_path,
-            Some(extra_configs),
+            None,
             vec![
                 JsonValueVc::cell(content.into()),
                 JsonValueVc::cell(css_path.into()),
             ],
-            CompletionVc::immutable(),
+            extra_configs_changed,
             /* debug */ false,
         )
         .await?;

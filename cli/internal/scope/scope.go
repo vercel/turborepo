@@ -11,7 +11,6 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/context"
-	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/scm"
 	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
@@ -19,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/util/filter"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // LegacyFilter holds the options in use before the filter syntax. They have their own rules
@@ -149,7 +149,7 @@ func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.
 	return filteredPkgs, isAllPackages, nil
 }
 
-func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos graph.WorkspaceInfos, logger hclog.Logger) (*scope_filter.PackageInference, error) {
+func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos workspace.Catalog, logger hclog.Logger) (*scope_filter.PackageInference, error) {
 	if rawPkgInferenceDir == "" {
 		// No inference specified, no need to calculate anything
 		return nil, nil
@@ -346,7 +346,7 @@ func fileInPackage(changedFile string, packagePath string) bool {
 	return false
 }
 
-func getChangedPackages(changedFiles []string, packageInfos graph.WorkspaceInfos) util.Set {
+func getChangedPackages(changedFiles []string, packageInfos workspace.Catalog) util.Set {
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false

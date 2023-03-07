@@ -1,23 +1,25 @@
 use std::io::Write;
 
 use anyhow::{bail, Result};
-use serde_json::Value;
-use turbo_tasks::primitives::StringVc;
+use indexmap::indexmap;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc, ChunkingContextVc, ChunksVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_dev_server::source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc};
 use turbopack_ecmascript::{
     utils::stringify_js, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
-use crate::{embed_js::next_js_file, util::get_asset_path_from_route};
+use crate::{embed_js::next_js_file_path, util::get_asset_path_from_route};
 
 #[turbo_tasks::function]
 pub async fn create_page_loader(
@@ -61,7 +63,8 @@ impl PageLoaderAssetVc {
             stringify_js(&format!("/{}", &*this.pathname.await?))
         )?;
 
-        let base_code = next_js_file("entry/page-loader.ts");
+        let page_loader_path = next_js_file_path("entry/page-loader.ts");
+        let base_code = page_loader_path.read();
         if let FileContent::Content(base_file) = &*base_code.await? {
             result += base_file.content()
         } else {
@@ -70,7 +73,7 @@ impl PageLoaderAssetVc {
 
         let file = File::from(result.build());
 
-        Ok(VirtualAssetVc::new(this.entry_asset.path().join("page-loader.ts"), file.into()).into())
+        Ok(VirtualAssetVc::new(page_loader_path, file.into()).into())
     }
 
     #[turbo_tasks::function]
@@ -79,12 +82,15 @@ impl PageLoaderAssetVc {
 
         let loader_entry_asset = self.get_loader_entry_asset();
 
-        let asset = EcmascriptModuleAssetVc::new(
+        let asset = EcmascriptModuleAssetVc::new_with_inner_assets(
             loader_entry_asset,
             this.client_context,
-            turbo_tasks::Value::new(EcmascriptModuleAssetType::Typescript),
+            Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
             this.client_context.compile_time_info(),
+            InnerAssetsVc::cell(indexmap! {
+                "PAGE".to_string() => this.client_context.process(this.entry_asset, Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)))
+            }),
         );
 
         let chunk_group =
@@ -97,11 +103,12 @@ impl PageLoaderAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for PageLoaderAsset {
     #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
-        Ok(self
-            .server_root
-            .join("_next/static/chunks/pages")
-            .join(&get_asset_path_from_route(&self.pathname.await?, ".js")))
+    async fn ident(&self) -> Result<AssetIdentVc> {
+        Ok(AssetIdentVc::from_path(
+            self.server_root
+                .join("_next/static/chunks/pages")
+                .join(&get_asset_path_from_route(&self.pathname.await?, ".js")),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -113,13 +120,13 @@ impl Asset for PageLoaderAsset {
         let mut data = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
             let path = chunk.path().await?;
-            data.push(Value::String(path.path.clone()));
+            data.push(serde_json::Value::String(path.path.clone()));
         }
 
         let content = format!(
             "__turbopack_load_page_chunks__({}, {})\n",
             stringify_js(&this.pathname.await?),
-            Value::Array(data)
+            serde_json::Value::Array(data)
         );
 
         Ok(AssetContentVc::from(File::from(content)))

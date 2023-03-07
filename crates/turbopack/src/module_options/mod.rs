@@ -83,7 +83,10 @@ impl ModuleOptionsVc {
                 }
             }
         }
-        let mut transforms = custom_ecmascript_app_transforms.clone();
+        // We apply decorators _before_ any ts transforms, as some of decorator requires
+        // type information.
+        let mut transforms = vec![EcmascriptInputTransform::Decorators];
+        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         // Order of transforms is important. e.g. if the React transform occurs before
@@ -153,7 +156,11 @@ impl ModuleOptionsVc {
                         };
                         Some(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(vec![PostCssTransformVc::new(
-                                node_evaluate_asset_context(Some(import_map), None),
+                                node_evaluate_asset_context(
+                                    execution_context.project_path(),
+                                    Some(import_map),
+                                    None,
+                                ),
                                 execution_context,
                             )
                             .into()]),
@@ -264,12 +271,19 @@ impl ModuleOptionsVc {
             };
             for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
                 rules.push(ModuleRule::new(
-                    ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                    ModuleRuleCondition::All(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
+                    ]),
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
-                                node_evaluate_asset_context(Some(import_map), None),
+                                node_evaluate_asset_context(
+                                    execution_context.project_path(),
+                                    Some(import_map),
+                                    None,
+                                ),
                                 execution_context,
                                 *loaders,
                             )

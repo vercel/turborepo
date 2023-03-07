@@ -311,7 +311,7 @@ mod test {
             UserResponse,
         },
         commands::{link, CommandBase},
-        config::{RepoConfigLoader, UserConfigLoader},
+        config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
         ui::UI,
         Args,
     };
@@ -334,6 +334,7 @@ mod test {
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
+            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_path_buf())
                     .with_token(Some("token".to_string()))

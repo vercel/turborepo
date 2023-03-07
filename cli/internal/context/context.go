@@ -10,11 +10,11 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 
 	"github.com/Masterminds/semver"
 	mapset "github.com/deckarep/golang-set"
@@ -51,7 +51,7 @@ func (w *Warnings) append(err error) {
 type Context struct {
 	// WorkspaceInfos contains the contents of package.json for every workspace
 	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
-	WorkspaceInfos graph.WorkspaceInfos
+	WorkspaceInfos workspace.Catalog
 
 	// WorkspaceNames is all the names of the workspaces
 	WorkspaceNames []string
@@ -144,7 +144,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON},
 		TurboConfigs: map[string]*fs.TurboJSON{},
 	}
@@ -165,7 +165,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
-	c.WorkspaceInfos = graph.WorkspaceInfos{
+	c.WorkspaceInfos = workspace.Catalog{
 		PackageJSONs: map[string]*fs.PackageJSON{},
 		TurboConfigs: map[string]*fs.TurboJSON{},
 	}

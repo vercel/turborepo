@@ -49,10 +49,12 @@ const featureWrapperClasses = `relative block overflow-hidden p-10 bg-white shad
 export const DetailedFeatureLink = (props: {
   href: string;
   feature: FeatureProps["feature"];
+  target?: string;
 }) => {
+  const { href, feature, ...rest } = props;
   return (
-    <Link href={props.href} className={featureWrapperClasses}>
-      <DetailedFeatureInner feature={props.feature}></DetailedFeatureInner>
+    <Link href={href} className={featureWrapperClasses} {...rest}>
+      <DetailedFeatureInner feature={feature}></DetailedFeatureInner>
     </Link>
   );
 };
