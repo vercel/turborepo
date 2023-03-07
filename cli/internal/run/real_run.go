@@ -98,6 +98,11 @@ func RealRun(
 		return ec.exec(ctx, packageTask, deps)
 	}
 
+	// We walk the graph with no concurrency.
+	// Populating the cache state is parallelizable.
+	// Do this _after_ walking the graph.
+	runSummary.PopulateCacheState(turboCache)
+
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
 	}

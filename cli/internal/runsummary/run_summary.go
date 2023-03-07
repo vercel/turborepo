@@ -4,6 +4,7 @@ package runsummary
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -38,6 +39,40 @@ func NewRunSummary(turboVersion string, packages []string, globalHashSummary *Gl
 		Tasks:             []*TaskSummary{},
 		GlobalHashSummary: globalHashSummary,
 	}
+}
+
+// PopulateCacheState sets the CacheState field on each of the TaskSummaries
+func (summary *RunSummary) PopulateCacheState(turboCache cache.Cache) {
+	taskSummaries := summary.Tasks
+	// We make at most 8 requests at a time for cache state.
+	maxParallelRequests := 8
+	taskCount := len(taskSummaries)
+
+	parallelRequestCount := maxParallelRequests
+	if taskCount < maxParallelRequests {
+		parallelRequestCount = taskCount
+	}
+
+	queue := make(chan int, taskCount)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < parallelRequestCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range queue {
+				task := taskSummaries[index]
+				itemStatus := turboCache.Exists(task.Hash)
+				task.CacheState = itemStatus
+			}
+		}()
+	}
+
+	for index := range taskSummaries {
+		queue <- index
+	}
+	close(queue)
+	wg.Wait()
 }
 
 // Save saves the run summary to a file

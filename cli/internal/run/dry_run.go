@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -53,7 +52,7 @@ func DryRun(
 	// We walk the graph with no concurrency.
 	// Populating the cache state is parallelizable.
 	// Do this _after_ walking the graph.
-	populateCacheState(turboCache, taskSummaries)
+	summary.PopulateCacheState(turboCache)
 
 	// Assign the Task Summaries to the main summary
 	summary.Tasks = taskSummaries
@@ -129,38 +128,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	}
 
 	return taskIDs, nil
-}
-
-func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
-	// We make at most 8 requests at a time for cache state.
-	maxParallelRequests := 8
-	taskCount := len(taskSummaries)
-
-	parallelRequestCount := maxParallelRequests
-	if taskCount < maxParallelRequests {
-		parallelRequestCount = taskCount
-	}
-
-	queue := make(chan int, taskCount)
-
-	wg := &sync.WaitGroup{}
-	for i := 0; i < parallelRequestCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for index := range queue {
-				task := taskSummaries[index]
-				itemStatus := turboCache.Exists(task.Hash)
-				task.CacheState = itemStatus
-			}
-		}()
-	}
-
-	for index := range taskSummaries {
-		queue <- index
-	}
-	close(queue)
-	wg.Wait()
 }
 
 var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
