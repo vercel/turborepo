@@ -114,7 +114,7 @@ func fromMatching(all EnvironmentVariableMap, keyMatchers []string, shouldExclud
 		}
 
 		for k, v := range all {
-			// we can skip the keys that match the excludedPrefix
+			// we can skip keys based on a shouldExclude function passed in.
 			if shouldExclude(k, v) {
 				continue
 			}
