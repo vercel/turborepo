@@ -29,7 +29,7 @@ use std::{
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
         mpsc::{channel, RecvError, TryRecvError},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
     },
     time::Duration,
 };
@@ -91,14 +91,47 @@ struct DiskWatcher {
 
 impl DiskWatcher {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    fn ensure_watching(&self, dir_path: &Path) -> Result<()> {
+    fn restore_if_watching(&self, dir_path: &Path, root_path: &Path) -> Result<()> {
+        if self.watching.contains(dir_path) {
+            let mut watcher = self.watcher.lock().unwrap();
+            self.start_watching(&mut watcher, dir_path, &root_path)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn ensure_watching(&self, dir_path: &Path, root_path: &Path) -> Result<()> {
         if self.watching.contains(dir_path) {
             return Ok(());
         }
         let mut watcher = self.watcher.lock().unwrap();
         if self.watching.insert(dir_path.to_path_buf()) {
-            if let Some(watcher) = watcher.as_mut() {
-                watcher.watch(dir_path, RecursiveMode::NonRecursive)?;
+            self.start_watching(&mut watcher, dir_path, root_path)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn start_watching(
+        &self,
+        watcher: &mut MutexGuard<Option<RecommendedWatcher>>,
+        dir_path: &Path,
+        root_path: &Path,
+    ) -> Result<()> {
+        if let Some(watcher) = watcher.as_mut() {
+            let mut path = dir_path;
+            while let Err(err) = watcher.watch(path, RecursiveMode::NonRecursive) {
+                if path == root_path {
+                    return Err(err).context(format!(
+                        "Unable to watch {} (tried up to {})",
+                        dir_path.display(),
+                        path.display()
+                    ));
+                }
+                let Some(parent_path) = path.parent() else {
+                    return Err(err).context(format!("Unable to watch {} (tried up to {})", dir_path.display(), path.display()));
+                };
+                path = parent_path;
             }
         }
         Ok(())
@@ -118,10 +151,15 @@ pub struct DiskFileSystem {
     dir_invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
-    watcher: DiskWatcher,
+    watcher: Arc<DiskWatcher>,
 }
 
 impl DiskFileSystem {
+    /// Returns the root as Path
+    fn root_path(&self) -> &Path {
+        simplified(Path::new(&self.root))
+    }
+
     /// registers the path as an invalidator for the current task,
     /// has to be called within a turbo-tasks function
     fn register_invalidator(&self, path: &Path) -> Result<()> {
@@ -129,7 +167,7 @@ impl DiskFileSystem {
         self.invalidator_map.insert(path_to_key(path), invalidator);
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         if let Some(dir) = path.parent() {
-            self.watcher.ensure_watching(dir)?;
+            self.watcher.ensure_watching(dir, self.root_path())?;
         }
         Ok(())
     }
@@ -141,7 +179,7 @@ impl DiskFileSystem {
         self.dir_invalidator_map
             .insert(path_to_key(path), invalidator);
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        self.watcher.ensure_watching(path)?;
+        self.watcher.ensure_watching(path, self.root_path())?;
         Ok(())
     }
 
@@ -188,11 +226,16 @@ impl DiskFileSystem {
         watcher_guard.replace(watcher);
         drop(watcher_guard);
 
+        let disk_watcher = self.watcher.clone();
+        let root_path = self.root_path().to_path_buf();
+
         spawn_thread(move || {
             let mut batched_invalidate_path = HashSet::new();
             let mut batched_invalidate_path_dir = HashSet::new();
             let mut batched_invalidate_path_and_children = HashSet::new();
             let mut batched_invalidate_path_and_children_dir = HashSet::new();
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            let mut batched_new_paths = HashSet::new();
 
             'outer: loop {
                 let mut event = rx.recv().map_err(|e| match e {
@@ -203,7 +246,16 @@ impl DiskFileSystem {
                         Ok(DebouncedEvent::Write(path)) => {
                             batched_invalidate_path.insert(path);
                         }
-                        Ok(DebouncedEvent::Create(path)) | Ok(DebouncedEvent::Remove(path)) => {
+                        Ok(DebouncedEvent::Create(path)) => {
+                            batched_invalidate_path_and_children.insert(path.clone());
+                            batched_invalidate_path_and_children_dir.insert(path.clone());
+                            if let Some(parent) = path.parent() {
+                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
+                            }
+                            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                            batched_new_paths.insert(path.clone());
+                        }
+                        Ok(DebouncedEvent::Remove(path)) => {
                             batched_invalidate_path_and_children.insert(path.clone());
                             batched_invalidate_path_and_children_dir.insert(path.clone());
                             if let Some(parent) = path.parent() {
@@ -219,6 +271,8 @@ impl DiskFileSystem {
                             if let Some(parent) = destination.parent() {
                                 batched_invalidate_path_dir.insert(PathBuf::from(parent));
                             }
+                            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                            batched_new_paths.insert(destination.clone());
                         }
                         Ok(DebouncedEvent::Rescan) => {
                             batched_invalidate_path_and_children.insert(PathBuf::from(&root));
@@ -299,6 +353,12 @@ impl DiskFileSystem {
                         &mut batched_invalidate_path_and_children_dir,
                     );
                 }
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                {
+                    for path in batched_new_paths.drain() {
+                        let _ = disk_watcher.restore_if_watching(&path, &root_path);
+                    }
+                }
             }
         });
         Ok(())
@@ -313,7 +373,7 @@ impl DiskFileSystem {
 
     pub async fn to_sys_path(&self, fs_path: FileSystemPathVc) -> Result<PathBuf> {
         // just in case there's a windows unc path prefix we remove it with `dunce`
-        let path = simplified(Path::new(&self.root));
+        let path = self.root_path();
         let fs_path = fs_path.await?;
         Ok(if fs_path.path.is_empty() {
             path.to_path_buf()
@@ -341,7 +401,7 @@ impl DiskFileSystemVc {
             mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
-            watcher: DiskWatcher::default(),
+            watcher: Default::default(),
         };
 
         Ok(Self::cell(instance))
