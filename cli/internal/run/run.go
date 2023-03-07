@@ -255,14 +255,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
 		r.base.Logger,
-		os.Environ(),
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := fs.HashObject(globalHashable); err == nil {
+	if globalHash, err := fs.HashObject(getGlobalHashable(globalHashable)); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -357,7 +356,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,
-			globalHashable.hashedSortedEnvPairs,
+			globalHashable.envVars,
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
