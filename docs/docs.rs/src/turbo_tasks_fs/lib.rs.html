@@ -1810,6 +1810,8 @@
 <span id="1810">1810</span>
 <span id="1811">1811</span>
 <span id="1812">1812</span>
+<span id="1813">1813</span>
+<span id="1814">1814</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1841,7 +1843,7 @@
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
         mpsc::{channel, RecvError, TryRecvError},
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex,
     },
     time::Duration,
 };
@@ -1926,7 +1928,7 @@
     <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
     </span><span class="kw">fn </span>start_watching(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        watcher: <span class="kw-2">&amp;mut </span>MutexGuard&lt;<span class="prelude-ty">Option</span>&lt;RecommendedWatcher&gt;&gt;,
+        watcher: <span class="kw-2">&amp;mut </span>std::sync::MutexGuard&lt;<span class="prelude-ty">Option</span>&lt;RecommendedWatcher&gt;&gt;,
         dir_path: <span class="kw-2">&amp;</span>Path,
         root_path: <span class="kw-2">&amp;</span>Path,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2038,8 +2040,10 @@
         watcher_guard.replace(watcher);
         drop(watcher_guard);
 
-        <span class="kw">let </span>disk_watcher = <span class="self">self</span>.watcher.clone();
-        <span class="kw">let </span>root_path = <span class="self">self</span>.root_path().to_path_buf();
+        <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+        </span><span class="kw">let </span>disk_watcher = <span class="self">self</span>.watcher.clone();
+        <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
+        </span><span class="kw">let </span>root_path = <span class="self">self</span>.root_path().to_path_buf();
 
         spawn_thread(<span class="kw">move </span>|| {
             <span class="kw">let </span><span class="kw-2">mut </span>batched_invalidate_path = HashSet::new();
