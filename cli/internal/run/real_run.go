@@ -140,23 +140,6 @@ func RealRun(
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
 
-	// We gathered the info as a map, but we want to attach it as an array
-	for _, s := range taskSummaryMap {
-		runSummary.Tasks = append(runSummary.Tasks, s)
-	}
-
-	for _, err := range errs {
-		if errors.As(err, &exitCodeErr) {
-			if exitCodeErr.ExitCode > exitCode {
-				exitCode = exitCodeErr.ExitCode
-			}
-		} else if exitCode == 0 {
-			// We hit some error, it shouldn't be exit code 0
-			exitCode = 1
-		}
-		base.UI.Error(err.Error())
-	}
-
 	runState.mu.Lock()
 
 	for taskID, state := range runState.state {
@@ -177,7 +160,24 @@ func RealRun(
 		}
 	}
 
+	// We gathered the info as a map, but we want to attach it as an array
+	for _, s := range taskSummaryMap {
+		runSummary.Tasks = append(runSummary.Tasks, s)
+	}
+
 	runSummary.ExitCode = exitCode
+
+	for _, err := range errs {
+		if errors.As(err, &exitCodeErr) {
+			if exitCodeErr.ExitCode > exitCode {
+				exitCode = exitCodeErr.ExitCode
+			}
+		} else if exitCode == 0 {
+			// We hit some error, it shouldn't be exit code 0
+			exitCode = 1
+		}
+		base.UI.Error(err.Error())
+	}
 
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
