@@ -414,6 +414,7 @@ func TestGlobFilesFs(t *testing.T) {
 			wantAll: []string{
 				"/repos/some-app/dist",
 				"/repos/some-app/dist/index.html",
+				"/repos/some-app/dist/js",
 			},
 			wantFiles: []string{
 				"/repos/some-app/dist/index.html",
