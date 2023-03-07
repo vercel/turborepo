@@ -179,6 +179,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
+	grouped := ec.rs.Opts.runOpts.logOrder == "grouped"
+
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
 	ec.logger.Debug("task hash", "value", hash)
@@ -213,12 +215,23 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
-	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	if err != nil {
-		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if hit {
-		tracer(TargetCached, nil)
-		return nil
+
+	cacheHit := taskCache.IsCacheHit(ctx)
+	outputtedTurboLogs := false
+
+	if cacheHit || !grouped {
+		outputtedTurboLogs = true
+		logMutex.Lock()
+		hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, false)
+		if err != nil {
+			prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
+		} else if hit {
+			tracer(TargetCached, nil)
+			logMutex.Unlock()
+			return nil
+		}
+
+		logMutex.Unlock()
 	}
 
 	// Setup command execution
@@ -246,14 +259,12 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 	}
 
-	grouped := ec.rs.Opts.runOpts.logOrder == "grouped"
-
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped, logMutex)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped, logMutex)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
@@ -261,6 +272,16 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	logStreamerOut.FlushRecord()
 
 	closeOutputs := func() error {
+		logMutex.Lock()
+		if !outputtedTurboLogs {
+			hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, true)
+			if err != nil {
+				prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
+			} else if hit {
+				return fmt.Errorf("Hit cache while expecting cache miss")
+			}
+		}
+
 		var closeErrors []error
 
 		if err := logStreamerOut.Close(); err != nil {
@@ -278,8 +299,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			for i, err := range closeErrors {
 				msgs[i] = err.Error()
 			}
+			logMutex.Unlock()
 			return fmt.Errorf("could not flush log output: %v", strings.Join(msgs, ", "))
 		}
+		logMutex.Unlock()
 		return nil
 	}
 

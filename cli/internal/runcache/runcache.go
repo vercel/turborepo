@@ -106,9 +106,27 @@ type TaskCache struct {
 	LogFileName       turbopath.AbsoluteSystemPath
 }
 
+// IsCacheHit returns true if we have a cache hit, false if we have a cache miss
+func (tc TaskCache) IsCacheHit(ctx context.Context) bool {
+	if tc.cachingDisabled || tc.rc.readsDisabled {
+		return false
+	}
+	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+	if err != nil {
+		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
+	}
+
+	hasChangedOutputs := len(changedOutputGlobs) > 0
+	if hasChangedOutputs {
+		hitStatus := tc.rc.cache.Exists(tc.hash)
+		return hitStatus.Local || hitStatus.Remote
+	}
+
+	return true
+}
+
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
-// Returns true if successful.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
+func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger, logStatusOnly bool) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -127,10 +145,19 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
-		if err != nil {
-			return false, err
-		} else if !hit {
+		hit := false
+		if logStatusOnly {
+			cacheStatus := tc.rc.cache.Exists(tc.hash)
+			hit = cacheStatus.Local || cacheStatus.Remote
+		} else {
+			fetchHit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
+			if err != nil {
+				return false, err
+			}
+			hit = fetchHit
+		}
+
+		if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
@@ -154,7 +181,9 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		tc.ReplayLogFile(prefixedUI, progressLogger)
+		if !logStatusOnly {
+			tc.ReplayLogFile(prefixedUI, progressLogger)
+		}
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
 	default:
