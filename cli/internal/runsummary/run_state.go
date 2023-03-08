@@ -42,16 +42,21 @@ const (
 	TargetBuildFailed
 )
 
+// BuildTargetState contains data about the state of a single task in a turbo run.
+// Some fields are updated over time as the task prepares to execute and finishes execution.
 type BuildTargetState struct {
-	StartAt time.Time
+	StartAt time.Time `json:"start"`
 
-	Duration time.Duration
+	Duration time.Duration `json:"duration"`
+
 	// Target which has just changed
-	Label string
+	Label string `json:"-"`
+
 	// Its current status
-	Status RunResultStatus
+	Status RunResultStatus `json:"status"`
+
 	// Error, only populated for failure statuses
-	Err error
+	Err error `json:"error"`
 }
 
 // RunState is the state of the entire `turbo run`. Individual task state in `Tasks` field
@@ -89,9 +94,9 @@ func NewRunState(start time.Time, tracingProfile string) *RunState {
 
 // Run starts the Execution of a single task. It returns a function that can
 // be used to update the state of a given taskID with the RunResultStatus enum
-func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
+func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), *BuildTargetState) {
 	start := time.Now()
-	r.add(&RunResult{
+	buildTargetState := r.add(&RunResult{
 		Time:   start,
 		Label:  label,
 		Status: TargetBuilding,
@@ -101,7 +106,7 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
-	return func(outcome RunResultStatus, err error) {
+	tracerFn := func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
 		result := &RunResult{
@@ -113,11 +118,14 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 		if err != nil {
 			result.Err = fmt.Errorf("running %v failed: %w", label, err)
 		}
+		// Ignore the return value here
 		r.add(result, label, false)
 	}
+
+	return tracerFn, buildTargetState
 }
 
-func (r *RunState) add(result *RunResult, previous string, active bool) {
+func (r *RunState) add(result *RunResult, previous string, active bool) *BuildTargetState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
@@ -144,6 +152,8 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 		r.Success++
 		r.Attempted++
 	}
+
+	return r.state[result.Label]
 }
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,

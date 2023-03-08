@@ -96,7 +96,12 @@ func RealRun(
 		taskSummaries = append(taskSummaries, taskSummary)
 
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		buildTargetState, err := ec.exec(ctx, packageTask, deps)
+		if err != nil {
+			return err
+		}
+		taskSummary.Execution = buildTargetState
+		return nil
 	}
 
 	getArgs := func(taskID string) []string {
@@ -168,14 +173,14 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.BuildTargetState, error) {
 	cmdTime := time.Now()
 
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer := ec.runState.Run(packageTask.TaskID)
+	tracer, buildTargetState := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
@@ -188,7 +193,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
+		return buildTargetState, nil
 	}
 
 	var prefix string
@@ -216,7 +221,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(runsummary.TargetCached, nil)
-		return nil
+		return buildTargetState, nil
 	}
 
 	// Setup command execution
@@ -287,7 +292,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
-			return nil
+			return buildTargetState, nil
 		}
 		tracer(runsummary.TargetBuildFailed, err)
 
@@ -302,7 +307,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 
-		return err
+		return buildTargetState, err
 	}
 
 	duration := time.Since(cmdTime)
@@ -318,5 +323,5 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Clean up tracing
 	tracer(runsummary.TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
+	return buildTargetState, nil
 }
