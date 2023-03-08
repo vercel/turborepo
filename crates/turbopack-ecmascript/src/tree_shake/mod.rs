@@ -3,11 +3,13 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks_fs::FileSystemPathVc;
+use turbopack_core::resolve::{ModulePart, ModulePartVc};
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode};
 use crate::{
     analyzer::graph::EvalContext,
     parse::{ParseResult, ParseResultVc},
+    EcmascriptModuleAssetVc,
 };
 
 pub mod asset;
@@ -319,13 +321,28 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 #[turbo_tasks::function]
 pub(super) async fn part_of_module(
     split_data: SplitResultVc,
-    chunk_id: Option<u32>,
+    part: Option<ModulePartVc>,
 ) -> Result<ParseResultVc> {
     let split_data = split_data.await?;
 
-    let chunk_id = match chunk_id {
-        Some(v) => v,
+    let part = match part {
+        Some(v) => v.await?,
         None => return Ok(split_data.parsed),
+    };
+
+    let key = match &*part {
+        ModulePart::ModuleEvaluation => Key::ModuleEvaluation,
+        ModulePart::Export(export) => Key::Export(export.await?.to_string()),
+    };
+
+    let chunk_id = match split_data.data.get(&key) {
+        Some(id) => *id,
+        None => {
+            return Err(anyhow::anyhow!(
+                "could not find part id for module part {:?}",
+                key
+            ))
+        }
     };
 
     let parsed = split_data.parsed.await?;

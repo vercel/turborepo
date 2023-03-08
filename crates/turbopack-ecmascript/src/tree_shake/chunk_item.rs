@@ -12,7 +12,7 @@ use turbopack_core::{
     chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc, ModuleId, ModuleIdVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    resolve::origin::ResolveOrigin,
+    resolve::{origin::ResolveOrigin, ModulePartVc},
 };
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, SplitResultVc};
@@ -33,12 +33,10 @@ use crate::{
 pub struct EcmascriptModulePartChunkItem {
     pub(super) full_module: EcmascriptModuleAssetVc,
 
-    pub(super) split_data: SplitResultVc,
-
     pub(super) module: EcmascriptModulePartAssetVc,
     pub(super) context: ChunkingContextVc,
 
-    pub(super) chunk_id: u32,
+    pub(super) part: ModulePartVc,
 }
 
 impl EcmascriptModulePartChunkItemVc {

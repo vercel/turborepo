@@ -24,8 +24,7 @@ use crate::{
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
     full_module: EcmascriptModuleAssetVc,
-    split_data: SplitResultVc,
-    part_id: u32,
+    part: ModulePartVc,
 }
 
 impl EcmascriptModulePartAssetVc {
@@ -34,24 +33,9 @@ impl EcmascriptModulePartAssetVc {
     }
 
     pub async fn from_split(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Result<Self> {
-        let split_data = split(module.origin_path(), module.parse());
-        let result = split_data.await?;
-        let part = part.await?;
-
-        let key = match &*part {
-            ModulePart::ModuleEvaluation => Key::ModuleEvaluation,
-            ModulePart::Export(export) => Key::Export(export.await?.to_string()),
-        };
-
-        let chunk_id = match result.data.get(&key) {
-            Some(id) => *id,
-            None => return Err(anyhow!("could not find part id for module part {:?}", key)),
-        };
-
         Ok(EcmascriptModulePartAsset {
             full_module: module,
-            part_id: chunk_id,
-            split_data,
+            part,
         }
         .cell())
     }
@@ -99,7 +83,7 @@ impl Asset for EcmascriptModulePartAsset {
     async fn ident(&self) -> Result<AssetIdentVc> {
         let inner = self.full_module.ident();
 
-        Ok(inner.with_part(self.part_id))
+        Ok(inner.with_part(self.part))
     }
 }
 
@@ -150,7 +134,7 @@ impl EcmascriptModulePartAssetVc {
             Value::new(this.ty),
             this.transforms,
             this.compile_time_info,
-            Some(part.part_id),
+            Some(part.part),
         ))
     }
 }
