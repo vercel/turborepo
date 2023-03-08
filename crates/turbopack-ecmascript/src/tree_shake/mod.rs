@@ -135,7 +135,7 @@ impl Analyzer<'_> {
                     // Create a weak dependency to all module items listed in
                     // LAST_READS for that var.
 
-                    // (the read need to be executed before this write, when
+                    // (the reads need to be executed before this write, when
                     // it’s needed)
 
                     if let Some(state) = self.vars.get(id) {
