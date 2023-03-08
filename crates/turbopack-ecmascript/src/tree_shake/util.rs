@@ -10,6 +10,7 @@ use swc_core::ecma::{
     visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
 
+/// A visitor which collects variables which are read or written.
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
     vars: Vars,
@@ -93,6 +94,8 @@ impl Visit for IdentUsageCollector {
     visit_obj_and_computed!();
 }
 
+/// A visitor which collects variables which are read or written, but not at the
+/// evaluation time.
 #[derive(Default)]
 pub(crate) struct CapturedIdCollector {
     vars: Vars,
@@ -169,6 +172,7 @@ impl Visit for CapturedIdCollector {
     visit_obj_and_computed!();
 }
 
+/// The list of variables which are read or written.
 #[derive(Debug, Default)]
 pub(crate) struct Vars {
     /// Variables which are read.
