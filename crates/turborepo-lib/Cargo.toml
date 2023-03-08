@@ -21,7 +21,6 @@ test-case = "3.0.0"
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
-async-io = "1.12.0"
 atty = { workspace = true }
 axum = "0.6.2"
 axum-server = "0.4.4"
@@ -45,7 +44,6 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 notify = "5.1.0"
 pidlock = { git = "https://github.com/arlyon/pidlock", branch = "master" }
-predicates = { workspace = true }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
@@ -69,6 +67,9 @@ webbrowser = { workspace = true }
 const_format = "0.2.30"
 turbo-updater = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+uds_windows = "1.0.2"
+async-io = "1.12.0"
+
 [build-dependencies]
 tonic-build = "0.8.4"
-
