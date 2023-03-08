@@ -1,7 +1,7 @@
 use std::{
     env,
     env::current_dir,
-    fs::{self, File},
+    fs::{self},
     io::Write,
     path::{Path, PathBuf},
     process,
@@ -184,38 +184,87 @@ pub struct LocalTurboState {
 
 impl LocalTurboState {
     pub fn infer(repo_root: &Path) -> Option<Self> {
-        let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
+        // We support six per-platform packages and one `turbo` package which handles
+        // indirection. We identify the per-platform package and execute the appropriate
+        // binary directly. We can choose to operate this aggressively because the
+        // _worst_ outcome is that we run global `turbo`.
+        let arch = {
+            #[cfg(target_arch = "x86_64")]
+            {
+                "64"
+            }
+            #[cfg(target_arch = "aarch64")]
+            {
+                "arm64"
+            }
+        };
+
+        let os = {
+            #[cfg(target_os = "macos")]
+            {
+                "darwin"
+            }
+            #[cfg(target_arch = "windows")]
+            {
+                "windows"
+            }
+            #[cfg(target_arch = "linux")]
+            {
+                "linux"
+            }
+        };
+
+        let binary_name = {
             #[cfg(windows)]
             {
-                "turbo.cmd"
+                "turbo.exe"
             }
             #[cfg(not(windows))]
             {
                 "turbo"
             }
-        });
+        };
 
-        if !local_turbo_path.exists() {
-            debug!(
-                "No local turbo binary found at: {}",
-                local_turbo_path.display()
-            );
-            return None;
+        let platform_package_name = format!("turbo-{}-{}", os, arch);
+        let platform_package_json_path = Path::new("")
+            .join(&platform_package_name)
+            .join("package.json");
+        let platform_package_executable_path = Path::new("")
+            .join(&platform_package_name)
+            .join("bin")
+            .join(&binary_name);
+
+        let search_locations = [
+            // Nested
+            repo_root
+                .join("node_modules")
+                .join("turbo")
+                .join("node_modules"),
+            // Hoisted
+            repo_root.join("node_modules"),
+        ];
+
+        for root in search_locations {
+            let bin_path = root.join(&platform_package_executable_path);
+            if bin_path.exists() {
+                let resolved_package_json_path = root.join(platform_package_json_path);
+                let platform_package_json_string =
+                    fs::read_to_string(&resolved_package_json_path).ok()?;
+                let platform_package_json: PackageJson =
+                    serde_json::from_str(&platform_package_json_string).ok()?;
+
+                debug!("Local turbo path: {}", bin_path.display());
+                debug!("Local turbo version: {}", platform_package_json.version);
+                return Some(Self {
+                    bin_path,
+                    version: platform_package_json.version,
+                });
+            } else {
+                debug!("No local turbo binary found at: {}", bin_path.display());
+            }
         }
 
-        let local_turbo_package_path = repo_root
-            .join("node_modules")
-            .join("turbo")
-            .join("package.json");
-
-        let package_json: PackageJson =
-            serde_json::from_reader(File::open(local_turbo_package_path).ok()?).ok()?;
-
-        debug!("Local turbo version: {}", package_json.version);
-        Some(Self {
-            bin_path: local_turbo_path,
-            version: package_json.version,
-        })
+        return None;
     }
 }
 
