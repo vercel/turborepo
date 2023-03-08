@@ -148,16 +148,24 @@ async function runOperation(renderData: RenderData) {
         }
 
         // The key is a `${file}#${name}`, but `file` can contain `#` itself.
-        let pos = key.lastIndexOf("#");
-        if (pos === -1) pos = key.length;
-
-        const file = key.slice(0, pos);
-        const name = key.slice(pos + 1);
+        // There are 3 possibilities:
+        //   "file"     => id = "file", name = "*"
+        //   "file#"    => id = "file", name = ""
+        //   "file#foo" => id = "file", name = "foo"
+        const pos = key.lastIndexOf("#");
+        let id = key;
+        let name = "";
+        if (pos === -1) {
+          name = "*";
+        } else {
+          id = key.slice(0, pos);
+          name = key.slice(pos + 1);
+        }
 
         return {
-          id: file,
-          chunks: JSON.parse(file)[1],
-          name: name || "*",
+          id,
+          name,
+          chunks: JSON.parse(id)[1],
         };
       },
     };
