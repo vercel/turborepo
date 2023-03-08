@@ -12,6 +12,7 @@ use turbopack_core::{
     chunk::{ChunkingContext, ChunkingContextVc},
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
+    resolve::ModulePart,
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc, EcmascriptChunkingContext,
@@ -147,6 +148,7 @@ impl ChunkingContext for DevChunkingContext {
             fragment,
             assets,
             modifiers,
+            part,
         } = ident;
         if let Some(query) = query {
             0_u8.deterministic_hash(&mut hasher);
@@ -175,6 +177,22 @@ impl ChunkingContext for DevChunkingContext {
             modifier.deterministic_hash(&mut hasher);
             has_hash = true;
         }
+        if let Some(part) = part {
+            4_u8.deterministic_hash(&mut hasher);
+            match &*part.await? {
+                ModulePart::ModuleEvaluation => {
+                    1_u8.deterministic_hash(&mut hasher);
+                }
+
+                ModulePart::Export(export) => {
+                    2_u8.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+            }
+
+            has_hash = true;
+        }
+
         if has_hash {
             let hash = encode_hex(hasher.finish());
             let truncated_hash = &hash[..6];

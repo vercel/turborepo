@@ -25,7 +25,7 @@ use crate::{
 pub struct EcmascriptModulePartAsset {
     full_module: EcmascriptModuleAssetVc,
     split_data: SplitResultVc,
-    chunk_id: u32,
+    part_id: u32,
 }
 
 impl EcmascriptModulePartAssetVc {
@@ -50,7 +50,7 @@ impl EcmascriptModulePartAssetVc {
 
         Ok(EcmascriptModulePartAsset {
             full_module: module,
-            chunk_id,
+            part_id: chunk_id,
             split_data,
         }
         .cell())
@@ -67,18 +67,18 @@ impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
         let split_data = self.split_data.await?;
-        let deps = match split_data.deps.get(&self.chunk_id) {
+        let deps = match split_data.deps.get(&self.part_id) {
             Some(v) => v,
             None => return Ok(self.full_module.references()),
         };
 
         let mut assets = deps
             .iter()
-            .map(|&chunk_id| {
+            .map(|&part_id| {
                 SingleAssetReferenceVc::new(
                     EcmascriptModulePartAssetVc::new(EcmascriptModulePartAsset {
                         full_module: self.full_module,
-                        chunk_id,
+                        part_id,
                         split_data: self.split_data,
                     })
                     .as_asset(),
@@ -97,13 +97,9 @@ impl Asset for EcmascriptModulePartAsset {
 
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<AssetIdentVc> {
-        let inner = self.full_module.ident().await?;
+        let inner = self.full_module.ident();
 
-        let query = StringVc::cell(format!("part={}", self.chunk_id).into());
-        Ok(AssetIdentVc::new(Value::new(AssetIdent {
-            query: Some(query),
-            ..(*inner).clone()
-        })))
+        Ok(inner.with_part(self.part_id))
     }
 }
 
@@ -120,7 +116,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
             EcmascriptModulePartChunkItemVc::new(EcmascriptModulePartChunkItem {
                 module: self_vc,
                 context,
-                chunk_id: s.chunk_id,
+                chunk_id: s.part_id,
                 full_module: s.full_module,
                 split_data: s.split_data,
             })
@@ -154,7 +150,7 @@ impl EcmascriptModulePartAssetVc {
             Value::new(this.ty),
             this.transforms,
             this.compile_time_info,
-            Some(part.chunk_id),
+            Some(part.part_id),
         ))
     }
 }
