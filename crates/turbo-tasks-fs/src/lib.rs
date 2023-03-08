@@ -6,7 +6,6 @@
 #![feature(main_separator_str)]
 #![feature(box_syntax)]
 #![feature(round_char_boundary)]
-#![feature(new_uninit)]
 
 pub mod attach;
 pub mod embed;
