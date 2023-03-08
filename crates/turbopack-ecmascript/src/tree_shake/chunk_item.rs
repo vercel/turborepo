@@ -15,7 +15,7 @@ use turbopack_core::{
     resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
 
-use super::{asset::EcmascriptModulePartAssetVc, part_of_module, SplitResultVc};
+use super::{asset::EcmascriptModulePartAssetVc, part_of_module};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,

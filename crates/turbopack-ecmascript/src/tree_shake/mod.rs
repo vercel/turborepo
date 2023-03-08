@@ -3,7 +3,7 @@ use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::resolve::{ModulePart, ModulePartVc};
+use turbopack_core::resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc};
 
 use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode};
 use crate::{
@@ -280,6 +280,11 @@ impl PartialEq for SplitResult {
     fn eq(&self, other: &Self) -> bool {
         false
     }
+}
+
+#[turbo_tasks::function]
+pub(super) async fn split_module(asset: EcmascriptModuleAssetVc) -> Result<SplitResultVc> {
+    Ok(split(asset.origin_path(), asset.parse()))
 }
 
 #[turbo_tasks::function]

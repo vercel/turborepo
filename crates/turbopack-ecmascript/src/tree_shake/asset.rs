@@ -1,16 +1,16 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
-    ident::{AssetIdent, AssetIdentVc},
+    ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
+    resolve::ModulePartVc,
 };
 
 use super::{
     chunk_item::{EcmascriptModulePartChunkItem, EcmascriptModulePartChunkItemVc},
-    split, Key, SplitResultVc,
+    split, split_module,
 };
 use crate::{
     chunk::{
@@ -50,7 +50,8 @@ impl Asset for EcmascriptModulePartAsset {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
-        let split_data = self.split_data.await?;
+        let split_data = split_module(self.full_module);
+
         let deps = match split_data.deps.get(&self.part_id) {
             Some(v) => v,
             None => return Ok(self.full_module.references()),
@@ -83,7 +84,7 @@ impl Asset for EcmascriptModulePartAsset {
     async fn ident(&self) -> Result<AssetIdentVc> {
         let inner = self.full_module.ident();
 
-        Ok(inner.with_part(self.part))
+        Ok(inner.with_part(Some(self.part.clone())))
     }
 }
 
@@ -100,9 +101,8 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
             EcmascriptModulePartChunkItemVc::new(EcmascriptModulePartChunkItem {
                 module: self_vc,
                 context,
-                chunk_id: s.part_id,
                 full_module: s.full_module,
-                split_data: s.split_data,
+                part: s.part,
             })
             .into(),
         )
