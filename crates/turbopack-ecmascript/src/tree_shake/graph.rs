@@ -527,29 +527,31 @@ impl DepGraph {
                         }
                         _ => {}
                     },
-                    ModuleDecl::ExportNamed(item) => {
+                    ModuleDecl::ExportNamed(NamedExport {
+                        src: None,
+                        specifiers,
+                        ..
+                    }) => {
                         // We are not interested in re-exports.
-                        if item.src.is_none() {
-                            for s in &item.specifiers {
-                                match s {
-                                    ExportSpecifier::Named(s) => {
-                                        match s.exported.as_ref().unwrap_or(&s.orig) {
-                                            ModuleExportName::Ident(i) => {
-                                                exports.push(i.to_id());
-                                            }
-                                            ModuleExportName::Str(s) => {}
-                                        }
-                                    }
-                                    ExportSpecifier::Default(s) => {
-                                        exports.push((js_word!("default"), Default::default()));
-                                    }
-                                    ExportSpecifier::Namespace(s) => match &s.name {
+                        for s in specifiers {
+                            match s {
+                                ExportSpecifier::Named(s) => {
+                                    match s.exported.as_ref().unwrap_or(&s.orig) {
                                         ModuleExportName::Ident(i) => {
                                             exports.push(i.to_id());
                                         }
                                         ModuleExportName::Str(s) => {}
-                                    },
+                                    }
                                 }
+                                ExportSpecifier::Default(s) => {
+                                    exports.push((js_word!("default"), Default::default()));
+                                }
+                                ExportSpecifier::Namespace(s) => match &s.name {
+                                    ModuleExportName::Ident(i) => {
+                                        exports.push(i.to_id());
+                                    }
+                                    ModuleExportName::Str(s) => {}
+                                },
                             }
                         }
                     }
