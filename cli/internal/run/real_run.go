@@ -219,6 +219,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	cacheHit := taskCache.IsCacheHit(ctx)
 	outputtedTurboLogs := false
 
+	// If we want grouped log ordering we want to either:
+	// - restore
+	// - not display any logs and do this when we have finished execution if we have a cache mis all output and display logs if we have a cache hit.s.
 	if cacheHit || !grouped {
 		outputtedTurboLogs = true
 		logMutex.Lock()
