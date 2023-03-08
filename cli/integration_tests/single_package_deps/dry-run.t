@@ -14,7 +14,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = 8fc80cfff3b64237                                                                                            
+    Hash                             = 02cd45da7a08ba05                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       
@@ -30,7 +30,7 @@ Check
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                     
   test
     Task                             = test                                                                                                          
-    Hash                             = c71366ccd6a86465                                                                                              
+    Hash                             = 6aadbf9bca4ae1e0                                                                                              
     Cached (Local)                   = false                                                                                                         
     Cached (Remote)                  = false                                                                                                         
     Command                          = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                  
@@ -50,7 +50,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "8fc80cfff3b64237",
+        "hash": "02cd45da7a08ba05",
         "cacheState": {
           "local": false,
           "remote": false
@@ -78,7 +78,7 @@ Check
         },
         "expandedInputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
-          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
@@ -93,7 +93,7 @@ Check
       },
       {
         "task": "test",
-        "hash": "c71366ccd6a86465",
+        "hash": "6aadbf9bca4ae1e0",
         "cacheState": {
           "local": false,
           "remote": false
@@ -119,7 +119,7 @@ Check
         },
         "expandedInputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
-          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },

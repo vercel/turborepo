@@ -14,7 +14,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = 7bf32e1dedb04a5d                                                                                            
+    Hash                             = fef49cd3cf47af84                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       
@@ -34,7 +34,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "7bf32e1dedb04a5d",
+        "hash": "fef49cd3cf47af84",
         "cacheState": {
           "local": false,
           "remote": false
@@ -60,7 +60,7 @@ Check
         },
         "expandedInputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
-          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
