@@ -1,270 +1,133 @@
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_ca05a4.js
-(globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_ca05a4.js", {
-=======
-<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js", {
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js", {
 ========
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js", {
->>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js
->>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js", {
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
 
-"[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
-<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/node_modules/foo/index.js (ecmascript)");
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript)");
 ========
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/shebang/input/node_modules/foo/index.js (ecmascript part 0)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/shebang/input/node_modules/foo/index.js (ecmascript part 1)");
->>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript part 0)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript part 1)");
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
-__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$shebang$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__["foo"](true);
+__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__["foo"](true);
 
 })()),
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_ca05a4.js
-=======
-<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
-    if (!(true && loadedChunks.has("output/d1787_foo_index_ea748e.js"))) return true;
-    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fdfba0.js.chunk-list.json", ["output/d1787_foo_index_ea748e.js"]);
+    if (!(true && loadedChunks.has("output/39e84_foo_index_a20770.js"))) return true;
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_874f70.js.chunk-list.json", ["output/39e84_foo_index_a20770.js"]);
 ========
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_1ab58b.js") && loadedChunks.has("output/d1787_foo_index_bca377.js") && loadedChunks.has("output/d1787_foo_index_221dc0.js"))) return true;
->>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)");
->>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_a36485.js") && loadedChunks.has("output/39e84_foo_index_bca377.js") && loadedChunks.has("output/39e84_foo_index_221dc0.js"))) return true;
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/index.js (ecmascript)");
 }
-,{
-  "otherChunks": [
-    "output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_dfec25.js",
-    "output/d1787_foo_index_dd389c.js"
-  ],
-  "runtimeModuleIds": [
-    "[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)"
-  ],
-  "chunkListPath": null
-}]);
-
+]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
     return;
 }
 /** @typedef {import('../types/backend').RuntimeBackend} RuntimeBackend */
-/** @typedef {import('../types/dom').ChunkResolver} ChunkResolver */
-/** @typedef {import('../types').ChunkPath} ChunkPath */
-/** @typedef {import('../types').SourceInfo} SourceInfo */
 
 /** @type {RuntimeBackend} */
-let BACKEND;
-
-(() => {
-  BACKEND = {
-    async registerChunk(chunkPath, params) {
-      const resolver = getOrCreateResolver(chunkPath);
-      resolver.resolve();
-
-      if (params == null) {
-        return;
-      }
-
-      const chunksToWaitFor = [];
-      for (const otherChunkPath of params.otherChunks) {
-        if (otherChunkPath.endsWith(".css")) {
-          // Mark all CSS chunks within the same chunk group as this chunk as loaded.
-          const cssResolver = getOrCreateResolver(chunkPath);
-          cssResolver.resolve();
-        } else if (otherChunkPath.endsWith(".js")) {
-          // Only wait for JS chunks to load.
-          chunksToWaitFor.push(otherChunkPath);
-        }
-      }
-
-      if (params.runtimeModuleIds.length > 0) {
-        await waitForChunksToLoad(chunksToWaitFor);
-
-        for (const moduleId of params.runtimeModuleIds) {
-          getOrInstantiateRuntimeModule(moduleId, chunkPath);
-        }
-      }
-    },
-
-    loadChunk(chunkPath, source) {
-      return loadChunk(chunkPath, source);
-    },
-
-    unloadChunk(chunkPath) {
-      deleteResolver(chunkPath);
-
+const BACKEND = {
+  loadChunk(chunkPath) {
+    return new Promise((resolve, reject) => {
       if (chunkPath.endsWith(".css")) {
-        const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
-        for (const link of Array.from(links)) {
-          link.remove();
-        }
-      } else if (chunkPath.endsWith(".js")) {
-        // Unloading a JS chunk would have no effect, as it lives in the JS
-        // runtime once evaluated.
-        // However, we still want to remove the script tag from the DOM to keep
-        // the HTML somewhat consistent from the user's perspective.
-        const scripts = document.querySelectorAll(
-          `script[src="/${chunkPath}"]`
-        );
-        for (const script of Array.from(scripts)) {
-          script.remove();
-        }
-      } else {
-        throw new Error(`can't infer type of chunk from path ${chunkPath}`);
-      }
-    },
-
-    reloadChunk(chunkPath) {
-      return new Promise((resolve, reject) => {
-        if (!chunkPath.endsWith(".css")) {
-          reject(new Error("The DOM backend can only reload CSS chunks"));
-          return;
-        }
-
-        const previousLink = document.querySelector(
-          `link[href^="/${chunkPath}"]`
-        );
-
-        if (previousLink == null) {
-          reject(new Error(`No link element found for chunk ${chunkPath}`));
-          return;
-        }
-
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = `/${chunkPath}?t=${Date.now()}`;
+        link.href = `/${chunkPath}`;
         link.onerror = () => {
           reject();
         };
         link.onload = () => {
-          // First load the new CSS, then remove the old one. This prevents visible
-          // flickering that would happen in-between removing the previous CSS and
-          // loading the new one.
-          previousLink.remove();
-
           // CSS chunks do not register themselves, and as such must be marked as
           // loaded instantly.
           resolve();
         };
-
-        // Make sure to insert the new CSS right after the previous one, so that
-        // its precedence is higher.
-        previousLink.parentElement.insertBefore(link, previousLink.nextSibling);
-      });
-    },
-
-    restart: () => self.location.reload(),
-  };
-
-  /**
-   * Maps chunk paths to the corresponding resolver.
-   *
-   * @type {Map<ChunkPath, ChunkResolver>}
-   */
-  const chunkResolvers = new Map();
-
-  /**
-   * @param {ChunkPath} chunkPath
-   * @returns {ChunkResolver}
-   */
-  function getOrCreateResolver(chunkPath) {
-    let resolver = chunkResolvers.get(chunkPath);
-    if (!resolver) {
-      let resolve;
-      let reject;
-      const promise = new Promise((innerResolve, innerReject) => {
-        resolve = innerResolve;
-        reject = innerReject;
-      });
-      resolver = {
-        resolved: false,
-        promise,
-        resolve: () => {
-          resolver.resolved = true;
-          resolve();
-        },
-        reject,
-      };
-      chunkResolvers.set(chunkPath, resolver);
-    }
-    return resolver;
-  }
-
-  function deleteResolver(chunkPath) {
-    chunkResolvers.delete(chunkPath);
-  }
-
-  /**
-   * Waits for all provided chunks to load.
-   *
-   * @param {ChunkPath[]} chunks
-   * @returns {Promise<void>}
-   */
-  async function waitForChunksToLoad(chunks) {
-    const promises = [];
-    for (const chunkPath of chunks) {
-      const resolver = getOrCreateResolver(chunkPath);
-      if (!resolver.resolved) {
-        promises.push(resolver.promise);
+        document.body.appendChild(link);
+      } else if (chunkPath.endsWith(".js")) {
+        const script = document.createElement("script");
+        script.src = `/${chunkPath}`;
+        // We'll only mark the chunk as loaded once the script has been executed,
+        // which happens in `registerChunk`. Hence the absence of `resolve()` in
+        // this branch.
+        script.onerror = () => {
+          reject();
+        };
+        document.body.appendChild(script);
+      } else {
+        throw new Error(`can't infer type of chunk from path ${chunkPath}`);
       }
-    }
-    await Promise.all(promises);
-  }
+    });
+  },
 
-  /**
-   * Loads the given chunk, and returns a promise that resolves once the chunk
-   * has been loaded.
-   *
-   * @param {ChunkPath} chunkPath
-   * @param {SourceInfo} source
-   */
-  async function loadChunk(chunkPath, source) {
-    const resolver = getOrCreateResolver(chunkPath);
-    if (resolver.resolved) {
-      return resolver.promise;
-    }
-
-    // We don't need to load chunks references from runtime code, as they're already
-    // present in the DOM.
-    // However, we need to wait for them to register themselves within `registerChunk`
-    // before we can start instantiating runtime modules, hence the absense of
-    // `resolver.resolve()` in this branch.
-    if (source.type === SourceTypeRuntime) {
-      return resolver.promise;
-    }
-
+  unloadChunk(chunkPath) {
     if (chunkPath.endsWith(".css")) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = `/${chunkPath}`;
-      link.onerror = () => {
-        resolver.reject();
-      };
-      link.onload = () => {
-        // CSS chunks do not register themselves, and as such must be marked as
-        // loaded instantly.
-        resolver.resolve();
-      };
-      document.body.appendChild(link);
+      const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
+      for (const link of Array.from(links)) {
+        link.remove();
+      }
     } else if (chunkPath.endsWith(".js")) {
-      const script = document.createElement("script");
-      script.src = `/${chunkPath}`;
-      // We'll only mark the chunk as loaded once the script has been executed,
-      // which happens in `registerChunk`. Hence the absence of `resolve()` in
-      // this branch.
-      script.onerror = () => {
-        resolver.reject();
-      };
-      document.body.appendChild(script);
+      // Unloading a JS chunk would have no effect, as it lives in the JS
+      // runtime once evaluated.
+      // However, we still want to remove the script tag from the DOM to keep
+      // the HTML somewhat consistent from the user's perspective.
+      const scripts = document.querySelectorAll(`script[src="/${chunkPath}"]`);
+      for (const script of Array.from(scripts)) {
+        script.remove();
+      }
     } else {
       throw new Error(`can't infer type of chunk from path ${chunkPath}`);
     }
+  },
 
-    return resolver.promise;
-  }
-})();
+  reloadChunk(chunkPath) {
+    return new Promise((resolve, reject) => {
+      if (!chunkPath.endsWith(".css")) {
+        reject(new Error("The DOM backend can only reload CSS chunks"));
+        return;
+      }
+
+      const previousLink = document.querySelector(
+        `link[href^="/${chunkPath}"]`
+      );
+
+      if (previousLink == null) {
+        reject(new Error(`No link element found for chunk ${chunkPath}`));
+        return;
+      }
+
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = `/${chunkPath}?t=${Date.now()}`;
+      link.onerror = () => {
+        reject();
+      };
+      link.onload = () => {
+        // First load the new CSS, then remove the old one. This prevents visible
+        // flickering that would happen in-between removing the previous CSS and
+        // loading the new one.
+        previousLink.remove();
+
+        // CSS chunks do not register themselves, and as such must be marked as
+        // loaded instantly.
+        resolve();
+      };
+
+      // Make sure to insert the new CSS right after the previous one, so that
+      // its precedence is higher.
+      previousLink.parentElement.insertBefore(link, previousLink.nextSibling);
+    });
+  },
+
+  restart: () => self.location.reload(),
+};
 /* eslint-disable @next/next/no-assign-module-variable */
 
 /** @typedef {import('../types').ChunkRegistration} ChunkRegistration */
@@ -282,6 +145,9 @@ let BACKEND;
 /** @typedef {import('../types').SourceType.Update} SourceTypeUpdate */
 /** @typedef {import('../types').Exports} Exports */
 /** @typedef {import('../types').EsmInteropNamespace} EsmInteropNamespace */
+/** @typedef {import('../types').Runnable} Runnable */
+
+/** @typedef {import('../types').Runtime} Runtime */
 
 /** @typedef {import('../types').RefreshHelpers} RefreshHelpers */
 /** @typedef {import('../types/hot').Hot} Hot */
@@ -295,13 +161,27 @@ let BACKEND;
 /** @typedef {import('../types/protocol').EcmascriptMergedChunkUpdate} EcmascriptMergedChunkUpdate */
 /** @typedef {import('../types/protocol').EcmascriptModuleEntry} EcmascriptModuleEntry */
 
+/** @typedef {import('../types/runtime').Loader} Loader */
 /** @typedef {import('../types/runtime').ModuleEffect} ModuleEffect */
-/** @typedef {import('../types/runtime').DevRuntimeParams} DevRuntimeParams */
 
+/** @type {Array<Runnable>} */
+let runnable = [];
 /** @type {Object.<ModuleId, ModuleFactory>} */
 const moduleFactories = { __proto__: null };
 /** @type {Object.<ModuleId, Module>} */
 const moduleCache = { __proto__: null };
+/**
+ * Contains the IDs of all chunks that have been loaded.
+ *
+ * @type {Set<ChunkPath>}
+ */
+const loadedChunks = new Set();
+/**
+ * Maps a chunk ID to the chunk's loader if the chunk is currently being loaded.
+ *
+ * @type {Map<ChunkPath, Loader>}
+ */
+const chunkLoaders = new Map();
 /**
  * Maps module IDs to persisted data between executions of their hot module
  * implementation (`hot.data`).
@@ -483,32 +363,62 @@ externalRequire.resolve = (name, opt) => {
 };
 
 /**
- * @param {SourceInfo} source
+ * @param {ModuleId} from
  * @param {string} chunkPath
  * @returns {Promise<any> | undefined}
  */
-async function loadChunk(source, chunkPath) {
-  try {
-    await BACKEND.loadChunk(chunkPath, source);
-  } catch (error) {
-    let loadReason;
-    switch (source.type) {
-      case SourceTypeRuntime:
-        loadReason = `as a runtime dependency of chunk ${source.chunkPath}`;
-        break;
-      case SourceTypeParent:
-        loadReason = `from module ${source.parentId}`;
-        break;
-      case SourceTypeUpdate:
-        loadReason = "from an HMR update";
-        break;
-    }
-    throw new Error(
-      `Failed to load chunk ${chunkPath} ${loadReason}${
-        error ? `: ${error}` : ""
-      }`
-    );
+function loadChunk(from, chunkPath) {
+  if (loadedChunks.has(chunkPath)) {
+    return Promise.resolve();
   }
+
+  const chunkLoader = getOrCreateChunkLoader(chunkPath, from);
+
+  return chunkLoader.promise;
+}
+
+/**
+ * @param {string} chunkPath
+ * @param {ModuleId} from
+ * @returns {Loader}
+ */
+function getOrCreateChunkLoader(chunkPath, from) {
+  let chunkLoader = chunkLoaders.get(chunkPath);
+  if (chunkLoader) {
+    return chunkLoader;
+  }
+
+  let resolve;
+  let reject;
+  const promise = new Promise((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  const onError = (error) => {
+    chunkLoaders.delete(chunkPath);
+    reject(
+      new Error(
+        `Failed to load chunk from ${chunkPath}${error ? `: ${error}` : ""}`
+      )
+    );
+  };
+
+  const onLoad = () => {
+    loadedChunks.add(chunkPath);
+    chunkLoaders.delete(chunkPath);
+    resolve();
+  };
+
+  chunkLoader = {
+    promise,
+    onLoad,
+  };
+  chunkLoaders.set(chunkPath, chunkLoader);
+
+  BACKEND.loadChunk(chunkPath, from).then(onLoad, onError);
+
+  return chunkLoader;
 }
 
 /** @type {SourceTypeRuntime} */
@@ -533,7 +443,7 @@ function instantiateModule(id, source) {
     let instantiationReason;
     switch (source.type) {
       case SourceTypeRuntime:
-        instantiationReason = `as a runtime entry of chunk ${source.chunkPath}`;
+        instantiationReason = "as a runtime entry";
         break;
       case SourceTypeParent:
         instantiationReason = `because it was required from module ${source.parentId}`;
@@ -589,7 +499,7 @@ function instantiateModule(id, source) {
       v: exportValue.bind(null, module),
       m: module,
       c: moduleCache,
-      l: loadChunk.bind(null, { type: SourceTypeParent, parentId: id }),
+      l: loadChunk.bind(null, id),
       k: registerChunkList,
       p: _process,
       g: globalThis,
@@ -1017,12 +927,13 @@ function applyChunkListUpdate(chunkListPath, update) {
     for (const [chunkPath, chunkUpdate] of Object.entries(update.chunks)) {
       switch (chunkUpdate.type) {
         case "added":
-          BACKEND.loadChunk(chunkPath, { type: SourceTypeUpdate });
+          BACKEND.loadChunk(chunkPath);
           break;
         case "total":
           BACKEND.reloadChunk?.(chunkPath);
           break;
         case "deleted":
+          loadedChunks.delete(chunkPath);
           BACKEND.unloadChunk?.(chunkPath);
           break;
         case "partial":
@@ -1457,6 +1368,7 @@ function disposeChunkList(chunkListPath) {
 function disposeChunk(chunkPath) {
   // This should happen whether or not the chunk has any modules in it. For instance,
   // CSS chunks have no modules in them, but they still need to be unloaded.
+  loadedChunks.delete(chunkPath);
   BACKEND.unloadChunk(chunkPath);
 
   const chunkModules = chunkModulesMap.get(chunkPath);
@@ -1483,27 +1395,10 @@ function disposeChunk(chunkPath) {
  * Instantiates a runtime module.
  *
  * @param {ModuleId} moduleId
- * @param {ChunkPath} chunkPath
  * @returns {Module}
  */
-function instantiateRuntimeModule(moduleId, chunkPath) {
-  return instantiateModule(moduleId, { type: SourceTypeRuntime, chunkPath });
-}
-
-/**
- * Gets or instantiates a runtime module.
- *
- * @param {ModuleId} moduleId
- * @param {ChunkPath} chunkPath
- * @returns {Module}
- */
-function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
-  const module = moduleCache[moduleId];
-  if (module) {
-    return module;
-  }
-
-  return instantiateModule(moduleId, { type: SourceTypeRuntime, chunkPath });
+function instantiateRuntimeModule(moduleId) {
+  return instantiateModule(moduleId, { type: SourceTypeRuntime });
 }
 
 /**
@@ -1556,43 +1451,58 @@ function markChunkListAsRuntime(chunkListPath) {
 }
 
 /**
- * @param {ChunkRegistration} chunkRegistration
+ * @param {ChunkPath} chunkPath
  */
-async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
-  if (runtimeParams != null) {
-    registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
-      chunkPath,
-      ...runtimeParams.otherChunks,
-    ]);
+function markChunkAsLoaded(chunkPath) {
+  const chunkLoader = chunkLoaders.get(chunkPath);
+  if (!chunkLoader) {
+    loadedChunks.add(chunkPath);
+
+    // This happens for all initial chunks that are loaded directly from
+    // the HTML.
+    return;
   }
 
+  // Only chunks that are loaded via `loadChunk` will have a loader.
+  chunkLoader.onLoad();
+}
+
+/** @type {Runtime} */
+const runtime = {
+  loadedChunks,
+  modules: moduleFactories,
+  cache: moduleCache,
+  instantiateRuntimeModule,
+  registerChunkList: registerChunkListAndMarkAsRuntime,
+};
+
+/**
+ * @param {ChunkRegistration} chunkRegistration
+ */
+function registerChunk([chunkPath, chunkModules, ...run]) {
+  markChunkAsLoaded(chunkPath);
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
     if (!moduleFactories[moduleId]) {
       moduleFactories[moduleId] = moduleFactory;
     }
     addModuleToChunk(moduleId, chunkPath);
   }
-
-  BACKEND.registerChunk(chunkPath, runtimeParams);
+  runnable.push(...run);
+  runnable = runnable.filter((r) => r(runtime));
 }
 
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS || [];
 
-const chunksToRegister = globalThis.TURBOPACK;
+globalThis.TURBOPACK.forEach(registerChunk);
 globalThis.TURBOPACK = {
   push: registerChunk,
 };
-chunksToRegister.forEach(registerChunk);
 })();
 
 
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_ca05a4.js
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_ca05a4.js.map
-=======
-<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js.map
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js.map
 ========
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js.map
->>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fbbe42.js
->>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/shebang/output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_6c9fe5.js
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js.map
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js

@@ -8,8 +8,8 @@ Count: 18
 let dog = "dog";
 ```
 
-- Declares: "`dog`"
-- Write: "`dog`"
+- Declares: `dog`
+- Write: `dog`
 
 ## Item 2: Stmt 1, `Normal`
 
@@ -17,8 +17,7 @@ let dog = "dog";
 dog += "!";
 ```
 
-- Reads: "`dog`"
-- Write: "`dog`"
+- Write: `dog`
 
 ## Item 3: Stmt 2, `Normal`
 
@@ -27,7 +26,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: "`console`, `dog`"
+- Reads: `console`, `dog`
 
 ## Item 4: Stmt 3, `Normal`
 
@@ -38,8 +37,8 @@ function getDog() {
 ```
 
 - Hoisted
-- Declares: "`getDog`"
-- Reads (eventual): "`dog`"
+- Declares: `getDog`
+- Reads (eventual): `dog`
 
 ## Item 5: Stmt 4, `Normal`
 
@@ -47,8 +46,7 @@ function getDog() {
 dog += "!";
 ```
 
-- Reads: "`dog`"
-- Write: "`dog`"
+- Write: `dog`
 
 ## Item 6: Stmt 5, `Normal`
 
@@ -57,7 +55,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: "`console`, `dog`"
+- Reads: `console`, `dog`
 
 ## Item 7: Stmt 6, `Normal`
 
@@ -68,9 +66,9 @@ function setDog(newDog) {
 ```
 
 - Hoisted
-- Declares: "`setDog`"
-- Reads (eventual): "`newDog`"
-- Write (eventual): "`newDog`, `dog`"
+- Declares: `setDog`
+- Reads (eventual): `newDog`
+- Write (eventual): `newDog`, `dog`
 
 ## Item 8: Stmt 7, `Normal`
 
@@ -78,8 +76,7 @@ function setDog(newDog) {
 dog += "!";
 ```
 
-- Reads: "`dog`"
-- Write: "`dog`"
+- Write: `dog`
 
 ## Item 9: Stmt 8, `Normal`
 
@@ -88,7 +85,7 @@ console.log(dog);
 ```
 
 - Side effects
-- Reads: "`console`, `dog`"
+- Reads: `console`, `dog`
 
 ## Item 10: Stmt 9, `VarDeclarator(0)`
 
@@ -100,9 +97,9 @@ export const dogRef = {
 };
 ```
 
-- Declares: "`dogRef`"
-- Reads: "`dog`, `getDog`, `setDog`"
-- Write: "`dogRef`"
+- Declares: `dogRef`
+- Reads: `dog`, `getDog`, `setDog`
+- Write: `dogRef`
 
 ## Item 11: Stmt 10, `VarDeclarator(0)`
 
@@ -110,8 +107,8 @@ export const dogRef = {
 export let cat = "cat";
 ```
 
-- Declares: "`cat`"
-- Write: "`cat`"
+- Declares: `cat`
+- Write: `cat`
 
 ## Item 12: Stmt 11, `VarDeclarator(0)`
 
@@ -119,9 +116,9 @@ export let cat = "cat";
 export const initialCat = cat;
 ```
 
-- Declares: "`initialCat`"
-- Reads: "`cat`"
-- Write: "`initialCat`"
+- Declares: `initialCat`
+- Reads: `cat`
+- Write: `initialCat`
 
 ## Item 13: Stmt 12, `Normal`
 
@@ -132,8 +129,8 @@ export function getChimera() {
 ```
 
 - Hoisted
-- Declares: "`getChimera`"
-- Reads (eventual): "`cat`, `dog`"
+- Declares: `getChimera`
+- Reads (eventual): `cat`, `dog`
 
 # Phase 1
 
@@ -191,19 +188,13 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item1;
-    Item5 --> Item2;
     Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 --> Item1;
-    Item8 --> Item2;
-    Item8 --> Item5;
     Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
@@ -248,19 +239,13 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item1;
-    Item5 --> Item2;
     Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 --> Item1;
-    Item8 --> Item2;
-    Item8 --> Item5;
     Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
@@ -318,19 +303,13 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item1;
-    Item5 --> Item2;
     Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 --> Item1;
-    Item8 --> Item2;
-    Item8 --> Item5;
     Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
@@ -402,19 +381,13 @@ graph TD
     N4 --> N6;
     N4 --> N8;
     N4 --> N10;
-    N6 --> N5;
     N7 --> N5;
     N7 --> N6;
-    N8 --> N5;
-    N8 --> N6;
     N8 --> N7;
     N9 --> N5;
     N9 --> N6;
     N9 --> N8;
     N9 --> N7;
-    N10 --> N5;
-    N10 --> N6;
-    N10 --> N8;
     N10 --> N7;
     N10 --> N9;
     N11 --> N5;
@@ -427,7 +400,7 @@ graph TD
 
 # Modules (dev)
 
-## Chunk 0
+## Part 0
 
 ```js
 import "entry.js" assert {
@@ -443,7 +416,7 @@ import "entry.js" assert {
 
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -485,7 +458,7 @@ export { dogRef } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { cat } from "entry.js" assert {
@@ -495,7 +468,7 @@ export { cat };
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 import { cat } from "entry.js" assert {
@@ -509,7 +482,7 @@ export { initialCat } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 4
+## Part 4
 
 ```js
 import { cat } from "entry.js" assert {
@@ -534,7 +507,7 @@ export { getChimera };
 
 ```
 
-## Chunk 5
+## Part 5
 
 ```js
 let dog = "dog";
@@ -544,17 +517,14 @@ export { dog } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 6
+## Part 6
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
 dog += "!";
-
+export { dog };
 ```
 
-## Chunk 7
+## Part 7
 
 ```js
 import { dog } from "entry.js" assert {
@@ -567,23 +537,18 @@ console.log(dog);
 
 ```
 
-## Chunk 8
+## Part 8
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
 import "entry.js" assert {
     __turbopack_chunk__: 7
 };
 dog += "!";
+export { dog };
 
 ```
 
-## Chunk 9
+## Part 9
 
 ```js
 import { dog } from "entry.js" assert {
@@ -602,18 +567,9 @@ console.log(dog);
 
 ```
 
-## Chunk 10
+## Part 10
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 import "entry.js" assert {
     __turbopack_chunk__: 7
 };
@@ -621,10 +577,11 @@ import "entry.js" assert {
     __turbopack_chunk__: 9
 };
 dog += "!";
+export { dog };
 
 ```
 
-## Chunk 11
+## Part 11
 
 ```js
 import { dog } from "entry.js" assert {
@@ -649,7 +606,7 @@ console.log(dog);
 
 ```
 
-## Chunk 12
+## Part 12
 
 ```js
 let cat = "cat";
@@ -667,10 +624,13 @@ export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 dog += "!";
+export { dog };
 console.log(dog);
 dog += "!";
+export { dog };
 console.log(dog);
 dog += "!";
+export { dog };
 console.log(dog);
 "module evaluation";
 
@@ -678,7 +638,7 @@ console.log(dog);
 
 # Modules (prod)
 
-## Chunk 0
+## Part 0
 
 ```js
 import { dog } from "entry.js" assert {
@@ -700,7 +660,7 @@ console.log(dog);
 
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -733,7 +693,7 @@ export { dogRef } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { cat } from "entry.js" assert {
@@ -743,7 +703,7 @@ export { cat };
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 import { cat } from "entry.js" assert {
@@ -757,7 +717,7 @@ export { initialCat } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 4
+## Part 4
 
 ```js
 import { cat } from "entry.js" assert {
@@ -782,7 +742,7 @@ export { getChimera };
 
 ```
 
-## Chunk 5
+## Part 5
 
 ```js
 let dog = "dog";
@@ -792,46 +752,28 @@ export { dog } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 6
+## Part 6
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
 dog += "!";
-
+export { dog };
 ```
 
-## Chunk 7
+## Part 7
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
 dog += "!";
-
+export { dog };
 ```
 
-## Chunk 8
+## Part 8
 
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
 dog += "!";
-
+export { dog };
 ```
 
-## Chunk 9
+## Part 9
 
 ```js
 let cat = "cat";
@@ -849,8 +791,11 @@ export { dog } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 dog += "!";
+export { dog };
 dog += "!";
+export { dog };
 dog += "!";
+export { dog };
 console.log(dog);
 console.log(dog);
 console.log(dog);

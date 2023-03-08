@@ -18,7 +18,7 @@ import { upper } from "module";
 ```
 
 - Hoisted
-- Declares: "`upper`"
+- Declares: `upper`
 
 ## Item 3: Stmt 1, `VarDeclarator(0)`
 
@@ -26,8 +26,8 @@ import { upper } from "module";
 export let foobar = "foo";
 ```
 
-- Declares: "`foobar`"
-- Write: "`foobar`"
+- Declares: `foobar`
+- Write: `foobar`
 
 ## Item 4: Stmt 2, `VarDeclarator(0)`
 
@@ -35,9 +35,9 @@ export let foobar = "foo";
 export const foo = foobar;
 ```
 
-- Declares: "`foo`"
-- Reads: "`foobar`"
-- Write: "`foo`"
+- Declares: `foo`
+- Reads: `foobar`
+- Write: `foo`
 
 ## Item 5: Stmt 3, `VarDeclarator(0)`
 
@@ -45,8 +45,8 @@ export const foo = foobar;
 const bar = "bar";
 ```
 
-- Declares: "`bar`"
-- Write: "`bar`"
+- Declares: `bar`
+- Write: `bar`
 
 ## Item 6: Stmt 4, `Normal`
 
@@ -54,8 +54,8 @@ const bar = "bar";
 foobar += bar;
 ```
 
-- Reads: "`bar`, `foobar`"
-- Write: "`foobar`"
+- Reads: `bar`
+- Write: `foobar`
 
 ## Item 7: Stmt 5, `VarDeclarator(0)`
 
@@ -63,9 +63,9 @@ foobar += bar;
 let foobarCopy = foobar;
 ```
 
-- Declares: "`foobarCopy`"
-- Reads: "`foobar`"
-- Write: "`foobarCopy`"
+- Declares: `foobarCopy`
+- Reads: `foobar`
+- Write: `foobarCopy`
 
 ## Item 8: Stmt 6, `Normal`
 
@@ -73,8 +73,7 @@ let foobarCopy = foobar;
 foobar += "foo";
 ```
 
-- Reads: "`foobar`"
-- Write: "`foobar`"
+- Write: `foobar`
 
 ## Item 9: Stmt 7, `Normal`
 
@@ -83,7 +82,7 @@ console.log(foobarCopy);
 ```
 
 - Side effects
-- Reads: "`console`, `foobarCopy`"
+- Reads: `console`, `foobarCopy`
 
 ## Item 10: Stmt 8, `Normal`
 
@@ -91,8 +90,7 @@ console.log(foobarCopy);
 foobarCopy += "Unused";
 ```
 
-- Reads: "`foobarCopy`"
-- Write: "`foobarCopy`"
+- Write: `foobarCopy`
 
 ## Item 11: Stmt 9, `Normal`
 
@@ -103,8 +101,8 @@ function internal() {
 ```
 
 - Hoisted
-- Declares: "`internal`"
-- Reads (eventual): "`upper`, `foobar`"
+- Declares: `internal`
+- Reads (eventual): `upper`, `foobar`
 
 ## Item 12: Stmt 10, `Normal`
 
@@ -115,8 +113,8 @@ export function external1() {
 ```
 
 - Hoisted
-- Declares: "`external1`"
-- Reads (eventual): "`internal`, `foobar`"
+- Declares: `external1`
+- Reads (eventual): `internal`, `foobar`
 
 ## Item 13: Stmt 11, `Normal`
 
@@ -127,8 +125,8 @@ export function external2() {
 ```
 
 - Hoisted
-- Declares: "`external2`"
-- Write (eventual): "`foobar`"
+- Declares: `external2`
+- Write (eventual): `foobar`
 
 # Phase 1
 
@@ -188,12 +186,9 @@ graph TD
     Item18["export external2"];
     Item4 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item3;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
@@ -204,7 +199,6 @@ graph TD
     Item9 -.-> Item8;
     Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 --> Item7;
     Item10 -.-> Item9;
 ```
 
@@ -237,12 +231,9 @@ graph TD
     Item18["export external2"];
     Item4 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item3;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
@@ -253,7 +244,6 @@ graph TD
     Item9 -.-> Item8;
     Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 --> Item7;
     Item10 -.-> Item9;
     Item11 --> Item2;
     Item11 --> Item3;
@@ -265,7 +255,6 @@ graph TD
     Item12 --> Item8;
     Item13 -.-> Item4;
     Item13 -.-> Item7;
-    Item13 -.-> Item8;
 ```
 
 # Phase 4
@@ -297,12 +286,9 @@ graph TD
     Item18["export external2"];
     Item4 --> Item3;
     Item6 --> Item5;
-    Item6 --> Item3;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item8 --> Item3;
-    Item8 --> Item6;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
@@ -313,7 +299,6 @@ graph TD
     Item9 -.-> Item8;
     Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 --> Item7;
     Item10 -.-> Item9;
     Item11 --> Item2;
     Item11 --> Item3;
@@ -325,7 +310,6 @@ graph TD
     Item12 --> Item8;
     Item13 -.-> Item4;
     Item13 -.-> Item7;
-    Item13 -.-> Item8;
     Item14 --> Item1;
     Item14 --> Item9;
     Item15 --> Item3;
@@ -368,15 +352,11 @@ graph TD
     N3 --> N10;
     N4 --> N6;
     N4 --> N9;
-    N4 --> N10;
     N6 --> N5;
     N8 --> N7;
-    N8 --> N5;
     N8 --> N6;
     N9 --> N5;
     N9 --> N8;
-    N10 --> N5;
-    N10 --> N8;
     N10 --> N6;
     N10 --> N9;
     N11 --> N5;
@@ -386,7 +366,7 @@ graph TD
 
 # Modules (dev)
 
-## Chunk 0
+## Part 0
 
 ```js
 import { foobarCopy } from "entry.js" assert {
@@ -414,7 +394,7 @@ console.log(foobarCopy);
 
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -430,7 +410,7 @@ export { foobar };
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { foo } from "entry.js" assert {
@@ -440,7 +420,7 @@ export { foo };
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 import { internal } from "entry.js" assert {
@@ -462,7 +442,7 @@ export { external1 };
 
 ```
 
-## Chunk 4
+## Part 4
 
 ```js
 import "entry.js" assert {
@@ -471,9 +451,6 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 9
 };
-import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 10
-};
 function external2() {
     foobar += ".";
 }
@@ -481,7 +458,7 @@ export { external2 };
 
 ```
 
-## Chunk 5
+## Part 5
 
 ```js
 let foobar = "foo";
@@ -491,7 +468,7 @@ export { foobar } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 6
+## Part 6
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -504,7 +481,7 @@ export { foo } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 7
+## Part 7
 
 ```js
 const bar = "bar";
@@ -514,23 +491,21 @@ export { bar } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 8
+## Part 8
 
 ```js
 import { bar } from "entry.js" assert {
     __turbopack_chunk__: 7
 };
-import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
 import "entry.js" assert {
     __turbopack_chunk__: 6
 };
 foobar += bar;
+export { foobar };
 
 ```
 
-## Chunk 9
+## Part 9
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -546,15 +521,9 @@ export { foobarCopy } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 10
+## Part 10
 
 ```js
-import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 import "entry.js" assert {
     __turbopack_chunk__: 6
 };
@@ -562,10 +531,11 @@ import "entry.js" assert {
     __turbopack_chunk__: 9
 };
 foobar += "foo";
+export { foobar };
 
 ```
 
-## Chunk 11
+## Part 11
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -602,12 +572,14 @@ export { foo } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 foobar += bar;
+export { foobar };
 let foobarCopy = foobar;
 export { foobarCopy } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 import { upper } from "module";
 foobar += "foo";
+export { foobar };
 function internal() {
     return upper(foobar);
 }
@@ -618,7 +590,7 @@ console.log(foobarCopy);
 
 # Modules (prod)
 
-## Chunk 0
+## Part 0
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -637,7 +609,7 @@ export { foobarCopy } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -653,7 +625,7 @@ export { foobar };
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -667,7 +639,7 @@ export { foo } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 import { foobar } from "entry.js" assert {
@@ -690,7 +662,7 @@ export { external1 };
 
 ```
 
-## Chunk 4
+## Part 4
 
 ```js
 function external2() {
@@ -699,7 +671,7 @@ function external2() {
 export { external2 };
 ```
 
-## Chunk 5
+## Part 5
 
 ```js
 let foobar = "foo";
@@ -709,7 +681,7 @@ export { foobar } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 6
+## Part 6
 
 ```js
 const bar = "bar";
@@ -719,30 +691,22 @@ export { bar } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 7
+## Part 7
 
 ```js
 import { bar } from "entry.js" assert {
     __turbopack_chunk__: 6
 };
-import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
 foobar += bar;
+export { foobar };
 
 ```
 
-## Chunk 8
+## Part 8
 
 ```js
-import { foobar } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
 foobar += "foo";
-
+export { foobar };
 ```
 
 ## Merged (module eval)
@@ -758,6 +722,7 @@ export { bar } from "__turbopack_fake_url__" assert {
     __turbopack_var__: true
 };
 foobar += bar;
+export { foobar };
 let foobarCopy = foobar;
 console.log(foobarCopy);
 "module evaluation";

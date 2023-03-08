@@ -8,8 +8,8 @@ Count: 7
 const dog = "dog";
 ```
 
-- Declares: "`dog`"
-- Write: "`dog`"
+- Declares: `dog`
+- Write: `dog`
 
 ## Item 2: Stmt 1, `VarDeclarator(0)`
 
@@ -17,8 +17,8 @@ const dog = "dog";
 const cat = "cat";
 ```
 
-- Declares: "`cat`"
-- Write: "`cat`"
+- Declares: `cat`
+- Write: `cat`
 
 ## Item 3: Stmt 2, `VarDeclarator(0)`
 
@@ -26,9 +26,9 @@ const cat = "cat";
 export const DOG = dog;
 ```
 
-- Declares: "`DOG`"
-- Reads: "`dog`"
-- Write: "`DOG`"
+- Declares: `DOG`
+- Reads: `dog`
+- Write: `DOG`
 
 ## Item 4: Stmt 3, `VarDeclarator(0)`
 
@@ -36,9 +36,9 @@ export const DOG = dog;
 export const CHIMERA = cat + dog;
 ```
 
-- Declares: "`CHIMERA`"
-- Reads: "`cat`, `dog`"
-- Write: "`CHIMERA`"
+- Declares: `CHIMERA`
+- Reads: `cat`, `dog`
+- Write: `CHIMERA`
 
 # Phase 1
 
@@ -129,13 +129,13 @@ graph TD
 
 # Modules (dev)
 
-## Chunk 0
+## Part 0
 
 ```js
 "module evaluation";
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -149,7 +149,7 @@ export { DOG } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { dog } from "entry.js" assert {
@@ -167,7 +167,7 @@ export { CHIMERA } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 const dog = "dog";
@@ -185,13 +185,13 @@ export { dog } from "__turbopack_fake_url__" assert {
 
 # Modules (prod)
 
-## Chunk 0
+## Part 0
 
 ```js
 "module evaluation";
 ```
 
-## Chunk 1
+## Part 1
 
 ```js
 import { dog } from "entry.js" assert {
@@ -205,7 +205,7 @@ export { DOG } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 2
+## Part 2
 
 ```js
 import { dog } from "entry.js" assert {
@@ -223,7 +223,7 @@ export { CHIMERA } from "__turbopack_fake_url__" assert {
 
 ```
 
-## Chunk 3
+## Part 3
 
 ```js
 const dog = "dog";

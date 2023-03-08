@@ -612,8 +612,6 @@ impl DepGraph {
                             },
                         );
                     }
-
-                    continue;
                 }
                 ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
                     decl: Decl::Fn(f),
@@ -643,7 +641,6 @@ impl DepGraph {
                             ..Default::default()
                         },
                     );
-                    continue;
                 }
                 ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
                     decl: Decl::Var(v),
@@ -679,8 +676,6 @@ impl DepGraph {
                             },
                         );
                     }
-
-                    continue;
                 }
 
                 ModuleItem::Stmt(Stmt::Expr(ExprStmt {
@@ -711,31 +706,30 @@ impl DepGraph {
                     };
                     ids.push(id.clone());
                     items.insert(id, data);
-                    continue;
                 }
-                _ => {}
+                _ => {
+                    // Default to normal
+
+                    let used_ids = ids_used_by_ignoring_nested(item);
+                    let captured_ids = ids_captured_by(item);
+                    let data = ItemData {
+                        read_vars: used_ids.read,
+                        eventual_read_vars: captured_ids.read,
+                        write_vars: used_ids.write,
+                        eventual_write_vars: captured_ids.write,
+                        side_effects: true,
+                        content: item.clone(),
+                        ..Default::default()
+                    };
+
+                    let id = ItemId {
+                        index,
+                        kind: ItemIdKind::Normal,
+                    };
+                    ids.push(id.clone());
+                    items.insert(id, data);
+                }
             }
-
-            // Default to normal
-
-            let used_ids = ids_used_by_ignoring_nested(item);
-            let captured_ids = ids_captured_by(item);
-            let data = ItemData {
-                read_vars: used_ids.read,
-                eventual_read_vars: captured_ids.read,
-                write_vars: used_ids.write,
-                eventual_write_vars: captured_ids.write,
-                side_effects: true,
-                content: item.clone(),
-                ..Default::default()
-            };
-
-            let id = ItemId {
-                index,
-                kind: ItemIdKind::Normal,
-            };
-            ids.push(id.clone());
-            items.insert(id, data);
         }
 
         {

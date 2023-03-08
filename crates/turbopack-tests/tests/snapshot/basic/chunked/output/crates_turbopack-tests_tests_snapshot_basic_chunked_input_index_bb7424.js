@@ -1,13 +1,38 @@
+<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_bb7424.js
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_bb7424.js", {
+=======
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js", {
+========
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js", {
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
+>>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
 
 "[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript)");
+========
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript part 0)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/basic/chunked/input/node_modules/foo/index.js (ecmascript part 1)");
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
-__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js__$28$ecmascript$29__["foo"](true);
+__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$basic$2f$chunked$2f$input$2f$node_modules$2f$foo$2f$index$2e$js$3f$part$3d$0__$28$ecmascript$29__["foo"](true);
 
 })()),
+<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_bb7424.js
+=======
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+}, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
+    if (!(true && loadedChunks.has("output/39e84_foo_index_a20770.js"))) return true;
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_874f70.js.chunk-list.json", ["output/39e84_foo_index_a20770.js"]);
+========
+}, ({ loadedChunks, instantiateRuntimeModule }) => {
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_a36485.js") && loadedChunks.has("output/39e84_foo_index_bca377.js") && loadedChunks.has("output/39e84_foo_index_221dc0.js"))) return true;
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/index.js (ecmascript)");
+>>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
 }
 ,{
   "otherChunks": [
@@ -1562,4 +1587,12 @@ chunksToRegister.forEach(registerChunk);
 })();
 
 
+<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_bb7424.js
 //# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_bb7424.js.map
+=======
+<<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js.map
+========
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js.map
+>>>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_07df9a.js
+>>>>>>> ab83d339e (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/basic/chunked/output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js
