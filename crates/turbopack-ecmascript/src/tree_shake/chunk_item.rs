@@ -12,7 +12,7 @@ use turbopack_core::{
     chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc, ModuleId, ModuleIdVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    resolve::{origin::ResolveOrigin, ModulePartVc},
+    resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, SplitResultVc};
@@ -168,12 +168,20 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn id(&self) -> Result<ModuleIdVc> {
         let module = self.full_module.origin_path().await?;
+        let part = self.part.await?;
 
-        Ok(ModuleId::String(format!(
-            "{} (ecmascript part {})",
-            module.path, self.chunk_id
-        ))
-        .into())
+        match &*part {
+            ModulePart::ModuleEvaluation => {
+                Ok(ModuleId::String(format!("{} (ecmascript evaluation)", module.path)).into())
+            }
+            ModulePart::Export(name) => {
+                let name = name.await?;
+                Ok(
+                    ModuleId::String(format!("{} (ecmascript export {})", module.path, name))
+                        .into(),
+                )
+            }
+        }
     }
 }
 
