@@ -528,6 +528,7 @@ impl DepGraph {
                         _ => {}
                     },
                     ModuleDecl::ExportNamed(item) => {
+                        // We are not interested in re-exports.
                         if item.src.is_none() {
                             for s in &item.specifiers {
                                 match s {
@@ -558,7 +559,9 @@ impl DepGraph {
                     ModuleDecl::ExportDefaultExpr(_) => {
                         exports.push((js_word!("default"), Default::default()));
                     }
-                    ModuleDecl::ExportAll(_) => {}
+                    ModuleDecl::ExportAll(_) => {
+                        // noop as this is an reexport.
+                    }
                     _ => {}
                 }
             }
