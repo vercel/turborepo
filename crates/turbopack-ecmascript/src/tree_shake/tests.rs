@@ -20,7 +20,7 @@ use swc_core::{
 };
 
 use super::{
-    graph::{DepGraph, Dependency, InternedGraph, ItemId, ItemIdKind, Mode},
+    graph::{DepGraph, Dependency, InternedGraph, ItemId, ItemIdGroupKind, Mode},
     merge::Merger,
     Analyzer,
 };
@@ -55,17 +55,13 @@ fn run(input: PathBuf) {
         for (i, id) in item_ids.iter().enumerate() {
             let item = &items[id];
 
-            if id.index == usize::MAX {
-                continue;
-            }
+            let (index, kind) = match id {
+                ItemId::Group(_) => continue,
+                ItemId::Item { index, kind } => (*index, kind),
+            };
 
-            writeln!(s, "## Item {}: Stmt {}, `{:?}`", i + 1, id.index, id.kind).unwrap();
-            writeln!(
-                s,
-                "\n```js\n{}\n```\n",
-                print(&cm, &[&module.body[id.index]])
-            )
-            .unwrap();
+            writeln!(s, "## Item {}: Stmt {}, `{:?}`", i + 1, index, kind).unwrap();
+            writeln!(s, "\n```js\n{}\n```\n", print(&cm, &[&module.body[index]])).unwrap();
 
             if item.is_hoisted {
                 writeln!(s, "- Hoisted").unwrap();
@@ -267,7 +263,7 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
 
         writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
-        if let Some(item_id) = render_item_id(&id.kind) {
+        if let Some(item_id) = render_item_id(&id) {
             writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, item_id).unwrap();
         }
     }
@@ -325,10 +321,10 @@ where
     mermaid
 }
 
-fn render_item_id(id: &ItemIdKind) -> Option<String> {
+fn render_item_id(id: &ItemId) -> Option<String> {
     match id {
-        ItemIdKind::ModuleEvaluation => Some("ModuleEvaluation".into()),
-        ItemIdKind::Export(id) => Some(format!("export {}", id.0)),
+        ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => Some("ModuleEvaluation".into()),
+        ItemId::Group(ItemIdGroupKind::Export(id)) => Some(format!("export {}", id.0)),
         _ => None,
     }
 }

@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks_fs::FileSystemPathVc;
 
-use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind, Mode};
+use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode};
 use crate::{
     analyzer::graph::EvalContext,
     parse::{ParseResult, ParseResultVc},
@@ -232,24 +232,23 @@ impl Analyzer<'_> {
     /// Phase 4: Exports
     fn handle_exports(&mut self, module: &Module) {
         for item_id in self.item_ids.iter() {
-            if item_id.index == usize::MAX {
-                match &item_id.kind {
-                    ItemIdKind::ModuleEvaluation => {
+            match item_id {
+                ItemId::Group(kind) => match kind {
+                    ItemIdGroupKind::ModuleEvaluation => {
                         // Create a strong dependency to LAST_SIDE_EFFECTS
 
                         self.g
                             .add_strong_deps(item_id, self.last_side_effects.iter());
                     }
-                    ItemIdKind::Export(id) => {
+                    ItemIdGroupKind::Export(id) => {
                         // Create a strong dependency to LAST_WRITES for this var
 
                         if let Some(state) = self.vars.get(id) {
                             self.g.add_strong_deps(item_id, state.last_writes.iter());
                         }
                     }
-
-                    _ => {}
-                }
+                },
+                _ => {}
             }
         }
     }

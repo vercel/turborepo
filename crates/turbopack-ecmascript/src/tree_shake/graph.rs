@@ -30,42 +30,38 @@ use super::{
 
 /// The id of an item
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct ItemId {
-    /// The index of the module item in the module.
-    pub index: usize,
-    pub kind: ItemIdKind,
+pub(crate) enum ItemId {
+    Group(ItemIdGroupKind),
+    Item { index: usize, kind: ItemIdItemKind },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum ItemIdGroupKind {
+    ModuleEvaluation,
+    Export(Id),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum ItemIdItemKind {
+    Normal,
+
+    ImportOfModule,
+    /// Imports are split as multiple items.
+    ImportBinding(u32),
+    VarDeclarator(u32),
 }
 
 impl fmt::Debug for ItemId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.index == usize::MAX {
-            return write!(f, "ItemId({:?})", self.kind);
+        match self {
+            ItemId::Group(kind) => {
+                write!(f, "ItemId({:?})", kind)
+            }
+            ItemId::Item { index, kind } => {
+                write!(f, "ItemId({}, {:?})", index, kind)
+            }
         }
-
-        write!(f, "ItemId({}, {:?})", self.index, self.kind)
     }
-}
-
-/// ## Import
-///
-/// ```js
-/// import { upper } from "module";
-/// ```
-///
-/// becomes [ItemIdKind::ImportOfModule] and [ItemIdKind::ImportBinding].
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum ItemIdKind {
-    ///
-    Normal,
-
-    ImportOfModule,
-    /// Imports are splitted as multiple items.
-    ImportBinding(u32),
-    VarDeclarator(u32),
-
-    ModuleEvaluation,
-
-    Export(Id),
 }
 
 type FxBuildHasher = BuildHasherDefault<FxHasher>;
@@ -260,16 +256,18 @@ impl DepGraph {
                 .collect::<FxHashSet<_>>();
 
             for item in group {
-                if let ItemIdKind::Export(id) = &item.kind {
-                    required_vars.insert(id);
-                }
+                match item {
+                    ItemId::Group(ItemIdGroupKind::Export(id)) => {
+                        required_vars.insert(id);
 
-                if let Some(export) = &data[item].export {
-                    exports.insert(Key::Export(export.0.to_string()), ix as u32);
-                }
-
-                if item.kind == ItemIdKind::ModuleEvaluation {
-                    exports.insert(Key::ModuleEvaluation, ix as u32);
+                        if let Some(export) = &data[item].export {
+                            exports.insert(Key::Export(export.0.to_string()), ix as u32);
+                        }
+                    }
+                    ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
+                        exports.insert(Key::ModuleEvaluation, ix as u32);
+                    }
+                    _ => {}
                 }
             }
 
@@ -413,9 +411,12 @@ impl DepGraph {
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
 
-            if id.index == usize::MAX {
-                groups.push((vec![id.clone()], FxHashSet::default()));
-                global_done.insert(ix);
+            match id {
+                ItemId::Group(_) => {
+                    groups.push((vec![id.clone()], FxHashSet::default()));
+                    global_done.insert(ix);
+                }
+                _ => {}
             }
         }
 
@@ -576,9 +577,9 @@ impl DepGraph {
 
                     {
                         // One item for the import itself
-                        let id = ItemId {
+                        let id = ItemId::Item {
                             index,
-                            kind: ItemIdKind::ImportOfModule,
+                            kind: ItemIdItemKind::ImportOfModule,
                         };
                         ids.push(id.clone());
                         items.insert(
@@ -597,9 +598,9 @@ impl DepGraph {
 
                     // One per binding
                     for (si, s) in item.specifiers.iter().enumerate() {
-                        let id = ItemId {
+                        let id = ItemId::Item {
                             index,
-                            kind: ItemIdKind::ImportBinding(si as u32),
+                            kind: ItemIdItemKind::ImportBinding(si as _),
                         };
                         ids.push(id.clone());
                         let local = match s {
@@ -632,9 +633,9 @@ impl DepGraph {
                     ..
                 }))
                 | ModuleItem::Stmt(Stmt::Decl(Decl::Fn(f))) => {
-                    let id = ItemId {
+                    let id = ItemId::Item {
                         index,
-                        kind: ItemIdKind::Normal,
+                        kind: ItemIdItemKind::Normal,
                     };
                     ids.push(id.clone());
 
@@ -662,9 +663,9 @@ impl DepGraph {
                 }))
                 | ModuleItem::Stmt(Stmt::Decl(Decl::Var(v))) => {
                     for (i, decl) in v.decls.iter().enumerate() {
-                        let id = ItemId {
+                        let id = ItemId::Item {
                             index,
-                            kind: ItemIdKind::VarDeclarator(i as _),
+                            kind: ItemIdItemKind::VarDeclarator(i as _),
                         };
                         ids.push(id.clone());
 
@@ -714,9 +715,9 @@ impl DepGraph {
                         ..Default::default()
                     };
 
-                    let id = ItemId {
+                    let id = ItemId::Item {
                         index,
-                        kind: ItemIdKind::Normal,
+                        kind: ItemIdItemKind::Normal,
                     };
                     ids.push(id.clone());
                     items.insert(id, data);
@@ -736,9 +737,9 @@ impl DepGraph {
                         ..Default::default()
                     };
 
-                    let id = ItemId {
+                    let id = ItemId::Item {
                         index,
-                        kind: ItemIdKind::Normal,
+                        kind: ItemIdItemKind::Normal,
                     };
                     ids.push(id.clone());
                     items.insert(id, data);
@@ -748,10 +749,7 @@ impl DepGraph {
 
         {
             // `module evaluation side effects` Node
-            let id = ItemId {
-                index: usize::MAX,
-                kind: ItemIdKind::ModuleEvaluation,
-            };
+            let id = ItemId::Group(ItemIdGroupKind::ModuleEvaluation);
             ids.push(id.clone());
             items.insert(
                 id,
@@ -766,10 +764,7 @@ impl DepGraph {
         }
 
         for export in exports {
-            let id = ItemId {
-                index: usize::MAX,
-                kind: ItemIdKind::Export(export.clone()),
-            };
+            let id = ItemId::Group(ItemIdGroupKind::Export(export.clone()));
             ids.push(id.clone());
             items.insert(
                 id.clone(),
