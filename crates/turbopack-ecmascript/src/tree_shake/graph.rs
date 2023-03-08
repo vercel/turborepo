@@ -355,6 +355,11 @@ impl DepGraph {
         (exports, chunk_deps, modules)
     }
 
+    /// Merges a dependency group between [ModuleItem]s into a depdendency graph
+    /// of [Module]s.
+    ///
+    /// Note that [ModuleItem] and [Module] are represented as [ItemId] for
+    /// perforamnce.
     pub(super) fn finalize(
         &self,
         data: &FxHashMap<ItemId, ItemData>,
