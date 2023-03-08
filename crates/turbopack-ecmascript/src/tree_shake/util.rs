@@ -103,19 +103,26 @@ pub(crate) struct CapturedIdCollector {
     is_read: bool,
 }
 
-impl Visit for CapturedIdCollector {
-    fn visit_block_stmt_or_expr(&mut self, n: &BlockStmtOrExpr) {
+impl CapturedIdCollector {
+    fn with_nested(&mut self, f: impl FnOnce(&mut Self)) {
         let old = self.is_nested;
         self.is_nested = true;
-        n.visit_children_with(self);
+        f(self);
         self.is_nested = old;
+    }
+}
+
+impl Visit for CapturedIdCollector {
+    fn visit_block_stmt_or_expr(&mut self, n: &BlockStmtOrExpr) {
+        self.with_nested(|this| {
+            n.visit_children_with(this);
+        })
     }
 
     fn visit_constructor(&mut self, n: &Constructor) {
-        let old = self.is_nested;
-        self.is_nested = true;
-        n.visit_children_with(self);
-        self.is_nested = old;
+        self.with_nested(|this| {
+            n.visit_children_with(this);
+        })
     }
 
     fn visit_expr(&mut self, e: &Expr) {
@@ -126,10 +133,9 @@ impl Visit for CapturedIdCollector {
     }
 
     fn visit_function(&mut self, n: &Function) {
-        let old = self.is_nested;
-        self.is_nested = true;
-        n.visit_children_with(self);
-        self.is_nested = old;
+        self.with_nested(|this| {
+            n.visit_children_with(this);
+        })
     }
 
     fn visit_ident(&mut self, n: &Ident) {
