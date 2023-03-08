@@ -10,12 +10,28 @@ use swc_core::ecma::{
     visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
 
+#[derive(Debug, Default)]
+enum Mode {
+    Read,
+    #[default]
+    Write,
+}
+
 /// A visitor which collects variables which are read or written.
 #[derive(Default)]
 pub(crate) struct IdentUsageCollector {
     vars: Vars,
     ignore_nested: bool,
-    is_read: bool,
+    mode: Mode,
+}
+
+impl IdentUsageCollector {
+    fn with_mode(&mut self, mode: Mode, f: impl FnOnce(&mut Self)) {
+        let old = self.mode;
+        self.mode = mode;
+        f(self);
+        self.mode = old;
+    }
 }
 
 impl Visit for IdentUsageCollector {
@@ -36,10 +52,9 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_expr(&mut self, e: &Expr) {
-        let old = self.is_read;
-        self.is_read = true;
-        e.visit_children_with(self);
-        self.is_read = old;
+        self.with_mode(Mode::Read, |this| {
+            e.visit_children_with(this);
+        })
     }
 
     fn visit_function(&mut self, n: &Function) {
@@ -51,10 +66,13 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
-        if self.is_read {
-            self.vars.read.insert(n.to_id());
-        } else {
-            self.vars.write.insert(n.to_id());
+        match self.mode {
+            Mode::Read => {
+                self.vars.read.insert(n.to_id());
+            }
+            Mode::Write => {
+                self.vars.write.insert(n.to_id());
+            }
         }
     }
 
@@ -65,19 +83,17 @@ impl Visit for IdentUsageCollector {
     }
 
     fn visit_pat(&mut self, p: &Pat) {
-        let old = self.is_read;
-        self.is_read = false;
-        p.visit_children_with(self);
-        self.is_read = old;
+        self.with_mode(Mode::Write, |this| {
+            p.visit_children_with(this);
+        })
     }
 
     fn visit_pat_or_expr(&mut self, n: &PatOrExpr) {
         if let PatOrExpr::Expr(e) = n {
-            let old = self.is_read;
-            self.is_read = false;
-            // Skip `visit_expr`
-            e.visit_children_with(self);
-            self.is_read = old;
+            self.with_mode(Mode::Write, |this| {
+                // Skip `visit_expr`
+                e.visit_children_with(this);
+            })
         } else {
             n.visit_children_with(self);
         }
@@ -100,7 +116,7 @@ impl Visit for IdentUsageCollector {
 pub(crate) struct CapturedIdCollector {
     vars: Vars,
     is_nested: bool,
-    is_read: bool,
+    mode: Mode,
 }
 
 impl CapturedIdCollector {
@@ -109,6 +125,13 @@ impl CapturedIdCollector {
         self.is_nested = true;
         f(self);
         self.is_nested = old;
+    }
+
+    fn with_mode(&mut self, mode: Mode, f: impl FnOnce(&mut Self)) {
+        let old = self.mode;
+        self.mode = mode;
+        f(self);
+        self.mode = old;
     }
 }
 
@@ -126,10 +149,9 @@ impl Visit for CapturedIdCollector {
     }
 
     fn visit_expr(&mut self, e: &Expr) {
-        let old = self.is_read;
-        self.is_read = true;
-        e.visit_children_with(self);
-        self.is_read = old;
+        self.with_mode(Mode::Read, |this| {
+            e.visit_children_with(this);
+        })
     }
 
     fn visit_function(&mut self, n: &Function) {
@@ -140,28 +162,29 @@ impl Visit for CapturedIdCollector {
 
     fn visit_ident(&mut self, n: &Ident) {
         if self.is_nested {
-            if self.is_read {
-                self.vars.read.insert(n.to_id());
-            } else {
-                self.vars.write.insert(n.to_id());
+            match self.mode {
+                Mode::Read => {
+                    self.vars.read.insert(n.to_id());
+                }
+                Mode::Write => {
+                    self.vars.write.insert(n.to_id());
+                }
             }
         }
     }
 
     fn visit_pat(&mut self, p: &Pat) {
-        let old = self.is_read;
-        self.is_read = false;
-        p.visit_children_with(self);
-        self.is_read = old;
+        self.with_mode(Mode::Write, |this| {
+            p.visit_children_with(this);
+        })
     }
 
     fn visit_pat_or_expr(&mut self, n: &PatOrExpr) {
         if let PatOrExpr::Expr(e) = n {
-            let old = self.is_read;
-            self.is_read = false;
-            // Skip `visit_expr`
-            e.visit_children_with(self);
-            self.is_read = old;
+            self.with_mode(Mode::Write, |this| {
+                // Skip `visit_expr`
+                e.visit_children_with(this);
+            })
         } else {
             n.visit_children_with(self);
         }
