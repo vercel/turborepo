@@ -10,7 +10,7 @@ use swc_core::ecma::{
     visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 enum Mode {
     Read,
     #[default]

@@ -10,8 +10,8 @@ use crate::{
     parse::{ParseResult, ParseResultVc},
 };
 
-mod asset;
-mod chunk_item;
+pub mod asset;
+pub mod chunk_item;
 mod graph;
 pub mod merge;
 #[cfg(test)]
