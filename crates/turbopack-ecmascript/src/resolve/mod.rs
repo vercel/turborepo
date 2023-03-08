@@ -13,7 +13,7 @@ use turbopack_core::{
         options::{ConditionValue, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc},
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
-        resolve, ModulePartVc, ResolveResultVc,
+        resolve, ResolveResultVc,
     },
 };
 
@@ -51,13 +51,10 @@ pub async fn apply_cjs_specific_options(options: ResolveOptionsVc) -> Result<Res
 pub async fn esm_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
-    part: Option<ModulePartVc>,
+    ty: Value<EcmaScriptModulesReferenceSubType>,
 ) -> Result<ResolveResultVc> {
     // TODO pass EcmaScriptModulesReferenceSubType
-    let ty = Value::new(ReferenceType::EcmaScriptModules(match part {
-        Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(part),
-        None => EcmaScriptModulesReferenceSubType::Undefined,
-    }));
+    let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
     specific_resolve(origin, request, options, ty).await
 }

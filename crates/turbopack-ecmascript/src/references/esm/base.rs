@@ -13,6 +13,7 @@ use turbopack_core::{
         ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{
         origin::ResolveOriginVc, parse::RequestVc, ModulePartVc, PrimaryResolveResult,
         ResolveResultVc,
@@ -117,8 +118,13 @@ impl EsmAssetReferenceVc {
     #[turbo_tasks::function]
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
+
+        let ty = Value::new(match &this.export_name {
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(part.clone()),
+            None => EcmaScriptModulesReferenceSubType::Undefined,
+        });
         Ok(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request, this.export_name),
+            esm_resolve(this.get_origin(), this.request, ty),
             this.request,
         ))
     }
@@ -143,7 +149,12 @@ impl EsmAssetReferenceVc {
 impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.get_origin(), self.request, self.export_name)
+        let ty = Value::new(match &self.export_name {
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(part.clone()),
+            None => EcmaScriptModulesReferenceSubType::Undefined,
+        });
+
+        esm_resolve(self.get_origin(), self.request, ty)
     }
 }
 
