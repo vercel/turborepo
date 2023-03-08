@@ -44,7 +44,7 @@ func RealRun(
 	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
-	runState *RunState,
+	runState *runsummary.RunState,
 ) error {
 	singlePackage := rs.Opts.runOpts.singlePackage
 
@@ -94,6 +94,7 @@ func RealRun(
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		taskSummaries = append(taskSummaries, taskSummary)
+
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
 	}
@@ -145,7 +146,7 @@ func RealRun(
 
 type execContext struct {
 	colorCache      *colorcache.ColorCache
-	runState        *RunState
+	runState        *runsummary.RunState
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
@@ -214,7 +215,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer(TargetCached, nil)
+		tracer(runsummary.TargetCached, nil)
 		return nil
 	}
 
@@ -236,7 +237,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
-		tracer(TargetBuildFailed, err)
+		tracer(runsummary.TargetBuildFailed, err)
+
 		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
@@ -287,7 +289,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		if errors.Is(err, process.ErrClosing) {
 			return nil
 		}
-		tracer(TargetBuildFailed, err)
+		tracer(runsummary.TargetBuildFailed, err)
+
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.continueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -313,7 +316,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(TargetBuilt, nil)
+	tracer(runsummary.TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return nil
 }

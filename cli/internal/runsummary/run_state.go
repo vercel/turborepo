@@ -1,4 +1,4 @@
-package run
+package runsummary
 
 import (
 	"fmt"
@@ -54,6 +54,8 @@ type BuildTargetState struct {
 	Err error
 }
 
+// RunState is the state of the entire `turbo run`. Individual task state in `Tasks` field
+// TODO(mehulkar): Can this be combined with the RunSummary?
 type RunState struct {
 	mu      sync.Mutex
 	state   map[string]*BuildTargetState
@@ -68,9 +70,8 @@ type RunState struct {
 	profileFilename string
 }
 
-// NewRunState creates a RunState instance for tracking events during the
-// course of a run.
-func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
+// NewRunState creates a RunState instance to track events in a `turbo run`.`
+func NewRunState(start time.Time, tracingProfile string) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
@@ -81,12 +82,13 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 		Cached:          0,
 		Attempted:       0,
 		state:           make(map[string]*BuildTargetState),
+		startedAt:       start,
 		profileFilename: tracingProfile,
-
-		startedAt: startedAt,
 	}
 }
 
+// Run starts the Execution of a single task. It returns a function that can
+// be used to update the state of a given taskID with the RunResultStatus enum
 func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 	start := time.Now()
 	r.add(&RunResult{
@@ -97,6 +99,8 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 
 	tracer := chrometracing.Event(label)
 
+	// This function can be called with an enum and an optional error to update
+	// the state of a given taskID.
 	return func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
@@ -174,6 +178,7 @@ func (r *RunState) Close(terminal cli.Ui) error {
 	return nil
 }
 
+// writeChromeTracing writes to a profile name if the `--profile` flag was passed to turbo run
 func writeChrometracing(filename string, terminal cli.Ui) error {
 	outputPath := chrometracing.Path()
 	if outputPath == "" {
