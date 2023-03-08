@@ -13,6 +13,9 @@ pub trait Load {
     fn load(&mut self, uri: &str, part_id: u32) -> Result<Option<Module>, Error>;
 }
 
+/// A module merger.
+///
+/// This ensures that a module is loaded only once.
 pub struct Merger<L>
 where
     L: Load,
