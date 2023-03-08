@@ -189,13 +189,18 @@ pub struct DepGraph {
     pub(super) g: InternedGraph<ItemId>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Mode {
+    Development,
+    Production,
+}
+
 impl DepGraph {
     /// Weak imports are imports only if it is referenced strongly. But this
     /// is production-only, and weak dependencies are treated as strong
     /// dependencies in development mode.
-    pub(super) fn handle_weak(&mut self, is_development: bool) {
-        if is_development {
-        } else {
+    pub(super) fn handle_weak(&mut self, mode: Mode) {
+        if let Mode::Production = mode {
             for start in self.g.graph_ix.iter() {
                 let start = self.g.get_node(start);
                 for end in self.g.graph_ix.iter() {

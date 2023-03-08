@@ -20,7 +20,7 @@ use swc_core::{
 };
 
 use super::{
-    graph::{DepGraph, InternedGraph, ItemId, ItemIdKind},
+    graph::{DepGraph, InternedGraph, ItemId, ItemIdKind, Mode},
     merge::Merger,
     Analyzer,
 };
@@ -176,7 +176,7 @@ fn run(input: PathBuf) {
 
         {
             let mut g = analyzer.g.clone();
-            g.handle_weak(true);
+            g.handle_weak(Mode::Development);
             let (_, _, modules) = g.split_module(&uri_of_module, &analyzer.items);
 
             writeln!(s, "# Modules (dev)").unwrap();
@@ -197,7 +197,7 @@ fn run(input: PathBuf) {
 
         {
             let mut g = analyzer.g.clone();
-            g.handle_weak(false);
+            g.handle_weak(Mode::Production);
             let (_, _, modules) = g.split_module(&uri_of_module, &analyzer.items);
 
             writeln!(s, "# Modules (prod)").unwrap();

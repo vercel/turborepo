@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks_fs::FileSystemPathVc;
 
-use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
+use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind, Mode};
 use crate::{
     analyzer::graph::EvalContext,
     parse::{ParseResult, ParseResultVc},
@@ -318,7 +318,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
             if let Program::Module(module) = program {
                 let (mut dep_graph, items) = Analyzer::analyze(module);
 
-                dep_graph.handle_weak(true);
+                dep_graph.handle_weak(Mode::Production);
 
                 let (data, deps, modules) =
                     dep_graph.split_module(&format!("./{filename}").into(), &items);
