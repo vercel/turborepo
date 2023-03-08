@@ -7,8 +7,10 @@ use swc_core::ecma::{
 
 use super::graph::find_turbopack_chunk_id_in_asserts;
 
+/// A lodaer used to merge module items after splitting.
 pub trait Load {
-    fn load(&mut self, uri: &str, chunk_id: u32) -> Result<Option<Module>, Error>;
+    /// Loads a module while returning [None] if the module is already loaded.
+    fn load(&mut self, uri: &str, part_id: u32) -> Result<Option<Module>, Error>;
 }
 
 pub struct Merger<L>
@@ -40,14 +42,14 @@ where
                 ModuleItem::ModuleDecl(ModuleDecl::Import(import)) => {
                     // Try to prepend the content of module
 
-                    let chunk_id = import
+                    let part_id = import
                         .asserts
                         .as_deref()
                         .and_then(|asserts| find_turbopack_chunk_id_in_asserts(asserts));
 
-                    if let Some(chunk_id) = chunk_id {
-                        if self.done.insert((import.src.value.clone(), chunk_id)) {
-                            if let Some(dep) = self.loader.load(&import.src.value, chunk_id)? {
+                    if let Some(part_id) = part_id {
+                        if self.done.insert((import.src.value.clone(), part_id)) {
+                            if let Some(dep) = self.loader.load(&import.src.value, part_id)? {
                                 let mut dep = self.merge_recursively(dep)?;
 
                                 extra_body.append(&mut dep.body);
