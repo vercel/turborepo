@@ -96,7 +96,7 @@ fn run(input: PathBuf) {
             }
 
             if !item.eventual_read_vars.is_empty() {
-                writeln!(s, "- Reads (eventual): {:?}", f(&item.eventual_read_vars)).unwrap();
+                writeln!(s, "- Reads (eventual): {}", f(&item.eventual_read_vars)).unwrap();
             }
 
             if !item.write_vars.is_empty() {
