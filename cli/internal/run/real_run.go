@@ -217,13 +217,13 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	cacheHit := taskCache.IsCacheHit(ctx)
-	outputtedTurboLogs := false
+	outputtedCacheStatusLogs := false
 
 	// If we want grouped log ordering we want to either:
 	// - restore
 	// - not display any logs and do this when we have finished execution if we have a cache mis all output and display logs if we have a cache hit.s.
 	if cacheHit || !grouped {
-		outputtedTurboLogs = true
+		outputtedCacheStatusLogs = true
 		logMutex.Lock()
 		hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, false)
 		if err != nil {
@@ -276,7 +276,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		logMutex.Lock()
-		if !outputtedTurboLogs {
+		if !outputtedCacheStatusLogs {
 			hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, true)
 			if err != nil {
 				prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
