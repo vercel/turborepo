@@ -353,7 +353,7 @@ impl RepoState {
             } else {
                 for ancestor_infer in check_roots {
                     if ancestor_infer.is_workspace_root_of(&current.path) {
-                        let local_turbo_state = LocalTurboState::infer(&current.path);
+                        let local_turbo_state = LocalTurboState::infer(&ancestor_infer.path);
                         return Ok(Self {
                             root: ancestor_infer.path.to_path_buf(),
                             mode: RepoMode::MultiPackage,
