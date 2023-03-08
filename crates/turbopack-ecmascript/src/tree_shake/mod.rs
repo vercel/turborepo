@@ -117,7 +117,7 @@ impl Analyzer<'_> {
                     // Create a strong dependency to all module items listed in LAST_WRITES for that
                     // var.
 
-                    // (the write need to be executed before this read)
+                    // (the writes need to be executed before this read)
                     if let Some(state) = self.vars.get(id) {
                         for last_write in state.last_writes.iter() {
                             self.g.add_strong_dep(item_id, last_write);
