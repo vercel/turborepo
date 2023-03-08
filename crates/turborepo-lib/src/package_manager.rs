@@ -61,7 +61,7 @@ impl PackageManager {
     pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Option<Globs>> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let pnpm_workspace = pnpm_workspace::read(root_path.join("pnpm-workspace.yaml"))?;
+                let pnpm_workspace = pnpm_workspace::read(&root_path.join("pnpm-workspace.yaml"))?;
 
                 match pnpm_workspace.packages {
                     Some(packages) => packages,
@@ -69,7 +69,7 @@ impl PackageManager {
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
-                let package_json = package_json::read(root_path.join("package.json"))?;
+                let package_json = package_json::read(&root_path.join("package.json"))?;
 
                 match package_json.workspaces {
                     Some(workspaces) => workspaces.into(),

@@ -27,7 +27,7 @@ impl Default for TurboJson {
     }
 }
 
-pub fn read(path: PathBuf) -> Result<TurboJson> {
+pub fn read(path: &PathBuf) -> Result<TurboJson> {
     let turbo_json_string = fs::read_to_string(path)?;
     let turbo_json = serde_json::from_str(&turbo_json_string)?;
 

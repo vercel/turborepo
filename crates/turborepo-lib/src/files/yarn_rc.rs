@@ -17,7 +17,7 @@ impl Default for YarnRc {
     }
 }
 
-pub fn read(path: PathBuf) -> Result<YarnRc> {
+pub fn read(path: &PathBuf) -> Result<YarnRc> {
     let yarn_rc_string = fs::read_to_string(path)?;
     let yarn_rc = serde_yaml::from_str(&yarn_rc_string)?;
 
