@@ -60,7 +60,11 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
     }
 
     #[turbo_tasks::function]
-    async fn result(&self, request: RequestVc) -> Result<ImportMapResultVc> {
+    async fn result(
+        &self,
+        _context: FileSystemPathVc,
+        request: RequestVc,
+    ) -> Result<ImportMapResultVc> {
         let request = &*request.await?;
         let Request::Module {
             module: _,
@@ -146,7 +150,11 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
     }
 
     #[turbo_tasks::function]
-    async fn result(&self, request: RequestVc) -> Result<ImportMapResultVc> {
+    async fn result(
+        &self,
+        _context: FileSystemPathVc,
+        request: RequestVc,
+    ) -> Result<ImportMapResultVc> {
         let request = &*request.await?;
         let Request::Module {
             module: _,
