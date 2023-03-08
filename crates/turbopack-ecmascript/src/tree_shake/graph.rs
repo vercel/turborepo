@@ -15,7 +15,7 @@ use swc_core::{
         ast::{
             op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
             FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
-            Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
+            Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
             PropName, PropOrSpread, Stmt, VarDecl,
         },
         atoms::{js_word, JsWord},
@@ -842,4 +842,14 @@ fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
             value: (dep as f64).into(),
         }))],
     }
+}
+
+pub(crate) fn find_turbopack_chunk_id_in_asserts(asserts: &ObjectLit) -> Option<u32> {
+    asserts.props.iter().find_map(|prop| match prop {
+        PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+            key: PropName::Ident(key),
+            value: box Expr::Lit(Lit::Num(chunk_id)),
+        })) if key.sym == *"__turbopack_chunk__" => Some(chunk_id.value as u32),
+        _ => None,
+    })
 }
