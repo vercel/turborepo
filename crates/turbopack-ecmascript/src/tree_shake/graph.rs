@@ -190,9 +190,9 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
-    /// Weak imports are imports only if it's is referenced strongly. But this
-    /// is production-only, and week dependencies are treated as strong
-    /// dependency in development mode.
+    /// Weak imports are imports only if it is referenced strongly. But this
+    /// is production-only, and weak dependencies are treated as strong
+    /// dependencies in development mode.
     pub(super) fn handle_weak(&mut self, is_development: bool) {
         if is_development {
         } else {
