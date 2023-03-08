@@ -143,7 +143,7 @@ impl ImportMap {
     pub fn references(
         &self,
     ) -> impl Iterator<Item = (&JsWord, &Option<Vec<JsWord>>, &ImportAnnotations)> {
-        self.references.iter().map(|(m, s, a)| (m, s, a))
+        self.references.iter()
     }
 
     pub fn reexports(&self) -> impl Iterator<Item = (usize, &Reexport)> {
