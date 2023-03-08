@@ -103,7 +103,7 @@ func globWalkFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns 
 
 		// In case this is a file pattern and not a directory, add the exact pattern.
 		// In the event that the user has already specified /**,
-		if !strings.HasSuffix(iofsRelativePath, "/**") {
+		if !strings.HasSuffix(iofsRelativePath, string(filepath.Separator)+"**") {
 			processedExcludes = append(processedExcludes, iofsRelativePath)
 		}
 		// TODO: we need to either document or change this behavior
