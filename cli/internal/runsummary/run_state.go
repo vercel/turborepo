@@ -59,28 +59,11 @@ func (rrs RunResultStatus) toString() string {
 	return ""
 }
 
-// BuildTargetState contains data about the state of a single task in a turbo run.
-// Some fields are updated over time as the task prepares to execute and finishes execution.
-type BuildTargetState struct {
-	StartAt time.Time `json:"start"`
-
-	Duration time.Duration `json:"duration"`
-
-	// Target which has just changed
-	Label string `json:"-"`
-
-	// Its current status
-	Status string `json:"status"`
-
-	// Error, only populated for failure statuses
-	Err error `json:"error"`
-}
-
 // RunState is the state of the entire `turbo run`. Individual task state in `Tasks` field
 // TODO(mehulkar): Can this be combined with the RunSummary?
 type RunState struct {
 	mu      sync.Mutex
-	state   map[string]*BuildTargetState
+	state   map[string]*TaskExecutionSummary
 	Success int
 	Failure int
 	// Is the output streaming?
@@ -103,7 +86,7 @@ func NewRunState(start time.Time, tracingProfile string) *RunState {
 		Failure:         0,
 		Cached:          0,
 		Attempted:       0,
-		state:           make(map[string]*BuildTargetState),
+		state:           make(map[string]*TaskExecutionSummary),
 		startedAt:       start,
 		profileFilename: tracingProfile,
 	}
@@ -111,9 +94,9 @@ func NewRunState(start time.Time, tracingProfile string) *RunState {
 
 // Run starts the Execution of a single task. It returns a function that can
 // be used to update the state of a given taskID with the RunResultStatus enum
-func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), *BuildTargetState) {
+func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), *TaskExecutionSummary) {
 	start := time.Now()
-	buildTargetState := r.add(&RunResult{
+	taskExecutionSummary := r.add(&RunResult{
 		Time:   start,
 		Label:  label,
 		Status: TargetBuilding,
@@ -139,10 +122,10 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 		r.add(result)
 	}
 
-	return tracerFn, buildTargetState
+	return tracerFn, taskExecutionSummary
 }
 
-func (r *RunState) add(result *RunResult) *BuildTargetState {
+func (r *RunState) add(result *RunResult) *TaskExecutionSummary {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
@@ -150,7 +133,7 @@ func (r *RunState) add(result *RunResult) *BuildTargetState {
 		s.Err = result.Err
 		s.Duration = result.Duration
 	} else {
-		r.state[result.Label] = &BuildTargetState{
+		r.state[result.Label] = &TaskExecutionSummary{
 			StartAt:  result.Time,
 			Label:    result.Label,
 			Status:   result.Status.toString(),

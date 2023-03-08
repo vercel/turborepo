@@ -49,7 +49,7 @@ func (summary *RunSummary) Close(terminal cli.Ui) error {
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
-func (summary *RunSummary) TrackTask(taskID string) (func(outcome RunResultStatus, err error), *BuildTargetState) {
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome RunResultStatus, err error), *TaskExecutionSummary) {
 	return summary.runState.Run(taskID)
 }
 
@@ -101,7 +101,7 @@ type TaskSummary struct {
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	Execution              *BuildTargetState                     `json:"execution"`
+	Execution              *TaskExecutionSummary                 `json:"execution"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
