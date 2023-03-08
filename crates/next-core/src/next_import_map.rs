@@ -24,7 +24,7 @@ use crate::{
     next_config::NextConfigVc,
     next_font::{
         google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
-        local::NextFontLocalReplacerVc,
+        local::{NextFontLocalCssModuleReplacerVc, NextFontLocalReplacerVc},
     },
     next_server::context::ServerContextType,
 };
@@ -388,6 +388,11 @@ pub async fn insert_next_shared_aliases(
         // Request path from js via next-font swc transform
         AliasPattern::exact("@next/font/local/target.css"),
         ImportMapping::Dynamic(NextFontLocalReplacerVc::new(project_path).into()).into(),
+    );
+
+    import_map.insert_alias(
+        AliasPattern::exact("@vercel/turbopack-next/internal/font/local/cssmodule.module.css"),
+        ImportMapping::Dynamic(NextFontLocalCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
     import_map.insert_alias(
