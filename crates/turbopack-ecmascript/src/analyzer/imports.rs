@@ -289,22 +289,7 @@ impl Visit for Analyzer<'_> {
             {
                 ImportedSymbols::Namespace
             } else {
-                ImportedSymbols::Symbols(
-                    export
-                        .specifiers
-                        .iter()
-                        .map(|s| match s {
-                            ExportSpecifier::Named(ExportNamedSpecifier {
-                                orig, exported, ..
-                            }) => match exported {
-                                Some(exported) => orig_name(exported),
-                                _ => orig_name(orig),
-                            },
-                            ExportSpecifier::Default(..) => js_word!("default"),
-                            ExportSpecifier::Namespace(..) => unreachable!(),
-                        })
-                        .collect(),
-                )
+                ImportedSymbols::Symbols(named_or_default_export_symbols(&export.specifiers))
             };
 
             let i = self.ensure_reference(src.value.clone(), symbols);
@@ -376,4 +361,18 @@ fn named_or_default_import_symbols(specifiers: &[ImportSpecifier]) -> Vec<JsWord
             ImportSpecifier::Namespace(..) => None,
         })
         .collect::<Vec<_>>()
+}
+
+fn named_or_default_export_symbols(specifiers: &[ExportSpecifier]) -> Vec<JsWord> {
+    specifiers
+        .iter()
+        .map(|s| match s {
+            ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => match exported {
+                Some(exported) => orig_name(exported),
+                _ => orig_name(orig),
+            },
+            ExportSpecifier::Default(..) => js_word!("default"),
+            ExportSpecifier::Namespace(..) => unreachable!(),
+        })
+        .collect()
 }
