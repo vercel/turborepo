@@ -300,16 +300,7 @@ impl DepGraph {
                         specifiers,
                         src: box uri_of_module.clone().into(),
                         type_only: false,
-                        asserts: Some(box ObjectLit {
-                            span: DUMMY_SP,
-                            props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
-                                key: PropName::Ident(Ident::new(
-                                    "__turbopack_chunk__".into(),
-                                    DUMMY_SP,
-                                )),
-                                value: (dep as f64).into(),
-                            }))],
-                        }),
+                        asserts: Some(box create_turbopack_chunk_id_assert(dep)),
                     })));
             }
 
@@ -840,5 +831,15 @@ impl DepGraph {
             return;
         }
         self.g.idx_graph.add_edge(from, to, false);
+    }
+}
+
+fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
+    ObjectLit {
+        span: DUMMY_SP,
+        props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+            key: PropName::Ident(Ident::new("__turbopack_chunk__".into(), DUMMY_SP)),
+            value: (dep as f64).into(),
+        }))],
     }
 }
