@@ -1287,6 +1287,7 @@ pub async fn handle_resolve_error(
 pub enum ModulePart {
     ModuleEvaluation,
     Export(StringVc),
+    Internal(u32),
 }
 
 impl ModulePartVc {

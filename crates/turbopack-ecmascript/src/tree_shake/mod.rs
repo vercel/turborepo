@@ -262,6 +262,29 @@ pub(crate) enum Key {
     Export(String),
 }
 
+/// Converts [ModulePartVc] to the index.
+async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
+    let part = part.await?;
+
+    let key = match &*part {
+        ModulePart::ModuleEvaluation => Key::ModuleEvaluation,
+        ModulePart::Export(export) => Key::Export(export.await?.to_string()),
+        ModulePart::Internal(part_id) => return Ok(*part_id),
+    };
+
+    let part_id = match result.data.get(&key) {
+        Some(id) => *id,
+        None => {
+            return Err(anyhow::anyhow!(
+                "could not find part id for module part {:?}",
+                key
+            ))
+        }
+    };
+
+    Ok(part_id)
+}
+
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub(crate) struct SplitResult {
     #[turbo_tasks(debug_ignore, trace_ignore)]
@@ -330,24 +353,9 @@ pub(super) async fn part_of_module(
 ) -> Result<ParseResultVc> {
     let split_data = split_data.await?;
 
-    let part = match part {
-        Some(v) => v.await?,
+    let part_id = match part {
+        Some(part) => get_part_id(&split_data, part).await?,
         None => return Ok(split_data.parsed),
-    };
-
-    let key = match &*part {
-        ModulePart::ModuleEvaluation => Key::ModuleEvaluation,
-        ModulePart::Export(export) => Key::Export(export.await?.to_string()),
-    };
-
-    let chunk_id = match split_data.data.get(&key) {
-        Some(id) => *id,
-        None => {
-            return Err(anyhow::anyhow!(
-                "could not find part id for module part {:?}",
-                key
-            ))
-        }
     };
 
     let parsed = split_data.parsed.await?;
@@ -365,7 +373,7 @@ pub(super) async fn part_of_module(
                 return Ok(split_data.parsed);
             }
 
-            let program = Program::Module(split_data.modules[chunk_id as usize].clone());
+            let program = Program::Module(split_data.modules[part_id as usize].clone());
             let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
 
             Ok(ParseResultVc::cell(ParseResult::Ok {

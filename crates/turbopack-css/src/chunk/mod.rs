@@ -309,6 +309,7 @@ impl Asset for CssChunk {
                 fragment: None,
                 assets,
                 modifiers: Vec::new(),
+                part: None,
             }))
         };
 

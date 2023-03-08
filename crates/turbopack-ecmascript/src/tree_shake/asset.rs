@@ -5,12 +5,12 @@ use turbopack_core::{
     chunk::{ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    resolve::ModulePartVc,
+    resolve::{ModulePart, ModulePartVc},
 };
 
 use super::{
     chunk_item::{EcmascriptModulePartChunkItem, EcmascriptModulePartChunkItemVc},
-    split, split_module,
+    get_part_id, split_module,
 };
 use crate::{
     chunk::{
@@ -50,9 +50,10 @@ impl Asset for EcmascriptModulePartAsset {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
-        let split_data = split_module(self.full_module);
+        let split_data = split_module(self.full_module).await?;
+        let part_id = get_part_id(&split_data, self.part).await?;
 
-        let deps = match split_data.deps.get(&self.part_id) {
+        let deps = match split_data.deps.get(&part_id) {
             Some(v) => v,
             None => return Ok(self.full_module.references()),
         };
@@ -63,8 +64,7 @@ impl Asset for EcmascriptModulePartAsset {
                 SingleAssetReferenceVc::new(
                     EcmascriptModulePartAssetVc::new(EcmascriptModulePartAsset {
                         full_module: self.full_module,
-                        part_id,
-                        split_data: self.split_data,
+                        part: ModulePartVc::new(ModulePart::Internal(part_id)),
                     })
                     .as_asset(),
                     StringVc::cell("ecmascript module part".to_string()),

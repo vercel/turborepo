@@ -188,6 +188,10 @@ impl ChunkingContext for DevChunkingContext {
                     2_u8.deterministic_hash(&mut hasher);
                     export.await?.deterministic_hash(&mut hasher);
                 }
+                ModulePart::Internal(id) => {
+                    3_u8.deterministic_hash(&mut hasher);
+                    id.deterministic_hash(&mut hasher);
+                }
             }
 
             has_hash = true;

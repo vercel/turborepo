@@ -15,7 +15,7 @@ use turbopack_core::{
     resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
 
-use super::{asset::EcmascriptModulePartAssetVc, part_of_module};
+use super::{asset::EcmascriptModulePartAssetVc, part_of_module, split_module};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
@@ -83,7 +83,8 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             }
         }
 
-        let parsed = part_of_module(self.split_data, Some(self.chunk_id)).await?;
+        let split_data = split_module(self.full_module);
+        let parsed = part_of_module(split_data, Some(self.part)).await?;
 
         if let ParseResult::Ok {
             program,
@@ -181,6 +182,11 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
                         .into(),
                 )
             }
+            ModulePart::Internal(part_id) => Ok(ModuleId::String(format!(
+                "{} (ecmascript part {})",
+                module.path, part_id
+            ))
+            .into()),
         }
     }
 }
