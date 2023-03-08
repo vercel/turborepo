@@ -31,14 +31,14 @@ use crate::{
 
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartChunkItem {
-    full_module: EcmascriptModuleAssetVc,
+    pub(super) full_module: EcmascriptModuleAssetVc,
 
-    split_data: SplitResultVc,
+    pub(super) split_data: SplitResultVc,
 
-    module: EcmascriptModulePartAssetVc,
-    context: ChunkingContextVc,
+    pub(super) module: EcmascriptModulePartAssetVc,
+    pub(super) context: ChunkingContextVc,
 
-    chunk_id: u32,
+    pub(super) chunk_id: u32,
 }
 
 impl EcmascriptModulePartChunkItemVc {
