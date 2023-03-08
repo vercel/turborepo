@@ -29,6 +29,7 @@ impl<L> Merger<L>
 where
     L: Load,
 {
+    /// Creates a module merger.
     pub fn new(loader: L) -> Self {
         Merger {
             loader,
@@ -36,6 +37,8 @@ where
         }
     }
 
+    /// Merges module content by appending the content of imported modules. This
+    /// is recursive, so a single call is enoguh.
     pub fn merge_recursively(&mut self, entry: Module) -> Result<Module, Error> {
         let mut content = vec![];
         let mut extra_body = vec![];
