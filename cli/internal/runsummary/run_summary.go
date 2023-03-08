@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -27,17 +28,29 @@ type RunSummary struct {
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
 	Tasks             []*TaskSummary     `json:"tasks"`
+	runState          *RunState          `json:"-"`
 }
 
 // NewRunSummary returns a RunSummary instance
-func NewRunSummary(turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+func NewRunSummary(runState *RunState, turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
 	return &RunSummary{
 		ID:                ksuid.New(),
+		runState:          runState,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
 		Tasks:             []*TaskSummary{},
 		GlobalHashSummary: globalHashSummary,
 	}
+}
+
+// Close wraps up the RunSummary at the end of a `turbo run`.
+func (summary *RunSummary) Close(terminal cli.Ui) error {
+	return summary.runState.Close(terminal)
+}
+
+// TrackTask makes it possible for the consumer to send information about the execution of a task.
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome RunResultStatus, err error), *BuildTargetState) {
+	return summary.runState.Run(taskID)
 }
 
 func (summary *RunSummary) normalize() {

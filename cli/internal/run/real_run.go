@@ -44,7 +44,6 @@ func RealRun(
 	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
-	runState *runsummary.RunState,
 ) error {
 	singlePackage := rs.Opts.runOpts.singlePackage
 
@@ -72,7 +71,7 @@ func RealRun(
 
 	ec := &execContext{
 		colorCache:      colorCache,
-		runState:        runState,
+		runSummary:      runSummary,
 		rs:              rs,
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
@@ -130,7 +129,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	if err := runState.Close(base.UI); err != nil {
+	if err := runSummary.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
 
@@ -151,7 +150,7 @@ func RealRun(
 
 type execContext struct {
 	colorCache      *colorcache.ColorCache
-	runState        *runsummary.RunState
+	runSummary      *runsummary.RunSummary
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
@@ -180,7 +179,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer, buildTargetState := ec.runState.Run(packageTask.TaskID)
+	tracer, buildTargetState := ec.runSummary.TrackTask(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
