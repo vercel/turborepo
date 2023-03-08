@@ -69,6 +69,14 @@
 <span id="69">69</span>
 <span id="70">70</span>
 <span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
 </pre><pre class="rust"><code><span class="kw">use </span>syn::Ident;
 
 <span class="kw">pub fn </span>get_register_value_type_ident(struct_ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {
@@ -128,6 +136,14 @@
 
 <span class="kw">pub fn </span>get_ref_ident(ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {
     Ident::new(<span class="kw-2">&amp;</span>(ident.to_string() + <span class="string">&quot;Vc&quot;</span>), ident.span())
+}
+
+<span class="kw">pub fn </span>get_read_ref_ident(ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {
+    Ident::new(<span class="kw-2">&amp;</span>(ident.to_string() + <span class="string">&quot;ReadRef&quot;</span>), ident.span())
+}
+
+<span class="kw">pub fn </span>get_trait_ref_ident(ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {
+    Ident::new(<span class="kw-2">&amp;</span>(ident.to_string() + <span class="string">&quot;TraitRef&quot;</span>), ident.span())
 }
 
 <span class="kw">pub fn </span>get_trait_default_impl_function_ident(trait_ident: <span class="kw-2">&amp;</span>Ident, ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {

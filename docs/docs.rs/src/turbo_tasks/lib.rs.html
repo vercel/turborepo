@@ -105,6 +105,11 @@
 <span id="105">105</span>
 <span id="106">106</span>
 <span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A task scheduling and caching system that is focused on incremental
 //! execution.
 //!
@@ -167,6 +172,7 @@
 <span class="kw">mod </span>task_input;
 <span class="kw">mod </span>timed_future;
 <span class="kw">pub mod </span>trace;
+<span class="kw">mod </span>trait_ref;
 <span class="kw">pub mod </span>util;
 <span class="kw">mod </span>value;
 <span class="kw">mod </span>value_type;
@@ -187,10 +193,14 @@
 };
 <span class="kw">pub use </span>native_function::{NativeFunction, NativeFunctionVc};
 <span class="kw">pub use </span>nothing::{Nothing, NothingVc};
-<span class="kw">pub use </span>raw_vc::{CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
+<span class="kw">pub use </span>raw_vc::{
+    CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError, TraitCast,
+    TransparentValueCast, ValueCast,
+};
 <span class="kw">pub use </span>read_ref::ReadRef;
 <span class="kw">pub use </span>state::State;
 <span class="kw">pub use </span>task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
+<span class="kw">pub use </span>trait_ref::{IntoTraitRef, TraitRef};
 <span class="kw">pub use </span>turbo_tasks_macros::{function, value, value_impl, value_trait};
 <span class="kw">pub use </span>value::{TransientInstance, TransientValue, Value};
 <span class="kw">pub use </span>value_type::{

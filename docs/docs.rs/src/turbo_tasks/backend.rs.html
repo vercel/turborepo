@@ -407,6 +407,23 @@
 <span id="407">407</span>
 <span id="408">408</span>
 <span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -418,18 +435,17 @@
     time::{Duration, Instant},
 };
 
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">pub use </span><span class="kw">crate</span>::id::BackendJobId;
 <span class="kw">use crate</span>::{
     event::EventListener, manager::TurboTasksBackendApi, primitives::RawVcSetVc, raw_vc::CellId,
     registry, task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider,
-    TaskInput, TraitTypeId,
+    TaskInput, TraitRef, TraitTypeId, ValueTraitVc,
 };
 
-<span class="doccomment">/// Different Task types
-</span><span class="kw">pub enum </span>TaskType {
+<span class="kw">pub enum </span>TaskType {
     <span class="doccomment">/// Tasks that only exist for a certain operation and
     /// won&#39;t persist between sessions
     </span>Transient(TransientTaskType),
@@ -571,6 +587,24 @@
             .downcast()
             .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Unexpected type in cell&quot;</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{ ReadRef::new_transparent(data) })
+    }
+
+    <span class="doccomment">/// # Safety
+    ///
+    /// The caller must ensure that the CellContent contains a vc that
+    /// implements T.
+    </span><span class="kw">pub fn </span>cast_trait&lt;T&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;TraitRef&lt;T&gt;&gt;
+    <span class="kw">where
+        </span>T: ValueTraitVc,
+    {
+        <span class="kw">let </span>shared_reference = <span class="self">self</span>.<span class="number">0</span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Cell is empty&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">if </span>shared_reference.<span class="number">0</span>.is_none() {
+            <span class="macro">bail!</span>(<span class="string">&quot;Cell content is untyped&quot;</span>);
+        }
+        <span class="prelude-val">Ok</span>(
+            <span class="comment">// Safety: We just checked that the content is typed.
+            </span>TraitRef::new(shared_reference),
+        )
     }
 
     <span class="kw">pub fn </span>try_cast&lt;T: Any + Send + Sync&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ReadRef&lt;T&gt;&gt; {

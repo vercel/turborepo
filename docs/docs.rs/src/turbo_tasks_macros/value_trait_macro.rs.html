@@ -346,6 +346,53 @@
 <span id="346">346</span>
 <span id="347">347</span>
 <span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -354,7 +401,8 @@
     TraitItemMethod, TypeParamBound,
 };
 <span class="kw">use </span>turbo_tasks_macros_shared::{
-    get_ref_ident, get_trait_default_impl_function_ident, get_trait_type_ident, ValueTraitArguments,
+    get_ref_ident, get_trait_default_impl_function_ident, get_trait_ref_ident,
+    get_trait_type_ident, ValueTraitArguments,
 };
 
 <span class="kw">use crate</span>::{
@@ -431,6 +479,7 @@
         .collect();
 
     <span class="kw">let </span>ref_ident = get_ref_ident(ident);
+    <span class="kw">let </span>trait_ref_ident = get_trait_ref_ident(ident);
     <span class="kw">let </span>trait_type_ident = get_trait_type_ident(ident);
     <span class="kw">let </span>trait_type_id_ident = get_trait_type_id_ident(ident);
     <span class="kw">let </span><span class="kw-2">mut </span>trait_fns = Vec::new();
@@ -493,6 +542,50 @@
             }
         }
     }
+
+    <span class="kw">let </span>future_type = <span class="macro">quote! </span>{
+        turbo_tasks::ReadRawVcFuture&lt;turbo_tasks::TraitCast&lt;#ref_ident&gt;&gt;
+    };
+
+    <span class="kw">let </span>into_trait_ref = <span class="macro">quote! </span>{
+        <span class="kw">impl </span>turbo_tasks::IntoTraitRef <span class="kw">for </span>#ref_ident {
+            <span class="kw">type </span>TraitVc = #ref_ident;
+            <span class="kw">type </span>Future = #future_type;
+            <span class="kw">fn </span>into_trait_ref(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Future {
+                <span class="self">self</span>.node.into_trait_read::&lt;#ref_ident&gt;()
+            }
+        }
+
+        <span class="kw">impl </span>turbo_tasks::IntoTraitRef <span class="kw">for </span><span class="kw-2">&amp;</span>#ref_ident {
+            <span class="kw">type </span>TraitVc = #ref_ident;
+            <span class="kw">type </span>Future = #future_type;
+            <span class="kw">fn </span>into_trait_ref(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Future {
+                <span class="self">self</span>.node.into_trait_read::&lt;#ref_ident&gt;()
+            }
+        }
+    };
+
+    <span class="kw">let </span>strongly_consistent = {
+        <span class="kw">let </span>read = <span class="macro">quote! </span>{
+            <span class="self">self</span>.node.into_strongly_consistent_trait_read::&lt;#ref_ident&gt;()
+        };
+        <span class="kw">let </span>doc = strongly_consistent_doccomment();
+        <span class="macro">quote! </span>{
+            #doc
+            <span class="attr">#[must_use]
+            </span><span class="kw">pub fn </span>strongly_consistent(<span class="self">self</span>) -&gt; #future_type {
+                #read
+            }
+        }
+    };
+
+    <span class="kw">let </span>trait_ref = <span class="macro">quote! </span>{
+        turbo_tasks::TraitRef&lt;#ref_ident&gt;
+    };
+    <span class="kw">let </span>trait_ref = <span class="macro">quote! </span>{
+        <span class="doccomment">/// see [turbo_tasks::TraitRef]
+        </span>#vis <span class="kw">type </span>#trait_ref_ident = #trait_ref;
+    };
 
     <span class="kw">let </span>value_debug_impl = <span class="kw">if </span>debug {
         <span class="macro">quote! </span>{
@@ -571,6 +664,8 @@
             node: turbo_tasks::RawVc,
         }
 
+        #trait_ref
+
         <span class="kw">impl </span>#ref_ident {
             <span class="doccomment">/// see [turbo_tasks::RawVc::resolve]
             </span><span class="kw">pub async fn </span>resolve(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
@@ -580,11 +675,6 @@
             <span class="doccomment">/// see [turbo_tasks::RawVc::resolve_strongly_consistent]
             </span><span class="kw">pub async fn </span>resolve_strongly_consistent(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
                 <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>})
-            }
-
-            <span class="doccomment">/// see [turbo_tasks::RawVc::cell_local]
-            </span><span class="kw">pub async fn </span>cell_local(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
-                <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.cell_local().<span class="kw">await</span><span class="question-mark">? </span>})
             }
 
             <span class="kw">pub async fn </span>resolve_from(super_trait_vc: <span class="kw">impl </span>std::convert::Into&lt;turbo_tasks::RawVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;, turbo_tasks::ResolveTypeError&gt; {
@@ -597,6 +687,8 @@
                 <span class="kw">let </span>raw_vc: turbo_tasks::RawVc = super_trait_vc.into();
                 #ref_ident { node: raw_vc }
             }
+
+            #strongly_consistent
         }
 
         <span class="kw">impl </span>turbo_tasks::CollectiblesSource <span class="kw">for </span>#ref_ident {
@@ -615,6 +707,8 @@
                 <span class="kw-2">*</span>#trait_type_id_ident
             }
         }
+
+        #into_trait_ref
 
         <span class="kw">impl</span>&lt;T&gt; #ident <span class="kw">for </span>T
         <span class="kw">where

@@ -333,6 +333,8 @@
 <span id="333">333</span>
 <span id="334">334</span>
 <span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -353,6 +355,8 @@
 };
 
 <span class="kw">pub trait </span>Typed {
+    <span class="kw">type </span>Vc: From&lt;RawVc&gt;;
+
     <span class="kw">fn </span>get_value_type_id() -&gt; ValueTypeId;
 }
 

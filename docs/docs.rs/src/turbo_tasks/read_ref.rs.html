@@ -168,6 +168,24 @@
 <span id="168">168</span>
 <span id="169">169</span>
 <span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Borrow,
     cmp::Ordering,
@@ -182,7 +200,9 @@
 
 <span class="kw">use crate</span>::{
     debug::{ValueDebugFormat, ValueDebugFormatString},
+    manager::find_cell_by_type,
     trace::{TraceRawVcs, TraceRawVcsContext},
+    RawVc, SharedReference, Typed,
 };
 
 <span class="doccomment">/// The read value of a value cell. The read value is immutable, while the cell
@@ -328,6 +348,22 @@
 
     <span class="kw">pub fn </span>ptr_cmp(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ReadRef&lt;T, U&gt;) -&gt; Ordering {
         Arc::as_ptr(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).cmp(<span class="kw-2">&amp;</span>Arc::as_ptr(<span class="kw-2">&amp;</span>other.<span class="number">0</span>))
+    }
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; ReadRef&lt;T, U&gt;
+<span class="kw">where
+    </span>T: Typed + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="doccomment">/// Returns a new cell that points to a value that implements the value
+    /// trait `T`.
+    </span><span class="kw">pub fn </span>cell(trait_ref: ReadRef&lt;T, U&gt;) -&gt; T::Vc {
+        <span class="comment">// See Safety clause above.
+        </span><span class="kw">let </span>local_cell = find_cell_by_type(T::get_value_type_id());
+        local_cell
+            .update_shared_reference(SharedReference(<span class="prelude-val">Some</span>(T::get_value_type_id()), trait_ref.<span class="number">0</span>));
+        <span class="kw">let </span>raw_vc: RawVc = local_cell.into();
+        raw_vc.into()
     }
 }
 

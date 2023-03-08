@@ -536,6 +536,96 @@
 <span id="536">536</span>
 <span id="537">537</span>
 <span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     fmt::{Debug, Display},
@@ -556,14 +646,14 @@
     backend::CellContent,
     event::EventListener,
     manager::{
-        find_cell_by_type, read_task_cell, read_task_cell_untracked, read_task_output,
-        read_task_output_untracked, CurrentCellRef, TurboTasksApi,
+        read_task_cell, read_task_cell_untracked, read_task_output, read_task_output_untracked,
+        TurboTasksApi,
     },
     primitives::{RawVcSet, RawVcSetVc},
     registry::{<span class="self">self</span>, get_value_type},
     turbo_tasks,
     value_type::ValueTraitVc,
-    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId,
+    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitRef, TraitTypeId, ValueTypeId,
 };
 
 <span class="attr">#[derive(Error, Debug)]
@@ -602,13 +692,15 @@
 }
 
 <span class="kw">impl </span>RawVc {
-    <span class="kw">pub fn </span>into_read&lt;T: Any + Send + Sync&gt;(<span class="self">self</span>) -&gt; ReadRawVcFuture&lt;T&gt; {
+    <span class="kw">pub fn </span>into_read&lt;T: Any + Send + Sync&gt;(<span class="self">self</span>) -&gt; ReadRawVcFuture&lt;ValueCast&lt;T&gt;&gt; {
         <span class="comment">// returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         </span>ReadRawVcFuture::new(<span class="self">self</span>)
     }
 
-    <span class="kw">pub fn </span>into_strongly_consistent_read&lt;T: Any + Send + Sync&gt;(<span class="self">self</span>) -&gt; ReadRawVcFuture&lt;T&gt; {
+    <span class="kw">pub fn </span>into_strongly_consistent_read&lt;T: Any + Send + Sync&gt;(
+        <span class="self">self</span>,
+    ) -&gt; ReadRawVcFuture&lt;ValueCast&lt;T&gt;&gt; {
         <span class="comment">// returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         </span>ReadRawVcFuture::new_strongly_consistent(<span class="self">self</span>)
@@ -619,7 +711,7 @@
     /// T and U must be binary identical (#[repr(transparent)])
     </span><span class="kw">pub unsafe fn </span>into_transparent_read&lt;T: Any + Send + Sync, U: Any + Send + Sync&gt;(
         <span class="self">self</span>,
-    ) -&gt; ReadRawVcFuture&lt;T, U&gt; {
+    ) -&gt; ReadRawVcFuture&lt;TransparentValueCast&lt;T, U&gt;&gt; {
         <span class="comment">// returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         </span><span class="kw">unsafe </span>{ ReadRawVcFuture::new_transparent(<span class="self">self</span>) }
@@ -633,10 +725,24 @@
         U: Any + Send + Sync,
     &gt;(
         <span class="self">self</span>,
-    ) -&gt; ReadRawVcFuture&lt;T, U&gt; {
+    ) -&gt; ReadRawVcFuture&lt;TransparentValueCast&lt;T, U&gt;&gt; {
         <span class="comment">// returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         </span><span class="kw">unsafe </span>{ ReadRawVcFuture::new_transparent_strongly_consistent(<span class="self">self</span>) }
+    }
+
+    <span class="kw">pub fn </span>into_trait_read&lt;T&gt;(<span class="self">self</span>) -&gt; ReadRawVcFuture&lt;TraitCast&lt;T&gt;&gt;
+    <span class="kw">where
+        </span>T: ValueTraitVc,
+    {
+        ReadRawVcFuture::new_trait(<span class="self">self</span>)
+    }
+
+    <span class="kw">pub fn </span>into_strongly_consistent_trait_read&lt;T&gt;(<span class="self">self</span>) -&gt; ReadRawVcFuture&lt;TraitCast&lt;T&gt;&gt;
+    <span class="kw">where
+        </span>T: ValueTraitVc,
+    {
+        ReadRawVcFuture::new_trait_strongly_consistent(<span class="self">self</span>)
     }
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -834,39 +940,6 @@
         }
     }
 
-    <span class="kw">async fn </span>cell_local_internal&lt;T: FnOnce(ValueTypeId) -&gt; CurrentCellRef&gt;(
-        <span class="self">self</span>,
-        select_cell: T,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
-        <span class="kw">let </span>tt = turbo_tasks();
-        tt.notify_scheduled_tasks();
-        <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="self">self</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>current {
-                RawVc::TaskOutput(task) =&gt; current = read_task_output(<span class="kw-2">&amp;*</span>tt, task, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>,
-                RawVc::TaskCell(task, index) =&gt; {
-                    <span class="kw">let </span>content = read_task_cell(<span class="kw-2">&amp;*</span>tt, task, index).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>shared_ref = content.<span class="number">0</span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Cell is empty&quot;</span>))<span class="question-mark">?</span>;
-                    <span class="kw">let </span>SharedReference(ty, <span class="kw">_</span>) = shared_ref;
-                    <span class="kw">let </span>ty = ty.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Cell content is untyped&quot;</span>))<span class="question-mark">?</span>;
-                    <span class="kw">let </span>local_cell = select_cell(ty);
-                    local_cell.update_shared_reference(shared_ref);
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(local_cell.into());
-                }
-            }
-        }
-    }
-
-    <span class="doccomment">/// Reads the value from the cell and stores it to a new cell in the current
-    /// task. This basically create a shallow copy of the cell content.
-    /// As comparing Vcs is based on the cell location, this creates a new
-    /// identity of the value. When used in a once task, it will create Vc
-    /// that snapshots the value of a cell that is disconnected from ongoing
-    /// recomputations in the graph (as once tasks doesn&#39;t reexecute)
-    </span><span class="kw">pub async fn </span>cell_local(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
-        <span class="self">self</span>.cell_local_internal(find_cell_by_type).<span class="kw">await
-    </span>}
-
     <span class="kw">pub fn </span>get_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {
         <span class="kw">match </span><span class="self">self </span>{
             RawVc::TaskOutput(t) | RawVc::TaskCell(t, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>t,
@@ -913,15 +986,21 @@
     }
 }
 
-<span class="kw">pub struct </span>ReadRawVcFuture&lt;T: Any + Send + Sync, U: Any + Send + Sync = T&gt; {
+<span class="kw">pub struct </span>ReadRawVcFuture&lt;C&gt;
+<span class="kw">where
+    </span>C: Cast,
+{
     turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksApi&gt;,
     strongly_consistent: bool,
     current: RawVc,
     listener: <span class="prelude-ty">Option</span>&lt;EventListener&gt;,
-    phantom_data: PhantomData&lt;Pin&lt;Box&lt;(T, U)&gt;&gt;&gt;,
+    _cast: C,
 }
 
-<span class="kw">impl</span>&lt;T: Any + Send + Sync&gt; ReadRawVcFuture&lt;T, T&gt; {
+<span class="kw">impl</span>&lt;T&gt; ReadRawVcFuture&lt;ValueCast&lt;T&gt;&gt;
+<span class="kw">where
+    </span>T: Any + Send + Sync,
+{
     <span class="kw">fn </span>new(vc: RawVc) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>tt = turbo_tasks();
         tt.notify_scheduled_tasks();
@@ -930,7 +1009,9 @@
             strongly_consistent: <span class="bool-val">false</span>,
             current: vc,
             listener: <span class="prelude-val">None</span>,
-            phantom_data: PhantomData,
+            _cast: ValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 
@@ -942,12 +1023,17 @@
             strongly_consistent: <span class="bool-val">true</span>,
             current: vc,
             listener: <span class="prelude-val">None</span>,
-            phantom_data: PhantomData,
+            _cast: ValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 }
 
-<span class="kw">impl</span>&lt;T: Any + Send + Sync, U: Any + Send + Sync&gt; ReadRawVcFuture&lt;T, U&gt; {
+<span class="kw">impl</span>&lt;T, U&gt; ReadRawVcFuture&lt;TransparentValueCast&lt;T, U&gt;&gt;
+<span class="kw">where
+    </span>T: Any + Send + Sync,
+{
     <span class="doccomment">/// # Safety
     ///
     /// T and U must be binary identical (#[repr(transparent)])
@@ -959,7 +1045,9 @@
             strongly_consistent: <span class="bool-val">false</span>,
             current: vc,
             listener: <span class="prelude-val">None</span>,
-            phantom_data: PhantomData,
+            _cast: TransparentValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 
@@ -974,13 +1062,51 @@
             strongly_consistent: <span class="bool-val">true</span>,
             current: vc,
             listener: <span class="prelude-val">None</span>,
-            phantom_data: PhantomData,
+            _cast: TransparentValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 }
 
-<span class="kw">impl</span>&lt;T: Any + Send + Sync, U: Any + Send + Sync&gt; Future <span class="kw">for </span>ReadRawVcFuture&lt;T, U&gt; {
-    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;ReadRef&lt;T, U&gt;&gt;;
+<span class="kw">impl</span>&lt;T&gt; ReadRawVcFuture&lt;TraitCast&lt;T&gt;&gt;
+<span class="kw">where
+    </span>T: ValueTraitVc,
+{
+    <span class="kw">fn </span>new_trait(vc: RawVc) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>tt = turbo_tasks();
+        tt.notify_scheduled_tasks();
+        ReadRawVcFuture {
+            turbo_tasks: tt,
+            strongly_consistent: <span class="bool-val">false</span>,
+            current: vc,
+            listener: <span class="prelude-val">None</span>,
+            _cast: TraitCast {
+                _phantom: PhantomData,
+            },
+        }
+    }
+
+    <span class="kw">fn </span>new_trait_strongly_consistent(vc: RawVc) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>tt = turbo_tasks();
+        tt.notify_scheduled_tasks();
+        ReadRawVcFuture {
+            turbo_tasks: tt,
+            strongly_consistent: <span class="bool-val">true</span>,
+            current: vc,
+            listener: <span class="prelude-val">None</span>,
+            _cast: TraitCast {
+                _phantom: PhantomData,
+            },
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;C&gt; Future <span class="kw">for </span>ReadRawVcFuture&lt;C&gt;
+<span class="kw">where
+    </span>C: Cast,
+{
+    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;C::Output&gt;;
 
     <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
         <span class="self">self</span>.turbo_tasks.notify_scheduled_tasks();
@@ -1011,8 +1137,7 @@
                 RawVc::TaskCell(task, index) =&gt; {
                     <span class="kw">match </span>this.turbo_tasks.try_read_task_cell(task, index) {
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(content)) =&gt; {
-                            <span class="comment">// SAFETY: Constructor ensures that T and U are binary identical
-                            </span><span class="kw">return </span>Poll::Ready(<span class="kw">unsafe </span>{ content.cast_transparent::&lt;T, U&gt;() });
+                            <span class="kw">return </span>Poll::Ready(C::cast(content));
                         }
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener)) =&gt; listener,
                         <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span>Poll::Ready(<span class="prelude-val">Err</span>(err)),
@@ -1031,6 +1156,61 @@
     }
 }
 
+<span class="doccomment">/// Trait defined to share behavior between values and traits within
+/// [`ReadRawVcFuture`]. See [`ValueCast`] and [`TraitCast`].
+///
+/// This should not be implemented by users.
+</span><span class="kw">pub trait </span>Cast {
+    <span class="kw">type </span>Output;
+
+    <span class="kw">fn </span>cast(content: CellContent) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output&gt;;
+}
+
+<span class="doccomment">/// Casts an arbitrary cell content into a [`ReadRef&lt;T, U&gt;`].
+</span><span class="kw">pub struct </span>ValueCast&lt;T&gt; {
+    _phantom: PhantomData&lt;T&gt;,
+}
+
+<span class="kw">impl</span>&lt;T: Any + Send + Sync&gt; Cast <span class="kw">for </span>ValueCast&lt;T&gt; {
+    <span class="kw">type </span>Output = ReadRef&lt;T, T&gt;;
+
+    <span class="kw">fn </span>cast(content: CellContent) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output&gt; {
+        content.cast::&lt;T&gt;()
+    }
+}
+
+<span class="doccomment">/// Casts an arbitrary cell content into a [`ReadRef&lt;T, U&gt;`].
+</span><span class="kw">pub struct </span>TransparentValueCast&lt;T, U = T&gt; {
+    _phantom: PhantomData&lt;(T, U)&gt;,
+}
+
+<span class="kw">impl</span>&lt;T: Any + Send + Sync, U&gt; Cast <span class="kw">for </span>TransparentValueCast&lt;T, U&gt; {
+    <span class="kw">type </span>Output = ReadRef&lt;T, U&gt;;
+
+    <span class="kw">fn </span>cast(content: CellContent) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="comment">// Safety: Constructor ensures that T and U are binary identical
+        </span><span class="kw">unsafe </span>{ content.cast_transparent::&lt;T, U&gt;() }
+    }
+}
+
+<span class="doccomment">/// Casts an arbitrary cell content into a [`TraitRef&lt;T&gt;`].
+</span><span class="kw">pub struct </span>TraitCast&lt;T&gt; {
+    _phantom: PhantomData&lt;T&gt;,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Cast <span class="kw">for </span>TraitCast&lt;T&gt;
+<span class="kw">where
+    </span>T: ValueTraitVc,
+{
+    <span class="kw">type </span>Output = TraitRef&lt;T&gt;;
+
+    <span class="kw">fn </span>cast(content: CellContent) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="comment">// Safety: Constructor ensures the cell content points to a value that
+        // implements T
+        </span>content.cast_trait::&lt;T&gt;()
+    }
+}
+
 <span class="attr">#[derive(Error, Debug)]
 #[error(<span class="string">&quot;Unable to read collectibles&quot;</span>)]
 </span><span class="kw">pub struct </span>ReadCollectiblesError {
@@ -1039,7 +1219,7 @@
 
 <span class="kw">pub struct </span>CollectiblesFuture&lt;T: ValueTraitVc&gt; {
     turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksApi&gt;,
-    inner: ReadRawVcFuture&lt;RawVcSet, AutoSet&lt;RawVc&gt;&gt;,
+    inner: ReadRawVcFuture&lt;TransparentValueCast&lt;RawVcSet, AutoSet&lt;RawVc&gt;&gt;&gt;,
     take: bool,
     phantom: PhantomData&lt;<span class="kw">fn</span>() -&gt; T&gt;,
 }

@@ -196,14 +196,13 @@
 <span id="196">196</span>
 <span id="197">197</span>
 <span id="198">198</span>
-<span id="199">199</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, Stream};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>turbo_tasks::{CollectiblesSource, State, TransientInstance};
+<span class="kw">use </span>turbo_tasks::{CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance};
 <span class="kw">use </span>turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
     version::{
@@ -298,7 +297,8 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>VersionState {
-    inner: State&lt;VersionVc&gt;,
+    <span class="attr">#[turbo_tasks(trace_ignore)]
+    </span>version: State&lt;TraitRef&lt;VersionVc&gt;&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -306,23 +306,21 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;VersionVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>version = <span class="kw-2">*</span>this.inner.get();
+        <span class="kw">let </span>version = TraitRef::cell(this.version.get().clone());
         <span class="prelude-val">Ok</span>(version)
     }
 }
 
 <span class="kw">impl </span>VersionStateVc {
-    <span class="kw">async fn </span>new(inner: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>inner = inner.cell_local().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">async fn </span>new(version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(VersionState {
-            inner: State::new(inner),
+            version: State::new(version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>),
         }))
     }
 
-    <span class="kw">async fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, new_inner: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, new_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>new_inner = new_inner.cell_local().<span class="kw">await</span><span class="question-mark">?</span>;
-        this.inner.set(new_inner);
+        this.version.set(new_version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(())
     }
 }

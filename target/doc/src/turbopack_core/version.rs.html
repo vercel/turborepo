@@ -201,12 +201,23 @@
 <span id="201">201</span>
 <span id="202">202</span>
 <span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
     primitives::{JsonValueVc, StringVc},
     trace::TraceRawVcs,
+    IntoTraitRef,
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef, LinkType};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
@@ -219,9 +230,8 @@
     <span class="doccomment">/// The content of the [Asset].
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc;
 
-    <span class="doccomment">/// Get a unique identifier of the version as a string. There is no way
-    /// to convert a version identifier back to the original `VersionedContent`,
-    /// so the original object needs to be stored somewhere.
+    <span class="doccomment">/// Get a [`Version`] implementor that contains enough information to
+    /// identify and diff a future [`VersionedContent`] against it.
     </span><span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VersionVc;
 
     <span class="doccomment">/// Describes how to update the content from an earlier version to the
@@ -229,10 +239,20 @@
     </span><span class="kw">async fn </span>update(self_vc: VersionedContentVc, from: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
         <span class="comment">// By default, since we can&#39;t make any assumptions about the versioning
         // scheme of the content, we ask for a full invalidation, except in the
-        // case where versions are the same. And we can&#39;t compare `VersionVc`s
-        // directly since `.cell_local()` breaks referential equality checks.
+        // case where versions are the same.
         </span><span class="kw">let </span>to = self_vc.version();
-        <span class="kw">let </span>from_id = from.id();
+        <span class="kw">let </span>from_ref = from.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>to_ref = to.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// Fast path: versions are the same.
+        </span><span class="kw">if </span>from_ref == to_ref {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(Update::None.into());
+        }
+
+        <span class="comment">// The fast path might not always work since `self_vc` might have been converted
+        // from a `ReadRef` or a `ReadRef`, in which case `self_vc.version()` would
+        // return a new `VersionVc`. In this case, we need to compare version ids.
+        </span><span class="kw">let </span>from_id = from.id();
         <span class="kw">let </span>to_id = to.id();
         <span class="kw">let </span>from_id = from_id.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>to_id = to_id.<span class="kw">await</span><span class="question-mark">?</span>;

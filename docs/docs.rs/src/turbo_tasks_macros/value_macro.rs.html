@@ -692,22 +692,6 @@
 <span id="692">692</span>
 <span id="693">693</span>
 <span id="694">694</span>
-<span id="695">695</span>
-<span id="696">696</span>
-<span id="697">697</span>
-<span id="698">698</span>
-<span id="699">699</span>
-<span id="700">700</span>
-<span id="701">701</span>
-<span id="702">702</span>
-<span id="703">703</span>
-<span id="704">704</span>
-<span id="705">705</span>
-<span id="706">706</span>
-<span id="707">707</span>
-<span id="708">708</span>
-<span id="709">709</span>
-<span id="710">710</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::Ident;
 <span class="kw">use </span>quote::quote;
@@ -720,6 +704,8 @@
     <span class="prelude-ty">Result</span>, Token,
 };
 <span class="kw">use </span>turbo_tasks_macros_shared::{get_ref_ident, get_register_value_type_ident};
+
+<span class="kw">use </span><span class="kw">crate</span>::util::strongly_consistent_doccomment;
 
 <span class="kw">fn </span>get_read_ref_ident(ident: <span class="kw-2">&amp;</span>Ident) -&gt; Ident {
     Ident::new(<span class="kw-2">&amp;</span>(ident.to_string() + <span class="string">&quot;ReadRef&quot;</span>), ident.span())
@@ -1105,11 +1091,21 @@
         },
     };
 
+    <span class="kw">let </span>future_type = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_type) = inner_type {
+        <span class="macro">quote! </span>{
+           turbo_tasks::ReadRawVcFuture&lt;turbo_tasks::TransparentValueCast&lt;#ident, #inner_type&gt;&gt;
+        }
+    } <span class="kw">else </span>{
+        <span class="macro">quote! </span>{
+            turbo_tasks::ReadRawVcFuture&lt;turbo_tasks::ValueCast&lt;#ident&gt;&gt;
+        }
+    };
+
     <span class="kw">let </span>into_future = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_type) = inner_type {
         <span class="macro">quote! </span>{
              <span class="kw">impl </span>std::future::IntoFuture <span class="kw">for </span>#ref_ident {
                 <span class="kw">type </span>Output = turbo_tasks::Result&lt;#read_ref_ident&gt;;
-                <span class="kw">type </span>IntoFuture = turbo_tasks::ReadRawVcFuture&lt;#ident, #inner_type&gt;;
+                <span class="kw">type </span>IntoFuture = #future_type;
                 <span class="kw">fn </span>into_future(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoFuture {
                     <span class="doccomment">/// SAFETY: Types are binary identical via #[repr(transparent)]
                     </span><span class="kw">unsafe </span>{ <span class="self">self</span>.node.into_transparent_read::&lt;#ident, #inner_type&gt;() }
@@ -1118,7 +1114,7 @@
 
             <span class="kw">impl </span>std::future::IntoFuture <span class="kw">for </span><span class="kw-2">&amp;</span>#ref_ident {
                 <span class="kw">type </span>Output = turbo_tasks::Result&lt;#read_ref_ident&gt;;
-                <span class="kw">type </span>IntoFuture = turbo_tasks::ReadRawVcFuture&lt;#ident, #inner_type&gt;;
+                <span class="kw">type </span>IntoFuture = #future_type;
                 <span class="kw">fn </span>into_future(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoFuture {
                     <span class="doccomment">/// SAFETY: Types are binary identical via #[repr(transparent)]
                     </span><span class="kw">unsafe </span>{ <span class="self">self</span>.node.into_transparent_read::&lt;#ident, #inner_type&gt;() }
@@ -1129,7 +1125,7 @@
         <span class="macro">quote! </span>{
              <span class="kw">impl </span>std::future::IntoFuture <span class="kw">for </span>#ref_ident {
                 <span class="kw">type </span>Output = turbo_tasks::Result&lt;#read_ref_ident&gt;;
-                <span class="kw">type </span>IntoFuture = turbo_tasks::ReadRawVcFuture&lt;#ident&gt;;
+                <span class="kw">type </span>IntoFuture = #future_type;
                 <span class="kw">fn </span>into_future(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoFuture {
                     <span class="self">self</span>.node.into_read::&lt;#ident&gt;()
                 }
@@ -1137,7 +1133,7 @@
 
             <span class="kw">impl </span>std::future::IntoFuture <span class="kw">for </span><span class="kw-2">&amp;</span>#ref_ident {
                 <span class="kw">type </span>Output = turbo_tasks::Result&lt;#read_ref_ident&gt;;
-                <span class="kw">type </span>IntoFuture = turbo_tasks::ReadRawVcFuture&lt;#ident&gt;;
+                <span class="kw">type </span>IntoFuture = #future_type;
                 <span class="kw">fn </span>into_future(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoFuture {
                     <span class="self">self</span>.node.into_read::&lt;#ident&gt;()
                 }
@@ -1146,46 +1142,21 @@
     };
 
     <span class="kw">let </span>strongly_consistent = {
-        <span class="kw">let </span>(return_type, read) = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_type) = inner_type {
-            (
-                <span class="macro">quote! </span>{
-                   turbo_tasks::ReadRawVcFuture&lt;#ident, #inner_type&gt;
-                },
-                <span class="macro">quote! </span>{
-                    <span class="doccomment">/// SAFETY: Types are binary identical via #[repr(transparent)]
-                    </span><span class="kw">unsafe </span>{ <span class="self">self</span>.node.into_transparent_strongly_consistent_read::&lt;#ident, #inner_type&gt;() }
-                },
-            )
+        <span class="kw">let </span>read = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_type) = inner_type {
+            <span class="macro">quote! </span>{
+                <span class="doccomment">/// SAFETY: Types are binary identical via #[repr(transparent)]
+                </span><span class="kw">unsafe </span>{ <span class="self">self</span>.node.into_transparent_strongly_consistent_read::&lt;#ident, #inner_type&gt;() }
+            }
         } <span class="kw">else </span>{
-            (
-                <span class="macro">quote! </span>{
-                    turbo_tasks::ReadRawVcFuture&lt;#ident&gt;
-                },
-                <span class="macro">quote! </span>{
-                    <span class="self">self</span>.node.into_strongly_consistent_read::&lt;#ident&gt;()
-                },
-            )
+            <span class="macro">quote! </span>{
+                <span class="self">self</span>.node.into_strongly_consistent_read::&lt;#ident&gt;()
+            }
         };
+        <span class="kw">let </span>doc = strongly_consistent_doccomment();
         <span class="macro">quote! </span>{
-            <span class="doccomment">/// The invalidation of tasks due to changes is eventually consistent by default.
-            /// Tasks will execute as early as any of their children has changed, even while
-            /// other children or grandchildren are still computing (and may or may not result
-            /// in a future invalidation). Tasks may execute multiple times until the graph
-            /// reaches the end state. Partial applied changes might be visible to the user.
-            /// But changes are available as fast as possible and won&#39;t be blocked by some
-            /// slower parts of the graph (e. g. recomputation of blurred images, linting,
-            /// etc).
-            ///
-            /// When you read a task with `.strongly_consistent()` it will make that one read
-            /// operation strongly consistent. That means it will only return a result when all
-            /// children and grandchildren in that graph have been settled. This means your
-            /// current task will recompute less often, but it might also need to wait for
-            /// slower operations in the graph and can&#39;t continue with partial applied changes.
-            ///
-            /// Reading strongly consistent is also far more expensive compared to normal
-            /// reading, so it should be used with care.
-            </span><span class="attr">#[must_use]
-            </span><span class="kw">pub fn </span>strongly_consistent(<span class="self">self</span>) -&gt; #return_type {
+            #doc
+            <span class="attr">#[must_use]
+            </span><span class="kw">pub fn </span>strongly_consistent(<span class="self">self</span>) -&gt; #future_type {
                 #read
             }
         }
@@ -1291,6 +1262,8 @@
         }
 
         <span class="kw">impl </span>turbo_tasks::Typed <span class="kw">for </span>#ident {
+            <span class="kw">type </span>Vc = #ref_ident;
+
             <span class="kw">fn </span>get_value_type_id() -&gt; turbo_tasks::ValueTypeId {
                 <span class="kw-2">*</span>#value_type_id_ident
             }
@@ -1326,11 +1299,6 @@
             <span class="doccomment">/// see [turbo_tasks::RawVc::resolve_strongly_consistent]
             </span><span class="kw">pub async fn </span>resolve_strongly_consistent(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
                 <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>})
-            }
-
-            <span class="doccomment">/// see [turbo_tasks::RawVc::cell_local]
-            </span><span class="kw">pub async fn </span>cell_local(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
-                <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.cell_local().<span class="kw">await</span><span class="question-mark">? </span>})
             }
 
             <span class="kw">pub async fn </span>resolve_from(super_trait_vc: <span class="kw">impl </span>std::convert::Into&lt;turbo_tasks::RawVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;, turbo_tasks::ResolveTypeError&gt; {
