@@ -137,9 +137,14 @@ pub struct InternedGraph<T>
 where
     T: Eq + Hash + Clone,
 {
-    /// `bool`: Strong
-    pub(super) idx_graph: DiGraphMap<u32, bool>,
+    pub(super) idx_graph: DiGraphMap<u32, Dependency>,
     pub(super) graph_ix: IndexSet<T, BuildHasherDefault<FxHasher>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Dependency {
+    Strong,
+    Weak,
 }
 
 impl<T> Default for InternedGraph<T>
@@ -206,7 +211,7 @@ impl DepGraph {
                 for end in self.g.graph_ix.iter() {
                     let end = self.g.get_node(end);
 
-                    if let Some(false) = self.g.idx_graph.edge_weight(start, end) {
+                    if let Some(Dependency::Weak) = self.g.idx_graph.edge_weight(start, end) {
                         self.g.idx_graph.remove_edge(start, end);
                     }
                 }
@@ -487,7 +492,9 @@ impl DepGraph {
                         if group_ix == dep_group_ix {
                             continue;
                         }
-                        new_graph.idx_graph.add_edge(group_ix, dep_group_ix, true);
+                        new_graph
+                            .idx_graph
+                            .add_edge(group_ix, dep_group_ix, Dependency::Strong);
                     }
                 }
             }
@@ -791,7 +798,7 @@ impl DepGraph {
         for to in to {
             let to = self.g.node(to);
 
-            self.g.idx_graph.add_edge(from, to, true);
+            self.g.idx_graph.add_edge(from, to, Dependency::Strong);
         }
     }
     pub(super) fn add_weak_deps<'a, T>(&mut self, from: &ItemId, to: T)
@@ -803,10 +810,10 @@ impl DepGraph {
         for to in to {
             let to = self.g.node(to);
 
-            if let Some(true) = self.g.idx_graph.edge_weight(from, to) {
+            if let Some(Dependency::Strong) = self.g.idx_graph.edge_weight(from, to) {
                 continue;
             }
-            self.g.idx_graph.add_edge(from, to, false);
+            self.g.idx_graph.add_edge(from, to, Dependency::Weak);
         }
     }
 
@@ -814,17 +821,17 @@ impl DepGraph {
         let from = self.g.node(item);
         let to = self.g.node(dep);
 
-        self.g.idx_graph.add_edge(from, to, true);
+        self.g.idx_graph.add_edge(from, to, Dependency::Strong);
     }
 
     pub(super) fn add_weak_dep(&mut self, item: &ItemId, dep: &ItemId) {
         let from = self.g.node(item);
         let to = self.g.node(dep);
 
-        if let Some(true) = self.g.idx_graph.edge_weight(from, to) {
+        if let Some(Dependency::Strong) = self.g.idx_graph.edge_weight(from, to) {
             return;
         }
-        self.g.idx_graph.add_edge(from, to, false);
+        self.g.idx_graph.add_edge(from, to, Dependency::Weak);
     }
 }
 

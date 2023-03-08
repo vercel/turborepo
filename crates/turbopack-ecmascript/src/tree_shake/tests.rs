@@ -20,7 +20,7 @@ use swc_core::{
 };
 
 use super::{
-    graph::{DepGraph, InternedGraph, ItemId, ItemIdKind, Mode},
+    graph::{DepGraph, Dependency, InternedGraph, ItemId, ItemIdKind, Mode},
     merge::Merger,
     Analyzer,
 };
@@ -272,12 +272,15 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
         }
     }
 
-    for (from, to, strong) in g.g.idx_graph.all_edges() {
+    for (from, to, kind) in g.g.idx_graph.all_edges() {
         writeln!(
             mermaid,
             "    Item{} -{}-> Item{};",
             from + 1,
-            if *strong { "" } else { "." },
+            match kind {
+                Dependency::Strong => "",
+                Dependency::Weak => ".",
+            },
             to + 1,
         )
         .unwrap();
@@ -305,12 +308,15 @@ where
         .unwrap();
     }
 
-    for (from, to, strong) in g.idx_graph.all_edges() {
+    for (from, to, kind) in g.idx_graph.all_edges() {
         writeln!(
             mermaid,
             "    N{} -{}-> N{};",
             from,
-            if *strong { "" } else { "." },
+            match kind {
+                Dependency::Strong => "",
+                Dependency::Weak => ".",
+            },
             to,
         )
         .unwrap();
