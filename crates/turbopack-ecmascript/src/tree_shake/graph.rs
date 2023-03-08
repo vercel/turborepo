@@ -78,13 +78,13 @@ pub(crate) struct ItemData {
 
     pub pure: bool,
 
-    /// Variables declared or bound by this module item?
+    /// Variables declared or bound by this module item
     pub var_decls: IndexSet<Id, FxBuildHasher>,
 
-    /// Variables read by this module item during evaluation?
+    /// Variables read by this module item during evaluation
     pub read_vars: IndexSet<Id, FxBuildHasher>,
 
-    /// Variables read by this module item eventually?
+    /// Variables read by this module item eventually
     ///
     /// - e.g. variables read in the body of function declarations are
     ///   considered
@@ -98,13 +98,13 @@ pub(crate) struct ItemData {
     ///   item with SIDE_EFFECTS.
     pub eventual_read_vars: IndexSet<Id, FxBuildHasher>,
 
-    /// Side effects that are triggered on local variables during evaluation?
+    /// Side effects that are triggered on local variables during evaluation
     pub write_vars: IndexSet<Id, FxBuildHasher>,
 
-    /// Side effects that are triggered on local variables eventually?
+    /// Side effects that are triggered on local variables eventually
     pub eventual_write_vars: IndexSet<Id, FxBuildHasher>,
 
-    /// Are other unknown side effects that are trigger during evaluation?
+    /// Are other unknown side effects that are trigger during evaluation
     pub side_effects: bool,
 
     pub content: ModuleItem,
