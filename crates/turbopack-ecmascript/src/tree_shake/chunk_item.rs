@@ -6,19 +6,16 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
+use turbo_tasks::TryJoinIterExt;
 use turbopack_core::{
     asset::Asset,
     chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc, ModuleId, ModuleIdVc},
     ident::AssetIdentVc,
-    reference::{AssetReferencesVc, SingleAssetReferenceVc},
+    reference::AssetReferencesVc,
     resolve::origin::ResolveOrigin,
 };
 
-use super::{
-    asset::{EcmascriptModulePartAsset, EcmascriptModulePartAssetVc},
-    part_of_module, SplitResultVc,
-};
+use super::{asset::EcmascriptModulePartAssetVc, part_of_module, SplitResultVc};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
@@ -185,34 +182,8 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
-        let split_data = self.split_data.await?;
-        let deps = match split_data.deps.get(&self.chunk_id) {
-            Some(v) => v,
-            None => return Ok(self.full_module.references()),
-        };
-
-        let mut assets = deps
-            .iter()
-            .map(|&chunk_id| {
-                SingleAssetReferenceVc::new(
-                    EcmascriptModulePartAssetVc::new(EcmascriptModulePartAsset {
-                        full_module: self.full_module,
-                        chunk_id,
-                        split_data: self.split_data,
-                    })
-                    .as_asset(),
-                    StringVc::cell("ecmascript module part".to_string()),
-                )
-                .as_asset_reference()
-            })
-            .collect::<Vec<_>>();
-
-        let external = self.full_module.references().await?;
-
-        assets.extend(external.iter().cloned());
-
-        Ok(AssetReferencesVc::cell(assets))
+    async fn references(&self) -> AssetReferencesVc {
+        self.module.references()
     }
 
     #[turbo_tasks::function]

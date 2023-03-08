@@ -4,7 +4,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     ident::{AssetIdent, AssetIdentVc},
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
 };
 
@@ -65,8 +65,34 @@ impl Asset for EcmascriptModulePartAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        todo!()
+    async fn references(&self) -> Result<AssetReferencesVc> {
+        let split_data = self.split_data.await?;
+        let deps = match split_data.deps.get(&self.chunk_id) {
+            Some(v) => v,
+            None => return Ok(self.full_module.references()),
+        };
+
+        let mut assets = deps
+            .iter()
+            .map(|&chunk_id| {
+                SingleAssetReferenceVc::new(
+                    EcmascriptModulePartAssetVc::new(EcmascriptModulePartAsset {
+                        full_module: self.full_module,
+                        chunk_id,
+                        split_data: self.split_data,
+                    })
+                    .as_asset(),
+                    StringVc::cell("ecmascript module part".to_string()),
+                )
+                .as_asset_reference()
+            })
+            .collect::<Vec<_>>();
+
+        let external = self.full_module.references().await?;
+
+        assets.extend(external.iter().cloned());
+
+        Ok(AssetReferencesVc::cell(assets))
     }
 
     #[turbo_tasks::function]
