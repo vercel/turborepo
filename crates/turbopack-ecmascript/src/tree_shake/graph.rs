@@ -389,7 +389,7 @@ impl DepGraph {
         let mut cycles = kosaraju_scc(&self.g.idx_graph);
         cycles.retain(|v| v.len() > 1);
 
-        // If a node have two or more dependants, it should be in a separate
+        // If a node have two or more dependents, it should be in a separate
         // group.
 
         let mut groups = vec![];
