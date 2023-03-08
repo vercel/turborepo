@@ -197,7 +197,7 @@ pub(crate) async fn analyze_ecmascript_module(
     ty: Value<EcmascriptModuleAssetType>,
     transforms: EcmascriptInputTransformsVc,
     compile_time_info: CompileTimeInfoVc,
-   part_id: Option<u32>,
+    part_id: Option<u32>,
 ) -> Result<AnalyzeEcmascriptModuleResultVc> {
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = origin.origin_path();
