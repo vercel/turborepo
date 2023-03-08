@@ -484,10 +484,27 @@
 <span id="484">484</span>
 <span id="485">485</span>
 <span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
-<span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc},
     Value,
@@ -520,6 +537,7 @@
         options::FontDataEntry,
         util::{get_font_axes, get_stylesheet_url},
     },
+    util::load_next_json,
 };
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>font_fallback;
@@ -530,11 +548,9 @@
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>util;
 
 <span class="kw">pub const </span>GOOGLE_FONTS_STYLESHEET_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;https://fonts.googleapis.com/css2&quot;</span>;
-<span class="kw">static </span>FONT_DATA: Lazy&lt;FontData&gt; = Lazy::new(|| {
-    parse_json_with_source_context(<span class="macro">include_str!</span>(<span class="string">&quot;__generated__/font-data.json&quot;</span>)).unwrap()
-});
 
-<span class="kw">type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">struct </span>FontData(IndexMap&lt;String, FontDataEntry&gt;);
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>NextFontGoogleReplacer {
@@ -567,14 +583,15 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportMapResult::NoEntry.into());
         };
 
+        <span class="kw">let </span>font_data = load_font_data(<span class="self">self</span>.project_path);
         <span class="kw">let </span>query = <span class="kw-2">&amp;*</span>query_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
+        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc, font_data);
         <span class="kw">let </span>request_hash = get_request_hash(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>fallback = get_font_fallback(<span class="self">self</span>.project_path, options, request_hash);
         <span class="kw">let </span>properties = get_font_css_properties(options, fallback, request_hash).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>js_asset = VirtualAssetVc::new(
                 next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
-                    .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>)),
+                    .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc, font_data).<span class="kw">await</span><span class="question-mark">?</span>)),
                 FileContent::Content(
                     <span class="macro">formatdoc!</span>(
                         <span class="string">r#&quot;
@@ -651,15 +668,17 @@
         } = request <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportMapResult::NoEntry.into());
         };
-        request.request();
 
-        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
-        <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options);
+        <span class="kw">let </span>font_data = load_font_data(<span class="self">self</span>.project_path);
+        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc, font_data);
+        <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options, font_data);
         <span class="kw">let </span>request_hash = get_request_hash(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>scoped_font_family =
             get_scoped_font_family(FontFamilyType::WebFont.cell(), options, request_hash);
-        <span class="kw">let </span>css_virtual_path = next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>)
-            .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}.module.css&quot;</span>, get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>));
+        <span class="kw">let </span>css_virtual_path = next_js_file_path(<span class="string">&quot;internal/font/google&quot;</span>).join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+            <span class="string">&quot;/{}.module.css&quot;</span>,
+            get_request_id(<span class="kw-2">*</span>query_vc, font_data).<span class="kw">await</span><span class="question-mark">?
+        </span>));
 
         <span class="comment">// When running Next.js integration tests, use the mock data available in
         // process.env.NEXT_FONT_GOOGLE_MOCKED_RESPONSES instead of making real
@@ -732,6 +751,17 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>load_font_data(project_root: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;FontDataVc&gt; {
+    <span class="kw">let </span>data: FontData = load_next_json(
+        project_root,
+        <span class="string">&quot;/dist/compiled/@next/font/dist/google/font-data.json&quot;</span>,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(data.cell())
+}
+
+<span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>update_stylesheet(
     stylesheet: StringVc,
     options: NextFontGoogleOptionsVc,
@@ -746,8 +776,8 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_request_id(query_vc: QueryMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-    <span class="kw">let </span>options = font_options_from_query_map(query_vc).<span class="kw">await</span><span class="question-mark">?</span>;
+</span><span class="kw">async fn </span>get_request_id(query_vc: QueryMapVc, font_data: FontDataVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+    <span class="kw">let </span>options = font_options_from_query_map(query_vc, font_data).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
         <span class="string">&quot;{}_{:x?}&quot;</span>,
@@ -774,7 +804,10 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_stylesheet_url_from_options(options: NextFontGoogleOptionsVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+</span><span class="kw">async fn </span>get_stylesheet_url_from_options(
+    options: NextFontGoogleOptionsVc,
+    font_data: FontDataVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
     <span class="attr">#[allow(unused_mut, unused_assignments)] </span><span class="comment">// This is used in test environments
     </span><span class="kw">let </span><span class="kw-2">mut </span>css_url: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
     <span class="attr">#[cfg(debug_assertions)]
@@ -792,7 +825,7 @@
         css_url.as_deref().unwrap_or(GOOGLE_FONTS_STYLESHEET_URL),
         <span class="kw-2">&amp;</span>options.font_family,
         <span class="kw-2">&amp;</span>get_font_axes(
-            <span class="kw-2">&amp;</span>FONT_DATA,
+            <span class="kw-2">&amp;*</span>font_data.<span class="kw">await</span><span class="question-mark">?</span>,
             <span class="kw-2">&amp;</span>options.font_family,
             <span class="kw-2">&amp;</span>options.weights,
             <span class="kw-2">&amp;</span>options.styles,
@@ -855,7 +888,10 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>font_options_from_query_map(query: QueryMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;NextFontGoogleOptionsVc&gt; {
+</span><span class="kw">async fn </span>font_options_from_query_map(
+    query: QueryMapVc,
+    font_data: FontDataVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;NextFontGoogleOptionsVc&gt; {
     <span class="kw">let </span>query_map = <span class="kw-2">&amp;*</span>query.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="comment">// These are invariants from the next/font swc transform. Regular errors instead
     // of Issues should be okay.
@@ -871,7 +907,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Expected one entry&quot;</span>);
         };
 
-    <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>parse_json_with_source_context(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>FONT_DATA)
+    <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>parse_json_with_source_context(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;*</span>font_data.<span class="kw">await</span><span class="question-mark">?</span>)
         .map(|o| NextFontGoogleOptionsVc::new(Value::new(o)))
 }
 

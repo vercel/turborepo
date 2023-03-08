@@ -568,6 +568,8 @@
 <span id="568">568</span>
 <span id="569">569</span>
 <span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -611,20 +613,22 @@
     Fixed(Vec&lt;u16&gt;),
 }
 
-<span class="attr">#[derive(Debug, Deserialize)]
+<span class="attr">#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, TraceRawVcs)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>FontDataEntry {
     <span class="kw">pub </span>weights: Vec&lt;String&gt;,
     <span class="kw">pub </span>styles: Vec&lt;String&gt;,
     <span class="kw">pub </span>axes: <span class="prelude-ty">Option</span>&lt;Vec&lt;Axis&gt;&gt;,
 }
 
-<span class="attr">#[derive(Debug, Deserialize)]
+<span class="attr">#[derive(Debug, PartialEq, Deserialize, Serialize, TraceRawVcs)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Axis {
     <span class="kw">pub </span>tag: String,
     <span class="kw">pub </span>min: f64,
     <span class="kw">pub </span>max: f64,
 }
+
+<span class="kw">impl </span>Eq <span class="kw">for </span>Axis {}
 
 <span class="comment">// Transforms the request fields to a struct suitable for making requests to
 // Google Fonts. Similar to next/font/google&#39;s validateData:
