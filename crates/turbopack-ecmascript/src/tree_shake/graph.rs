@@ -834,13 +834,13 @@ impl DepGraph {
     }
 }
 
-const CHUNK_KEY: &str = "__turbopack_chunk__";
+const ASSERT_CHUNK_KEY: &str = "__turbopack_chunk__";
 
 fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
         props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
-            key: PropName::Ident(Ident::new(CHUNK_KEY.into(), DUMMY_SP)),
+            key: PropName::Ident(Ident::new(ASSERT_CHUNK_KEY.into(), DUMMY_SP)),
             value: (dep as f64).into(),
         }))],
     }
@@ -851,7 +851,7 @@ pub(crate) fn find_turbopack_chunk_id_in_asserts(asserts: &ObjectLit) -> Option<
         PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(key),
             value: box Expr::Lit(Lit::Num(chunk_id)),
-        })) if &*key.sym == CHUNK_KEY => Some(chunk_id.value as u32),
+        })) if &*key.sym == ASSERT_CHUNK_KEY => Some(chunk_id.value as u32),
         _ => None,
     })
 }
