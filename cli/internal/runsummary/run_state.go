@@ -42,6 +42,23 @@ const (
 	TargetBuildFailed
 )
 
+func (rrs RunResultStatus) toString() string {
+	switch rrs {
+	case TargetBuilding:
+		return "building"
+	case TargetBuildStopped:
+		return "buildStopped"
+	case TargetBuilt:
+		return "built"
+	case TargetCached:
+		return "cached"
+	case TargetBuildFailed:
+		return "buildFailed"
+	}
+
+	return ""
+}
+
 // BuildTargetState contains data about the state of a single task in a turbo run.
 // Some fields are updated over time as the task prepares to execute and finishes execution.
 type BuildTargetState struct {
@@ -53,7 +70,7 @@ type BuildTargetState struct {
 	Label string `json:"-"`
 
 	// Its current status
-	Status RunResultStatus `json:"status"`
+	Status string `json:"status"`
 
 	// Error, only populated for failure statuses
 	Err error `json:"error"`
@@ -129,14 +146,14 @@ func (r *RunState) add(result *RunResult, previous string, active bool) *BuildTa
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
-		s.Status = result.Status
+		s.Status = result.Status.toString()
 		s.Err = result.Err
 		s.Duration = result.Duration
 	} else {
 		r.state[result.Label] = &BuildTargetState{
 			StartAt:  result.Time,
 			Label:    result.Label,
-			Status:   result.Status,
+			Status:   result.Status.toString(),
 			Err:      result.Err,
 			Duration: result.Duration,
 		}
