@@ -382,7 +382,6 @@ pub(super) async fn part_of_module(
                 eval_context,
             }))
         }
-        ParseResult::Unparseable => Ok(ParseResultVc::cell(ParseResult::Unparseable)),
-        ParseResult::NotFound => Ok(ParseResultVc::cell(ParseResult::NotFound)),
+        ParseResult::Unparseable | ParseResult::NotFound => Ok(split_data.parsed),
     }
 }
