@@ -1812,6 +1812,68 @@
 <span id="1812">1812</span>
 <span id="1813">1813</span>
 <span id="1814">1814</span>
+<span id="1815">1815</span>
+<span id="1816">1816</span>
+<span id="1817">1817</span>
+<span id="1818">1818</span>
+<span id="1819">1819</span>
+<span id="1820">1820</span>
+<span id="1821">1821</span>
+<span id="1822">1822</span>
+<span id="1823">1823</span>
+<span id="1824">1824</span>
+<span id="1825">1825</span>
+<span id="1826">1826</span>
+<span id="1827">1827</span>
+<span id="1828">1828</span>
+<span id="1829">1829</span>
+<span id="1830">1830</span>
+<span id="1831">1831</span>
+<span id="1832">1832</span>
+<span id="1833">1833</span>
+<span id="1834">1834</span>
+<span id="1835">1835</span>
+<span id="1836">1836</span>
+<span id="1837">1837</span>
+<span id="1838">1838</span>
+<span id="1839">1839</span>
+<span id="1840">1840</span>
+<span id="1841">1841</span>
+<span id="1842">1842</span>
+<span id="1843">1843</span>
+<span id="1844">1844</span>
+<span id="1845">1845</span>
+<span id="1846">1846</span>
+<span id="1847">1847</span>
+<span id="1848">1848</span>
+<span id="1849">1849</span>
+<span id="1850">1850</span>
+<span id="1851">1851</span>
+<span id="1852">1852</span>
+<span id="1853">1853</span>
+<span id="1854">1854</span>
+<span id="1855">1855</span>
+<span id="1856">1856</span>
+<span id="1857">1857</span>
+<span id="1858">1858</span>
+<span id="1859">1859</span>
+<span id="1860">1860</span>
+<span id="1861">1861</span>
+<span id="1862">1862</span>
+<span id="1863">1863</span>
+<span id="1864">1864</span>
+<span id="1865">1865</span>
+<span id="1866">1866</span>
+<span id="1867">1867</span>
+<span id="1868">1868</span>
+<span id="1869">1869</span>
+<span id="1870">1870</span>
+<span id="1871">1871</span>
+<span id="1872">1872</span>
+<span id="1873">1873</span>
+<span id="1874">1874</span>
+<span id="1875">1875</span>
+<span id="1876">1876</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1835,10 +1897,11 @@
 
 <span class="kw">use </span>std::{
     borrow::Cow,
+    cmp::min,
     collections::{HashMap, HashSet},
     fmt::{<span class="self">self</span>, Debug, Display, Formatter},
     fs::FileType,
-    io::{<span class="self">self</span>, ErrorKind},
+    io::{<span class="self">self</span>, BufRead, ErrorKind},
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
@@ -1861,7 +1924,10 @@
 <span class="kw">pub use </span>read_glob::{ReadGlobResult, ReadGlobResultVc};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
-<span class="kw">use </span>tokio::{fs, io::AsyncReadExt};
+<span class="kw">use </span>tokio::{
+    fs,
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+};
 <span class="kw">use </span>turbo_tasks::{
     mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
@@ -1870,7 +1936,7 @@
     CompletionVc, Invalidator, ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
-<span class="kw">use </span>util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
+<span class="kw">use </span>util::{extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys};
 
 <span class="kw">use </span><span class="self">self</span>::{json::UnparseableJson, mutex_map::MutexMap};
 <span class="kw">use crate</span>::{
@@ -2230,18 +2296,6 @@
     }
 }
 
-<span class="doccomment">/// Reads the file from disk, without converting the contents into a Vc.
-</span><span class="kw">async fn </span>read_file(path: PathBuf, mutex_map: <span class="kw-2">&amp;</span>MutexMap&lt;PathBuf&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;FileContent&gt; {
-    <span class="kw">let </span>_lock = mutex_map.lock(path.clone()).<span class="kw">await</span>;
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>retry_future(|| File::from_path(path.clone())).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
-        <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
-        <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="macro">bail!</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading file {}&quot;</span>, path.display())))
-        }
-    })
-}
-
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>FileSystem <span class="kw">for </span>DiskFileSystem {
     <span class="attr">#[turbo_tasks::function]
@@ -2249,7 +2303,14 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>content = read_file(full_path, <span class="kw-2">&amp;</span><span class="self">self</span>.mutex_map).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>content = <span class="kw">match </span>retry_future(|| File::from_path(full_path.clone())).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
+            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">bail!</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading file {}&quot;</span>, full_path.display())))
+            }
+        };
         <span class="prelude-val">Ok</span>(content.cell())
     }
 
@@ -2408,19 +2469,19 @@
         <span class="comment">// Track the file, so that we will rewrite it if it ever changes.
         </span>fs_path.track().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// We perform an untracked read here, so that this write is not dependent on the
-        // read&#39;s FileContent value (and the memory it holds). Our untracked read can be
-        // freed immediately. Given this is an output file, it&#39;s unlikely any Turbo code
-        // will need to read the file from disk into a FileContentVc, so we&#39;re not
-        // wasting cycles.
-        </span><span class="kw">let </span>old_content = read_file(full_path.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.mutex_map).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">if </span><span class="kw-2">*</span>content == old_content {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
-        }
         <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>create_directory = old_content == FileContent::NotFound;
+        <span class="comment">// We perform an untracked comparison here, so that this write is not dependent
+        // on a read&#39;s FileContentVc (and the memory it holds). Our untracked read can
+        // be freed immediately. Given this is an output file, it&#39;s unlikely any Turbo
+        // code will need to read the file from disk into a FileContentVc, so we&#39;re not
+        // wasting cycles.
+        </span><span class="kw">let </span>compare = content.streaming_compare(full_path.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>compare == FileComparison::Equal {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
+        }
+
+        <span class="kw">let </span>create_directory = compare == FileComparison::Create;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
             FileContent::Content(file) =&gt; {
                 <span class="kw">if </span>create_directory {
@@ -3111,6 +3172,69 @@
 <span class="kw">impl </span>From&lt;File&gt; <span class="kw">for </span>FileContentVc {
     <span class="kw">fn </span>from(file: File) -&gt; <span class="self">Self </span>{
         FileContent::Content(file).cell()
+    }
+}
+
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq)]
+</span><span class="kw">enum </span>FileComparison {
+    Create,
+    Equal,
+    NotEqual,
+}
+
+<span class="kw">impl </span>FileContent {
+    <span class="doccomment">/// Performs a comparison of self&#39;s data against a disk file&#39;s streamed
+    /// read.
+    </span><span class="kw">async fn </span>streaming_compare(<span class="kw-2">&amp;</span><span class="self">self</span>, path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;FileComparison&gt; {
+        <span class="kw">let </span>old_file = extract_disk_access(retry_future(|| fs::File::open(<span class="kw-2">&amp;</span>path)).<span class="kw">await</span>, <span class="kw-2">&amp;</span>path)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>old_file) = old_file <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
+                FileContent::NotFound =&gt; FileComparison::Equal,
+                <span class="kw">_ </span>=&gt; FileComparison::Create,
+            });
+        };
+        <span class="comment">// We know old file exists, does the new file?
+        </span><span class="kw">let </span>FileContent::Content(new_file) = <span class="self">self </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(FileComparison::NotEqual);
+        };
+
+        <span class="kw">let </span>old_meta = extract_disk_access(retry_future(|| old_file.metadata()).<span class="kw">await</span>, <span class="kw-2">&amp;</span>path)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(old_meta) = old_meta <span class="kw">else </span>{
+            <span class="comment">// If we failed to get meta, then the old file has been deleted between the handle open.
+            // In which case, we just pretend the file never existed.
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(FileComparison::Create);
+        };
+        <span class="comment">// If the meta is different, we need to rewrite the file to update it.
+        </span><span class="kw">if </span>new_file.meta != old_meta.into() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(FileComparison::NotEqual);
+        }
+
+        <span class="comment">// So meta matches, and we have a file handle. Let&#39;s stream the contents to see
+        // if they match.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>new_contents = new_file.read();
+        <span class="kw">let </span><span class="kw-2">mut </span>old_contents = BufReader::new(<span class="kw-2">&amp;mut </span>old_file);
+        <span class="prelude-val">Ok</span>(<span class="kw">loop </span>{
+            <span class="kw">let </span>new_chunk = new_contents.fill_buf()<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="prelude-val">Ok</span>(old_chunk) = old_contents.fill_buf().<span class="kw">await else </span>{
+                <span class="kw">break </span>FileComparison::NotEqual;
+            };
+
+            <span class="kw">let </span>len = min(new_chunk.len(), old_chunk.len());
+            <span class="kw">if </span>len == <span class="number">0 </span>{
+                <span class="kw">if </span>new_chunk.len() == old_chunk.len() {
+                    <span class="kw">break </span>FileComparison::Equal;
+                } <span class="kw">else </span>{
+                    <span class="kw">break </span>FileComparison::NotEqual;
+                }
+            }
+
+            <span class="kw">if </span>new_chunk[<span class="number">0</span>..len] != old_chunk[<span class="number">0</span>..len] {
+                <span class="kw">break </span>FileComparison::NotEqual;
+            }
+
+            new_contents.consume(len);
+            old_contents.consume(len);
+        })
     }
 }
 

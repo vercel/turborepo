@@ -957,7 +957,7 @@
     borrow::Cow,
     cmp::min,
     fmt,
-    io::{<span class="self">self</span>, BufRead, Read, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
+    io::{BufRead, Read, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
     mem,
     ops::{AddAssign, Deref},
     pin::Pin,
@@ -1575,7 +1575,7 @@
 }
 
 <span class="kw">impl </span>Read <span class="kw">for </span>RopeReader {
-    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+    <span class="kw">fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; IoResult&lt;usize&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.read_internal(buf.len(), <span class="kw-2">&amp;mut </span>ReadBuf::new(buf)))
     }
 }
@@ -1585,7 +1585,7 @@
         <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;,
         buf: <span class="kw-2">&amp;mut </span>ReadBuf&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Poll&lt;io::Result&lt;()&gt;&gt; {
+    ) -&gt; Poll&lt;IoResult&lt;()&gt;&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.get_mut();
         this.read_internal(buf.remaining(), buf);
         Poll::Ready(<span class="prelude-val">Ok</span>(()))

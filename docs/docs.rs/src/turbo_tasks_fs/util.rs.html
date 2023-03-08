@@ -110,7 +110,30 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    borrow::Cow,
+    io::{ErrorKind, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult},
+    path::Path,
+};
+
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 
 <span class="doccomment">/// Joins two /-separated paths into a normalized path.
 /// Paths are concatenated with /.
@@ -221,6 +244,17 @@
         }
     }
     seqments.join(<span class="string">&quot;/&quot;</span>)
+}
+
+<span class="doccomment">/// Converts a disk access Result&lt;T&gt; into a Result&lt;Some&lt;T&gt;&gt;, where a NotFound
+/// error results in a None value. This is purely to reduce boilerplate code
+/// comparing NotFound errors against all other errors.
+</span><span class="kw">pub fn </span>extract_disk_access&lt;T&gt;(value: IoResult&lt;T&gt;, path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt; {
+    <span class="kw">match </span>value {
+        <span class="prelude-val">Ok</span>(v) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(v)),
+        <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading file {}&quot;</span>, path.display()))),
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_fs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
