@@ -16,8 +16,9 @@ use std::{
 use anyhow::Result;
 use css::{CssModuleAssetVc, ModuleCssModuleAssetVc};
 use ecmascript::{
-    tree_shake::EcmascriptModulePartAssetVc, typescript::resolve::TypescriptTypesAssetReferenceVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    tree_shake::asset::EcmascriptModulePartAssetVc,
+    typescript::resolve::TypescriptTypesAssetReferenceVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc,
 };
 use graph::{aggregate, AggregatedGraphNodeContent, AggregatedGraphVc};
 use lazy_static::lazy_static;
