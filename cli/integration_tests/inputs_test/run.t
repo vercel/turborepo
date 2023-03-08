@@ -3,11 +3,11 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Running build for my-app succeeds
-  $ ${TURBO} run build --filter=my-app
+  $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing b7cf611b2774bb9a
+  my-app:build: cache miss, executing 8e831316c353dd67
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo 'building'
@@ -20,11 +20,11 @@ Running build for my-app succeeds
   
 Update exluded file and try again
   $ echo "new excluded value" > apps/my-app/excluded.txt
-  $ ${TURBO} run build --filter=my-app
+  $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying output b7cf611b2774bb9a
+  my-app:build: cache hit, replaying output 8e831316c353dd67
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo 'building'
