@@ -33,10 +33,7 @@ impl EcmascriptModulePartAssetVc {
         data.cell()
     }
 
-    pub async fn from_splitted(
-        module: EcmascriptModuleAssetVc,
-        part: ModulePartVc,
-    ) -> Result<Self> {
+    pub async fn from_split(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Result<Self> {
         let split_data = split(module.origin_path(), module.parse());
         let result = split_data.await?;
         let part = part.await?;
