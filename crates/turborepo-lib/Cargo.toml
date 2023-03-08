@@ -42,7 +42,7 @@ reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde_json = { version = "1.0.94", package = "serde_jsonc" }
 serde_yaml = { workspace = true }
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

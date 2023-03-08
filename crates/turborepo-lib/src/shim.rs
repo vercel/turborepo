@@ -16,17 +16,14 @@ use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
 use crate::{
     cli,
-    files::{
-        package_json,
-        yarn_rc::{self, YarnRc}, turbo_json,
-    },
+    files::{package_json, turbo_json, yarn_rc},
     get_version,
     package_manager::Globs,
     PackageManager, Payload,
@@ -55,23 +52,6 @@ fn turbo_version_has_shim(version: &str) -> bool {
     }
 
     version.major > 1
-}
-
-fn turbo_version_in_range(version: &str, root_path: PathBuf) -> bool {
-    let version = Version::parse(version).unwrap();
-
-    turbo_json::read(root_path)
-        .ok()
-        .and_then(|turbo_json| {
-            Version::parse(&turbo_json.turbo_version).ok()
-        })
-        .and_then(|specified_version| {
-            match version == specified_version {
-                true => Some(true),
-                false => None,
-            }
-        })
-        .is_some()
 }
 
 #[derive(Debug)]
@@ -320,7 +300,7 @@ impl LocalTurboState {
         let yarn_rc_filename =
             env::var_os("YARN_RC_FILENAME").unwrap_or_else(|| OsString::from(".yarnrc.yml"));
         let yarn_rc_filepath = root_path.join(yarn_rc_filename);
-        let yarn_rc: YarnRc = yarn_rc::read(yarn_rc_filepath).unwrap_or_default();
+        let yarn_rc = yarn_rc::read(&yarn_rc_filepath).unwrap_or_default();
 
         root_path.join(yarn_rc.pnp_unplugged_folder)
     }
@@ -393,7 +373,7 @@ impl LocalTurboState {
                     #[allow(clippy::needless_borrow)]
                     let resolved_package_json_path = root.join(&platform_package_json_path);
                     let platform_package_json =
-                        package_json::read(resolved_package_json_path).unwrap_or_default();
+                        package_json::read(&resolved_package_json_path).unwrap_or_default();
 
                     let version = match platform_package_json.version {
                         Some(version) => version,
@@ -604,10 +584,26 @@ impl RepoState {
             try_check_for_updates(&shim_args, global_version);
             debug!("Running command as global turbo");
 
-            if !turbo_version_in_range(global_version, &self.root) {
-                return Err(anyhow!(
-                    "Project specifies that version is 9, you're running 8."
-                ));
+            // Absence of turbo.json is not an error per business logic.
+            if let Ok(turbo_json) = turbo_json::read(&self.root) {
+                match turbo_json.check_version(global_version) {
+                    Ok(version_match) => {
+                        if !version_match {
+                            return Err(anyhow!(
+                                "You specified needing `turbo` version {}, but you're running {}",
+                                turbo_json.turbo_version,
+                                global_version
+                            ));
+                        }
+                    }
+                    Err(err) => {
+                        return Err(anyhow!(
+                            "The version string in turbo.json at `turboVersion` is invalid: {}. {}",
+                            turbo_json.turbo_version,
+                            err.to_string()
+                        ));
+                    }
+                }
             }
 
             // cli::run checks for this env var, rather than an arg, so that we can support

@@ -45,7 +45,7 @@ impl Default for PackageJson {
     }
 }
 
-pub fn read(path: PathBuf) -> Result<PackageJson> {
+pub fn read(path: &PathBuf) -> Result<PackageJson> {
     let package_json_string = fs::read_to_string(path)?;
     let package_json = serde_json::from_str(&package_json_string)?;
 

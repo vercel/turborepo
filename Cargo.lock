@@ -4463,6 +4463,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_jsonc"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b605afc6c4fc0589e7f740b4f06c46f63b1be86b16e55b3661a5ce2b79e9d0f1"
+dependencies = [
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_path_to_error"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6859,7 +6870,7 @@ dependencies = [
  "rustc_version_runtime",
  "semver 1.0.16",
  "serde",
- "serde_json",
+ "serde_jsonc",
  "serde_yaml",
  "tempfile",
  "tiny-gradient",
