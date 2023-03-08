@@ -97,10 +97,23 @@ pub(crate) struct ImportMap {
     /// Ordered list of (module path, imported symbols, annotations)
     ///
     /// imported symbols is `None` when it's a namespace import.
-    references: IndexSet<(JsWord, Option<Vec<JsWord>>, ImportAnnotations)>,
+    references: IndexSet<ImportMapReference>,
 
     /// True, when the module has exports
     has_exports: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ImportedSymbols {
+    Symbols(Vec<JsWord>),
+    Namespace,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ImportMapReference {
+    pub module_path: JsWord,
+    pub imported_symbols: ImportedSymbols,
+    pub annotations: ImportAnnotations,
 }
 
 impl ImportMap {
@@ -110,20 +123,20 @@ impl ImportMap {
 
     pub fn get_import(&self, id: &Id) -> Option<JsValue> {
         if let Some((i, i_sym)) = self.imports.get(id) {
-            let (i_src, _, annotations) = &self.references[*i];
+            let r = &self.references[*i];
             return Some(JsValue::member(
                 box JsValue::Module(ModuleValue {
-                    module: i_src.clone(),
-                    annotations: annotations.clone(),
+                    module: r.module_path.clone(),
+                    annotations: r.annotations.clone(),
                 }),
                 box i_sym.clone().into(),
             ));
         }
         if let Some(i) = self.namespace_imports.get(id) {
-            let (i_src, _, annotations) = &self.references[*i];
+            let r = &self.references[*i];
             return Some(JsValue::Module(ModuleValue {
-                module: i_src.clone(),
-                annotations: annotations.clone(),
+                module: r.module_path.clone(),
+                annotations: r.annotations.clone(),
             }));
         }
         None
@@ -140,9 +153,7 @@ impl ImportMap {
         None
     }
 
-    pub fn references(
-        &self,
-    ) -> impl Iterator<Item = (&JsWord, &Option<Vec<JsWord>>, &ImportAnnotations)> {
+    pub fn references(&self) -> impl Iterator<Item = &ImportMapReference> {
         self.references.iter()
     }
 
@@ -172,18 +183,18 @@ impl<'a> Analyzer<'a> {
     fn ensure_reference(
         &mut self,
         module_path: JsWord,
-        imported_symbols: Option<Vec<JsWord>>,
+        imported_symbols: ImportedSymbols,
     ) -> usize {
-        let tuple = (
+        let r = ImportMapReference {
             module_path,
             imported_symbols,
-            take(&mut self.current_annotations),
-        );
-        if let Some(i) = self.data.references.get_index_of(&tuple) {
+            annotations: take(&mut self.current_annotations),
+        };
+        if let Some(i) = self.data.references.get_index_of(&r) {
             i
         } else {
             let i = self.data.references.len();
-            self.data.references.insert(tuple);
+            self.data.references.insert(r);
             i
         }
     }
@@ -237,9 +248,9 @@ impl Visit for Analyzer<'_> {
             .iter()
             .any(|s| matches!(s, ImportSpecifier::Namespace(..)))
         {
-            None
+            ImportedSymbols::Namespace
         } else {
-            Some(
+            ImportedSymbols::Symbols(
                 import
                     .specifiers
                     .iter()
@@ -279,7 +290,7 @@ impl Visit for Analyzer<'_> {
 
     fn visit_export_all(&mut self, export: &ExportAll) {
         self.data.has_exports = true;
-        let i = self.ensure_reference(export.src.value.clone(), None);
+        let i = self.ensure_reference(export.src.value.clone(), ImportedSymbols::Namespace);
         self.data.reexports.push((i, Reexport::Star));
     }
 
@@ -291,9 +302,9 @@ impl Visit for Analyzer<'_> {
                 .iter()
                 .any(|s| matches!(s, ExportSpecifier::Namespace(..)))
             {
-                None
+                ImportedSymbols::Namespace
             } else {
-                Some(
+                ImportedSymbols::Symbols(
                     export
                         .specifiers
                         .iter()

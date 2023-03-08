@@ -93,7 +93,7 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::Reexport,
+        imports::{ImportedSymbols, Reexport},
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
@@ -313,22 +313,22 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            for (src, symbols, annotations) in eval_context.imports.references() {
-                match symbols {
-                    Some(symbols) => {
-                        let r = EsmAssetReferenceVc::new(
+            for r in eval_context.imports.references() {
+                match &r.imported_symbols {
+                    ImportedSymbols::Symbols(symbols) => {
+                        let vc = EsmAssetReferenceVc::new(
                             origin,
-                            RequestVc::parse(Value::new(src.to_string().into())),
-                            Value::new(annotations.clone()),
+                            RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                            Value::new(r.annotations.clone()),
                             Some(ModulePartVc::new(ModulePart::ModuleEvaluation)),
                         );
-                        import_references.push(r);
+                        import_references.push(vc);
 
                         for symbol in symbols {
                             let r = EsmAssetReferenceVc::new(
                                 origin,
-                                RequestVc::parse(Value::new(src.to_string().into())),
-                                Value::new(annotations.clone()),
+                                RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                                Value::new(r.annotations.clone()),
                                 Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
                                     symbol.to_string(),
                                 )))),
@@ -336,13 +336,13 @@ pub(crate) async fn analyze_ecmascript_module(
                             import_references.push(r);
                         }
                     }
-                    None => {
+                    ImportedSymbols::Namespace => {
                         // Namespace import
 
                         let r = EsmAssetReferenceVc::new(
                             origin,
-                            RequestVc::parse(Value::new(src.to_string().into())),
-                            Value::new(annotations.clone()),
+                            RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                            Value::new(r.annotations.clone()),
                             None,
                         );
                         import_references.push(r);
