@@ -60,62 +60,65 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 }
 
 #[no_mangle]
-pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
-    let req: proto::ChangedFilesReq = match buffer.into_proto() {
-        Ok(req) => req,
-        Err(err) => {
-            let resp = proto::ChangedFilesResp {
-                response: Some(proto::changed_files_resp::Response::Error(err.to_string())),
-            };
-            return resp.into();
-        }
-    };
+pub extern "C" fn changed_files(_buffer: Buffer) -> Buffer {
+    // let req: proto::ChangedFilesReq = match buffer.into_proto() {
+    //     Ok(req) => req,
+    //     Err(err) => {
+    //         let resp = proto::ChangedFilesResp {
+    //             response:
+    // Some(proto::changed_files_resp::Response::Error(err.to_string())),
+    //         };
+    //         return resp.into();
+    //     }
+    // };
 
-    let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
-    let response = match turborepo_scm::git::changed_files(
-        req.repo_root.into(),
-        commit_range,
-        req.include_untracked,
-        req.relative_to.as_deref(),
-    ) {
-        Ok(files) => {
-            let files: Vec<_> = files.into_iter().collect();
-            proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files })
-        }
-        Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
-    };
+    // let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
+    // let response = match turborepo_scm::git::changed_files(
+    //     req.repo_root.into(),
+    //     commit_range,
+    //     req.include_untracked,
+    //     req.relative_to.as_deref(),
+    // ) {
+    //     Ok(files) => {
+    //         let files: Vec<_> = files.into_iter().collect();
+    //         proto::changed_files_resp::Response::Files(proto::ChangedFilesList {
+    // files })     }
+    //     Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
+    // };
 
     let resp = proto::ChangedFilesResp {
-        response: Some(response),
+        response: Some(proto::changed_files_resp::Response::Files(
+            proto::ChangedFilesList { files: vec![] },
+        )),
     };
     resp.into()
 }
 
 #[no_mangle]
-pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
-    let req: proto::PreviousContentReq = match buffer.into_proto() {
-        Ok(req) => req,
-        Err(err) => {
-            let resp = proto::PreviousContentResp {
-                response: Some(proto::previous_content_resp::Response::Error(
-                    err.to_string(),
-                )),
-            };
-            return resp.into();
-        }
-    };
+pub extern "C" fn previous_content(_buffer: Buffer) -> Buffer {
+    // let req: proto::PreviousContentReq = match buffer.into_proto() {
+    //     Ok(req) => req,
+    //     Err(err) => {
+    //         let resp = proto::PreviousContentResp {
+    //             response: Some(proto::previous_content_resp::Response::Error(
+    //                 err.to_string(),
+    //             )),
+    //         };
+    //         return resp.into();
+    //     }
+    // };
 
-    let response = match turborepo_scm::git::previous_content(
-        req.repo_root.into(),
-        &req.from_commit,
-        PathBuf::from(req.file_path),
-    ) {
-        Ok(content) => proto::previous_content_resp::Response::Content(content),
-        Err(err) => proto::previous_content_resp::Response::Error(err.to_string()),
-    };
+    // let response = match turborepo_scm::git::previous_content(
+    //     req.repo_root.into(),
+    //     &req.from_commit,
+    //     PathBuf::from(req.file_path),
+    // ) {
+    //     Ok(content) => proto::previous_content_resp::Response::Content(content),
+    //     Err(err) =>
+    // proto::previous_content_resp::Response::Error(err.to_string()), };
 
     let resp = proto::PreviousContentResp {
-        response: Some(response),
+        response: Some(proto::previous_content_resp::Response::Content(vec![])),
     };
     resp.into()
 }
