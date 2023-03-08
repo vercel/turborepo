@@ -119,9 +119,9 @@ impl Analyzer<'_> {
 
                     // (the writes need to be executed before this read)
                     if let Some(state) = self.vars.get(id) {
-                        for last_write in state.last_writes.iter() {
-                            self.g.add_strong_dep(item_id, last_write);
+                        self.g.add_strong_deps(item_id, state.last_writes.iter());
 
+                        for last_write in state.last_writes.iter() {
                             items_to_remove_from_last_reads
                                 .entry(id.clone())
                                 .or_default()
@@ -139,9 +139,7 @@ impl Analyzer<'_> {
                     // it’s needed)
 
                     if let Some(state) = self.vars.get(id) {
-                        for last_read in state.last_reads.iter() {
-                            self.g.add_weak_dep(item_id, last_read);
-                        }
+                        self.g.add_weak_deps(item_id, state.last_reads.iter());
                     }
                 }
 
@@ -156,13 +154,8 @@ impl Analyzer<'_> {
                     // LAST_READS.
                     for id in eventual_ids.iter() {
                         if let Some(state) = self.vars.get(id) {
-                            for last_write in state.last_writes.iter() {
-                                self.g.add_weak_dep(item_id, last_write);
-                            }
-
-                            for last_read in state.last_reads.iter() {
-                                self.g.add_weak_dep(item_id, last_read);
-                            }
+                            self.g.add_weak_deps(item_id, state.last_writes.iter());
+                            self.g.add_weak_deps(item_id, state.last_reads.iter());
                         }
                     }
                 }
@@ -216,9 +209,7 @@ impl Analyzer<'_> {
                     // LAST_WRITES for that var.
 
                     if let Some(state) = self.vars.get(id) {
-                        for last_write in state.last_writes.iter() {
-                            self.g.add_strong_dep(item_id, last_write);
-                        }
+                        self.g.add_strong_deps(item_id, state.last_writes.iter());
                     }
                 }
 
@@ -228,9 +219,7 @@ impl Analyzer<'_> {
                     // LAST_READS for that var.
 
                     if let Some(state) = self.vars.get(id) {
-                        for last_read in state.last_reads.iter() {
-                            self.g.add_weak_dep(item_id, last_read);
-                        }
+                        self.g.add_weak_deps(item_id, state.last_reads.iter());
                     }
                 }
 
@@ -248,30 +237,14 @@ impl Analyzer<'_> {
                     ItemIdKind::ModuleEvaluation => {
                         // Create a strong dependency to LAST_SIDE_EFFECTS
 
-                        for last in self.last_side_effects.iter() {
-                            self.g.add_strong_dep(item_id, last);
-                        }
-
-                        // // Create weak dependencies to all LAST_WRITES and
-                        // // LAST_READS.
-
-                        // for (.., state) in self.vars.iter() {
-                        //     for last_write in state.last_writes.iter() {
-                        //         self.g.add_weak_dep(item_id, last_write);
-                        //     }
-
-                        //     for last_read in state.last_reads.iter() {
-                        //         self.g.add_weak_dep(item_id, last_read);
-                        //     }
-                        // }
+                        self.g
+                            .add_strong_deps(item_id, self.last_side_effects.iter());
                     }
                     ItemIdKind::Export(id) => {
                         // Create a strong dependency to LAST_WRITES for this var
 
                         if let Some(state) = self.vars.get(id) {
-                            for last_write in state.last_writes.iter() {
-                                self.g.add_strong_dep(item_id, last_write);
-                            }
+                            self.g.add_strong_deps(item_id, state.last_writes.iter());
                         }
                     }
 

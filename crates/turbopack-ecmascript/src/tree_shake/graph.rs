@@ -797,6 +797,34 @@ impl DepGraph {
         (ids, items)
     }
 
+    pub(super) fn add_strong_deps<'a, T>(&mut self, from: &ItemId, to: T)
+    where
+        T: IntoIterator<Item = &'a ItemId>,
+    {
+        let from = self.g.node(from);
+
+        for to in to {
+            let to = self.g.node(to);
+
+            self.g.idx_graph.add_edge(from, to, true);
+        }
+    }
+    pub(super) fn add_weak_deps<'a, T>(&mut self, from: &ItemId, to: T)
+    where
+        T: IntoIterator<Item = &'a ItemId>,
+    {
+        let from = self.g.node(from);
+
+        for to in to {
+            let to = self.g.node(to);
+
+            if let Some(true) = self.g.idx_graph.edge_weight(from, to) {
+                continue;
+            }
+            self.g.idx_graph.add_edge(from, to, false);
+        }
+    }
+
     pub(super) fn add_strong_dep(&mut self, item: &ItemId, dep: &ItemId) {
         let from = self.g.node(item);
         let to = self.g.node(dep);
