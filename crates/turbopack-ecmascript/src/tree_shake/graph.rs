@@ -553,10 +553,7 @@ impl DepGraph {
                             }
                         }
                     }
-                    ModuleDecl::ExportDefaultDecl(_) => {
-                        exports.push((js_word!("default"), Default::default()));
-                    }
-                    ModuleDecl::ExportDefaultExpr(_) => {
+                    ModuleDecl::ExportDefaultDecl(_) | ModuleDecl::ExportDefaultExpr(_) => {
                         exports.push((js_word!("default"), Default::default()));
                     }
                     ModuleDecl::ExportAll(_) => {
