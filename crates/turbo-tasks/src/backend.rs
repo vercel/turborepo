@@ -167,7 +167,7 @@ impl CellContent {
     ///
     /// The caller must ensure that the CellContent contains a vc that
     /// implements T.
-    pub unsafe fn cast_trait<T>(self) -> Result<TraitRef<T>>
+    pub fn cast_trait<T>(self) -> Result<TraitRef<T>>
     where
         T: ValueTraitVc,
     {
@@ -177,7 +177,7 @@ impl CellContent {
         }
         Ok(
             // Safety: We just checked that the content is typed.
-            unsafe { TraitRef::new(shared_reference) },
+            TraitRef::new(shared_reference),
         )
     }
 

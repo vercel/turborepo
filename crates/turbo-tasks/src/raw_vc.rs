@@ -83,7 +83,7 @@ impl RawVc {
     /// T and U must be binary identical (#[repr(transparent)])
     pub unsafe fn into_transparent_read<T: Any + Send + Sync, U: Any + Send + Sync>(
         self,
-    ) -> ReadRawVcFuture<ValueCast<T, U>> {
+    ) -> ReadRawVcFuture<TransparentValueCast<T, U>> {
         // returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         unsafe { ReadRawVcFuture::new_transparent(self) }
@@ -97,7 +97,7 @@ impl RawVc {
         U: Any + Send + Sync,
     >(
         self,
-    ) -> ReadRawVcFuture<ValueCast<T, U>> {
+    ) -> ReadRawVcFuture<TransparentValueCast<T, U>> {
         // returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         unsafe { ReadRawVcFuture::new_transparent_strongly_consistent(self) }
@@ -107,14 +107,14 @@ impl RawVc {
     where
         T: ValueTraitVc,
     {
-        ReadRawVcFuture::new(self)
+        ReadRawVcFuture::new_trait(self)
     }
 
     pub fn into_strongly_consistent_trait_read<T>(self) -> ReadRawVcFuture<TraitCast<T>>
     where
         T: ValueTraitVc,
     {
-        ReadRawVcFuture::new_strongly_consistent(self)
+        ReadRawVcFuture::new_trait_strongly_consistent(self)
     }
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -366,12 +366,12 @@ where
     strongly_consistent: bool,
     current: RawVc,
     listener: Option<EventListener>,
-    _cast: PhantomData<C>,
+    _cast: C,
 }
 
-impl<C> ReadRawVcFuture<C>
+impl<T> ReadRawVcFuture<ValueCast<T>>
 where
-    C: Cast,
+    T: Any + Send + Sync,
 {
     fn new(vc: RawVc) -> Self {
         let tt = turbo_tasks();
@@ -381,7 +381,9 @@ where
             strongly_consistent: false,
             current: vc,
             listener: None,
-            _cast: PhantomData,
+            _cast: ValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 
@@ -393,14 +395,16 @@ where
             strongly_consistent: true,
             current: vc,
             listener: None,
-            _cast: PhantomData,
+            _cast: ValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 }
 
-impl<C> ReadRawVcFuture<C>
+impl<T, U> ReadRawVcFuture<TransparentValueCast<T, U>>
 where
-    C: Cast,
+    T: Any + Send + Sync,
 {
     /// # Safety
     ///
@@ -413,7 +417,9 @@ where
             strongly_consistent: false,
             current: vc,
             listener: None,
-            _cast: PhantomData,
+            _cast: TransparentValueCast {
+                _phantom: PhantomData,
+            },
         }
     }
 
@@ -428,7 +434,42 @@ where
             strongly_consistent: true,
             current: vc,
             listener: None,
-            _cast: PhantomData,
+            _cast: TransparentValueCast {
+                _phantom: PhantomData,
+            },
+        }
+    }
+}
+
+impl<T> ReadRawVcFuture<TraitCast<T>>
+where
+    T: ValueTraitVc,
+{
+    fn new_trait(vc: RawVc) -> Self {
+        let tt = turbo_tasks();
+        tt.notify_scheduled_tasks();
+        ReadRawVcFuture {
+            turbo_tasks: tt,
+            strongly_consistent: false,
+            current: vc,
+            listener: None,
+            _cast: TraitCast {
+                _phantom: PhantomData,
+            },
+        }
+    }
+
+    fn new_trait_strongly_consistent(vc: RawVc) -> Self {
+        let tt = turbo_tasks();
+        tt.notify_scheduled_tasks();
+        ReadRawVcFuture {
+            turbo_tasks: tt,
+            strongly_consistent: true,
+            current: vc,
+            listener: None,
+            _cast: TraitCast {
+                _phantom: PhantomData,
+            },
         }
     }
 }
@@ -498,11 +539,24 @@ pub trait Cast {
 }
 
 /// Casts an arbitrary cell content into a [`ReadRef<T, U>`].
-pub struct ValueCast<T, U = T> {
+pub struct ValueCast<T> {
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Any + Send + Sync> Cast for ValueCast<T> {
+    type Output = ReadRef<T, T>;
+
+    fn cast(content: CellContent) -> Result<Self::Output> {
+        content.cast::<T>()
+    }
+}
+
+/// Casts an arbitrary cell content into a [`ReadRef<T, U>`].
+pub struct TransparentValueCast<T, U = T> {
     _phantom: PhantomData<(T, U)>,
 }
 
-impl<T: Any + Send + Sync, U> Cast for ValueCast<T, U> {
+impl<T: Any + Send + Sync, U> Cast for TransparentValueCast<T, U> {
     type Output = ReadRef<T, U>;
 
     fn cast(content: CellContent) -> Result<Self::Output> {
@@ -525,7 +579,7 @@ where
     fn cast(content: CellContent) -> Result<Self::Output> {
         // Safety: Constructor ensures the cell content points to a value that
         // implements T
-        unsafe { content.cast_trait::<T>() }
+        content.cast_trait::<T>()
     }
 }
 
@@ -537,7 +591,7 @@ pub struct ReadCollectiblesError {
 
 pub struct CollectiblesFuture<T: ValueTraitVc> {
     turbo_tasks: Arc<dyn TurboTasksApi>,
-    inner: ReadRawVcFuture<ValueCast<RawVcSet, AutoSet<RawVc>>>,
+    inner: ReadRawVcFuture<TransparentValueCast<RawVcSet, AutoSet<RawVc>>>,
     take: bool,
     phantom: PhantomData<fn() -> T>,
 }

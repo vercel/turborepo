@@ -20,12 +20,7 @@ where
 }
 
 impl<T> TraitRef<T> {
-    /// # Safety
-    ///
-    /// The caller must ensure that:
-    /// * the shared reference points to a vc that implements the value trait T;
-    /// * the shared reference is typed.
-    pub(crate) unsafe fn new(shared_reference: SharedReference) -> Self {
+    pub(crate) fn new(shared_reference: SharedReference) -> Self {
         Self {
             shared_reference,
             _t: PhantomData,

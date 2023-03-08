@@ -82,7 +82,8 @@ pub use manager::{
 pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};
 pub use raw_vc::{
-    CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError, TraitCast, ValueCast,
+    CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError, TraitCast,
+    TransparentValueCast, ValueCast,
 };
 pub use read_ref::ReadRef;
 pub use state::State;

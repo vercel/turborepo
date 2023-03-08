@@ -399,7 +399,7 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let future_type = if let Some(inner_type) = inner_type {
         quote! {
-           turbo_tasks::ReadRawVcFuture<turbo_tasks::ValueCast<#ident, #inner_type>>
+           turbo_tasks::ReadRawVcFuture<turbo_tasks::TransparentValueCast<#ident, #inner_type>>
         }
     } else {
         quote! {
