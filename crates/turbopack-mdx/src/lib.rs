@@ -88,8 +88,8 @@ impl MdxModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        Ok(into_ecmascript_module_asset(&self).await?.analyze())
+    async fn analyze(self, failsafe: bool) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        Ok(into_ecmascript_module_asset(&self).await?.analyze(failsafe))
     }
 }
 
@@ -107,7 +107,7 @@ impl Asset for MdxModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: MdxModuleAssetVc) -> Result<AssetReferencesVc> {
-        Ok(self_vc.analyze().await?.references)
+        Ok(self_vc.analyze(true).await?.references)
     }
 }
 

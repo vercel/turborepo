@@ -109,11 +109,12 @@ use crate::{
     EcmascriptInputTransformsVc,
 };
 
-#[turbo_tasks::value]
+#[turbo_tasks::value(shared)]
 pub struct AnalyzeEcmascriptModuleResult {
     pub references: AssetReferencesVc,
     pub code_generation: CodeGenerateablesVc,
     pub exports: EcmascriptExportsVc,
+    pub successful: bool,
 }
 
 /// A temporary analysis result builder to pass around, to be turned into an
@@ -122,6 +123,7 @@ pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: Vec<AssetReferenceVc>,
     code_gens: Vec<CodeGenerateableVc>,
     exports: EcmascriptExports,
+    successful: bool,
 }
 
 impl AnalyzeEcmascriptModuleResultBuilder {
@@ -130,6 +132,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             references: Vec::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
+            successful: false,
         }
     }
 
@@ -154,6 +157,11 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         self.exports = exports;
     }
 
+    /// Sets whether the analysis was successful.
+    pub fn set_successful(&mut self, successful: bool) {
+        self.successful = successful;
+    }
+
     /// Builds the final analysis result. Resolves internal Vcs for performance
     /// in using them.
     pub async fn build(mut self) -> Result<AnalyzeEcmascriptModuleResultVc> {
@@ -168,6 +176,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
                 references: AssetReferencesVc::cell(self.references),
                 code_generation: CodeGenerateablesVc::cell(self.code_gens),
                 exports: self.exports.into(),
+                successful: self.successful,
             },
         ))
     }
@@ -1405,6 +1414,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     }
                 }
             }
+            analysis.set_successful(true);
         }
         ParseResult::Unparseable | ParseResult::NotFound => {}
     };

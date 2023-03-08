@@ -42,7 +42,7 @@ use swc_core::{
 pub use transform::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
+use turbo_tasks::{primitives::StringVc, ReadRef, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
@@ -50,7 +50,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesReadRef, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -60,8 +60,8 @@ use turbopack_core::{
 pub use self::references::AnalyzeEcmascriptModuleResultVc;
 use self::{
     chunk::{
-        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-        EcmascriptExportsVc,
+        placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContent,
+        EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions, EcmascriptExportsVc,
     },
     parse::ParseResultVc,
 };
@@ -94,7 +94,6 @@ fn modifier() -> StringVc {
 }
 
 #[turbo_tasks::value]
-#[derive(Clone, Copy)]
 pub struct EcmascriptModuleAsset {
     pub source: AssetVc,
     pub context: AssetContextVc,
@@ -102,6 +101,14 @@ pub struct EcmascriptModuleAsset {
     pub transforms: EcmascriptInputTransformsVc,
     pub compile_time_info: CompileTimeInfoVc,
     pub inner_assets: Option<InnerAssetsVc>,
+    #[turbo_tasks(debug_ignore)]
+    pub last_successful_analyse: turbo_tasks::State<
+        Option<(
+            AnalyzeEcmascriptModuleResultVc,
+            AssetReferencesReadRef,
+            EcmascriptExportsReadRef,
+        )>,
+    >,
 }
 
 /// An optional [EcmascriptModuleAsset]
@@ -125,6 +132,7 @@ impl EcmascriptModuleAssetVc {
             transforms,
             compile_time_info,
             inner_assets: None,
+            last_successful_analyse: Default::default(),
         })
     }
 
@@ -144,6 +152,7 @@ impl EcmascriptModuleAssetVc {
             transforms,
             compile_time_info,
             inner_assets: Some(inner_assets),
+            last_successful_analyse: Default::default(),
         })
     }
 
@@ -157,15 +166,40 @@ impl EcmascriptModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+    pub async fn analyze(self, failsafe: bool) -> Result<AnalyzeEcmascriptModuleResultVc> {
         let this = self.await?;
-        Ok(analyze_ecmascript_module(
+        let result = analyze_ecmascript_module(
             this.source,
             self.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
             this.compile_time_info,
-        ))
+        );
+        if failsafe {
+            let result_value = result.await?;
+            if result_value.successful {
+                this.last_successful_analyse.set(Some((
+                    result,
+                    result_value.references.await?,
+                    result_value.exports.await?,
+                )));
+            } else {
+                if let Some((last_operation, last_references, last_exports)) =
+                    &*this.last_successful_analyse.get()
+                {
+                    let last_operation: turbo_tasks::RawVc = last_operation.into();
+                    last_operation.connect();
+                    return Ok(AnalyzeEcmascriptModuleResult {
+                        references: ReadRef::cell(last_references.clone()),
+                        exports: ReadRef::cell(last_exports.clone()),
+                        code_generation: result_value.code_generation,
+                        successful: false,
+                    }
+                    .cell());
+                }
+            }
+        }
+        Ok(result)
     }
 
     #[turbo_tasks::function]
@@ -198,7 +232,7 @@ impl Asset for EcmascriptModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: EcmascriptModuleAssetVc) -> Result<AssetReferencesVc> {
-        Ok(self_vc.analyze().await?.references)
+        Ok(self_vc.analyze(true).await?.references)
     }
 }
 
@@ -226,7 +260,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
 
     #[turbo_tasks::function]
     async fn get_exports(self_vc: EcmascriptModuleAssetVc) -> Result<EcmascriptExportsVc> {
-        Ok(self_vc.analyze().await?.exports)
+        Ok(self_vc.analyze(true).await?.exports)
     }
 }
 
@@ -290,7 +324,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             references,
             code_generation,
             ..
-        } = &*self.module.analyze().await?;
+        } = &*self.module.analyze(false).await?;
         let context = self.context;
         let mut code_gens = Vec::new();
         for r in references.await?.iter() {
