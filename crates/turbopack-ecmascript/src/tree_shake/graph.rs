@@ -217,7 +217,7 @@ impl DepGraph {
     ///
     /// This returns a tuple of `(exports, part_deps, modules)`.
     ///
-    /// Note: ESM imports are immutable, but we does not handle it.
+    /// Note: ESM imports are immutable, but we do not handle it.
     pub(super) fn split_module(
         &self,
         uri_of_module: &JsWord,
