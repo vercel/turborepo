@@ -28,6 +28,8 @@ type RunResult struct {
 	Status RunResultStatus
 	// Error, only populated for failure statuses
 	Err error
+	// The exitCode of the task. This is a pointer so we can distinguish between 0 and unknown.
+	ExitCode *int
 }
 
 // RunResultStatus represents the status of a target when we log a build result.
@@ -74,6 +76,8 @@ type BuildTargetState struct {
 
 	// Error, only populated for failure statuses
 	Err error `json:"error"`
+
+	ExitCode *int `json:"exitCode,omitempty"`
 }
 
 // RunState is the state of the entire `turbo run`. Individual task state in `Tasks` field
@@ -111,7 +115,7 @@ func NewRunState(start time.Time, tracingProfile string) *RunState {
 
 // Run starts the Execution of a single task. It returns a function that can
 // be used to update the state of a given taskID with the RunResultStatus enum
-func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), *BuildTargetState) {
+func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error, exitCode *int), *BuildTargetState) {
 	start := time.Now()
 	buildTargetState := r.add(&RunResult{
 		Time:   start,
@@ -123,7 +127,7 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
-	tracerFn := func(outcome RunResultStatus, err error) {
+	tracerFn := func(outcome RunResultStatus, err error, exitCode *int) {
 		defer tracer.Done()
 		now := time.Now()
 		result := &RunResult{
@@ -135,6 +139,12 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 		if err != nil {
 			result.Err = fmt.Errorf("running %v failed: %w", label, err)
 		}
+
+		if exitCode != nil {
+			fmt.Printf("[debug] setting exitCode %#v\n", exitCode)
+			result.ExitCode = exitCode
+		}
+
 		// Ignore the return value here
 		r.add(result)
 	}
@@ -149,6 +159,7 @@ func (r *RunState) add(result *RunResult) *BuildTargetState {
 		s.Status = result.Status.toString()
 		s.Err = result.Err
 		s.Duration = result.Duration
+		s.ExitCode = result.ExitCode
 	} else {
 		r.state[result.Label] = &BuildTargetState{
 			StartAt:  result.Time,
@@ -156,6 +167,7 @@ func (r *RunState) add(result *RunResult) *BuildTargetState {
 			Status:   result.Status.toString(),
 			Err:      result.Err,
 			Duration: result.Duration,
+			ExitCode: result.ExitCode,
 		}
 	}
 	switch {

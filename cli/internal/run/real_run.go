@@ -220,7 +220,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer(runsummary.TargetCached, nil)
+		tracer(runsummary.TargetCached, nil, nil)
 		return buildTargetState, nil
 	}
 
@@ -242,7 +242,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
-		tracer(runsummary.TargetBuildFailed, err)
+		tracer(runsummary.TargetBuildFailed, err, nil)
 
 		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
@@ -294,7 +294,16 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		if errors.Is(err, process.ErrClosing) {
 			return buildTargetState, nil
 		}
-		tracer(runsummary.TargetBuildFailed, err)
+
+		// If the error we got is a ChildExit, it will have an ExitCode field
+		// Pass that along into the tracer.
+		var e *process.ChildExit
+		if errors.As(err, &e) {
+			tracer(runsummary.TargetBuildFailed, err, &e.ExitCode)
+		} else {
+			// If it wasn't a ChildExit, and something else went wrong, we don't have an exitCode
+			tracer(runsummary.TargetBuildFailed, err, nil)
+		}
 
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.continueOnError {
@@ -321,7 +330,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(runsummary.TargetBuilt, nil)
+	tracer(runsummary.TargetBuilt, nil, &successCode)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
 	return buildTargetState, nil
 }
+
+var successCode = 0
