@@ -117,7 +117,7 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 		Time:   start,
 		Label:  label,
 		Status: TargetBuilding,
-	}, label, true)
+	})
 
 	tracer := chrometracing.Event(label)
 
@@ -136,13 +136,13 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 			result.Err = fmt.Errorf("running %v failed: %w", label, err)
 		}
 		// Ignore the return value here
-		r.add(result, label, false)
+		r.add(result)
 	}
 
 	return tracerFn, buildTargetState
 }
 
-func (r *RunState) add(result *RunResult, previous string, active bool) *BuildTargetState {
+func (r *RunState) add(result *RunResult) *BuildTargetState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
