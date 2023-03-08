@@ -1,7 +1,11 @@
 pub mod http;
 mod signature_authentication;
+#[cfg(test)]
+mod signature_authentication_test_cases;
 
 use thiserror::Error;
+
+use crate::signature_authentication::SignatureError;
 
 #[derive(Debug, Error)]
 pub enum CacheError {
@@ -18,4 +22,8 @@ pub enum CacheError {
     InvalidTag(String),
     #[error("cannot untar file to {0}")]
     InvalidFilePath(String),
+    #[error("artifact verification failed: {0}")]
+    ApiClientError(#[from] turborepo_api_client::Error),
+    #[error("signing artifact failed: {0}")]
+    SignatureError(#[from] SignatureError),
 }

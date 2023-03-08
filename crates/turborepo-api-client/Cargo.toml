@@ -15,4 +15,5 @@ lazy_static = "1.4.0"
 reqwest = { version = "0.11.14", default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 serde = { version = "1.0.152", features = ["derive"] }
+thiserror = { workspace = true }
 tokio = "1.25.0"

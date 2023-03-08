@@ -61,10 +61,12 @@ impl HttpCache {
     }
 
     async fn retrieve(&self, hash: &str) -> Result<(), CacheError> {
-        let response = self.client.get_artifact(&hash).await?;
+        let response = self.client.fetch_artifact(hash).await?;
 
         if let Some(signer_verifier) = &self.signer_verifier {
-            let expected_tag = response.expected_tag.ok_or(CacheError::MissingTag)?;
+            let expected_tag = response
+                .expected_tag
+                .ok_or(CacheError::ArtifactTagMissing)?;
             let is_valid = signer_verifier.validate(hash, &response.body, &expected_tag)?;
 
             if !is_valid {
@@ -76,7 +78,6 @@ impl HttpCache {
     }
 
     fn restore_tar(&self, root: &PathBuf, tar_reader: impl Read) -> Result<(), CacheError> {
-        let missing_links = Vec::new();
         let mut files = Vec::new();
         let zr = zstd::Decoder::new(tar_reader)?;
         let mut tr = tar::Archive::new(zr);
@@ -84,11 +85,11 @@ impl HttpCache {
         for entry in tr.entries()? {
             let mut entry = entry?;
             let path = entry.path()?;
-            files.push(path.clone());
+            files.push(path.to_path_buf());
             let filename = root.join(path);
             let is_child = filename.starts_with(root);
             if !is_child {
-                return Err(CacheError::InvalidPath(
+                return Err(CacheError::InvalidFilePath(
                     filename.to_string_lossy().to_string(),
                 ));
             }
@@ -104,7 +105,9 @@ impl HttpCache {
                 EntryType::Directory => {
                     create_dir_all(&filename)?;
                 }
-                EntryType::Symlink => self.restore_symlink(root, header, false),
+                EntryType::Symlink => {
+                    self.restore_symlink(root, header, false)?;
+                }
                 entry_type => {
                     println!(
                         "Unhandled file type {:?} for {}",
@@ -127,7 +130,7 @@ impl HttpCache {
         let link_filename = root.join(header.path()?);
         let exists = link_filename.parent().map(|p| p.exists()).unwrap_or(false);
         if !exists {
-            return Err(CacheError::InvalidPath(
+            return Err(CacheError::InvalidFilePath(
                 link_filename.to_string_lossy().to_string(),
             ));
         }

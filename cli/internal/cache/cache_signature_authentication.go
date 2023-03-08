@@ -40,9 +40,7 @@ func (asa *ArtifactSignatureAuthentication) generateTag(hash string, artifactBod
 	}
 	tag.Write(artifactBody)
 	hmacOutput := tag.Sum(nil)
-	fmt.Printf("HMAC OUTPUT: %v\n", hmacOutput)
 	output := base64.StdEncoding.EncodeToString(hmacOutput)
-	fmt.Printf("hash: %v, artifactBody: %v, output: %v\n", hash, string(artifactBody), output)
 
 	return output, nil
 }
@@ -64,7 +62,6 @@ func (asa *ArtifactSignatureAuthentication) getTagGenerator(hash string) (hash.H
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("METADATA: %#v\n", string(metadata))
 	// TODO(Gaspar) Support additional signing algorithms here
 	h := hmac.New(sha256.New, secret)
 	h.Write(metadata)

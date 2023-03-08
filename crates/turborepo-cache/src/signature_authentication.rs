@@ -7,7 +7,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-enum SignatureError {
+pub enum SignatureError {
     #[error(
         "signature secret key not found. You must specify a secret key in the \
          TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable"
@@ -32,10 +32,6 @@ struct ArtifactSignature {
 }
 
 impl ArtifactSignatureAuthentication {
-    fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
     fn secret_key(&self) -> Result<Vec<u8>, SignatureError> {
         Ok(env::var_os("TURBO_REMOTE_CACHE_SIGNATURE_KEY")
             .ok_or(SignatureError::NoSignatureSecretKey)?

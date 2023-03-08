@@ -1,7 +1,8 @@
 use std::future::Future;
 
-use anyhow::anyhow;
 use tokio::time::sleep;
+
+use crate::error::Error;
 
 const MIN_SLEEP_TIME_SECS: u64 = 2;
 const MAX_SLEEP_TIME_SECS: u64 = 10;
@@ -18,11 +19,11 @@ const MAX_SLEEP_TIME_SECS: u64 = 10;
 ///   error
 ///
 /// returns: Result<T, Error>
-pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
+pub async fn retry_future<T, E: Into<Error>, F: Future<Output = Result<T, E>>>(
     max_retries: u32,
     future_generator: impl Fn() -> F,
     should_retry: impl Fn(&E) -> bool,
-) -> Result<T, anyhow::Error> {
+) -> Result<T, Error> {
     let mut last_error = None;
     for retry_count in 0..max_retries {
         let future = future_generator();
@@ -42,8 +43,5 @@ pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T
         sleep(std::time::Duration::from_secs(sleep_period)).await;
     }
 
-    Err(anyhow!(
-        "skipping HTTP Request, too many failures have occurred.\nLast error: {}",
-        last_error.unwrap().into()
-    ))
+    Err(Error::TooManyFailures(Box::new(last_error.unwrap().into())))
 }

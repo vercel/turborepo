@@ -8,11 +8,64 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"math/rand"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+var MinArtifactBodyLength = 100
+var MaxArtifactBodyLength = 1000
+var MinWordLength = 10
+var MaxWordLength = 100
+var ValidAsciiChars = 90
+
+func generateWord() string {
+	length := MinWordLength + rand.Intn(MaxWordLength-MinWordLength)
+	word := make([]rune, length)
+	for i := range word {
+		word[i] = rune(rand.Intn(ValidAsciiChars) + '#')
+	}
+
+	return string(word)
+}
+
+func generateTestCase(t *testing.T, r *rand.Rand) string {
+	teamId := generateWord()
+	hash := generateWord()
+
+	artifactBodyLen := MinArtifactBodyLength + rand.Intn(MaxArtifactBodyLength-MinArtifactBodyLength)
+	artifactBody := make([]byte, artifactBodyLen)
+	r.Read(artifactBody)
+
+	secretKey := generateWord()
+
+	artifactBodyString := make([]string, artifactBodyLen)
+	for i := range artifactBody {
+		artifactBodyString[i] = fmt.Sprintf("%d", artifactBody[i])
+	}
+	t.Setenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY", secretKey)
+	hmacTag := testUtilGetHMACTag(hash, teamId, artifactBody, secretKey)
+
+	return fmt.Sprintf("TestCase {") +
+		fmt.Sprintf("team_id: \"%v\", secret_key: \"%v\",", teamId, secretKey) +
+		fmt.Sprintf("artifact_body: vec![%v], hmac_tag: \"%v\" },", strings.Join(artifactBodyString, ", "), hmacTag)
+}
+
+func Test_GenerateTestCases(t *testing.T) {
+	r := rand.New(rand.NewSource(99))
+	testCases := make([]string, 100)
+
+	for i := range testCases {
+		testCases[i] = generateTestCase(t, r)
+	}
+	output := fmt.Sprintf("vec![%v]", strings.Join(testCases, "\n"))
+
+	os.WriteFile("tests.rs", []byte(output), 0644)
+}
 func Test_SecretKeySuccess(t *testing.T) {
 	teamId := "team_someid"
 	secretKeyEnvName := "TURBO_REMOTE_CACHE_SIGNATURE_KEY"

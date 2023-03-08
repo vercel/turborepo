@@ -1,12 +1,14 @@
+#![feature(async_closure)]
+
 use std::{env, future::Future};
 
-use anyhow::{anyhow, Result};
-use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
+pub use crate::error::Error;
 use crate::retry::retry_future;
 
+mod error;
 mod retry;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -111,9 +113,9 @@ pub struct APIClient {
 }
 
 impl APIClient {
-    pub async fn get_user(&self, token: &str) -> Result<UserResponse> {
+    pub async fn get_user(&self, token: &str) -> Result<UserResponse, Error> {
         let response = self
-            .make_retryable_request(|| {
+            .make_retryable_request(async || {
                 let url = self.make_url("/v2/user");
                 let request_builder = self
                     .client
@@ -122,24 +124,17 @@ impl APIClient {
                     .header("Authorization", format!("Bearer {}", token))
                     .header("Content-Type", "application/json");
 
-                request_builder.send()
+                Ok(request_builder.send().await?)
             })
             .await?
             .error_for_status()?;
 
-        response.json().await.map_err(|err| {
-            anyhow!(
-                "Error getting user: {}",
-                err.status()
-                    .and_then(|status| status.canonical_reason())
-                    .unwrap_or(&err.to_string())
-            )
-        })
+        Ok(response.json().await?)
     }
 
-    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse, Error> {
         let response = self
-            .make_retryable_request(|| {
+            .make_retryable_request(async || {
                 let request_builder = self
                     .client
                     .get(self.make_url("/v2/teams?limit=100"))
@@ -147,22 +142,15 @@ impl APIClient {
                     .header("Content-Type", "application/json")
                     .header("Authorization", format!("Bearer {}", token));
 
-                request_builder.send()
+                Ok(request_builder.send().await?)
             })
             .await?
             .error_for_status()?;
 
-        response.json().await.map_err(|err| {
-            anyhow!(
-                "Error getting teams: {}",
-                err.status()
-                    .and_then(|status| status.canonical_reason())
-                    .unwrap_or(&err.to_string())
-            )
-        })
+        Ok(response.json().await?)
     }
 
-    pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>, Error> {
         let response = self
             .client
             .get(self.make_url("/v2/team"))
@@ -174,14 +162,7 @@ impl APIClient {
             .await?
             .error_for_status()?;
 
-        response.json().await.map_err(|err| {
-            anyhow!(
-                "Error getting team: {}",
-                err.status()
-                    .and_then(|status| status.canonical_reason())
-                    .unwrap_or(&err.to_string())
-            )
-        })
+        Ok(response.json().await?)
     }
 
     pub async fn get_caching_status(
@@ -189,9 +170,9 @@ impl APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<CachingStatusResponse> {
+    ) -> Result<CachingStatusResponse, Error> {
         let response = self
-            .make_retryable_request(|| {
+            .make_retryable_request(async || {
                 let mut request_builder = self
                     .client
                     .get(self.make_url("/v8/artifacts/status"))
@@ -206,72 +187,63 @@ impl APIClient {
                     request_builder = request_builder.query(&[("teamId", team_id)]);
                 }
 
-                request_builder.send()
+                Ok(request_builder.send().await?)
             })
             .await?
             .error_for_status()?;
 
-        response.json().await.map_err(|err| {
-            anyhow!(
-                "Error getting caching status: {}",
-                err.status()
-                    .and_then(|status| status.canonical_reason())
-                    .unwrap_or(&err.to_string())
-            )
-        })
+        Ok(response.json().await?)
     }
 
-    pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    pub async fn verify_sso_token(
+        &self,
+        token: &str,
+        token_name: &str,
+    ) -> Result<VerifiedSsoUser, Error> {
         let response = self
-            .make_retryable_request(|| {
+            .make_retryable_request(async || {
                 let request_builder = self
                     .client
                     .get(self.make_url("/registration/verify"))
                     .query(&[("token", token), ("tokenName", token_name)])
                     .header("User-Agent", self.user_agent.clone());
 
-                request_builder.send()
+                Ok(request_builder.send().await?)
             })
             .await?
             .error_for_status()?;
 
-        let verification_response: VerificationResponse = response.json().await.map_err(|err| {
-            anyhow!(
-                "Error verifying token: {}",
-                err.status()
-                    .and_then(|status| status.canonical_reason())
-                    .unwrap_or(&err.to_string())
-            )
-        })?;
+        let verification_response: VerificationResponse = response.json().await?;
+
         Ok(VerifiedSsoUser {
             token: verification_response.token,
             team_id: verification_response.team_id,
         })
     }
 
-    pub fn fetch_artifact() -> Result<ArtifactResponse> {
+    pub async fn fetch_artifact(&self, hash: &str) -> Result<ArtifactResponse, Error> {
         todo!()
     }
 
     const RETRY_MAX: u32 = 2;
 
-    async fn make_retryable_request<
-        F: Future<Output = Result<reqwest::Response, reqwest::Error>>,
-    >(
+    async fn make_retryable_request<F: Future<Output = Result<reqwest::Response, Error>>>(
         &self,
         request_builder: impl Fn() -> F,
-    ) -> Result<reqwest::Response> {
+    ) -> Result<reqwest::Response, Error> {
         retry_future(Self::RETRY_MAX, request_builder, Self::should_retry_request).await
     }
 
-    fn should_retry_request(error: &reqwest::Error) -> bool {
-        if let Some(status) = error.status() {
-            if status == StatusCode::TOO_MANY_REQUESTS {
-                return true;
-            }
+    fn should_retry_request(error: &Error) -> bool {
+        if let Error::ReqwestError(reqwest_error) = error {
+            if let Some(status) = reqwest_error.status() {
+                if status == StatusCode::TOO_MANY_REQUESTS {
+                    return true;
+                }
 
-            if status.as_u16() >= 500 && status.as_u16() != 501 {
-                return true;
+                if status.as_u16() >= 500 && status.as_u16() != 501 {
+                    return true;
+                }
             }
         }
 
@@ -282,7 +254,7 @@ impl APIClient {
         base_url: impl AsRef<str>,
         timeout: Option<u64>,
         version: &'static str,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let client = match timeout {
             Some(timeout) => reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
@@ -308,5 +280,3 @@ impl APIClient {
         format!("{}{}", self.base_url, endpoint)
     }
 }
-
-lazy_static! {}
