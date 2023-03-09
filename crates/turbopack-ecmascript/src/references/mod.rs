@@ -114,6 +114,7 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub references: AssetReferencesVc,
     pub code_generation: CodeGenerateablesVc,
     pub exports: EcmascriptExportsVc,
+    /// `true` when the analysis was successful.
     pub successful: bool,
 }
 
