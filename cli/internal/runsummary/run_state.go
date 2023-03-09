@@ -25,24 +25,24 @@ type executionEvent struct {
 	// Target which has just changed
 	Label string
 	// Its current status
-	Status runResultStatus
+	Status executionEventName
 	// Error, only populated for failure statuses
 	Err error
 }
 
-// runResultStatus represents the status of a target when we log a build result.
-type runResultStatus int
+// executionEventName represents the status of a target when we log a build result.
+type executionEventName int
 
 // The collection of expected build result statuses.
 const (
-	targetBuilding runResultStatus = iota
+	targetBuilding executionEventName = iota
 	TargetBuildStopped
 	TargetBuilt
 	TargetCached
 	TargetBuildFailed
 )
 
-func (rrs runResultStatus) toString() string {
+func (rrs executionEventName) toString() string {
 	switch rrs {
 	case targetBuilding:
 		return "building"
@@ -93,8 +93,8 @@ func newRunState(start time.Time, tracingProfile string) *runState {
 }
 
 // Run starts the Execution of a single task. It returns a function that can
-// be used to update the state of a given taskID with the runResultStatus enum
-func (r *runState) run(label string) (func(outcome runResultStatus, err error), *TaskExecutionSummary) {
+// be used to update the state of a given taskID with the executionEventName enum
+func (r *runState) run(label string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
 	start := time.Now()
 	taskExecutionSummary := r.add(&executionEvent{
 		Time:   start,
@@ -106,7 +106,7 @@ func (r *runState) run(label string) (func(outcome runResultStatus, err error), 
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
-	tracerFn := func(outcome runResultStatus, err error) {
+	tracerFn := func(outcome executionEventName, err error) {
 		defer tracer.Done()
 		now := time.Now()
 		result := &executionEvent{

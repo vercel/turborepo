@@ -52,7 +52,7 @@ func (summary *RunSummary) Close(terminal cli.Ui) error {
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
-func (summary *RunSummary) TrackTask(taskID string) (func(outcome runResultStatus, err error), *TaskExecutionSummary) {
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
 	return summary.runState.run(taskID)
 }
 
