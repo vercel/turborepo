@@ -12,6 +12,9 @@ fn main() -> Result<()> {
         .expect("Unable to generate bindings")
         .write_to_file("bindings.h");
 
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let target = env::var("TARGET").unwrap();
+
     match env::var("CARGO_CFG_TARGET_OS").unwrap().as_ref() {
         "linux" => {
             // statically link libunwind if compiling for musl, dynamically link otherwise
