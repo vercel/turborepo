@@ -1,7 +1,5 @@
 pub mod http;
 mod signature_authentication;
-#[cfg(test)]
-mod signature_authentication_test_cases;
 
 use thiserror::Error;
 

@@ -88,18 +88,30 @@ mod tests {
 
     use super::*;
 
+    include!("./signature_authentication_test_cases.rs");
+
     #[test]
-    fn test_signature() -> Result<()> {
-        env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "my-secret-key-env");
+    fn test_signatures() -> Result<()> {
+        for test_case in get_test_cases() {
+            test_signature(test_case)?;
+        }
+        Ok(())
+    }
+
+    fn test_signature(test_case: TestCase) -> Result<()> {
+        env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key);
         let signature = ArtifactSignatureAuthentication {
-            team_id: "team_someid".to_string(),
-            enabled: true,
+            team_id: test_case.team_id.to_string(),
         };
-        let hash = "the-artifact-hash";
-        let artifact_body = b"the artifact body as bytes";
+
+        let hash = test_case.hash;
+        let artifact_body = &test_case.artifact_body;
         let tag = signature.generate_tag(hash, artifact_body)?;
 
         assert!(signature.validate(hash, artifact_body, &tag)?);
+
+        let test_case_tag = BASE64_STANDARD_NO_PAD.decode(&test_case.tag);
+        assert!(signature.validate(hash, artifact_body, &test_case_tag)?);
 
         // Generate some bad tag that is not correct
         let bad_tag = BASE64_STANDARD_NO_PAD.encode(b"bad tag");

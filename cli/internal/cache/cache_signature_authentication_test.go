@@ -54,7 +54,7 @@ func generateTestCase(t *testing.T, r *rand.Rand) string {
 	hmacTag := testUtilGetHMACTag(hash, teamId, artifactBody, secretKey)
 
 	return fmt.Sprintf("TestCase {") +
-		fmt.Sprintf("team_id: \"%v\", secret_key: \"%v\",", teamId, secretKey) +
+		fmt.Sprintf("team_id: \"%v\", secret_key: \"%v\", artifact_hash: \"%v\", ", teamId, secretKey, hash) +
 		fmt.Sprintf("artifact_body: vec![%v], hmac_tag: \"%v\" },", strings.Join(artifactBodyString, ", "), hmacTag)
 }
 
@@ -65,7 +65,8 @@ func Test_GenerateTestCases(t *testing.T) {
 	for i := range testCases {
 		testCases[i] = generateTestCase(t, r)
 	}
-	output := fmt.Sprintf("vec![%v]", strings.Join(testCases, "\n"))
+	output := "struct TestCase {\n    team_id: &'static str,\n    secret_key: &'static str,\n    artifact_body: Vec<u8>, artifact_hash: &'static str, \n    hmac_tag: &'static str,\n}\n" +
+		fmt.Sprintf("fn get_test_cases() -> Vec<TestCase> { vec![%v] }", strings.Join(testCases, "\n"))
 
 	os.WriteFile("signature_authentication_test_cases.rs", []byte(output), 0644)
 }
