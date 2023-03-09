@@ -507,6 +507,7 @@
 <a href="#507" id="507">507</a>
 <a href="#508" id="508">508</a>
 <a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -905,6 +906,7 @@
     );
 
     import_map.insert_singleton_alias(<span class="string">&quot;@swc/helpers&quot;</span>, get_next_package(project_path));
+    import_map.insert_singleton_alias(<span class="string">&quot;styled-jsx&quot;</span>, get_next_package(project_path));
     import_map.insert_singleton_alias(<span class="string">&quot;next&quot;</span>, project_path);
     import_map.insert_singleton_alias(<span class="string">&quot;react&quot;</span>, project_path);
     import_map.insert_singleton_alias(<span class="string">&quot;react-dom&quot;</span>, project_path);
