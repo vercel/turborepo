@@ -129,9 +129,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	if err := runSummary.Close(base.UI); err != nil {
-		return errors.Wrap(err, "error with profiler")
-	}
+	runSummary.Close(base.UI)
 
 	// Write Run Summary if we wanted to
 	if rs.Opts.runOpts.summarize {

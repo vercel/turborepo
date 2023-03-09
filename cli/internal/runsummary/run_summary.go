@@ -47,8 +47,12 @@ func NewRunSummary(startAt time.Time, profile string, turboVersion string, packa
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (summary *RunSummary) Close(terminal cli.Ui) error {
-	return summary.runState.close(terminal)
+func (summary *RunSummary) Close(terminal cli.Ui) {
+	if err := writeChrometracing(summary.runState.profileFilename, terminal); err != nil {
+		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+	}
+
+	summary.printExecutionSummary(terminal)
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.

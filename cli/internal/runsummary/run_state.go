@@ -8,10 +8,7 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/chrometracing"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/ui"
-	"github.com/vercel/turbo/cli/internal/util"
 
-	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 )
 
@@ -154,38 +151,6 @@ func (r *runState) add(event *executionEvent) *TaskExecutionSummary {
 	}
 
 	return r.state[event.Label]
-}
-
-// Close finishes a trace of a turbo run. The tracing file will be written if applicable,
-// and run stats are written to the terminal
-func (r *runState) close(terminal cli.Ui) error {
-	if err := writeChrometracing(r.profileFilename, terminal); err != nil {
-		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
-	}
-
-	maybeFullTurbo := ""
-	if r.cached == r.attempted && r.attempted > 0 {
-		terminalProgram := os.Getenv("TERM_PROGRAM")
-		// On the macOS Terminal, the rainbow colors show up as a magenta background
-		// with a gray background on a single letter. Instead, we print in bold magenta
-		if terminalProgram == "Apple_Terminal" {
-			fallbackTurboColor := color.New(color.FgHiMagenta, color.Bold).SprintFunc()
-			maybeFullTurbo = fallbackTurboColor(">>> FULL TURBO")
-		} else {
-			maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
-		}
-	}
-
-	if r.attempted == 0 {
-		terminal.Output("") // Clear the line
-		terminal.Warn("No tasks were executed as part of this run.")
-	}
-	terminal.Output("") // Clear the line
-	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.cached+r.success, r.attempted))
-	terminal.Output(util.Sprintf("${BOLD}cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.cached, r.attempted))
-	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
-	terminal.Output("")
-	return nil
 }
 
 // writeChromeTracing writes to a profile name if the `--profile` flag was passed to turbo run
