@@ -7,9 +7,9 @@ license = "MPL-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dunce = "1.0.3"
+dunce = { workspace = true }
 git2 = { version = "0.16.1", default-features = false }
-thiserror = "1.0.38"
+thiserror = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = { workspace = true }

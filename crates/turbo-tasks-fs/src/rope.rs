@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cmp::min,
     fmt,
-    io::{self, BufRead, Read, Result as IoResult, Write},
+    io::{BufRead, Read, Result as IoResult, Write},
     mem,
     ops::{AddAssign, Deref},
     pin::Pin,
@@ -22,7 +22,7 @@ static EMPTY_BUF: &[u8] = &[];
 
 /// A Rope provides an efficient structure for sharing bytes/strings between
 /// multiple sources. Cloning a Rope is extremely cheap (Arc and usize), and
-/// the sharing contents of one Rope can be done by just cloning an Arc.
+/// sharing the contents of one Rope can be done by just cloning an Arc.
 ///
 /// Ropes are immutable, in order to construct one see [RopeBuilder].
 #[turbo_tasks::value(shared, serialization = "custom", eq = "manual")]
@@ -38,8 +38,8 @@ pub struct Rope {
 
 /// An Arc container for ropes. This indirection allows for easily sharing the
 /// contents between Ropes (and also RopeBuilders/RopeReaders).
-#[derive(Clone, Debug, Default)]
-struct InnerRope(Arc<Box<[RopeElem]>>);
+#[derive(Clone, Debug)]
+struct InnerRope(Arc<[RopeElem]>);
 
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
@@ -100,7 +100,7 @@ impl Rope {
         self.length == 0
     }
 
-    /// Returns a Read/AsyncRead/Stream/Iterator instance over all bytes.
+    /// Returns a [Read]/[AsyncRead]/[Iterator] instance over all bytes.
     pub fn read(&self) -> RopeReader {
         RopeReader::new(&self.data, 0)
     }
@@ -120,7 +120,7 @@ impl<T: Into<Bytes>> From<T> for Rope {
         } else {
             Rope {
                 length: bytes.len(),
-                data: InnerRope::from(Box::from([Local(bytes)])),
+                data: InnerRope(Arc::from([Local(bytes)])),
             }
         }
     }
@@ -202,7 +202,7 @@ impl RopeBuilder {
         self.finish();
         Rope {
             length: self.length,
-            data: InnerRope::from(self.committed.into_boxed_slice()),
+            data: InnerRope::from(self.committed),
         }
     }
 }
@@ -388,7 +388,7 @@ impl PartialEq for Rope {
         }
 
         // At this point, we need to do slower contents equality. It's possible we'll
-        // still get some memory reference quality for Bytes.
+        // still get some memory reference equality for Bytes.
         let mut left = RopeReader::new(left, index);
         let mut right = RopeReader::new(right, index);
         loop {
@@ -453,6 +453,12 @@ impl InnerRope {
     }
 }
 
+impl Default for InnerRope {
+    fn default() -> Self {
+        InnerRope(Arc::from([]))
+    }
+}
+
 impl DeterministicHash for InnerRope {
     /// Ropes with similar contents hash the same, regardless of their
     /// structure. Notice the InnerRope does not contain a length (and any
@@ -465,8 +471,8 @@ impl DeterministicHash for InnerRope {
     }
 }
 
-impl From<Box<[RopeElem]>> for InnerRope {
-    fn from(els: Box<[RopeElem]>) -> Self {
+impl From<Vec<RopeElem>> for InnerRope {
+    fn from(els: Vec<RopeElem>) -> Self {
         if cfg!(debug_assertions) {
             // It's important that an InnerRope never contain an empty Bytes section.
             for el in els.iter() {
@@ -482,12 +488,12 @@ impl From<Box<[RopeElem]>> for InnerRope {
                 }
             }
         }
-        InnerRope(Arc::new(els))
+        InnerRope(Arc::from(els))
     }
 }
 
 impl Deref for InnerRope {
-    type Target = Arc<Box<[RopeElem]>>;
+    type Target = Arc<[RopeElem]>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -532,8 +538,8 @@ impl DeterministicHash for RopeElem {
     }
 }
 
-/// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
 #[derive(Debug, Default)]
+/// Implements the [Read]/[AsyncRead]/[Iterator] trait over a [Rope].
 pub struct RopeReader {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
@@ -614,7 +620,7 @@ impl Iterator for RopeReader {
 }
 
 impl Read for RopeReader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         Ok(self.read_internal(buf.len(), &mut ReadBuf::new(buf)))
     }
 }
@@ -624,7 +630,7 @@ impl AsyncRead for RopeReader {
         self: Pin<&mut Self>,
         _cx: &mut TaskContext<'_>,
         buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    ) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         this.read_internal(buf.remaining(), buf);
         Poll::Ready(Ok(()))
@@ -688,6 +694,11 @@ impl From<RopeElem> for StackElem {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        cmp::min,
+        io::{BufRead, Read},
+    };
+
     use super::{InnerRope, Rope, RopeBuilder, RopeElem};
 
     // These are intentionally not exposed, because they do inefficient conversions
@@ -699,7 +710,7 @@ mod test {
     }
     impl From<Vec<RopeElem>> for RopeElem {
         fn from(value: Vec<RopeElem>) -> Self {
-            RopeElem::Shared(InnerRope::from(value.into_boxed_slice()))
+            RopeElem::Shared(InnerRope::from(value))
         }
     }
     impl From<Rope> for RopeElem {
@@ -709,7 +720,7 @@ mod test {
     }
     impl Rope {
         fn new(value: Vec<RopeElem>) -> Self {
-            let data = InnerRope::from(value.into_boxed_slice());
+            let data = InnerRope::from(value);
             Rope {
                 length: data.len(),
                 data,
@@ -870,5 +881,75 @@ mod test {
         let b = Rope::new(vec!["abc".into(), shared.into(), "hhh".into()]);
 
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn iteration() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let chunks = rope.read().into_iter().collect::<Vec<_>>();
+
+        assert_eq!(chunks, vec!["abc", "def", "ghi"]);
+    }
+
+    #[test]
+    fn read() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut buf = [0_u8; 2];
+        let mut reader = rope.read();
+        loop {
+            let amt = reader.read(&mut buf).unwrap();
+            if amt == 0 {
+                break;
+            }
+            chunks.push(Vec::from(&buf[0..amt]));
+        }
+
+        assert_eq!(
+            chunks,
+            vec![
+                Vec::from(*b"ab"),
+                Vec::from(*b"cd"),
+                Vec::from(*b"ef"),
+                Vec::from(*b"gh"),
+                Vec::from(*b"i")
+            ]
+        );
+    }
+
+    #[test]
+    fn fill_buf() {
+        let shared = Rope::from("def");
+        let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
+
+        let mut chunks = vec![];
+        let mut reader = rope.read();
+        loop {
+            let buf = reader.fill_buf().unwrap();
+            if buf.is_empty() {
+                break;
+            }
+            let c = min(2, buf.len());
+            chunks.push(Vec::from(buf));
+            reader.consume(c);
+        }
+
+        assert_eq!(
+            chunks,
+            // We're receiving a full buf, then only consuming 2 bytes, so we'll still get the
+            // third.
+            vec![
+                Vec::from(*b"abc"),
+                Vec::from(*b"c"),
+                Vec::from(*b"def"),
+                Vec::from(*b"f"),
+                Vec::from(*b"ghi"),
+                Vec::from(*b"i")
+            ]
+        );
     }
 }

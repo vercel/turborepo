@@ -4,6 +4,7 @@ package run
 
 import (
 	"github.com/vercel/turbo/cli/internal/cache"
+	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -39,6 +40,7 @@ func (rs *runSpec) ArgsForTask(task string) []string {
 type Opts struct {
 	runOpts      runOpts
 	cacheOpts    cache.Opts
+	clientOpts   client.Opts
 	runcacheOpts runcache.Opts
 	scopeOpts    scope.Opts
 }
@@ -48,6 +50,9 @@ func getDefaultOptions() *Opts {
 	return &Opts{
 		runOpts: runOpts{
 			concurrency: 10,
+		},
+		clientOpts: client.Opts{
+			Timeout: client.ClientTimeout,
 		},
 	}
 }
@@ -77,4 +82,7 @@ type runOpts struct {
 
 	// logPrefix controls whether we should print a prefix in task logs
 	logPrefix string
+
+	// Whether turbo should create a run summary
+	summarize bool
 }

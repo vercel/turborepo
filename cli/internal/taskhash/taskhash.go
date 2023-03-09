@@ -30,14 +30,23 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode                    string
-	globalHash                  string
-	pipeline                    fs.Pipeline
-	mu                          sync.RWMutex
-	packageInputsHashes         packageFileHashes
+	rootNode   string
+	globalHash string
+	pipeline   fs.Pipeline
+
+	packageInputsHashes packageFileHashes
+
+	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
+	// Writes to this map happen during CalculateFileHash(). Since this happens synchronously
+	// before walking the task graph, it does not need to be protected by a mutex.
 	packageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
-	packageTaskHashes           map[string]string // taskID -> hash
-	PackageTaskFramework        map[string]string
+
+	// mu is a mutex that we can lock/unlock to read/write from maps
+	// the fields below should be protected by the mutex.
+	mu                   sync.RWMutex
+	packageTaskEnvVars   map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
+	packageTaskHashes    map[string]string          // taskID -> hash
+	packageTaskFramework map[string]string          // taskID -> inferred framework for package
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -47,7 +56,8 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		globalHash:           globalHash,
 		pipeline:             pipeline,
 		packageTaskHashes:    make(map[string]string),
-		PackageTaskFramework: make(map[string]string),
+		packageTaskFramework: make(map[string]string),
+		packageTaskEnvVars:   make(map[string]env.DetailedMap),
 	}
 }
 
@@ -119,14 +129,28 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		return nil, err
 	}
 
+	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration())
 	includePattern := ""
+	excludePattern := ""
 	if len(inputs) > 0 {
-		includePattern = "{" + strings.Join(inputs, ",") + "}"
+		var includePatterns []string
+		var excludePatterns []string
+		for _, pattern := range inputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				excludePatterns = append(excludePatterns, pathPrefix.UntypedJoin(pattern[1:]).ToString())
+			} else {
+				includePatterns = append(includePatterns, pathPrefix.UntypedJoin(pattern).ToString())
+			}
+		}
+		if len(includePatterns) > 0 {
+			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
+		}
+		if len(excludePatterns) > 0 {
+			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
+		}
 	}
 
-	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration()).ToString()
-	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
-	fs.Walk(pathPrefix, func(name string, isDir bool) error {
+	err = fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
 		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
@@ -141,12 +165,21 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 						return nil
 					}
 				}
+				if excludePattern != "" {
+					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if val {
+						return nil
+					}
+				}
 				hash, err := fs.GitLikeHashFile(convertedName.ToString())
 				if err != nil {
 					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
 
-				relativePath, err := convertedName.RelativeTo(convertedPathPrefix)
+				relativePath, err := convertedName.RelativeTo(pathPrefix)
 				if err != nil {
 					return fmt.Errorf("File path cannot be made relative: %w", err)
 				}
@@ -155,6 +188,9 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return hashObject, nil
 }
 
@@ -290,15 +326,23 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
 
-	var envPrefixes []string
+	var keyMatchers []string
 	framework := inference.InferFramework(packageTask.Pkg)
-	if framework != nil && framework.EnvPrefix != "" {
+	if framework != nil && framework.EnvMatcher != "" {
 		// log auto detected framework and env prefix
-		logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvPrefix)
-		envPrefixes = append(envPrefixes, framework.EnvPrefix)
+		logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
+		keyMatchers = append(keyMatchers, framework.EnvMatcher)
 	}
 
-	hashableEnvPairs := env.GetHashableEnvPairs(packageTask.TaskDefinition.EnvVarDependencies, envPrefixes)
+	envVars, err := env.GetHashableEnvVars(
+		packageTask.TaskDefinition.EnvVarDependencies,
+		keyMatchers,
+		"TURBO_CI_VENDOR_ENV_KEY",
+	)
+	if err != nil {
+		return "", err
+	}
+	hashableEnvPairs := envVars.All.ToHashable()
 	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
 	if err != nil {
@@ -322,16 +366,16 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}
 	th.mu.Lock()
+	th.packageTaskEnvVars[packageTask.TaskID] = envVars
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	if framework != nil {
-		th.PackageTaskFramework[packageTask.TaskID] = framework.Slug
+		th.packageTaskFramework[packageTask.TaskID] = framework.Slug
 	}
 	th.mu.Unlock()
 	return hash, nil
 }
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
-// Thes was stored during CalculateFilesHash, so that method must run first
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
 	pfs := specFromPackageTask(packageTask)
 	expandedInputs := th.packageInputsExpandedHashes[pfs.ToKey()]
@@ -342,4 +386,18 @@ func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopa
 	}
 
 	return inputsCopy
+}
+
+// GetEnvVars returns the hashed env vars for a given taskID
+func (th *Tracker) GetEnvVars(taskID string) env.DetailedMap {
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	return th.packageTaskEnvVars[taskID]
+}
+
+// GetFramework returns the inferred framework for a given taskID
+func (th *Tracker) GetFramework(taskID string) string {
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	return th.packageTaskFramework[taskID]
 }

@@ -37,10 +37,3 @@ func ParseConcurrency(concurrencyRaw string) (int, error) {
 		}
 	}
 }
-
-// ConcurrencyValue allows pflag to accept either a number or percentage
-// of available CPUs as a value for concurrency
-type ConcurrencyValue struct {
-	Value *int
-	raw   string
-}

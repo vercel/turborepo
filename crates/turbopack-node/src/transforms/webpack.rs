@@ -2,12 +2,12 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
-use turbo_tasks_fs::{
-    json::parse_json_rope_with_source_context, File, FileContent, FileSystemPathVc,
-};
+use turbo_tasks_fs::{json::parse_json_rope_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
+    source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -18,7 +18,7 @@ use turbopack_ecmascript::{
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
-    embed_js::embed_file,
+    embed_js::embed_file_path,
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
@@ -98,8 +98,8 @@ struct WebpackLoadersProcessedAsset {
 #[turbo_tasks::value_impl]
 impl Asset for WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident()
     }
 
     #[turbo_tasks::function]
@@ -115,13 +115,9 @@ struct ProcessWebpackLoadersResult {
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContextVc) -> AssetVc {
+fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
     EcmascriptModuleAssetVc::new(
-        VirtualAssetVc::new(
-            project_root.join("__turbopack__/webpack-loaders-executor.ts"),
-            AssetContent::File(embed_file("transforms/webpack-loaders.ts")).cell(),
-        )
-        .into(),
+        SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
@@ -137,7 +133,7 @@ impl WebpackLoadersProcessedAssetVc {
         let this = self.await?;
 
         let ExecutionContext {
-            project_root,
+            project_path,
             intermediate_output_path,
             env,
         } = *this.execution_context.await?;
@@ -154,16 +150,16 @@ impl WebpackLoadersProcessedAssetVc {
         let content = content.content().to_str()?;
         let context = this.evaluate_context;
 
-        let webpack_loaders_executor = webpack_loaders_executor(project_root, context);
-        let resource_fs_path = this.source.path().await?;
+        let webpack_loaders_executor = webpack_loaders_executor(context);
+        let resource_fs_path = this.source.ident().path().await?;
         let resource_path = resource_fs_path.path.as_str();
         let loaders = this.loaders.await?;
         let config_value = evaluate(
-            project_root,
+            project_path,
             webpack_loaders_executor,
-            project_root,
+            project_path,
             env,
-            this.source.path(),
+            this.source.ident(),
             context,
             intermediate_output_path,
             None,

@@ -1,12 +1,18 @@
-use anyhow::{anyhow, bail, Result};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, bail, Context, Result};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use swc_core::ecma::ast::Program;
-use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, Value, ValueToString};
+use turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileContent, FileSystemPathVc};
 use turbopack::condition::ContextCondition;
 use turbopack_core::{
     asset::{Asset, AssetVc},
+    ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
+    resolve::{
+        self, handle_resolve_error, node::node_cjs_resolve_options, parse::RequestVc,
+        pattern::QueryMapVc, PrimaryResolveResult,
+    },
 };
 use turbopack_ecmascript::{
     analyzer::{JsValue, ObjectPart},
@@ -105,7 +111,7 @@ impl NextSourceConfigVc {
 /// An issue that occurred while resolving the React Refresh runtime module.
 #[turbo_tasks::value(shared)]
 pub struct NextSourceConfigParsingIssue {
-    path: FileSystemPathVc,
+    ident: AssetIdentVc,
     detail: StringVc,
 }
 
@@ -128,7 +134,7 @@ impl Issue for NextSourceConfigParsingIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> FileSystemPathVc {
-        self.path
+        self.ident.path()
     }
 
     #[turbo_tasks::function]
@@ -173,7 +179,7 @@ pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourc
                                 return Ok(parse_config_from_js_value(module_asset, &value).cell());
                             } else {
                                 NextSourceConfigParsingIssue {
-                                    path: module_asset.path(),
+                                    ident: module_asset.ident(),
                                     detail: StringVc::cell(
                                         "The exported config object must contain an variable \
                                          initializer."
@@ -198,7 +204,7 @@ fn parse_config_from_js_value(module_asset: AssetVc, value: &JsValue) -> NextSou
     let invalid_config = |detail: &str, value: &JsValue| {
         let (explainer, hints) = value.explain(2, 0);
         NextSourceConfigParsingIssue {
-            path: module_asset.path(),
+            ident: module_asset.ident(),
             detail: StringVc::cell(format!("{detail} Got {explainer}.{hints}")),
         }
         .cell()
@@ -291,4 +297,47 @@ fn parse_config_from_js_value(module_asset: AssetVc, value: &JsValue) -> NextSou
     }
 
     config
+}
+
+pub async fn load_next_json<T: DeserializeOwned>(
+    context: FileSystemPathVc,
+    path: &str,
+) -> Result<T> {
+    let request = RequestVc::module(
+        "next".to_owned(),
+        Value::new(path.to_string().into()),
+        QueryMapVc::cell(None),
+    );
+    let resolve_options = node_cjs_resolve_options(context.root());
+
+    let resolve_result = handle_resolve_error(
+        resolve::resolve(context, request, resolve_options),
+        Value::new(ReferenceType::EcmaScriptModules(
+            EcmaScriptModulesReferenceSubType::Undefined,
+        )),
+        context,
+        request,
+        resolve_options,
+    )
+    .await?;
+    let resolve_result = &*resolve_result.await?;
+
+    let primary = resolve_result
+        .primary
+        .first()
+        .context("Unable to resolve primary asset")?;
+
+    let PrimaryResolveResult::Asset(metrics_asset) = primary else {
+        bail!("Expected to find asset");
+    };
+
+    let content = &*metrics_asset.content().file_content().await?;
+
+    let FileContent::Content(file) = content else {
+        bail!("Expected file content for metrics data");
+    };
+
+    let result: T = parse_json_rope_with_source_context(file.content())?;
+
+    Ok(result)
 }

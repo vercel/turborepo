@@ -155,14 +155,14 @@ func (cache *httpCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, _
 	return hit, files, duration, err
 }
 
-func (cache *httpCache) Exists(key string) (ItemStatus, error) {
+func (cache *httpCache) Exists(key string) ItemStatus {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, err := cache.exists(key)
 	if err != nil {
-		return ItemStatus{}, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
+		return ItemStatus{Remote: false}
 	}
-	return ItemStatus{Remote: hit}, err
+	return ItemStatus{Remote: hit}
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {

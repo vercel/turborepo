@@ -420,7 +420,7 @@ fn node_file_trace<B: Backend + 'static>(
                     .cell(),
                     ResolveOptionsContext {
                         enable_node_native_modules: true,
-                        enable_node_modules: true,
+                        enable_node_modules: Some(input_dir),
                         custom_conditions: vec!["node".to_string()],
                         ..Default::default()
                     }
@@ -430,7 +430,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
-                let output_path = rebased.path();
+                let output_path = rebased.ident().path();
                 emit_with_completion(rebased.into(), output_dir).await?;
 
                 #[cfg(not(feature = "bench_against_node_nft"))]

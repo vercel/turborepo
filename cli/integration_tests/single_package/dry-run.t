@@ -13,18 +13,21 @@ Check
   
   Tasks to Run
   build
-    Task                    = build                                                                                                       
-    Hash                    = 7bf32e1dedb04a5d                                                                                            
-    Cached (Local)          = false                                                                                                       
-    Cached (Remote)         = false                                                                                                       
-    Command                 = echo 'building' > foo                                                                                       
-    Outputs                 = foo                                                                                                         
-    Log File                = .turbo/turbo-build.log                                                                                      
-    Dependencies            =                                                                                                             
-    Dependendents           =                                                                                                             
-    Inputs Files Considered = 4                                                                                                           
-    ResolvedTaskDefinition  = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
-    Framework               = <NO FRAMEWORK DETECTED>                                                                                     
+    Task                             = build                                                                                                       
+    Hash                             = 7bf32e1dedb04a5d                                                                                            
+    Cached (Local)                   = false                                                                                                       
+    Cached (Remote)                  = false                                                                                                       
+    Command                          = echo 'building' > foo                                                                                       
+    Outputs                          = foo                                                                                                         
+    Log File                         = .turbo/turbo-build.log                                                                                      
+    Dependencies                     =                                                                                                             
+    Dependendents                    =                                                                                                             
+    Inputs Files Considered          = 4                                                                                                           
+    Configured Environment Variables =                                                                                                             
+    Inferred Environment Variables   =                                                                                                             
+    Global Environment Variables     = VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                        
+    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Framework                        = <NO FRAMEWORK DETECTED>                                                                                     
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -61,7 +64,14 @@ Check
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
-        "framework": "\u003cNO FRAMEWORK DETECTED\u003e"
+        "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
+        "environmentVariables": {
+          "configured": [],
+          "inferred": [],
+          "global": [
+            "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          ]
+        }
       }
     ]
   }

@@ -17,10 +17,15 @@ const INTRODUCED_IN = "1.7.0";
 
 function migrateConfig(config: TurboJsonSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    if (!taskDef.outputs) {
-      taskDef.outputs = DEFAULT_OUTPUTS;
-    } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
-      delete taskDef.outputs;
+    if (taskDef.cache !== false) {
+      if (!taskDef.outputs) {
+        taskDef.outputs = DEFAULT_OUTPUTS;
+      } else if (
+        Array.isArray(taskDef.outputs) &&
+        taskDef.outputs.length === 0
+      ) {
+        delete taskDef.outputs;
+      }
     }
   }
 

@@ -37,7 +37,7 @@ impl Emitter for IssueEmitter {
         } else {
             let mut message_split = message.split('\n');
             title = message_split.next().unwrap().to_string();
-            message = message_split.as_str().to_string();
+            message = message_split.remainder().unwrap_or("").to_string();
         }
 
         let source = db.span.primary_span().map(|span| {
@@ -62,7 +62,7 @@ impl Emitter for IssueEmitter {
             }
             .cell(),
             category: StringVc::cell("parse".to_string()),
-            path: self.source.path(),
+            source_ident: self.source.ident(),
             title: StringVc::cell(title),
             message: StringVc::cell(message),
             code,

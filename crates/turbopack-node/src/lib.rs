@@ -6,6 +6,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Write as _,
     path::PathBuf,
+    thread::available_parallelism,
 };
 
 use anyhow::{bail, Result};
@@ -17,10 +18,13 @@ pub use node_entry::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
+use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
+use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
+    issue::IssueSeverity,
     reference::AssetReference,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     virtual_asset::VirtualAssetVc,
@@ -55,8 +59,8 @@ async fn emit(
             .await?
             .iter()
             .map(|a| async {
-                Ok(if *a.path().extension().await? != "map" {
-                    Some(a.content().write(a.path()))
+                Ok(if *a.ident().path().extension().await? != "map" {
+                    Some(a.content().write(a.ident().path()))
                 } else {
                     None
                 })
@@ -67,7 +71,7 @@ async fn emit(
             .flatten()
             .collect(),
     )
-    .all())
+    .completed())
 }
 
 /// List of the all assets of the "internal" subgraph and a list of boundary
@@ -138,7 +142,12 @@ async fn separate_assets(
             // others as "external". We follow references on "internal" assets, but do not
             // look into references of "external" assets, since there are no "internal"
             // assets behind "externals"
-            if asset.path().await?.is_inside(intermediate_output_path) {
+            if asset
+                .ident()
+                .path()
+                .await?
+                .is_inside(intermediate_output_path)
+            {
                 let mut assets = Vec::new();
                 for reference in asset.references().await?.iter() {
                     for asset in reference.resolve_reference().primary_assets().await?.iter() {
@@ -183,6 +192,7 @@ async fn separate_assets(
 #[turbo_tasks::function]
 pub async fn get_renderer_pool(
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -206,7 +216,7 @@ pub async fn get_renderer_pool(
 
     emit(intermediate_asset, output_root).await?;
 
-    let entrypoint = intermediate_output_path.join("index.js");
+    let entrypoint = intermediate_asset.ident().path();
 
     let Some(cwd) = to_sys_path(cwd).await? else {
         bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.fs().to_string().await?);
@@ -215,7 +225,18 @@ pub async fn get_renderer_pool(
         bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.fs().to_string().await?);
     };
 
-    Ok(NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4, debug).cell())
+    Ok(NodeJsPool::new(
+        cwd,
+        entrypoint,
+        env.read_all()
+            .await?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        available_parallelism().map_or(1, |v| v.get()),
+        debug,
+    )
+    .cell())
 }
 
 /// Converts a module graph into node.js executable assets
@@ -225,8 +246,12 @@ pub async fn get_intermediate_asset(
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<AssetVc> {
     let chunk_group = ChunkGroupVc::from_chunk(entry_chunk);
+    let mut hash = encode_hex(hash_xxh3_hash64(
+        entry_chunk.ident().path().to_string().await?.as_str(),
+    ));
+    hash.push_str(".js");
     Ok(NodeJsBootstrapAsset {
-        path: intermediate_output_path.join("index.js"),
+        path: intermediate_output_path.join(&hash),
         chunk_group,
     }
     .cell()
@@ -249,10 +274,23 @@ enum EvalJavaScriptOutgoingMessage<'a> {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptIncomingMessage {
-    FileDependency { path: String },
-    BuildDependency { path: String },
-    DirDependency { path: String, glob: String },
-    JsonValue { data: String },
+    FileDependency {
+        path: String,
+    },
+    BuildDependency {
+        path: String,
+    },
+    DirDependency {
+        path: String,
+        glob: String,
+    },
+    JsonValue {
+        data: String,
+    },
+    EmittedError {
+        severity: IssueSeverity,
+        error: StructuredError,
+    },
     Error(StructuredError),
 }
 
@@ -315,9 +353,9 @@ pub async fn trace_stack(
                 None => return Ok(None),
             };
 
-            let path = match to_sys_path(a.path()).await? {
+            let path = match to_sys_path(a.ident().path()).await? {
                 Some(p) => p,
-                None => PathBuf::from(&a.path().await?.path),
+                None => PathBuf::from(&a.ident().path().await?.path),
             };
 
             let p = path.strip_prefix(&root).unwrap();

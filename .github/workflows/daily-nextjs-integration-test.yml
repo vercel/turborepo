@@ -27,7 +27,7 @@ jobs:
     with:
       diff_base: "none"
       version: ${{ inputs.version }}
-      skip_post_to_slack: ${{ inputs.post_to_slack != true }}
+      skip_post_to_slack: ${{ github.event_name != 'schedule' && inputs.post_to_slack != true }}
 
   # Upload test results to branch.
   upload_test_results:

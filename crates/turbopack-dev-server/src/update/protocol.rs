@@ -129,7 +129,7 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
     fn from(plain: &'a PlainIssue) -> Self {
         let source = plain.source.as_deref().map(|source| IssueSource {
             asset: Asset {
-                path: &source.asset.path,
+                path: &source.asset.ident,
             },
             start: source.start,
             end: source.end,
@@ -145,11 +145,15 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             detail: &plain.detail,
             source,
             sub_issues: plain.sub_issues.iter().map(|p| p.deref().into()).collect(),
+            // TODO(WEB-691) formatting the issue should be handled by the error overlay.
+            // The browser could handle error formatting in a better way than the text only
+            // formatting here
             formatted: format_issue(
                 plain,
                 None,
                 &LogOptions {
                     current_dir: PathBuf::new(),
+                    project_dir: PathBuf::new(),
                     show_all: true,
                     log_detail: true,
                     log_level: IssueSeverity::Info,

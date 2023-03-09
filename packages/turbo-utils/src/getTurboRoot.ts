@@ -2,21 +2,35 @@ import { findRootSync } from "@manypkg/find-root";
 import searchUp from "./searchUp";
 import JSON5 from "json5";
 
-function getTurboRoot(cwd?: string): string | null {
-  const contentCheck = (content: string) => {
-    const result = JSON5.parse(content);
-    return !result.extends;
-  };
-  // Turborepo root can be determined by the presence of turbo.json
+interface Options {
+  cache?: boolean;
+}
+
+function contentCheck(content: string): boolean {
+  const result = JSON5.parse(content);
+  return !result.extends;
+}
+
+const configCache: Record<string, string> = {};
+
+function getTurboRoot(cwd?: string, opts?: Options): string | null {
+  const cacheEnabled = opts?.cache ?? true;
+  const currentDir = cwd || process.cwd();
+
+  if (cacheEnabled && configCache[currentDir]) {
+    return configCache[currentDir];
+  }
+
+  // Turborepo root can be determined by a turbo.json without an extends key
   let root = searchUp({
     target: "turbo.json",
-    cwd: cwd || process.cwd(),
+    cwd: currentDir,
     contentCheck,
   });
 
   if (!root) {
     try {
-      root = findRootSync(cwd || process.cwd());
+      root = findRootSync(currentDir);
       if (!root) {
         return null;
       }
@@ -24,6 +38,11 @@ function getTurboRoot(cwd?: string): string | null {
       return null;
     }
   }
+
+  if (cacheEnabled) {
+    configCache[currentDir] = root;
+  }
+
   return root;
 }
 

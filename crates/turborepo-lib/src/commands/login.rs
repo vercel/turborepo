@@ -312,7 +312,7 @@ mod test {
             login::{get_token_and_redirect, SsoPayload, EXPECTED_TOKEN_TEST},
             CommandBase,
         },
-        config::{RepoConfigLoader, UserConfigLoader},
+        config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
         ui::UI,
         Args,
     };
@@ -332,6 +332,7 @@ mod test {
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
+            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_path_buf())
                     .load()
@@ -406,6 +407,7 @@ mod test {
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
+            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_path_buf())
                     .load()
