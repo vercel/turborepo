@@ -125,35 +125,35 @@ func (r *runState) run(label string) (func(outcome executionEventName, err error
 	return tracerFn, taskExecutionSummary
 }
 
-func (r *runState) add(result *executionEvent) *TaskExecutionSummary {
+func (r *runState) add(event *executionEvent) *TaskExecutionSummary {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.state[result.Label]; ok {
-		s.Status = result.Status.toString()
-		s.Err = result.Err
-		s.Duration = result.Duration
+	if s, ok := r.state[event.Label]; ok {
+		s.Status = event.Status.toString()
+		s.Err = event.Err
+		s.Duration = event.Duration
 	} else {
-		r.state[result.Label] = &TaskExecutionSummary{
-			StartAt:  result.Time,
-			Label:    result.Label,
-			Status:   result.Status.toString(),
-			Err:      result.Err,
-			Duration: result.Duration,
+		r.state[event.Label] = &TaskExecutionSummary{
+			StartAt:  event.Time,
+			Label:    event.Label,
+			Status:   event.Status.toString(),
+			Err:      event.Err,
+			Duration: event.Duration,
 		}
 	}
 	switch {
-	case result.Status == TargetBuildFailed:
+	case event.Status == TargetBuildFailed:
 		r.failure++
 		r.attempted++
-	case result.Status == TargetCached:
+	case event.Status == TargetCached:
 		r.cached++
 		r.attempted++
-	case result.Status == TargetBuilt:
+	case event.Status == TargetBuilt:
 		r.success++
 		r.attempted++
 	}
 
-	return r.state[result.Label]
+	return r.state[event.Label]
 }
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
