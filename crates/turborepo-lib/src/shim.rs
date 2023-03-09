@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process,
     process::Stdio,
-    time::Duration,
+    time::Duration, ffi::OsString,
 };
 
 use anyhow::{anyhow, Result};
@@ -182,6 +182,30 @@ pub struct LocalTurboState {
     version: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct YarnRc {
+    pnp_unplugged_folder: PathBuf,
+}
+
+impl Default for YarnRc {
+    fn default() -> Self {
+        Self {
+            pnp_unplugged_folder: PathBuf::from("./.yarn/unplugged")
+        }
+    }
+}
+
+fn get_unplugged_base_path(root_path: &Path) -> Result<PathBuf> {
+    let yarn_rc_filename = env::var_os("YARN_RC_FILENAME").unwrap_or(OsString::from(".yarnrc.yml"));
+    let yarn_rc_filepath = root_path.join(yarn_rc_filename);
+
+    let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath)?;
+    let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string)?;
+
+    Ok(yarn_rc.pnp_unplugged_folder)
+}
+
 impl LocalTurboState {
     pub fn infer(repo_root: &Path) -> Option<Self> {
         // We support six per-platform packages and one `turbo` package which handles
@@ -234,17 +258,79 @@ impl LocalTurboState {
             .join("bin")
             .join(&binary_name);
 
-        let search_locations = [
-            // Nested
+        // Hoisted strategy:
+        // - `npm install`
+        // - `yarn`
+        // - berry (nodeLinker: "node-modules")
+        //
+        // This also supports people directly depending upon the platform version.
+        let hoisted_base_path_option = Some(
+            repo_root
+                .join("node_modules")
+        );
+
+        // Nested strategy:
+        // - `npm install --install-strategy=shallow` (`npm install --global-style`)
+        // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
+        let nested_base_path_option = Some(
             repo_root
                 .join("node_modules")
                 .join("turbo")
-                .join("node_modules"),
-            // Hoisted
-            repo_root.join("node_modules"),
+                .join("node_modules")
+        );
+
+        // Linked strategy:
+        // - `pnpm install`
+        // - `npm install --install-strategy=linked`
+        let linked_base_path_option = repo_root
+            .join("node_modules")
+            .join("turbo")
+            .join("..")
+            .canonicalize()
+            .ok();
+
+        // pnpm: with hoisting.
+        // TODO:
+
+        // yarn: we construct this so we can use it later in the closure.
+        let unplugged_base_path = repo_root
+            .join(".yarn")
+            .join("unplugged");
+
+        // yarn: unplugged directories don't have an obvious installation path.
+        let unplugged_base_path_option = unplugged_base_path
+            .read_dir()
+            .ok()
+            .and_then(|mut read_dir| {
+                read_dir.find_map(|item| {
+                    match item {
+                        Ok(entry) => {
+                            let file_name = entry.file_name();
+                            if file_name.to_string_lossy().starts_with(&platform_package_name) {
+                                Some(
+                                    unplugged_base_path
+                                        .join(file_name)
+                                        .join("node_modules")
+                                )
+                            } else {
+                                None
+                            }
+                        },
+                        Err(_) => None
+                    }
+                })
+            });
+
+        println!("{:?}", unplugged_base_path_option);
+
+        let search_locations = [
+            hoisted_base_path_option,
+            nested_base_path_option,
+            linked_base_path_option,
+            unplugged_base_path_option,
         ];
 
-        for root in search_locations {
+        for root in search_locations.iter().flatten() {
             let bin_path = root.join(&platform_package_executable_path);
             if bin_path.exists() {
                 let resolved_package_json_path = root.join(platform_package_json_path);
@@ -264,7 +350,7 @@ impl LocalTurboState {
             }
         }
 
-        return None;
+        return None
     }
 }
 
@@ -984,6 +1070,23 @@ mod test {
                 ),
             };
         }
+    }
+
+    #[test]
+    fn test_local_state_infer() {
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm5-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm6-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm7-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm6-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm7-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm8-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-global-style")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-legacy-bundling")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-linked")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn1-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn2-turbo")).unwrap().bin_path);
+        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn3-turbo")).unwrap().bin_path);
     }
 
     #[test]
