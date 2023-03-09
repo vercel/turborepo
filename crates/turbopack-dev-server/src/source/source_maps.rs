@@ -1,3 +1,5 @@
+use std::{borrow::Cow, iter::once};
+
 use anyhow::Result;
 use mime::APPLICATION_JSON;
 use turbo_tasks::{primitives::StringVc, Value};
@@ -40,6 +42,17 @@ impl SourceMapContentSourceVc {
     }
 }
 
+fn encode_pathname_to_url(pathname: &str) -> String {
+    once(Cow::Borrowed("/"))
+        .chain(
+            pathname
+                .split('/')
+                .map(urlencoding::encode)
+                .intersperse(Cow::Borrowed("/")),
+        )
+        .collect()
+}
+
 #[turbo_tasks::value_impl]
 impl ContentSource for SourceMapContentSource {
     #[turbo_tasks::function]
@@ -78,7 +91,7 @@ impl ContentSource for SourceMapContentSource {
         );
         Ok(ContentSourceResultVc::exact(
             ContentSourceContent::Rewrite(
-                RewriteBuilder::new(urlencoding::encode(&format!("/{pathname}")).to_string())
+                RewriteBuilder::new(encode_pathname_to_url(pathname))
                     .content_source(wrapped.as_content_source())
                     .build(),
             )
