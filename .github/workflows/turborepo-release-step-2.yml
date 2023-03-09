@@ -78,6 +78,7 @@ jobs:
           mkdir ../zig
           curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.1908+06b263825.tar.xz | tar -J -xf - -C ../zig --strip-components 1
           export PATH=$PATH:$(pwd)/../zig
+          echo "$(pwd)/../zig" >> $GITHUB_PATH
       - uses: actions-rs/toolchain@v1
       - run: |
           rustup target add x86_64-pc-windows-gnu
