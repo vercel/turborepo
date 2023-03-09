@@ -74,10 +74,10 @@ type TaskExecutionSummary struct {
 }
 
 // executionSummary is the state of the entire `turbo run`. Individual task state in `Tasks` field
-// TODO(mehulkar): Can this be combined with the RunSummary?
 type executionSummary struct {
+	// mu guards reads/writes to the `state` field
 	mu        sync.Mutex                       `json:"-"`
-	state     map[string]*TaskExecutionSummary `json:"-"`
+	state     map[string]*TaskExecutionSummary `json:"-"` // key is a taskID
 	Success   int                              `json:"success"`
 	Failure   int                              `json:"failed"`
 	Cached    int                              `json:"cached"`
