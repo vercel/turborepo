@@ -399,12 +399,9 @@ impl DepGraph {
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
 
-            match id {
-                ItemId::Group(_) => {
-                    groups.push((vec![id.clone()], FxHashSet::default()));
-                    global_done.insert(ix);
-                }
-                _ => {}
+            if let ItemId::Group(_) = id {
+                groups.push((vec![id.clone()], FxHashSet::default()));
+                global_done.insert(ix);
             }
         }
 

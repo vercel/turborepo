@@ -70,7 +70,7 @@ impl Analyzer<'_> {
     ///
     ///
     /// Returns all (EVENTUAL_READ/WRITE_VARS) in the module.
-    fn hoist_vars_and_bindings(&mut self, module: &Module) -> IndexSet<Id> {
+    fn hoist_vars_and_bindings(&mut self, _module: &Module) -> IndexSet<Id> {
         let mut eventual_ids = IndexSet::default();
 
         for item_id in self.item_ids.iter() {
@@ -104,7 +104,7 @@ impl Analyzer<'_> {
     }
 
     /// Phase 2: Immediate evaluation
-    fn evaluate_immediate(&mut self, module: &Module, eventual_ids: &IndexSet<Id>) {
+    fn evaluate_immediate(&mut self, _module: &Module, eventual_ids: &IndexSet<Id>) {
         for item_id in self.item_ids.iter() {
             if let Some(item) = self.items.get(item_id) {
                 // Ignore HOISTED module items, they have been processed in phase 1 already.
@@ -232,10 +232,10 @@ impl Analyzer<'_> {
     }
 
     /// Phase 4: Exports
-    fn handle_exports(&mut self, module: &Module) {
+    fn handle_exports(&mut self, _module: &Module) {
         for item_id in self.item_ids.iter() {
-            match item_id {
-                ItemId::Group(kind) => match kind {
+            if let ItemId::Group(kind) = item_id {
+                match kind {
                     ItemIdGroupKind::ModuleEvaluation => {
                         // Create a strong dependency to LAST_SIDE_EFFECTS
 
@@ -249,8 +249,7 @@ impl Analyzer<'_> {
                             self.g.add_strong_deps(item_id, state.last_writes.iter());
                         }
                     }
-                },
-                _ => {}
+                }
             }
         }
     }
@@ -300,7 +299,7 @@ pub(crate) struct SplitResult {
 }
 
 impl PartialEq for SplitResult {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
@@ -315,26 +314,24 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
     let filename = path.await?.file_name().to_string();
     let parse_result = parsed.await?;
 
-    match &*parse_result {
-        ParseResult::Ok { program, .. } => {
-            if let Program::Module(module) = program {
-                let (mut dep_graph, items) = Analyzer::analyze(module);
+    if let ParseResult::Ok {
+        program: Program::Module(module),
+        ..
+    } = &*parse_result
+    {
+        let (mut dep_graph, items) = Analyzer::analyze(module);
 
-                dep_graph.handle_weak(Mode::Production);
+        dep_graph.handle_weak(Mode::Production);
 
-                let (data, deps, modules) =
-                    dep_graph.split_module(&format!("./{filename}").into(), &items);
+        let (data, deps, modules) = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-                return Ok(SplitResult {
-                    data,
-                    deps,
-                    modules,
-                    parsed,
-                }
-                .cell());
-            }
+        return Ok(SplitResult {
+            data,
+            deps,
+            modules,
+            parsed,
         }
-        _ => {}
+        .cell());
     }
 
     Ok(SplitResult {

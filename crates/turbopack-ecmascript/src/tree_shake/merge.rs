@@ -51,7 +51,7 @@ where
                     let part_id = import
                         .asserts
                         .as_deref()
-                        .and_then(|asserts| find_turbopack_chunk_id_in_asserts(asserts));
+                        .and_then(find_turbopack_chunk_id_in_asserts);
 
                     if let Some(part_id) = part_id {
                         if self.done.insert((import.src.value.clone(), part_id)) {

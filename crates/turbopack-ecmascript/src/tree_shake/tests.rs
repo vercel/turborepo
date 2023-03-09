@@ -31,7 +31,7 @@ fn test_fixture(input: PathBuf) {
 }
 
 fn run(input: PathBuf) {
-    testing::run_test(false, |cm, handler| {
+    testing::run_test(false, |cm, _handler| {
         let fm = cm.load_file(&input).unwrap();
 
         let module = parse_file_as_module(
@@ -118,44 +118,24 @@ fn run(input: PathBuf) {
         let eventual_ids = analyzer.hoist_vars_and_bindings(&module);
 
         writeln!(s, "# Phase 1").unwrap();
-        writeln!(
-            s,
-            "```mermaid\n{}```",
-            render_graph(&item_ids, &mut analyzer.g)
-        )
-        .unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
 
         analyzer.evaluate_immediate(&module, &eventual_ids);
 
         writeln!(s, "# Phase 2").unwrap();
-        writeln!(
-            s,
-            "```mermaid\n{}```",
-            render_graph(&item_ids, &mut analyzer.g)
-        )
-        .unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
 
         analyzer.evaluate_eventual(&module);
 
         writeln!(s, "# Phase 3").unwrap();
-        writeln!(
-            s,
-            "```mermaid\n{}```",
-            render_graph(&item_ids, &mut analyzer.g)
-        )
-        .unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
 
         analyzer.handle_exports(&module);
 
         writeln!(s, "# Phase 4").unwrap();
-        writeln!(
-            s,
-            "```mermaid\n{}```",
-            render_graph(&item_ids, &mut analyzer.g)
-        )
-        .unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&item_ids, analyzer.g)).unwrap();
 
-        let mut condensed = analyzer.g.finalize(&analyzer.items);
+        let mut condensed = analyzer.g.finalize(analyzer.items);
 
         writeln!(s, "# Final").unwrap();
         writeln!(
@@ -173,7 +153,7 @@ fn run(input: PathBuf) {
         {
             let mut g = analyzer.g.clone();
             g.handle_weak(Mode::Development);
-            let (_, _, modules) = g.split_module(&uri_of_module, &analyzer.items);
+            let (_, _, modules) = g.split_module(&uri_of_module, analyzer.items);
 
             writeln!(s, "# Modules (dev)").unwrap();
             for (i, module) in modules.iter().enumerate() {
@@ -182,7 +162,7 @@ fn run(input: PathBuf) {
             }
 
             let mut merger = Merger::new(SingleModuleLoader {
-                modules: &&modules,
+                modules: &modules,
                 entry_module_uri: &uri_of_module,
             });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
@@ -194,7 +174,7 @@ fn run(input: PathBuf) {
         {
             let mut g = analyzer.g.clone();
             g.handle_weak(Mode::Production);
-            let (_, _, modules) = g.split_module(&uri_of_module, &analyzer.items);
+            let (_, _, modules) = g.split_module(&uri_of_module, analyzer.items);
 
             writeln!(s, "# Modules (prod)").unwrap();
             for (i, module) in modules.iter().enumerate() {
@@ -203,7 +183,7 @@ fn run(input: PathBuf) {
             }
 
             let mut merger = Merger::new(SingleModuleLoader {
-                modules: &&modules,
+                modules: &modules,
                 entry_module_uri: &uri_of_module,
             });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
@@ -258,12 +238,12 @@ fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) ->
 fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
     let mut mermaid = String::from("graph TD\n");
 
-    for (i, id) in item_ids.iter().enumerate() {
+    for (_, id) in item_ids.iter().enumerate() {
         let i = g.g.node(id);
 
         writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
-        if let Some(item_id) = render_item_id(&id) {
+        if let Some(item_id) = render_item_id(id) {
             writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, item_id).unwrap();
         }
     }
