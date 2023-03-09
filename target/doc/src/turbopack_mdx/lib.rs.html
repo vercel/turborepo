@@ -196,6 +196,8 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -286,8 +288,10 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>analyze(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
-        <span class="prelude-val">Ok</span>(into_ecmascript_module_asset(<span class="kw-2">&amp;</span><span class="self">self</span>).<span class="kw">await</span><span class="question-mark">?</span>.analyze())
+    </span><span class="kw">async fn </span>failsafe_analyze(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
+        <span class="prelude-val">Ok</span>(into_ecmascript_module_asset(<span class="kw-2">&amp;</span><span class="self">self</span>)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.failsafe_analyze())
     }
 }
 
@@ -305,7 +309,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: MdxModuleAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="prelude-val">Ok</span>(self_vc.analyze().<span class="kw">await</span><span class="question-mark">?</span>.references)
+        <span class="prelude-val">Ok</span>(self_vc.failsafe_analyze().<span class="kw">await</span><span class="question-mark">?</span>.references)
     }
 }
 

@@ -2205,6 +2205,17 @@
 <a href="#2205" id="2205">2205</a>
 <a href="#2206" id="2206">2206</a>
 <a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2316,11 +2327,13 @@
     EcmascriptInputTransformsVc,
 };
 
-<span class="attr">#[turbo_tasks::value]
+<span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>AnalyzeEcmascriptModuleResult {
     <span class="kw">pub </span>references: AssetReferencesVc,
     <span class="kw">pub </span>code_generation: CodeGenerateablesVc,
     <span class="kw">pub </span>exports: EcmascriptExportsVc,
+    <span class="doccomment">/// `true` when the analysis was successful.
+    </span><span class="kw">pub </span>successful: bool,
 }
 
 <span class="doccomment">/// A temporary analysis result builder to pass around, to be turned into an
@@ -2329,6 +2342,7 @@
     references: Vec&lt;AssetReferenceVc&gt;,
     code_gens: Vec&lt;CodeGenerateableVc&gt;,
     exports: EcmascriptExports,
+    successful: bool,
 }
 
 <span class="kw">impl </span>AnalyzeEcmascriptModuleResultBuilder {
@@ -2337,6 +2351,7 @@
             references: Vec::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
+            successful: <span class="bool-val">false</span>,
         }
     }
 
@@ -2361,6 +2376,11 @@
         <span class="self">self</span>.exports = exports;
     }
 
+    <span class="doccomment">/// Sets whether the analysis was successful.
+    </span><span class="kw">pub fn </span>set_successful(<span class="kw-2">&amp;mut </span><span class="self">self</span>, successful: bool) {
+        <span class="self">self</span>.successful = successful;
+    }
+
     <span class="doccomment">/// Builds the final analysis result. Resolves internal Vcs for performance
     /// in using them.
     </span><span class="kw">pub async fn </span>build(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
@@ -2375,6 +2395,7 @@
                 references: AssetReferencesVc::cell(<span class="self">self</span>.references),
                 code_generation: CodeGenerateablesVc::cell(<span class="self">self</span>.code_gens),
                 exports: <span class="self">self</span>.exports.into(),
+                successful: <span class="self">self</span>.successful,
             },
         ))
     }
@@ -3612,6 +3633,7 @@
                     }
                 }
             }
+            analysis.set_successful(<span class="bool-val">true</span>);
         }
         ParseResult::Unparseable | ParseResult::NotFound =&gt; {}
     };

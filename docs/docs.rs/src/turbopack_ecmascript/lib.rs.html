@@ -408,6 +408,54 @@
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -452,7 +500,9 @@
 <span class="kw">pub use </span>transform::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
 };
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
+};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
@@ -460,7 +510,7 @@
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesReadRef, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -470,8 +520,8 @@
 <span class="kw">pub use </span><span class="self">self</span>::references::AnalyzeEcmascriptModuleResultVc;
 <span class="kw">use </span><span class="self">self</span>::{
     chunk::{
-        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-        EcmascriptExportsVc,
+        placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContent,
+        EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions, EcmascriptExportsVc,
     },
     parse::ParseResultVc,
 };
@@ -503,8 +553,14 @@
     StringVc::cell(<span class="string">&quot;ecmascript&quot;</span>.to_string())
 }
 
+<span class="attr">#[derive(PartialEq, Eq, Clone, TraceRawVcs)]
+</span><span class="kw">struct </span>MemoizedSuccessfulAnalysis {
+    operation: RawVc,
+    references: AssetReferencesReadRef,
+    exports: EcmascriptExportsReadRef,
+}
+
 <span class="attr">#[turbo_tasks::value]
-#[derive(Clone, Copy)]
 </span><span class="kw">pub struct </span>EcmascriptModuleAsset {
     <span class="kw">pub </span>source: AssetVc,
     <span class="kw">pub </span>context: AssetContextVc,
@@ -512,6 +568,9 @@
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
     <span class="kw">pub </span>compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
+    <span class="attr">#[turbo_tasks(debug_ignore)]
+    #[serde(skip)]
+    </span>last_successful_analysis: turbo_tasks::State&lt;<span class="prelude-ty">Option</span>&lt;MemoizedSuccessfulAnalysis&gt;&gt;,
 }
 
 <span class="doccomment">/// An optional [EcmascriptModuleAsset]
@@ -535,6 +594,7 @@
             transforms,
             compile_time_info,
             inner_assets: <span class="prelude-val">None</span>,
+            last_successful_analysis: Default::default(),
         })
     }
 
@@ -554,6 +614,7 @@
             transforms,
             compile_time_info,
             inner_assets: <span class="prelude-val">Some</span>(inner_assets),
+            last_successful_analysis: Default::default(),
         })
     }
 
@@ -576,6 +637,41 @@
             this.transforms,
             this.compile_time_info,
         ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>failsafe_analyze(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>result = <span class="self">self</span>.analyze();
+        <span class="kw">let </span>result_value = result.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>result_value.successful {
+            this.last_successful_analysis
+                .set(<span class="prelude-val">Some</span>(MemoizedSuccessfulAnalysis {
+                    operation: result.into(),
+                    <span class="comment">// We need to store the ReadRefs since we want to keep a snapshot.
+                    </span>references: result_value.references.<span class="kw">await</span><span class="question-mark">?</span>,
+                    exports: result_value.exports.<span class="kw">await</span><span class="question-mark">?</span>,
+                }));
+        } <span class="kw">else </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(MemoizedSuccessfulAnalysis {
+                operation,
+                references,
+                exports,
+            }) = <span class="kw-2">&amp;*</span>this.last_successful_analysis.get()
+            {
+                <span class="comment">// It&#39;s important to connect to the last operation here to keep it active, so
+                // it&#39;s potentially recomputed when garbage collected
+                </span>operation.connect();
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(AnalyzeEcmascriptModuleResult {
+                    references: ReadRef::cell(references.clone()),
+                    exports: ReadRef::cell(exports.clone()),
+                    code_generation: result_value.code_generation,
+                    successful: <span class="bool-val">false</span>,
+                }
+                .cell());
+            }
+        }
+        <span class="prelude-val">Ok</span>(ReadRef::cell(result_value))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -608,7 +704,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: EcmascriptModuleAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="prelude-val">Ok</span>(self_vc.analyze().<span class="kw">await</span><span class="question-mark">?</span>.references)
+        <span class="prelude-val">Ok</span>(self_vc.failsafe_analyze().<span class="kw">await</span><span class="question-mark">?</span>.references)
     }
 }
 
@@ -636,7 +732,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get_exports(self_vc: EcmascriptModuleAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptExportsVc&gt; {
-        <span class="prelude-val">Ok</span>(self_vc.analyze().<span class="kw">await</span><span class="question-mark">?</span>.exports)
+        <span class="prelude-val">Ok</span>(self_vc.failsafe_analyze().<span class="kw">await</span><span class="question-mark">?</span>.exports)
     }
 }
 
