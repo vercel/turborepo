@@ -534,17 +534,17 @@ impl DepGraph {
                                         ModuleExportName::Ident(i) => {
                                             exports.push(i.to_id());
                                         }
-                                        ModuleExportName::Str(s) => {}
+                                        ModuleExportName::Str(..) => {}
                                     }
                                 }
-                                ExportSpecifier::Default(s) => {
+                                ExportSpecifier::Default(..) => {
                                     exports.push((js_word!("default"), Default::default()));
                                 }
                                 ExportSpecifier::Namespace(s) => match &s.name {
                                     ModuleExportName::Ident(i) => {
                                         exports.push(i.to_id());
                                     }
-                                    ModuleExportName::Str(s) => {}
+                                    ModuleExportName::Str(..) => {}
                                 },
                             }
                         }
@@ -812,16 +812,6 @@ impl DepGraph {
         let to = self.g.node(dep);
 
         self.g.idx_graph.add_edge(from, to, Dependency::Strong);
-    }
-
-    pub(super) fn add_weak_dep(&mut self, item: &ItemId, dep: &ItemId) {
-        let from = self.g.node(item);
-        let to = self.g.node(dep);
-
-        if let Some(Dependency::Strong) = self.g.idx_graph.edge_weight(from, to) {
-            return;
-        }
-        self.g.idx_graph.add_edge(from, to, Dependency::Weak);
     }
 }
 

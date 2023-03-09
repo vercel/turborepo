@@ -201,7 +201,7 @@ impl Analyzer<'_> {
     }
 
     /// Phase 3: Eventual evaluation
-    fn evaluate_eventual(&mut self, module: &Module) {
+    fn evaluate_eventual(&mut self, _module: &Module) {
         for item_id in self.item_ids.iter() {
             if let Some(item) = self.items.get(item_id) {
                 // For each var in EVENTUAL_READ_VARS:

@@ -84,7 +84,7 @@ impl Asset for EcmascriptModulePartAsset {
     async fn ident(&self) -> Result<AssetIdentVc> {
         let inner = self.full_module.ident();
 
-        Ok(inner.with_part(Some(self.part.clone())))
+        Ok(inner.with_part(Some(self.part)))
     }
 }
 

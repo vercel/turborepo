@@ -120,7 +120,7 @@ impl EsmAssetReferenceVc {
         let this = self.await?;
 
         let ty = Value::new(match &this.export_name {
-            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(part.clone()),
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
             None => EcmaScriptModulesReferenceSubType::Undefined,
         });
         Ok(ReferencedAssetVc::from_resolve_result(
@@ -150,7 +150,7 @@ impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
         let ty = Value::new(match &self.export_name {
-            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(part.clone()),
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
             None => EcmaScriptModulesReferenceSubType::Undefined,
         });
 

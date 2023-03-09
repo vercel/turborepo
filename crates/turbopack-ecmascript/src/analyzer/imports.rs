@@ -357,7 +357,7 @@ fn named_or_default_import_symbols(specifiers: &[ImportSpecifier]) -> Vec<JsWord
                 Some(imported) => orig_name(imported),
                 _ => local.sym.clone(),
             }),
-            ImportSpecifier::Default(s) => Some(js_word!("default")),
+            ImportSpecifier::Default(..) => Some(js_word!("default")),
             ImportSpecifier::Namespace(..) => None,
         })
         .collect::<Vec<_>>()
