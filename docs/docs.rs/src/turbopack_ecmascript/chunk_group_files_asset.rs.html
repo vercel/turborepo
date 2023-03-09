@@ -157,9 +157,15 @@
 <span id="157">157</span>
 <span id="158">158</span>
 <span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>serde_json::Value;
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -177,6 +183,7 @@
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
         EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
+    utils::stringify_js_pretty,
     EcmascriptModuleAssetVc,
 };
 
@@ -278,16 +285,23 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="kw">let </span>chunks = <span class="self">self</span>.inner.chunks();
-        <span class="kw">let </span><span class="kw-2">mut </span>data = Vec::new();
         <span class="kw">let </span>base_path = <span class="self">self</span>.inner.<span class="kw">await</span><span class="question-mark">?</span>.base_path.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">for </span>chunk <span class="kw">in </span>chunks.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">let </span>path = chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = base_path.get_path_to(<span class="kw-2">&amp;</span>path) {
-                data.push(Value::String(p.to_string()));
-            }
-        }
+        <span class="kw">let </span>chunks_paths = chunks
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|chunk| chunk.path())
+            .try_join()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks_paths: Vec&lt;<span class="kw">_</span>&gt; = chunks_paths
+            .iter()
+            .filter_map(|path| base_path.get_path_to(path))
+            .collect();
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
-            inner_code: <span class="macro">format!</span>(<span class="string">&quot;__turbopack_export_value__({:#});\n&quot;</span>, Value::Array(data)).into(),
+            inner_code: <span class="macro">format!</span>(
+                <span class="string">&quot;__turbopack_export_value__({});\n&quot;</span>,
+                stringify_js_pretty(<span class="kw-2">&amp;</span>chunks_paths)
+            )
+            .into(),
             ..Default::default()
         }
         .cell())
