@@ -128,7 +128,7 @@ impl EcmascriptChunkItem for ChunkGroupFilesChunkItem {
             .await?;
         let chunks_paths: Vec<_> = chunks_paths
             .iter()
-            .filter_map(|path| base_path.get_path_to(&path))
+            .filter_map(|path| base_path.get_path_to(path))
             .collect();
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
