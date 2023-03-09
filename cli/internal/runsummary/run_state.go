@@ -59,13 +59,12 @@ func (rrs executionEventName) toString() string {
 // runState is the state of the entire `turbo run`. Individual task state in `Tasks` field
 // TODO(mehulkar): Can this be combined with the RunSummary?
 type runState struct {
-	mu      sync.Mutex
-	state   map[string]*TaskExecutionSummary
-	success int
-	failure int
-	// Is the output streaming?
-	cached    int
-	attempted int
+	mu        sync.Mutex                       `json:"-"`
+	state     map[string]*TaskExecutionSummary `json:"-"`
+	Success   int                              `json:"success"`
+	Failure   int                              `json:"failed"`
+	Cached    int                              `json:"cached"`
+	Attempted int                              `json:"attempted"`
 
 	startedAt time.Time
 
@@ -79,10 +78,10 @@ func newRunState(start time.Time, tracingProfile string) *runState {
 	}
 
 	return &runState{
-		success:         0,
-		failure:         0,
-		cached:          0,
-		attempted:       0,
+		Success:         0,
+		Failure:         0,
+		Cached:          0,
+		Attempted:       0,
 		state:           make(map[string]*TaskExecutionSummary),
 		startedAt:       start,
 		profileFilename: tracingProfile,
@@ -140,14 +139,14 @@ func (r *runState) add(event *executionEvent) *TaskExecutionSummary {
 	}
 	switch {
 	case event.Status == TargetBuildFailed:
-		r.failure++
-		r.attempted++
+		r.Failure++
+		r.Attempted++
 	case event.Status == TargetCached:
-		r.cached++
-		r.attempted++
+		r.Cached++
+		r.Attempted++
 	case event.Status == TargetBuilt:
-		r.success++
-		r.attempted++
+		r.Success++
+		r.Attempted++
 	}
 
 	return r.state[event.Label]

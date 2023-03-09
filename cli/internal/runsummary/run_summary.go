@@ -28,8 +28,8 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
+	ExecutionSummary  *runState          `json:"executionSummary"`
 	Tasks             []*TaskSummary     `json:"tasks"`
-	runState          *runState          `json:"-"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -38,7 +38,7 @@ func NewRunSummary(startAt time.Time, profile string, turboVersion string, packa
 
 	return &RunSummary{
 		ID:                ksuid.New(),
-		runState:          runState,
+		ExecutionSummary:  runState,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
 		Tasks:             []*TaskSummary{},
@@ -48,7 +48,7 @@ func NewRunSummary(startAt time.Time, profile string, turboVersion string, packa
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
 func (summary *RunSummary) Close(terminal cli.Ui) {
-	if err := writeChrometracing(summary.runState.profileFilename, terminal); err != nil {
+	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
@@ -57,7 +57,7 @@ func (summary *RunSummary) Close(terminal cli.Ui) {
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
 func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
-	return summary.runState.run(taskID)
+	return summary.ExecutionSummary.run(taskID)
 }
 
 func (summary *RunSummary) normalize() {
