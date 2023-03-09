@@ -262,17 +262,17 @@
                         data = ContentSourceData::default();
                     }
                     ContentSourceContent::NotFound =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell())
+                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell());
                     }
                     ContentSourceContent::Static(static_content) =&gt; {
                         <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::Static(
                             <span class="kw-2">*</span>static_content,
                             HeaderListVc::new(response_header_overwrites),
                         )
-                        .cell())
+                        .cell());
                     }
                     ContentSourceContent::HttpProxy(proxy_result) =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::HttpProxy(<span class="kw-2">*</span>proxy_result).cell())
+                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::HttpProxy(<span class="kw-2">*</span>proxy_result).cell());
                     }
                 }
             }

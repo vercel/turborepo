@@ -761,7 +761,7 @@
 /// Note that you might not receive information that has not been requested via
 /// `ContentSource::vary()`. So make sure to request all information that&#39;s
 /// needed.
-</span><span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+</span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 </span><span class="kw">pub struct </span>ContentSourceData {
     <span class="doccomment">/// HTTP method, if requested.

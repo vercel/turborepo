@@ -142,7 +142,28 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, iter::once};
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>mime::APPLICATION_JSON;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
@@ -157,7 +178,7 @@
     wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    NeededData,
+    NeededData, RewriteBuilder,
 };
 
 <span class="doccomment">/// SourceMapContentSource allows us to serve full source maps, and individual
@@ -182,6 +203,17 @@
     </span><span class="kw">pub fn </span>new(asset_source: ContentSourceVc) -&gt; SourceMapContentSourceVc {
         SourceMapContentSource { asset_source }.cell()
     }
+}
+
+<span class="kw">fn </span>encode_pathname_to_url(pathname: <span class="kw-2">&amp;</span>str) -&gt; String {
+    once(Cow::Borrowed(<span class="string">&quot;/&quot;</span>))
+        .chain(
+            pathname
+                .split(<span class="string">&#39;/&#39;</span>)
+                .map(urlencoding::encode)
+                .intersperse(Cow::Borrowed(<span class="string">&quot;/&quot;</span>)),
+        )
+        .collect()
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -220,9 +252,15 @@
             self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
             SourceMapContentProcessorVc::new(id).into(),
         );
-        <span class="prelude-val">Ok</span>(wrapped
-            .as_content_source()
-            .get(pathname, Default::default()))
+        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
+            ContentSourceContent::Rewrite(
+                RewriteBuilder::new(encode_pathname_to_url(pathname))
+                    .content_source(wrapped.as_content_source())
+                    .build(),
+            )
+            .cell()
+            .into(),
+        ))
     }
 }
 

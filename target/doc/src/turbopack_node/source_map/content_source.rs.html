@@ -169,6 +169,11 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -179,6 +184,7 @@
     wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
+    RewriteBuilder,
 };
 <span class="kw">use </span>url::Url;
 
@@ -236,10 +242,6 @@
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };
 
-        <span class="kw">let </span>path = <span class="kw">match </span>file.path().strip_prefix(<span class="string">&#39;/&#39;</span>) {
-            <span class="prelude-val">Some</span>(p) =&gt; p,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
-        };
         <span class="kw">let </span>id = file.query_pairs().find_map(|(k, v)| {
             <span class="kw">if </span>k == <span class="string">&quot;id&quot; </span>{
                 <span class="prelude-val">Some</span>(v.into_owned())
@@ -252,7 +254,15 @@
             self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
             NextSourceMapTraceContentProcessorVc::new(id, line, column, frame.name).into(),
         );
-        <span class="prelude-val">Ok</span>(wrapped.as_content_source().get(path, Default::default()))
+        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
+            ContentSourceContent::Rewrite(
+                RewriteBuilder::new(file.path().to_string())
+                    .content_source(wrapped.as_content_source())
+                    .build(),
+            )
+            .cell()
+            .into(),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]

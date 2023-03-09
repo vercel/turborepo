@@ -120,6 +120,36 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 
@@ -128,6 +158,7 @@
     ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
     GetContentSourceContentVc, NeededData,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::{ContentSourceContent, Rewrite};
 
 <span class="doccomment">/// A ContentSourceProcessor handles the final processing of an eventual
 /// [ContentSourceContent].
@@ -197,6 +228,7 @@
                 </span>ContentSourceResult::Result {
                     specificity: <span class="kw-2">*</span>specificity,
                     get_content: WrappedGetContentSourceContentVc::new(
+                        <span class="self">self</span>.inner,
                         <span class="kw-2">*</span>get_content,
                         <span class="self">self</span>.processor,
                     )
@@ -217,6 +249,7 @@
 /// ContentSourceResult.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>WrappedGetContentSourceContent {
+    inner_source: ContentSourceVc,
     inner: GetContentSourceContentVc,
     processor: ContentSourceProcessorVc,
 }
@@ -224,8 +257,17 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>WrappedGetContentSourceContentVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>new(inner: GetContentSourceContentVc, processor: ContentSourceProcessorVc) -&gt; <span class="self">Self </span>{
-        WrappedGetContentSourceContent { inner, processor }.cell()
+    </span><span class="kw">fn </span>new(
+        inner_source: ContentSourceVc,
+        inner: GetContentSourceContentVc,
+        processor: ContentSourceProcessorVc,
+    ) -&gt; <span class="self">Self </span>{
+        WrappedGetContentSourceContent {
+            inner_source,
+            inner,
+            processor,
+        }
+        .cell()
     }
 }
 
@@ -239,6 +281,24 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
         <span class="kw">let </span>res = <span class="self">self</span>.inner.get(data);
+        <span class="kw">if let </span>ContentSourceContent::Rewrite(rewrite) = <span class="kw-2">&amp;*</span>res.<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">let </span>rewrite = rewrite.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContent::Rewrite(
+                Rewrite {
+                    path_and_query: rewrite.path_and_query.clone(),
+                    source: <span class="prelude-val">Some</span>(
+                        WrappedContentSourceVc::new(
+                            rewrite.source.unwrap_or(<span class="self">self</span>.inner_source),
+                            <span class="self">self</span>.processor,
+                        )
+                        .into(),
+                    ),
+                    response_headers: rewrite.response_headers,
+                }
+                .cell(),
+            )
+            .cell());
+        }
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.processor.process(res))
     }
 }
