@@ -4,7 +4,6 @@ Setup
 
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
-
 # no output, just check for 0 status code
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l

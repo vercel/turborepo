@@ -79,7 +79,7 @@ Setup
     "expandedInputs": {
       "package.json": "f2a5d2525f3996a57680180a7cd9ad7310e4dec0"
     },
-    "expandedOutputs": null,
+    "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [],
@@ -123,7 +123,7 @@ Setup
     "expandedInputs": {
       "package.json": "8d3e121335e16dbd8d99c03522b892ec52416dda"
     },
-    "expandedOutputs": null,
+    "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [
