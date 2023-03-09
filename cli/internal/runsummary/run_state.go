@@ -15,9 +15,9 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// runResult represents a single event in the build process, i.e. a target starting or finishing
+// executionEvent represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
-type runResult struct {
+type executionEvent struct {
 	// Timestamp of this event
 	Time time.Time
 	// Duration of this event
@@ -96,7 +96,7 @@ func newRunState(start time.Time, tracingProfile string) *runState {
 // be used to update the state of a given taskID with the runResultStatus enum
 func (r *runState) run(label string) (func(outcome runResultStatus, err error), *TaskExecutionSummary) {
 	start := time.Now()
-	taskExecutionSummary := r.add(&runResult{
+	taskExecutionSummary := r.add(&executionEvent{
 		Time:   start,
 		Label:  label,
 		Status: targetBuilding,
@@ -109,7 +109,7 @@ func (r *runState) run(label string) (func(outcome runResultStatus, err error), 
 	tracerFn := func(outcome runResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
-		result := &runResult{
+		result := &executionEvent{
 			Time:     now,
 			Duration: now.Sub(start),
 			Label:    label,
@@ -125,7 +125,7 @@ func (r *runState) run(label string) (func(outcome runResultStatus, err error), 
 	return tracerFn, taskExecutionSummary
 }
 
-func (r *runState) add(result *runResult) *TaskExecutionSummary {
+func (r *runState) add(result *executionEvent) *TaskExecutionSummary {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
