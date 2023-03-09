@@ -739,6 +739,7 @@
 <a href="#739" id="739">739</a>
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1087,7 +1088,7 @@
         Value::new(ClientContextType::Pages { pages_dir }),
     );
 
-    <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>);
+    <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>, <span class="bool-val">false</span>);
     <span class="kw">let </span>route_matcher = NextParamsMatcherVc::new(pathname);
 
     <span class="prelude-val">Ok</span>(<span class="kw">if </span>is_api_path {
@@ -1111,8 +1112,9 @@
             runtime_entries,
         )
     } <span class="kw">else </span>{
+        <span class="kw">let </span>data_pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>, <span class="bool-val">true</span>);
         <span class="kw">let </span>data_route_matcher =
-            NextPrefixSuffixParamsMatcherVc::new(pathname, <span class="string">&quot;_next/data/development/&quot;</span>, <span class="string">&quot;.json&quot;</span>);
+            NextPrefixSuffixParamsMatcherVc::new(data_pathname, <span class="string">&quot;_next/data/development/&quot;</span>, <span class="string">&quot;.json&quot;</span>);
 
         <span class="kw">let </span>ssr_entry = SsrEntry {
             context: server_context,

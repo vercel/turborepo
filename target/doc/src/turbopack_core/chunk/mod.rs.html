@@ -709,8 +709,15 @@
 <a href="#709" id="709">709</a>
 <a href="#710" id="710">710</a>
 <a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>chunk_in_group;
 <span class="kw">pub mod </span>dev;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>list;
 <span class="kw">pub mod </span>optimize;
 
 <span class="kw">use </span>std::{
@@ -735,6 +742,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbo_tasks_hash::DeterministicHash;
 
+<span class="kw">pub use </span><span class="self">self</span>::list::reference::{ChunkListReference, ChunkListReferenceVc};
 <span class="kw">use </span><span class="self">self</span>::{chunk_in_group::ChunkInGroupVc, optimize::optimize};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -746,7 +754,7 @@
 
 <span class="doccomment">/// A module id, which can be a number or string
 </span><span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Debug, Clone, Hash, DeterministicHash)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, DeterministicHash)]
 #[serde(untagged)]
 </span><span class="kw">pub enum </span>ModuleId {
     Number(u32),
@@ -793,6 +801,10 @@
     </span><span class="kw">fn </span>environment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvironmentVc;
 
     <span class="kw">fn </span>chunk_path(<span class="kw-2">&amp;</span><span class="self">self</span>, ident: AssetIdentVc, extension: <span class="kw-2">&amp;</span>str) -&gt; FileSystemPathVc;
+
+    <span class="doccomment">/// Returns the path to the chunk list file for the given entry module
+    /// ident.
+    </span><span class="kw">fn </span>chunk_list_path(<span class="kw-2">&amp;</span><span class="self">self</span>, ident: AssetIdentVc) -&gt; FileSystemPathVc;
 
     <span class="kw">fn </span>can_be_in_same_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>, asset_a: AssetVc, asset_b: AssetVc) -&gt; BoolVc;
 

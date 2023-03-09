@@ -103,6 +103,7 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -171,18 +172,23 @@
         })
         .try_join()
         .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = entries
+
+    <span class="kw">let </span>chunk_groups: Vec&lt;<span class="kw">_</span>&gt; = entries
         .into_iter()
         .flatten()
         .enumerate()
         .map(|(i, module)| <span class="kw">async move </span>{
             <span class="kw">if let </span><span class="prelude-val">Some</span>(ecmascript) = EcmascriptModuleAssetVc::resolve_from(module).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Ok</span>(ecmascript
-                    .as_evaluated_chunk(chunking_context, (i == <span class="number">0</span>).then_some(runtime_entries)))
+                <span class="kw">let </span>chunk = ecmascript
+                    .as_evaluated_chunk(chunking_context, (i == <span class="number">0</span>).then_some(runtime_entries));
+                <span class="kw">let </span>chunk_group = ChunkGroupVc::from_chunk(chunk);
+                <span class="prelude-val">Ok</span>(chunk_group)
             } <span class="kw">else if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(module).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="comment">// TODO this is missing runtime code, so it&#39;s probably broken and we should also
                 // add an ecmascript chunk with the runtime code
-                </span><span class="prelude-val">Ok</span>(chunkable.as_chunk(chunking_context))
+                </span><span class="prelude-val">Ok</span>(ChunkGroupVc::from_chunk(
+                    chunkable.as_chunk(chunking_context),
+                ))
             } <span class="kw">else </span>{
                 <span class="comment">// TODO convert into a serve-able asset
                 </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
@@ -194,11 +200,7 @@
         .try_join()
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>entry_asset = DevHtmlAssetVc::new(
-        server_root.join(<span class="string">&quot;index.html&quot;</span>),
-        chunks.into_iter().map(ChunkGroupVc::from_chunk).collect(),
-    )
-    .into();
+    <span class="kw">let </span>entry_asset = DevHtmlAssetVc::new(server_root.join(<span class="string">&quot;index.html&quot;</span>), chunk_groups).into();
 
     <span class="kw">let </span>graph = <span class="kw">if </span>eager_compile {
         AssetGraphContentSourceVc::new_eager(server_root, entry_asset)

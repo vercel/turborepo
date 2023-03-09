@@ -202,6 +202,10 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
@@ -225,6 +229,7 @@
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
+<span class="kw">use </span>turbopack_ecmascript::utils::stringify_js_pretty;
 
 <span class="kw">use </span><span class="kw">crate</span>::next_client_chunks::in_chunking_context_asset::InChunkingContextAsset;
 
@@ -333,15 +338,17 @@
         <span class="kw">let </span>module_id = stringify_js(<span class="kw-2">&amp;*</span>inner.asset.as_chunk_item(<span class="self">self</span>.context).id().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: <span class="macro">formatdoc!</span>(
-                <span class="string">r#&quot;
+                <span class="comment">// We store the chunks in a binding, otherwise a new array would be created every
+                // time the export binding is read.
+                </span><span class="string">r#&quot;
                     __turbopack_esm__({{
                         default: () =&gt; __turbopack_import__({}),
-                        chunks: () =&gt; chunks
+                        chunks: () =&gt; chunks,
                     }});
                     const chunks = {};
                 &quot;#</span>,
                 module_id,
-                stringify_js(<span class="kw-2">&amp;</span>client_chunks)
+                stringify_js_pretty(<span class="kw-2">&amp;</span>client_chunks),
             )
             .into(),
             ..Default::default()
@@ -358,13 +365,14 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>inner = <span class="self">self</span>.inner.<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">async fn </span>references(self_vc: WithClientChunksChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>inner = this.inner.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[
             WithClientChunksAssetReference {
                 asset: InChunkingContextAsset {
                     asset: inner.asset,
-                    chunking_context: <span class="self">self</span>.context,
+                    chunking_context: this.context,
                 }
                 .cell()
                 .into(),

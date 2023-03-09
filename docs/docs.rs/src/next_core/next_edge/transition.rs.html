@@ -118,6 +118,7 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -232,6 +233,7 @@
             asset: new_asset.into(),
             chunking_context: <span class="self">self</span>.edge_chunking_context,
             base_path: <span class="self">self</span>.output_path,
+            server_root: <span class="self">self</span>.output_path,
             runtime_entries: <span class="prelude-val">None</span>,
         };
 

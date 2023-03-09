@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["UpdateStreamItem","UpdateStreamItemVc"],"type":["UpdateStreamItemReadRef"]};
+window.SIDEBAR_ITEMS = {"enum":["UpdateStreamItem"],"struct":["UpdateStreamItemVc"],"type":["UpdateStreamItemReadRef"]};

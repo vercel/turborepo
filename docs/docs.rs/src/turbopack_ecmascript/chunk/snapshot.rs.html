@@ -160,16 +160,10 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, io::Write <span class="kw">as _</span>, slice::Iter};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkItem, ModuleId, ModuleIdReadRef},
@@ -281,10 +275,6 @@
 
     <span class="kw">pub fn </span>code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Code {
         <span class="kw-2">&amp;</span><span class="self">self</span>.code
-    }
-
-    <span class="kw">pub fn </span>source_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Rope {
-        <span class="self">self</span>.code.source_code()
     }
 }
 

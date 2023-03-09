@@ -340,7 +340,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>HashSet&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>HashSet&lt;T, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(item, context);
@@ -348,7 +348,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>AutoSet&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>AutoSet&lt;T, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(item, context);
@@ -364,7 +364,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>IndexSet&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>IndexSet&lt;T, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(item, context);
@@ -372,7 +372,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>HashMap&lt;K, V&gt; {
+<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>HashMap&lt;K, V, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>(key, value) <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(key, context);
@@ -381,7 +381,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>AutoMap&lt;K, V&gt; {
+<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>AutoMap&lt;K, V, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>(key, value) <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(key, context);
@@ -399,7 +399,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs&gt; TraceRawVcs <span class="kw">for </span>IndexMap&lt;K, V&gt; {
+<span class="kw">impl</span>&lt;K: TraceRawVcs, V: TraceRawVcs, S&gt; TraceRawVcs <span class="kw">for </span>IndexMap&lt;K, V, S&gt; {
     <span class="kw">fn </span>trace_raw_vcs(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;mut </span>TraceRawVcsContext) {
         <span class="kw">for </span>(key, value) <span class="kw">in </span><span class="self">self</span>.iter() {
             TraceRawVcs::trace_raw_vcs(key, context);

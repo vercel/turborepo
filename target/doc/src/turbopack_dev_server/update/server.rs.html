@@ -253,6 +253,17 @@
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -340,7 +351,7 @@
                     }
                 }
                 <span class="prelude-val">Some</span>((resource, update)) = streams.next() =&gt; {
-                    <span class="self">Self</span>::send_update(<span class="kw-2">&amp;mut </span>client, resource, <span class="kw-2">&amp;</span>update).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="self">Self</span>::send_update(<span class="kw-2">&amp;mut </span>client, <span class="kw-2">&amp;mut </span>streams, resource, <span class="kw-2">&amp;</span>update).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
                 <span class="kw">else </span>=&gt; <span class="kw">break
             </span>}
@@ -351,35 +362,46 @@
 
     <span class="kw">async fn </span>send_update(
         client: <span class="kw-2">&amp;mut </span>UpdateClient,
+        streams: <span class="kw-2">&amp;mut </span>StreamMap&lt;ResourceIdentifier, UpdateStream&gt;,
         resource: ResourceIdentifier,
-        update: <span class="kw-2">&amp;</span>UpdateStreamItem,
+        item: <span class="kw-2">&amp;</span>UpdateStreamItem,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>issues = update
-            .issues
-            .iter()
-            .map(|p| (<span class="kw-2">&amp;**</span>p).into())
-            .collect::&lt;Vec&lt;Issue&lt;<span class="lifetime">&#39;_</span>&gt;&gt;&gt;();
-
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>update.update {
-            Update::Partial(partial) =&gt; {
-                <span class="kw">let </span>partial_instruction = partial.instruction.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">match </span>item {
+            UpdateStreamItem::NotFound =&gt; {
+                <span class="comment">// If the resource was not found, we remove the stream and indicate that to the
+                // client.
+                </span>streams.remove(<span class="kw-2">&amp;</span>resource);
                 client
-                    .send(ClientUpdateInstruction::partial(
-                        <span class="kw-2">&amp;</span>resource,
-                        <span class="kw-2">&amp;</span>partial_instruction,
-                        <span class="kw-2">&amp;</span>issues,
-                    ))
+                    .send(ClientUpdateInstruction::not_found(<span class="kw-2">&amp;</span>resource))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
             }
-            Update::Total(_total) =&gt; {
-                client
-                    .send(ClientUpdateInstruction::restart(<span class="kw-2">&amp;</span>resource, <span class="kw-2">&amp;</span>issues))
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            Update::None =&gt; {
-                client
-                    .send(ClientUpdateInstruction::issues(<span class="kw-2">&amp;</span>resource, <span class="kw-2">&amp;</span>issues))
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            UpdateStreamItem::Found { update, issues } =&gt; {
+                <span class="kw">let </span>issues = issues
+                    .iter()
+                    .map(|p| (<span class="kw-2">&amp;**</span>p).into())
+                    .collect::&lt;Vec&lt;Issue&lt;<span class="lifetime">&#39;_</span>&gt;&gt;&gt;();
+                <span class="kw">match </span><span class="kw-2">&amp;**</span>update {
+                    Update::Partial(partial) =&gt; {
+                        <span class="kw">let </span>partial_instruction = partial.instruction.<span class="kw">await</span><span class="question-mark">?</span>;
+                        client
+                            .send(ClientUpdateInstruction::partial(
+                                <span class="kw-2">&amp;</span>resource,
+                                <span class="kw-2">&amp;</span>partial_instruction,
+                                <span class="kw-2">&amp;</span>issues,
+                            ))
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                    }
+                    Update::Total(_total) =&gt; {
+                        client
+                            .send(ClientUpdateInstruction::restart(<span class="kw-2">&amp;</span>resource, <span class="kw-2">&amp;</span>issues))
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                    }
+                    Update::None =&gt; {
+                        client
+                            .send(ClientUpdateInstruction::issues(<span class="kw-2">&amp;</span>resource, <span class="kw-2">&amp;</span>issues))
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                    }
+                }
             }
         }
 

@@ -101,6 +101,7 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -198,6 +199,7 @@
             asset: asset.into(),
             chunking_context: <span class="self">self</span>.client_chunking_context,
             base_path: <span class="self">self</span>.server_root.join(<span class="string">&quot;_next&quot;</span>),
+            server_root: <span class="self">self</span>.server_root,
             runtime_entries: <span class="prelude-val">Some</span>(runtime_entries),
         };
 

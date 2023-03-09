@@ -144,11 +144,22 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -262,17 +273,28 @@
         <span class="kw">let </span>this = <span class="kw-2">&amp;*</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>chunks = self_vc.get_page_chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>server_root = this.server_root.<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>data = Vec::with_capacity(chunks.len());
-        <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
-            <span class="kw">let </span>path = chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
-            data.push(serde_json::Value::String(path.path.clone()));
-        }
+        <span class="kw">let </span>chunk_paths: Vec&lt;<span class="kw">_</span>&gt; = chunks
+            .iter()
+            .map(|chunk| {
+                <span class="kw">let </span>server_root = server_root.clone();
+                <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(server_root
+                        .get_path_to(<span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>)
+                        .map(|path| path.to_string()))
+                }
+            })
+            .try_join()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .flatten()
+            .collect();
 
         <span class="kw">let </span>content = <span class="macro">format!</span>(
             <span class="string">&quot;__turbopack_load_page_chunks__({}, {})\n&quot;</span>,
             stringify_js(<span class="kw-2">&amp;</span>this.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
-            serde_json::Value::Array(data)
+            stringify_js(<span class="kw-2">&amp;</span>chunk_paths)
         );
 
         <span class="prelude-val">Ok</span>(AssetContentVc::from(File::from(content)))

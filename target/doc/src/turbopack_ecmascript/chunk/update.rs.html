@@ -70,175 +70,77 @@
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>indexmap::{IndexMap, IndexSet};
-<span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>turbo_tasks::primitives::JsonValueVc;
-<span class="kw">use </span>turbo_tasks_fs::rope::Rope;
-<span class="kw">use </span>turbopack_core::{
-    chunk::ModuleId,
-    version::{PartialUpdate, TotalUpdate, Update, UpdateVc, VersionVc},
-};
+<span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>turbopack_core::{chunk::ModuleIdReadRef, code_builder::CodeReadRef};
 
-<span class="kw">use super</span>::{
-    content::EcmascriptChunkContentVc, snapshot::EcmascriptChunkContentEntry,
-    version::EcmascriptChunkVersionVc,
-};
+<span class="kw">use super</span>::{content::EcmascriptChunkContentVc, version::EcmascriptChunkVersionReadRef};
 
-<span class="attr">#[derive(Serialize)]
-#[serde(tag = <span class="string">&quot;type&quot;</span>)]
-</span><span class="kw">struct </span>EcmascriptChunkUpdate&lt;<span class="lifetime">&#39;a</span>&gt; {
-    added: IndexMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleId, HmrUpdateEntry&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-    modified: IndexMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleId, HmrUpdateEntry&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-    deleted: IndexSet&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleId&gt;,
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">enum </span>EcmascriptChunkUpdate {
+    <span class="prelude-val">None</span>,
+    Partial(EcmascriptChunkPartialUpdate),
 }
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>update_ecmascript_chunk(
-    content: EcmascriptChunkContentVc,
-    from_version: VersionVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
-    <span class="kw">let </span>to_version = content.version();
-    <span class="kw">let </span>from_version =
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(from) = EcmascriptChunkVersionVc::resolve_from(from_version).<span class="kw">await</span><span class="question-mark">? </span>{
-            from
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
-                to: to_version.into(),
-            })
-            .cell());
-        };
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>EcmascriptChunkPartialUpdate {
+    <span class="kw">pub </span>added: IndexMap&lt;ModuleIdReadRef, (u64, CodeReadRef)&gt;,
+    <span class="kw">pub </span>deleted: IndexMap&lt;ModuleIdReadRef, u64&gt;,
+    <span class="kw">pub </span>modified: IndexMap&lt;ModuleIdReadRef, CodeReadRef&gt;,
+}
 
-    <span class="kw">let </span>to = to_version.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>from = from_version.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>update_ecmascript_chunk(
+    content: EcmascriptChunkContentVc,
+    from: <span class="kw-2">&amp;</span>EcmascriptChunkVersionReadRef,
+) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkUpdate&gt; {
+    <span class="kw">let </span>to = content.own_version().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// When to and from point to the same value we can skip comparing them.
-    // This will happen since `cell_local` will not clone the value, but only make
-    // the local cell point to the same immutable value (Arc).
+    // This will happen since `TraitRef&lt;VersionVc&gt;::cell` will not clone the value,
+    // but only make the cell point to the same immutable value (Arc).
     </span><span class="kw">if </span>from.ptr_eq(<span class="kw-2">&amp;</span>to) {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(Update::None.cell());
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(EcmascriptChunkUpdate::None);
     }
 
     <span class="kw">let </span>content = content.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;</span>content.chunk_path.path;
 
     <span class="comment">// TODO(alexkirsz) This should probably be stored as a HashMap already.
     </span><span class="kw">let </span><span class="kw-2">mut </span>module_factories: IndexMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = content
         .module_factories
         .iter()
-        .map(|entry| (entry.id(), entry))
+        .map(|entry| (entry.id.clone(), entry))
         .collect();
-    <span class="kw">let </span><span class="kw-2">mut </span>added = IndexMap::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>modified = IndexMap::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>deleted = IndexSet::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>added = IndexMap::default();
+    <span class="kw">let </span><span class="kw-2">mut </span>modified = IndexMap::default();
+    <span class="kw">let </span><span class="kw-2">mut </span>deleted = IndexMap::default();
 
-    <span class="kw">for </span>(id, hash) <span class="kw">in </span><span class="kw-2">&amp;</span>from.module_factories_hashes {
-        <span class="kw">let </span>id = <span class="kw-2">&amp;**</span>id;
+    <span class="kw">for </span>(id, from_hash) <span class="kw">in </span><span class="kw-2">&amp;</span>from.module_factories_hashes {
+        <span class="kw">let </span>id = id;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(entry) = module_factories.remove(id) {
-            <span class="kw">if </span>entry.hash != <span class="kw-2">*</span>hash {
-                modified.insert(id, HmrUpdateEntry::new(entry, chunk_path));
+            <span class="kw">if </span>entry.hash != <span class="kw-2">*</span>from_hash {
+                modified.insert(id.clone(), entry.code.clone());
             }
         } <span class="kw">else </span>{
-            deleted.insert(id);
+            deleted.insert(id.clone(), <span class="kw-2">*</span>from_hash);
         }
     }
 
     <span class="comment">// Remaining entries are added
     </span><span class="kw">for </span>(id, entry) <span class="kw">in </span>module_factories {
-        added.insert(id, HmrUpdateEntry::new(entry, chunk_path));
+        <span class="kw">if </span>!from.module_factories_hashes.contains_key(<span class="kw-2">&amp;</span>id) {
+            added.insert(id, (entry.hash, entry.code.clone()));
+        }
     }
 
     <span class="kw">let </span>update = <span class="kw">if </span>added.is_empty() &amp;&amp; modified.is_empty() &amp;&amp; deleted.is_empty() {
-        Update::None
+        EcmascriptChunkUpdate::None
     } <span class="kw">else </span>{
-        <span class="kw">let </span>chunk_update = EcmascriptChunkUpdate {
+        EcmascriptChunkUpdate::Partial(EcmascriptChunkPartialUpdate {
             added,
             modified,
             deleted,
-        };
-
-        Update::Partial(PartialUpdate {
-            to: to_version.into(),
-            instruction: JsonValueVc::cell(serde_json::to_value(<span class="kw-2">&amp;</span>chunk_update)<span class="question-mark">?</span>),
         })
     };
 
-    <span class="prelude-val">Ok</span>(update.into())
-}
-
-<span class="attr">#[derive(serde::Serialize)]
-</span><span class="kw">struct </span>HmrUpdateEntry&lt;<span class="lifetime">&#39;a</span>&gt; {
-    code: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Rope,
-    url: String,
-    map: <span class="prelude-ty">Option</span>&lt;String&gt;,
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; HmrUpdateEntry&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>new(entry: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>EcmascriptChunkContentEntry, chunk_path: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
-        <span class="doccomment">/// serde_qs can&#39;t serialize a lone enum when it&#39;s [serde::untagged].
-        </span><span class="attr">#[derive(Serialize)]
-        </span><span class="kw">struct </span>Id&lt;<span class="lifetime">&#39;a</span>&gt; {
-            id: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleId,
-        }
-        <span class="kw">let </span>id = serde_qs::to_string(<span class="kw-2">&amp;</span>Id { id: <span class="kw-2">&amp;</span>entry.id }).unwrap();
-        HmrUpdateEntry {
-            code: entry.source_code(),
-            url: <span class="macro">format!</span>(<span class="string">&quot;/{}?{}&quot;</span>, chunk_path, <span class="kw-2">&amp;</span>id),
-            map: entry
-                .code
-                .has_source_map()
-                .then(|| <span class="macro">format!</span>(<span class="string">&quot;/__turbopack_sourcemap__/{}.map?{}&quot;</span>, chunk_path, <span class="kw-2">&amp;</span>id)),
-        }
-    }
+    <span class="prelude-val">Ok</span>(update)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_ecmascript" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -551,12 +551,6 @@
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
 <a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -759,12 +753,6 @@
 
     <span class="doccomment">/// The vary data which is needed in order to process the request.
     </span><span class="kw">pub </span>vary: ContentSourceDataVary,
-}
-
-<span class="kw">impl </span>From&lt;VersionedContentVc&gt; <span class="kw">for </span>ContentSourceContentVc {
-    <span class="kw">fn </span>from(content: VersionedContentVc) -&gt; <span class="self">Self </span>{
-        ContentSourceContentVc::static_content(content)
-    }
 }
 
 <span class="doccomment">/// Additional info passed to the ContentSource. It was extracted from the http

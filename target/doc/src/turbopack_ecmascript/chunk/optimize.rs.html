@@ -446,6 +446,7 @@
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -847,6 +848,7 @@
                         EcmascriptChunkEvaluate {
                             evaluate_entries: evaluate.evaluate_entries,
                             chunk_group: <span class="prelude-val">Some</span>(chunk_group),
+                            chunk_list_path: evaluate.chunk_list_path,
                         }
                         .cell(),
                     ),

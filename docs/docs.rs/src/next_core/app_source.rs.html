@@ -1162,7 +1162,7 @@
                 segments: layouts,
             } =&gt; {
                 <span class="kw">let </span>LayoutSegment { target, .. } = <span class="kw-2">*</span>segment.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>pathname = pathname_for_path(server_root, url, <span class="bool-val">false</span>);
+                <span class="kw">let </span>pathname = pathname_for_path(server_root, url, <span class="bool-val">false</span>, <span class="bool-val">false</span>);
                 <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname);
 
                 sources.push(create_node_rendered_source(
@@ -1194,7 +1194,7 @@
                 route,
                 ..
             } =&gt; {
-                <span class="kw">let </span>pathname = pathname_for_path(server_root, url, <span class="bool-val">false</span>);
+                <span class="kw">let </span>pathname = pathname_for_path(server_root, url, <span class="bool-val">false</span>, <span class="bool-val">false</span>);
                 <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname);
 
                 sources.push(create_node_api_source(

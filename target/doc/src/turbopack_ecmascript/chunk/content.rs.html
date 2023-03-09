@@ -354,6 +354,35 @@
 <a href="#354" id="354">354</a>
 <a href="#355" id="355">355</a>
 <a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -371,15 +400,18 @@
     environment::{ChunkLoading, EnvironmentVc},
     reference::AssetReferenceVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
-    version::{UpdateVc, VersionVc, VersionedContent, VersionedContentVc},
+    version::{
+        MergeableVersionedContent, MergeableVersionedContentVc, UpdateVc, VersionVc,
+        VersionedContent, VersionedContentMergerVc, VersionedContentVc,
+    },
 };
 
 <span class="kw">use super</span>::{
     evaluate::EcmascriptChunkContentEvaluateVc,
     item::{EcmascriptChunkItemVc, EcmascriptChunkItems, EcmascriptChunkItemsVc},
+    merged::merger::EcmascriptChunkContentMergerVc,
     placeable::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
     snapshot::EcmascriptChunkContentEntriesSnapshotReadRef,
-    update::update_ecmascript_chunk,
     version::{EcmascriptChunkVersion, EcmascriptChunkVersionVc},
 };
 <span class="kw">use </span><span class="kw">crate</span>::utils::stringify_js;
@@ -530,7 +562,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkContentVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>version(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVersionVc&gt; {
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>own_version(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVersionVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunk_server_path = <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = this.output_root.get_path_to(<span class="kw-2">&amp;</span>this.chunk_path) {
             path
@@ -590,12 +622,29 @@
                 .map(|id| <span class="kw">async move </span>{
                     <span class="kw">let </span>id = id.<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>id = stringify_js(<span class="kw-2">&amp;</span>id);
-                    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">r#&quot;instantiateRuntimeModule({id});&quot;#</span>)) <span class="kw">as </span><span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;
+                    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">r#&quot;    instantiateRuntimeModule({id});&quot;#</span>)) <span class="kw">as </span><span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;
                 })
                 .try_join()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.join(<span class="string">&quot;\n&quot;</span>);
 
+            <span class="kw">let </span>chunk_list_register = evaluate
+                .chunk_list_path
+                .as_deref()
+                .map(|path| {
+                    <span class="macro">format!</span>(
+                        <span class="string">r#&quot;registerChunkList({}, {});&quot;#</span>,
+                        stringify_js(<span class="kw-2">&amp;</span>path),
+                        stringify_js(
+                            <span class="kw-2">&amp;</span>evaluate
+                                .ecma_chunks_server_paths
+                                .iter()
+                                .chain(<span class="kw-2">&amp;</span>evaluate.other_chunks_server_paths)
+                                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                        )
+                    )
+                })
+                .unwrap_or_else(String::new);
             <span class="comment">// Add a runnable to the chunk that requests the entry module to ensure it gets
             // executed when the chunk is evaluated.
             // The condition stops the entry module from being executed while chunks it
@@ -605,9 +654,10 @@
             </span><span class="macro">writedoc!</span>(
                 code,
                 <span class="string">r#&quot;
-                    , ({{ loadedChunks, instantiateRuntimeModule }}) =&gt; {{
-                        if(!(true{condition})) return true;
-                        {entries_instantiations}
+                    , ({{ loadedChunks, instantiateRuntimeModule, registerChunkList }}) =&gt; {{
+                        if (!(true{condition})) return true;
+                        {chunk_list_register}
+                    {entries_instantiations}
                     }}
                 &quot;#
             </span>)<span class="question-mark">?</span>;
@@ -678,12 +728,20 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>version(self_vc: EcmascriptChunkContentVc) -&gt; VersionVc {
-        self_vc.version().into()
+        self_vc.own_version().into()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>update(self_vc: EcmascriptChunkContentVc, from_version: VersionVc) -&gt; UpdateVc {
-        update_ecmascript_chunk(self_vc, from_version)
+    </span><span class="kw">fn </span>update(_self_vc: EcmascriptChunkContentVc, _from_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
+        <span class="macro">bail!</span>(<span class="string">&quot;EcmascriptChunkContent is not updateable&quot;</span>)
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MergeableVersionedContent <span class="kw">for </span>EcmascriptChunkContent {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_merger(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VersionedContentMergerVc {
+        EcmascriptChunkContentMergerVc::new().into()
     }
 }
 

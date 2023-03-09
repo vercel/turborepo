@@ -211,6 +211,26 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
@@ -339,6 +359,26 @@
     /// needs to be stored somewhere.
     </span><span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc;
 }
+
+<span class="doccomment">/// This trait allows multiple `VersionedContent` to declare which
+/// [`VersionedContentMerger`] implementation should be used for merging.
+///
+/// [`MergeableVersionedContent`] which return the same merger will be merged
+/// together.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>MergeableVersionedContent: VersionedContent {
+    <span class="kw">fn </span>get_merger(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VersionedContentMergerVc;
+}
+
+<span class="doccomment">/// A [`VersionedContentMerger`] merges multiple [`VersionedContent`] into a
+/// single one.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>VersionedContentMerger {
+    <span class="kw">fn </span>merge(<span class="kw-2">&amp;</span><span class="self">self</span>, contents: VersionedContentsVc) -&gt; VersionedContentVc;
+}
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>VersionedContents(Vec&lt;VersionedContentVc&gt;);
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>NotFoundVersion;

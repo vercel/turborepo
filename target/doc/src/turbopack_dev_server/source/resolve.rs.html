@@ -260,8 +260,8 @@
                         }
                         current_asset_path = new_asset_path;
                         data = ContentSourceData::default();
-                    } <span class="comment">// _ =&gt; ,
-                    </span>ContentSourceContent::NotFound =&gt; {
+                    }
+                    ContentSourceContent::NotFound =&gt; {
                         <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell())
                     }
                     ContentSourceContent::Static(static_content) =&gt; {

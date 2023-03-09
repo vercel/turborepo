@@ -162,6 +162,13 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, ops::Deref, path::PathBuf};
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -220,6 +227,12 @@
         <span class="self">Self</span>::new(resource, ClientUpdateInstructionType::Restart, issues)
     }
 
+    <span class="doccomment">/// Returns a [`ClientUpdateInstruction`] that indicates that the resource
+    /// was not found.
+    </span><span class="kw">pub fn </span>not_found(resource: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ResourceIdentifier) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(resource, ClientUpdateInstructionType::NotFound, <span class="kw-2">&amp;</span>[])
+    }
+
     <span class="kw">pub fn </span>partial(
         resource: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ResourceIdentifier,
         instruction: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Value,
@@ -249,6 +262,7 @@
 #[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub enum </span>ClientUpdateInstructionType&lt;<span class="lifetime">&#39;a</span>&gt; {
     Restart,
+    NotFound,
     Partial { instruction: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Value },
     Issues,
 }

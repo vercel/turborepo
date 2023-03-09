@@ -206,31 +206,9 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
-<span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc};
+<span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
@@ -238,7 +216,7 @@
     chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    version::{Update, UpdateVc, Version, VersionVc, VersionedContent, VersionedContentVc},
+    version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
 
 <span class="doccomment">/// The HTML entry point of the dev server.
@@ -412,28 +390,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>version(self_vc: DevHtmlAssetContentVc) -&gt; VersionVc {
         self_vc.version().into()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>update(self_vc: DevHtmlAssetContentVc, from_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
-        <span class="kw">let </span>from_version = DevHtmlAssetVersionVc::resolve_from(from_version)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.context(<span class="string">&quot;version must be an `DevHtmlAssetVersionVc`&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>to_version = self_vc.version();
-
-        <span class="kw">let </span>to = to_version.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>from = from_version.<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">if </span>to.content.chunk_paths == from.content.chunk_paths {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(Update::None.into());
-        }
-
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-            <span class="string">&quot;cannot update `DevHtmlAssetContentVc` from version {:?} to version {:?}: the \
-             versions contain different chunks, which is not yet supported&quot;</span>,
-            from_version.dbg().<span class="kw">await</span><span class="question-mark">?</span>,
-            to_version.dbg().<span class="kw">await</span><span class="question-mark">?</span>,
-        ))
     }
 }
 

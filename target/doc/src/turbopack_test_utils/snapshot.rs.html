@@ -187,6 +187,7 @@
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env, fs,
@@ -291,32 +292,33 @@
     <span class="kw">let </span>path_str = <span class="kw-2">&amp;</span>path.<span class="kw">await</span><span class="question-mark">?</span>.path;
     <span class="kw">let </span>expected = path.read().into();
 
-    <span class="kw">let </span>actual = <span class="kw">match </span>get_contents(actual, path).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(s) =&gt; s,
-        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;could not generate {} contents&quot;</span>, path_str),
-    };
+    <span class="kw">let </span>actual = get_contents(actual, path).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>expected = get_contents(expected, path).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">if </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>actual) != expected.as_ref() {
-        <span class="kw">if </span><span class="kw-2">*</span>UPDATE {
-            <span class="kw">let </span>content = File::from(actual).into();
-            path.write(content).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">println!</span>(<span class="string">&quot;updated contents of {}&quot;</span>, path_str);
-        } <span class="kw">else </span>{
-            <span class="kw">if </span>expected.is_none() {
-                <span class="macro">eprintln!</span>(<span class="string">&quot;new file {path_str} detected:&quot;</span>);
+    <span class="kw">if </span>actual != expected {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(actual) = actual {
+            <span class="kw">if </span><span class="kw-2">*</span>UPDATE {
+                <span class="kw">let </span>content = File::from(actual).into();
+                path.write(content).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">println!</span>(<span class="string">&quot;updated contents of {}&quot;</span>, path_str);
             } <span class="kw">else </span>{
-                <span class="macro">eprintln!</span>(<span class="string">&quot;contents of {path_str} did not match:&quot;</span>);
+                <span class="kw">if </span>expected.is_none() {
+                    <span class="macro">eprintln!</span>(<span class="string">&quot;new file {path_str} detected:&quot;</span>);
+                } <span class="kw">else </span>{
+                    <span class="macro">eprintln!</span>(<span class="string">&quot;contents of {path_str} did not match:&quot;</span>);
+                }
+                <span class="kw">let </span>expected = expected.unwrap_or_default();
+                <span class="kw">let </span>diff = TextDiff::from_lines(<span class="kw-2">&amp;</span>expected, <span class="kw-2">&amp;</span>actual);
+                <span class="macro">eprintln!</span>(
+                    <span class="string">&quot;{}&quot;</span>,
+                    diff.unified_diff()
+                        .context_radius(<span class="number">3</span>)
+                        .header(<span class="string">&quot;expected&quot;</span>, <span class="string">&quot;actual&quot;</span>)
+                );
+                <span class="macro">bail!</span>(<span class="string">&quot;contents of {path_str} did not match&quot;</span>);
             }
-            <span class="kw">let </span>expected = expected.unwrap_or_default();
-            <span class="kw">let </span>diff = TextDiff::from_lines(<span class="kw-2">&amp;</span>expected, <span class="kw-2">&amp;</span>actual);
-            <span class="macro">eprintln!</span>(
-                <span class="string">&quot;{}&quot;</span>,
-                diff.unified_diff()
-                    .context_radius(<span class="number">3</span>)
-                    .header(<span class="string">&quot;expected&quot;</span>, <span class="string">&quot;actual&quot;</span>)
-            );
-            <span class="macro">bail!</span>(<span class="string">&quot;contents of {path_str} did not match&quot;</span>);
+        } <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;{path_str} was not generated&quot;</span>);
         }
     }
 
