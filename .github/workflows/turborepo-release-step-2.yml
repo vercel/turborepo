@@ -72,7 +72,12 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - run: apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+      - run: apt-get install -y build-essential musl-tools gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        # Yes, I'm aware of the irony of installing Zig to compile our Go + Rust project
+      - run: |
+          mkdir zig
+          curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.1908+06b263825.tar.xz | tar -J -xf - -C zig --strip-components 1
+          export PATH=$PATH:$(pwd)/zig
       - uses: actions-rs/toolchain@v1
       - run: |
           rustup target add x86_64-pc-windows-gnu
@@ -96,7 +101,7 @@ jobs:
       - name: Build Artifacts
         run: cd cli && make build-go-turbo-cross
         env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

@@ -31,14 +31,14 @@ builds:
       - goos: linux
         goarch: arm64
         env:
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
+          - CC=zig cc -target aarch64-linux-musl
+          - CXX=zig c++ -target aarch64-linux-musl
       - goos: linux
         goarch: amd64
         goamd64: v1
         env:
-          - CC=x86_64-linux-gnu-gcc
-          - CXX=x86_64-linux-gnu-g++
+          - CC=zig cc -target x86_64-linux-musl
+          - CXX=zig c++ -target x86_64-linux-musl
       - goos: windows
         goarch: arm64
         env:
