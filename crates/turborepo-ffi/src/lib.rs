@@ -1,3 +1,8 @@
+//! turborepo-ffi
+//!
+//! Please read the notes about safety (marked with `SAFETY`) in both this file,
+//! and in ffi.go before modifying this file.
+
 use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
@@ -9,6 +14,16 @@ mod proto {
 pub struct Buffer {
     len: u32,
     data: *mut u8,
+}
+
+#[no_mangle]
+pub extern "C" fn free_buffer(buffer: Buffer) {
+    // SAFETY
+    // it is important that any memory allocated in rust, is freed in rust
+    // we do this by converting the raw pointer to a Vec and letting it drop
+    // this is safe because we know that the memory was allocated by rust
+    // and that the length is correct
+    let _ = unsafe { Vec::from_raw_parts(buffer.data, buffer.len as usize, buffer.len as usize) };
 }
 
 impl<T: prost::Message> From<T> for Buffer {

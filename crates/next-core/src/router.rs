@@ -17,6 +17,7 @@ use turbopack_core::{
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention::Middleware, ServerAddrVc},
     ident::AssetIdentVc,
+    issue::IssueVc,
     reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -40,7 +41,7 @@ use crate::{
         transition::NextEdgeTransition,
     },
     next_import_map::get_next_build_import_map,
-    next_server::context::ServerContextType,
+    next_server::context::{get_server_module_options_context, ServerContextType},
     util::{parse_config_from_source, NextSourceConfigVc},
 };
 
@@ -282,9 +283,17 @@ fn edge_transition_map(
         execution_context,
     );
 
+    let server_module_options_context = get_server_module_options_context(
+        project_path,
+        execution_context,
+        Value::new(ServerContextType::Middleware),
+        next_config,
+    );
+
     let next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: Some(server_module_options_context),
         edge_resolve_options_context,
         output_path: output_path.root(),
         base_path: project_path,
@@ -303,6 +312,32 @@ fn edge_transition_map(
 
 #[turbo_tasks::function]
 pub async fn route(
+    execution_context: ExecutionContextVc,
+    request: RouterRequestVc,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
+    routes_changed: CompletionVc,
+) -> Result<RouterResultVc> {
+    let RouterRequest {
+        ref method,
+        ref pathname,
+        ..
+    } = *request.await?;
+    IssueVc::attach_description(
+        format!("Next.js Routing for {} {}", method, pathname),
+        route_internal(
+            execution_context,
+            request,
+            next_config,
+            server_addr,
+            routes_changed,
+        ),
+    )
+    .await
+}
+
+#[turbo_tasks::function]
+async fn route_internal(
     execution_context: ExecutionContextVc,
     request: RouterRequestVc,
     next_config: NextConfigVc,

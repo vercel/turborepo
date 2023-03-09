@@ -478,6 +478,8 @@ jobs:
           cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
+          # This is for next.js integration test
+          cargo check -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test
 
       - name: Run cargo check release
         run: |

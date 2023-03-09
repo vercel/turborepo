@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cache"
@@ -18,11 +19,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/util"
 )
-
-// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
-// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
-// the RunSummary will print this, instead of the script (e.g. `next build`).
-const missingTaskLabel = "<NONEXISTENT>"
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
 // execute the task.
@@ -48,12 +44,16 @@ func DryRun(
 		taskHashTracker,
 		rs,
 		base,
-		turboCache,
 	)
 
 	if err != nil {
 		return err
 	}
+
+	// We walk the graph with no concurrency.
+	// Populating the cache state is parallelizable.
+	// Do this _after_ walking the graph.
+	populateCacheState(turboCache, taskSummaries)
 
 	// Assign the Task Summaries to the main summary
 	summary.Tasks = taskSummaries
@@ -64,30 +64,20 @@ func DryRun(
 		if err != nil {
 			return err
 		}
-		base.UI.Output(rendered)
+		base.UI.Output(string(rendered))
 		return nil
 	}
 
 	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]runsummary.TaskSummary, error) {
-	taskIDs := []runsummary.TaskSummary{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]*runsummary.TaskSummary, error) {
+	taskIDs := []*runsummary.TaskSummary{}
 
-	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		command := missingTaskLabel
-		if packageTask.Command != "" {
-			command = packageTask.Command
-		}
-
-		framework := runsummary.MissingFrameworkLabel
-		if packageTask.Framework != "" {
-			framework = packageTask.Framework
-		}
-
+	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		isRootTask := packageTask.PackageName == util.RootPkgName
-		if isRootTask && commandLooksLikeTurbo(command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
+		if isRootTask && commandLooksLikeTurbo(taskSummary.Command) {
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, taskSummary.Command)
 		}
 
 		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
@@ -100,34 +90,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		hash := packageTask.Hash
-		itemStatus, err := turboCache.Exists(hash)
-		if err != nil {
-			return err
+		// Assign some fallbacks if they were missing
+		if taskSummary.Command == "" {
+			taskSummary.Command = runsummary.MissingTaskLabel
 		}
 
-		taskIDs = append(taskIDs, runsummary.TaskSummary{
-			TaskID:                 packageTask.TaskID,
-			Task:                   packageTask.Task,
-			Package:                packageTask.PackageName,
-			Dir:                    packageTask.Dir,
-			Outputs:                packageTask.Outputs,
-			ExcludedOutputs:        packageTask.ExcludedOutputs,
-			LogFile:                packageTask.LogFile,
-			ResolvedTaskDefinition: packageTask.TaskDefinition,
-			ExpandedInputs:         packageTask.ExpandedInputs,
-			Command:                command,
-			Framework:              framework,
-			EnvVars: runsummary.TaskEnvVarSummary{
-				Configured: packageTask.HashedEnvVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:   packageTask.HashedEnvVars.BySource.Prefixed.ToSecretHashable(),
-			},
+		if taskSummary.Framework == "" {
+			taskSummary.Framework = runsummary.MissingFrameworkLabel
+		}
 
-			Hash:         hash,
-			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
-			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
-			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
-		})
+		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
+		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
+
+		taskIDs = append(taskIDs, taskSummary)
 
 		return nil
 	}
@@ -154,6 +129,38 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	}
 
 	return taskIDs, nil
+}
+
+func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
+	// We make at most 8 requests at a time for cache state.
+	maxParallelRequests := 8
+	taskCount := len(taskSummaries)
+
+	parallelRequestCount := maxParallelRequests
+	if taskCount < maxParallelRequests {
+		parallelRequestCount = taskCount
+	}
+
+	queue := make(chan int, taskCount)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < parallelRequestCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range queue {
+				task := taskSummaries[index]
+				itemStatus := turboCache.Exists(task.Hash)
+				task.CacheState = itemStatus
+			}
+		}()
+	}
+
+	for index := range taskSummaries {
+		queue <- index
+	}
+	close(queue)
+	wg.Wait()
 }
 
 var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))

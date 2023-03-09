@@ -1,13 +1,14 @@
 use std::{
     collections::{BTreeMap, HashMap},
     io::Write,
+    iter::once,
 };
 
 use anyhow::{anyhow, Result};
 use indexmap::indexmap;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
-use turbo_tasks_fs::{rebase, rope::RopeBuilder, File, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{rope::RopeBuilder, File, FileContent, FileSystemPathVc};
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
     transition::{TransitionVc, TransitionsByNameVc},
@@ -202,6 +203,7 @@ fn next_route_transition(
     NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: None,
         edge_resolve_options_context,
         output_path,
         base_path: app_dir,
@@ -427,11 +429,7 @@ async fn create_app_source_for_directory(
                         page_path: page,
                         target,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                     }
                     .cell()
                     .into(),
@@ -460,11 +458,7 @@ async fn create_app_source_for_directory(
                         server_root,
                         entry_path: route,
                         project_path,
-                        intermediate_output_path: rebase(
-                            directory,
-                            project_path,
-                            intermediate_output_path_root,
-                        ),
+                        intermediate_output_path: intermediate_output_path_root,
                         output_root: intermediate_output_path_root,
                     }
                     .cell()
@@ -482,21 +476,31 @@ async fn create_app_source_for_directory(
             return Ok(NoContentSourceVc::new().into());
         }
     }
-    for child in children.iter() {
-        sources.push(create_app_source_for_directory(
-            *child,
-            context_ssr,
-            context,
-            project_path,
-            env,
-            server_root,
-            runtime_entries,
-            fallback_page,
-            intermediate_output_path_root,
-        ));
-    }
 
-    Ok(CombinedContentSource { sources }.cell().into())
+    let source = CombinedContentSource { sources }
+        .cell()
+        .as_content_source()
+        .issue_context(directory, "Next.js App Router");
+
+    Ok(CombinedContentSource {
+        sources: once(source)
+            .chain(children.iter().map(|child| {
+                create_app_source_for_directory(
+                    *child,
+                    context_ssr,
+                    context,
+                    project_path,
+                    env,
+                    server_root,
+                    runtime_entries,
+                    fallback_page,
+                    intermediate_output_path_root,
+                )
+            }))
+            .collect(),
+    }
+    .cell()
+    .into())
 }
 
 /// The renderer for pages in app directory
