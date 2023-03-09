@@ -37,7 +37,7 @@ builds:
         goarch: amd64
         goamd64: v1
         env:
-          - CC=zig cc -target x86_64-linux-musl
+          - CC=zig cc -target x86_64-linux-musl -L/usr/lib
           - CXX=zig c++ -target x86_64-linux-musl
       - goos: windows
         goarch: arm64
