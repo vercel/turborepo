@@ -30,7 +30,7 @@ func (summary *RunSummary) printExecutionSummary(ui cli.Ui) {
 	}
 	ui.Output("") // Clear the line
 	ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", summary.ExecutionSummary.Cached+summary.ExecutionSummary.Success, summary.ExecutionSummary.Attempted))
-	ui.Output(util.Sprintf("${BOLD}cached:    %v cached${RESET}${GRAY}, %v total${RESET}", summary.ExecutionSummary.Cached, summary.ExecutionSummary.Attempted))
+	ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", summary.ExecutionSummary.Cached, summary.ExecutionSummary.Attempted))
 	ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(summary.ExecutionSummary.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 	ui.Output("")
 }
