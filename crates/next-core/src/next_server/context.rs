@@ -299,7 +299,7 @@ pub async fn get_server_module_options_context(
             ModuleOptionsContext {
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: Some(Default::default()),
+                enable_typescript_transform: Some(tsconfig),
                 rules: vec![(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),

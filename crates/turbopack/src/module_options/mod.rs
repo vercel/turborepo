@@ -119,12 +119,8 @@ impl ModuleOptionsVc {
         let app_transforms = EcmascriptInputTransformsVc::cell(transforms);
         let vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
-        let ts_app_transforms = if enable_typescript_transform.is_some() {
-            let mut base_transforms = if let Some(transform) = ts_transform {
-                vec![transform.clone()]
-            } else {
-                vec![]
-            };
+        let ts_app_transforms = if let Some(transform) = ts_transform {
+            let mut base_transforms = vec![transform.clone()];
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms

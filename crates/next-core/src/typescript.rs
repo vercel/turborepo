@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks_fs::{FileJsonContent, FileSystemPathVc};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::module_options::{TypescriptTransformOptions, TypescriptTransformOptionsVc};
 use turbopack_core::{
     resolve::{find_context_file, node::node_cjs_resolve_options, FindContextFileResult},
