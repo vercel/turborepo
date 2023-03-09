@@ -97,7 +97,6 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 // TaskCache represents a single task's (package-task?) interface to the RunCache
 // and controls access to the task's outputs
 type TaskCache struct {
-	taskID            string
 	ExpandedOutputs   []turbopath.AnchoredSystemPath
 	rc                *RunCache
 	repoRelativeGlobs fs.TaskOutputs
@@ -302,7 +301,6 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	}
 
 	return TaskCache{
-		taskID:            pt.TaskID,
 		ExpandedOutputs:   []turbopath.AnchoredSystemPath{},
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
