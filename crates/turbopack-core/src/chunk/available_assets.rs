@@ -78,19 +78,6 @@ impl AvailableAssetsVc {
     }
 }
 
-impl AvailableAssetsVc {
-    pub fn from(parent: Option<Self>, root: Option<AssetVc>) -> Option<Self> {
-        let Some(root) = root else {
-            return parent;
-        };
-        if let Some(parent) = parent {
-            Some(parent.with_roots(vec![root]))
-        } else {
-            Some(Self::new(vec![root]))
-        }
-    }
-}
-
 #[turbo_tasks::function]
 async fn chunkable_assets_set(root: AssetVc) -> Result<AssetsSetVc> {
     let assets = GraphTraversal::<SkipDuplicates<ReverseTopological<AssetVc>, _>>::visit(

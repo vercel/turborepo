@@ -11,12 +11,12 @@
 #![feature(min_specialization)]
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{primitives::StringVc, ValueToString};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString};
 use turbo_tasks_fs::FileContent;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        availablility_info::AvailablilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     context::AssetContextVc,
@@ -83,14 +83,12 @@ impl ChunkableAsset for StaticModuleAsset {
     fn as_chunk(
         self_vc: StaticModuleAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
         .into()
     }

@@ -1,4 +1,5 @@
 pub mod available_assets;
+pub mod availablility_info;
 pub mod chunk_in_group;
 pub mod dev;
 pub(crate) mod list;
@@ -21,14 +22,14 @@ use turbo_tasks::{
     },
     primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
-    TryJoinIterExt, ValueToString, ValueToStringVc,
+    TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::DeterministicHash;
 
 pub use self::list::reference::{ChunkListReference, ChunkListReferenceVc};
 use self::{
-    available_assets::AvailableAssetsVc, chunk_in_group::ChunkInGroupVc, optimize::optimize,
+    availablility_info::AvailablilityInfo, chunk_in_group::ChunkInGroupVc, optimize::optimize,
 };
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -113,8 +114,7 @@ pub trait ChunkableAsset: Asset {
     fn as_chunk(
         &self,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc;
 }
 
@@ -133,10 +133,9 @@ impl ChunkGroupVc {
     pub fn from_asset(
         asset: ChunkableAssetVc,
         context: ChunkingContextVc,
-        available_asset: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Self {
-        Self::from_chunk(asset.as_chunk(context, available_asset, current_availability_root))
+        Self::from_chunk(asset.as_chunk(context, availablility_info))
     }
 
     /// Creates a chunk group from an chunk as entrypoint
@@ -402,8 +401,7 @@ pub trait FromChunkableAsset: ChunkItem + Sized + Debug {
     async fn from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Result<Option<Self>>;
 }
 
@@ -411,30 +409,21 @@ pub async fn chunk_content_split<I>(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
 ) -> Result<ChunkContentResult<I>>
 where
     I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
 {
-    chunk_content_internal_parallel(
-        context,
-        entry,
-        additional_entries,
-        available_assets,
-        current_availability_root,
-        true,
-    )
-    .await
-    .map(|o| o.unwrap())
+    chunk_content_internal_parallel(context, entry, additional_entries, availablility_info, true)
+        .await
+        .map(|o| o.unwrap())
 }
 
 pub async fn chunk_content<I>(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
     I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
@@ -443,8 +432,7 @@ where
         context,
         entry,
         additional_entries,
-        available_assets,
-        current_availability_root,
+        availablility_info,
         false,
     )
     .await
@@ -468,8 +456,7 @@ enum ChunkContentGraphNode<I> {
 struct ChunkContentContext {
     chunking_context: ChunkingContextVc,
     entry: AssetVc,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
     split: bool,
 }
 
@@ -502,7 +489,7 @@ where
     let mut graph_nodes = vec![];
 
     for asset in assets {
-        if let Some(available_assets) = context.available_assets {
+        if let Some(available_assets) = context.availablility_info.available_assets() {
             if *available_assets.includes(asset).await? {
                 graph_nodes.push((
                     Some((asset, chunking_type)),
@@ -538,11 +525,8 @@ where
                 }
             }
             ChunkingType::Parallel => {
-                let chunk = chunkable_asset.as_chunk(
-                    context.chunking_context,
-                    context.available_assets,
-                    context.current_availability_root,
-                );
+                let chunk =
+                    chunkable_asset.as_chunk(context.chunking_context, context.availablility_info);
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -551,8 +535,9 @@ where
             ChunkingType::IsolatedParallel => {
                 let chunk = chunkable_asset.as_chunk(
                     context.chunking_context,
-                    None,
-                    Some(chunkable_asset.into()),
+                    Value::new(AvailablilityInfo::Root {
+                        current_availability_root: chunkable_asset.into(),
+                    }),
                 );
                 graph_nodes.push((
                     Some((asset, chunking_type)),
@@ -578,11 +563,8 @@ where
                     }
                 }
 
-                let chunk = chunkable_asset.as_chunk(
-                    context.chunking_context,
-                    context.available_assets,
-                    context.current_availability_root,
-                );
+                let chunk =
+                    chunkable_asset.as_chunk(context.chunking_context, context.availablility_info);
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -594,8 +576,7 @@ where
                     ChunkContentGraphNode::AsyncChunkGroup(ChunkGroupVc::from_asset(
                         chunkable_asset,
                         context.chunking_context,
-                        context.available_assets,
-                        context.current_availability_root,
+                        context.availablility_info,
                     )),
                 ));
             }
@@ -603,8 +584,7 @@ where
                 if let Some(manifest_loader_item) = I::from_async_asset(
                     context.chunking_context,
                     chunkable_asset,
-                    context.available_assets,
-                    context.current_availability_root,
+                    context.availablility_info,
                 )
                 .await?
                 {
@@ -708,8 +688,7 @@ async fn chunk_content_internal_parallel<I>(
     chunking_context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
     split: bool,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
@@ -739,8 +718,7 @@ where
         chunking_context,
         entry,
         split,
-        available_assets,
-        current_availability_root,
+        availablility_info,
     };
 
     let visit = ChunkContentVisit {

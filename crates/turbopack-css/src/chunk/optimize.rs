@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, Value};
 use turbopack_core::chunk::{
     optimize::{ChunkOptimizer, ChunkOptimizerVc},
     ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
@@ -63,8 +63,7 @@ async fn merge_chunks(
     Ok(CssChunkVc::new_normalized(
         first.await?.context,
         CssChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
-        first.await?.available_assets,
-        first.await?.current_availability_root,
+        Value::new(first.await?.availablility_info),
     ))
 }
 

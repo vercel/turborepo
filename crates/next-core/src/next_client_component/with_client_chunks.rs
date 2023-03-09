@@ -1,6 +1,6 @@
 use anyhow::Result;
 use indoc::formatdoc;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::{
     chunk::{
@@ -13,9 +13,9 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc,
-        ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        availablility_info::AvailablilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
+        ChunkVc, ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -62,14 +62,12 @@ impl ChunkableAsset for WithClientChunksAsset {
     fn as_chunk(
         self_vc: WithClientChunksAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context.with_layer("rsc"),
             self_vc.as_ecmascript_chunk_placeable(),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
         .into()
     }
@@ -116,8 +114,9 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
         let group = ChunkGroupVc::from_asset(
             inner.asset.into(),
             self.context,
-            None,
-            Some(inner.asset.into()),
+            Value::new(AvailablilityInfo::Root {
+                current_availability_root: inner.asset.into(),
+            }),
         );
         let chunks = group.chunks().await?;
         let server_root = inner.server_root.await?;

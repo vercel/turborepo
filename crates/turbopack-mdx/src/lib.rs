@@ -7,7 +7,7 @@ use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        availablility_info::AvailablilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContextVc,
     },
     context::{AssetContext, AssetContextVc},
@@ -120,14 +120,12 @@ impl ChunkableAsset for MdxModuleAsset {
     fn as_chunk(
         self_vc: MdxModuleAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
         .into()
     }

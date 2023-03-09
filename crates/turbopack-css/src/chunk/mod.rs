@@ -11,7 +11,7 @@ use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc}
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc,
+        availablility_info::AvailablilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
@@ -42,8 +42,7 @@ use crate::{
 pub struct CssChunk {
     context: ChunkingContextVc,
     main_entries: CssChunkPlaceablesVc,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: AvailablilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -52,14 +51,12 @@ impl CssChunkVc {
     pub fn new_normalized(
         context: ChunkingContextVc,
         main_entries: CssChunkPlaceablesVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Self {
         CssChunk {
             context,
             main_entries,
-            available_assets,
-            current_availability_root,
+            availablility_info: availablility_info.into_value(),
         }
         .cell()
     }
@@ -68,14 +65,12 @@ impl CssChunkVc {
     pub fn new(
         context: ChunkingContextVc,
         entry: CssChunkPlaceableVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Self {
         Self::new_normalized(
             context,
             CssChunkPlaceablesVc::cell(vec![entry]),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
     }
 
@@ -217,21 +212,13 @@ impl From<ChunkContentResult<CssChunkItemVc>> for CssChunkContentResult {
 async fn css_chunk_content(
     context: ChunkingContextVc,
     entries: CssChunkPlaceablesVc,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
 ) -> Result<CssChunkContentResultVc> {
     let entries = entries.await?;
     let entries = entries.iter().copied();
 
     let contents = entries
-        .map(|entry| {
-            css_chunk_content_single_entry(
-                context,
-                entry,
-                available_assets,
-                current_availability_root,
-            )
-        })
+        .map(|entry| css_chunk_content_single_entry(context, entry, availablility_info))
         .collect::<Vec<_>>();
 
     if contents.len() == 1 {
@@ -269,29 +256,15 @@ async fn css_chunk_content(
 async fn css_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: CssChunkPlaceableVc,
-    available_assets: Option<AvailableAssetsVc>,
-    current_availability_root: Option<AssetVc>,
+    availablility_info: Value<AvailablilityInfo>,
 ) -> Result<CssChunkContentResultVc> {
     let asset = entry.as_asset();
-    let res = if let Some(res) = chunk_content::<CssChunkItemVc>(
-        context,
-        asset,
-        None,
-        available_assets,
-        current_availability_root,
-    )
-    .await?
+    let res = if let Some(res) =
+        chunk_content::<CssChunkItemVc>(context, asset, None, availablility_info).await?
     {
         res
     } else {
-        chunk_content_split::<CssChunkItemVc>(
-            context,
-            asset,
-            None,
-            available_assets,
-            current_availability_root,
-        )
-        .await?
+        chunk_content_split::<CssChunkItemVc>(context, asset, None, availablility_info).await?
     };
 
     Ok(CssChunkContentResultVc::cell(res.into()))
@@ -350,8 +323,7 @@ impl Asset for CssChunk {
         let content = css_chunk_content(
             this.context,
             this.main_entries,
-            this.available_assets,
-            this.current_availability_root,
+            Value::new(this.availablility_info),
         )
         .await?;
         let mut references = Vec::new();
@@ -452,8 +424,7 @@ impl FromChunkableAsset for CssChunkItemVc {
     async fn from_async_asset(
         _context: ChunkingContextVc,
         _asset: ChunkableAssetVc,
-        _available_assets: Option<AvailableAssetsVc>,
-        _current_availability_root: Option<AssetVc>,
+        _availablility_info: Value<AvailablilityInfo>,
     ) -> Result<Option<Self>> {
         Ok(None)
     }
@@ -489,8 +460,7 @@ impl Introspectable for CssChunk {
         let chunk_content = css_chunk_content(
             this.context,
             this.main_entries,
-            this.available_assets,
-            this.current_availability_root,
+            Value::new(this.availablility_info),
         )
         .await?;
         details += "Chunk items:\n\n";

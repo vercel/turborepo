@@ -4,7 +4,7 @@ use std::{cmp::Ordering, collections::HashSet};
 
 use anyhow::{bail, Result};
 use indexmap::{IndexMap, IndexSet};
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
@@ -69,8 +69,7 @@ async fn merge_chunks(
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         None,
         evaluate,
-        first.available_assets,
-        first.current_availability_root,
+        Value::new(first.availablility_info),
     ))
 }
 
@@ -406,8 +405,7 @@ async fn optimize_ecmascript(
                         }
                         .cell(),
                     ),
-                    content.available_assets,
-                    content.current_availability_root,
+                    Value::new(content.availablility_info),
                 )
             }
         }

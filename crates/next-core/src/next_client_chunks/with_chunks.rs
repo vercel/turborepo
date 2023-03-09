@@ -1,7 +1,6 @@
 use anyhow::{bail, Result};
 use indoc::formatdoc;
-use serde_json::Value;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::{
     chunk::{
@@ -14,8 +13,8 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem,
-        ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        availablility_info::AvailablilityInfo, Chunk, ChunkGroupReferenceVc, ChunkGroupVc,
+        ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -68,14 +67,12 @@ impl ChunkableAsset for WithChunksAsset {
     fn as_chunk(
         self_vc: WithChunksAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
         .into()
     }
@@ -117,8 +114,9 @@ impl WithChunksAssetVc {
         Ok(ChunkGroupVc::from_asset(
             this.asset.into(),
             this.chunking_context,
-            None,
-            Some(this.asset.into()),
+            Value::new(AvailablilityInfo::Root {
+                current_availability_root: this.asset.into(),
+            }),
         ))
     }
 }
@@ -153,7 +151,7 @@ impl EcmascriptChunkItem for WithChunksChunkItem {
 
         for chunk_path in chunks.iter().map(|c| c.path()).try_join().await? {
             if let Some(path) = server_root.get_path_to(&chunk_path) {
-                client_chunks.push(Value::String(path.to_string()));
+                client_chunks.push(serde_json::Value::String(path.to_string()));
             }
         }
         let module_id = stringify_js(

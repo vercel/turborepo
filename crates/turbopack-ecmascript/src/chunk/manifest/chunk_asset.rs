@@ -1,10 +1,10 @@
 use anyhow::Result;
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
+        availablility_info::AvailablilityInfo, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
         ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -45,7 +45,7 @@ fn chunk_list_modifier() -> StringVc {
 pub struct ManifestChunkAsset {
     pub asset: ChunkableAssetVc,
     pub chunking_context: ChunkingContextVc,
-    pub available_assets: Option<AvailableAssetsVc>,
+    pub availablility_info: AvailablilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -54,12 +54,12 @@ impl ManifestChunkAssetVc {
     pub fn new(
         asset: ChunkableAssetVc,
         chunking_context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Self {
         Self::cell(ManifestChunkAsset {
             asset,
             chunking_context,
-            available_assets,
+            availablility_info: availablility_info.into_value(),
         })
     }
 
@@ -69,8 +69,7 @@ impl ManifestChunkAssetVc {
         Ok(ChunkGroupVc::from_asset(
             this.asset,
             this.chunking_context,
-            this.available_assets,
-            Some(this.asset.as_asset()),
+            Value::new(this.availablility_info),
         ))
     }
 
@@ -83,11 +82,7 @@ impl ManifestChunkAssetVc {
     #[turbo_tasks::function]
     pub async fn manifest_chunk(self) -> Result<ChunkVc> {
         let this = self.await?;
-        Ok(self.as_chunk(
-            this.chunking_context,
-            this.available_assets,
-            Some(self.as_asset()),
-        ))
+        Ok(self.as_chunk(this.chunking_context, Value::new(this.availablility_info)))
     }
 
     #[turbo_tasks::function]
@@ -133,16 +128,9 @@ impl ChunkableAsset for ManifestChunkAsset {
     fn as_chunk(
         self_vc: ManifestChunkAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
-        EcmascriptChunkVc::new(
-            context,
-            self_vc.into(),
-            available_assets,
-            current_availability_root,
-        )
-        .into()
+        EcmascriptChunkVc::new(context, self_vc.into(), availablility_info).into()
     }
 }
 

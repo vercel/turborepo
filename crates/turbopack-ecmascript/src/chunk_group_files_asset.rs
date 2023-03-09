@@ -1,10 +1,10 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        available_assets::AvailableAssetsVc, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
+        availablility_info::AvailablilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
         ChunkingContextVc,
     },
@@ -49,7 +49,13 @@ impl ChunkGroupFilesAssetVc {
                     ecma.as_evaluated_chunk(this.chunking_context, this.runtime_entries),
                 )
             } else {
-                ChunkGroupVc::from_asset(this.asset, this.chunking_context, None, None)
+                ChunkGroupVc::from_asset(
+                    this.asset,
+                    this.chunking_context,
+                    Value::new(AvailablilityInfo::Root {
+                        current_availability_root: this.asset.into(),
+                    }),
+                )
             };
         Ok(chunk_group)
     }
@@ -95,14 +101,12 @@ impl ChunkableAsset for ChunkGroupFilesAsset {
     fn as_chunk(
         self_vc: ChunkGroupFilesAssetVc,
         context: ChunkingContextVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            available_assets,
-            current_availability_root,
+            availablility_info,
         )
         .into()
     }
@@ -119,7 +123,12 @@ impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
         Ok(ChunkGroupFilesChunkItem {
             context,
             inner: self_vc,
-            chunk: this.asset.as_chunk(context, None, Some(this.asset.into())),
+            chunk: this.asset.as_chunk(
+                context,
+                Value::new(AvailablilityInfo::Root {
+                    current_availability_root: this.asset.into(),
+                }),
+            ),
         }
         .cell()
         .into())

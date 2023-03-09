@@ -1,13 +1,13 @@
 use anyhow::Result;
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt};
+use turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::AssetVc,
     chunk::{
-        available_assets::AvailableAssetsVc, ChunkItem, ChunkItemVc, ChunkableAssetVc,
-        ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
+        available_assets::AvailableAssetsVc, availablility_info::AvailablilityInfo, ChunkItem,
+        ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
     },
 };
 
@@ -61,17 +61,26 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
     async fn from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-        available_assets: Option<AvailableAssetsVc>,
-        current_availability_root: Option<AssetVc>,
+        availablility_info: Value<AvailablilityInfo>,
     ) -> Result<Option<Self>> {
-        let next_available_assets = if let Some(next_available_assets) =
-            AvailableAssetsVc::from(available_assets, current_availability_root)
-        {
-            Some(next_available_assets.resolve().await?)
-        } else {
-            None
+        let next_availablility_info = match availablility_info.into_value() {
+            AvailablilityInfo::Untracked => AvailablilityInfo::Untracked,
+            AvailablilityInfo::Root {
+                current_availability_root,
+            } => AvailablilityInfo::Inner {
+                available_assets: AvailableAssetsVc::new(vec![current_availability_root]),
+                current_availability_root: asset.as_asset(),
+            },
+            AvailablilityInfo::Inner {
+                available_assets,
+                current_availability_root,
+            } => AvailablilityInfo::Inner {
+                available_assets: available_assets.with_roots(vec![current_availability_root]),
+                current_availability_root: asset.as_asset(),
+            },
         };
-        let manifest_asset = ManifestChunkAssetVc::new(asset, context, next_available_assets);
+        let manifest_asset =
+            ManifestChunkAssetVc::new(asset, context, Value::new(next_availablility_info));
         let manifest_loader = ManifestLoaderItemVc::new(manifest_asset);
         Ok(Some(manifest_loader.into()))
     }
