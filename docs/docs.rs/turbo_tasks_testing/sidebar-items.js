@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":[["register",""],["run",""]],"mod":[["retry",""]],"struct":[["VcStorage",""]]};
+window.SIDEBAR_ITEMS = {"macro":["register","run"],"mod":["retry"],"struct":["VcStorage"]};

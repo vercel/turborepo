@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["QueryValue",""]],"struct":[["Query","A parsed query string from a http request"]]};
+window.SIDEBAR_ITEMS = {"enum":["QueryValue"],"struct":["Query"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["register",""]],"mod":[["html",""],["introspect",""],["source",""],["update",""]],"struct":[["DevServer",""],["DevServerBuilder",""]],"trait":[["ContentProvider",""],["SourceProvider",""]]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"mod":["html","introspect","source","update"],"struct":["DevServer","DevServerBuilder"],"trait":["ContentProvider","SourceProvider"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["protocol",""],["server",""],["stream",""]]};
+window.SIDEBAR_ITEMS = {"mod":["protocol","server","stream"]};

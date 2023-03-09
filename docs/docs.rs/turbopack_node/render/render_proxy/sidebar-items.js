@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["render_proxy","Renders a module as static HTML in a node.js process."],["render_proxy_inline","Renders a module as static HTML in a node.js process."]]};
+window.SIDEBAR_ITEMS = {"fn":["render_proxy","render_proxy_inline"]};

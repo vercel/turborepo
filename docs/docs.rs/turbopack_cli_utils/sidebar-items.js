@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["register",""]],"mod":[["issue",""]]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"mod":["issue"]};

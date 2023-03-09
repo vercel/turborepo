@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ChunkInGroup","A chunk that is part of a [ChunkGroup]. In contrast to the inner chunk it will not have references of parallel chunk since these are already handled on [ChunkGroup] level."],["ChunkInGroupVc","Vc for [`ChunkInGroup`]"]],"type":[["ChunkInGroupReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["ChunkInGroup","ChunkInGroupVc"],"type":["ChunkInGroupReadRef"]};

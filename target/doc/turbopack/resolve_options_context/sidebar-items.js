@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ResolveOptionsContext",""],["ResolveOptionsContextVc","Vc for [`ResolveOptionsContext`]"]],"type":[["ResolveOptionsContextReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["ResolveOptionsContext","ResolveOptionsContextVc"],"type":["ResolveOptionsContextReadRef"]};

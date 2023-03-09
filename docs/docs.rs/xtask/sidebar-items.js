@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["cli",""],["main",""]],"mod":[["command",""],["nft_bench",""],["publish",""],["summarize_bench",""],["visualize_bundler_bench",""]]};
+window.SIDEBAR_ITEMS = {"fn":["cli","main"],"mod":["command","nft_bench","publish","summarize_bench","visualize_bundler_bench"]};

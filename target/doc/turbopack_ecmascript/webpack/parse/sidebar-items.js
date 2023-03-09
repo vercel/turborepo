@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["WebpackRuntime",""]],"fn":[["webpack_runtime",""],["webpack_runtime_inline",""]],"struct":[["WebpackRuntimeVc","Vc for [`WebpackRuntime`]"]],"type":[["WebpackRuntimeReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":["WebpackRuntime"],"fn":["webpack_runtime","webpack_runtime_inline"],"struct":["WebpackRuntimeVc"],"type":["WebpackRuntimeReadRef"]};

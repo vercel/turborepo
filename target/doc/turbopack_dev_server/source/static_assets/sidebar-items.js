@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["StaticAssetsContentSource",""],["StaticAssetsContentSourceVc","Vc for [`StaticAssetsContentSource`]"]],"type":[["StaticAssetsContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["StaticAssetsContentSource","StaticAssetsContentSourceVc"],"type":["StaticAssetsContentSourceReadRef"]};

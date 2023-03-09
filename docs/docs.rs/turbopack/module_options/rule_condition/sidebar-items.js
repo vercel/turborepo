@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["ModuleRuleCondition",""]]};
+window.SIDEBAR_ITEMS = {"enum":["ModuleRuleCondition"]};

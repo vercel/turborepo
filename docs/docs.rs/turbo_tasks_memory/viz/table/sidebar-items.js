@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["create_table",""],["wrap_html",""]]};
+window.SIDEBAR_ITEMS = {"fn":["create_table","wrap_html"]};

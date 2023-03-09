@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["AnalyzeIssue",""],["AnalyzeIssueVc","Vc for [`AnalyzeIssue`]"]],"type":[["AnalyzeIssueReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["AnalyzeIssue","AnalyzeIssueVc"],"type":["AnalyzeIssueReadRef"]};

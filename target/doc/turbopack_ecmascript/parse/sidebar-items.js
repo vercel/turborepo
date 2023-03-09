@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["ParseResult",""]],"fn":[["parse",""],["parse_inline",""]],"struct":[["ParseResultSourceMap",""],["ParseResultSourceMapVc","Vc for [`ParseResultSourceMap`]"],["ParseResultVc","Vc for [`ParseResult`]"]],"type":[["ParseResultReadRef","see [turbo_tasks::ReadRef]"],["ParseResultSourceMapReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":["ParseResult"],"fn":["parse","parse_inline"],"struct":["ParseResultSourceMap","ParseResultSourceMapVc","ParseResultVc"],"type":["ParseResultReadRef","ParseResultSourceMapReadRef"]};

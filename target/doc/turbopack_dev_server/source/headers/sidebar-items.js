@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["HeaderValue","The value of an http header. HTTP headers might contain non-utf-8 bytes. An header might also occur multiple times."]],"struct":[["Headers","A parsed query string from a http request"]]};
+window.SIDEBAR_ITEMS = {"enum":["HeaderValue"],"struct":["Headers"]};

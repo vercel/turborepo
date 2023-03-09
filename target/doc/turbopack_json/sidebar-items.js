@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["register",""]],"struct":[["JsonModuleAsset",""],["JsonModuleAssetVc","Vc for [`JsonModuleAsset`]"]],"type":[["JsonModuleAssetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["JsonModuleAsset","JsonModuleAssetVc"],"type":["JsonModuleAssetReadRef"]};

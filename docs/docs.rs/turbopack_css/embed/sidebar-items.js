@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["CssEmbedVc",""],["CssEmbeddableVc",""]],"trait":[["CssEmbed",""],["CssEmbeddable",""]],"type":[["CssEmbedTraitRef","see [turbo_tasks::TraitRef]"],["CssEmbeddableTraitRef","see [turbo_tasks::TraitRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["CssEmbedVc","CssEmbeddableVc"],"trait":["CssEmbed","CssEmbeddable"],"type":["CssEmbedTraitRef","CssEmbeddableTraitRef"]};

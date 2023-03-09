@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["RebasedAsset",""],["RebasedAssetVc","Vc for [`RebasedAsset`]"]],"type":[["RebasedAssetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["RebasedAsset","RebasedAssetVc"],"type":["RebasedAssetReadRef"]};

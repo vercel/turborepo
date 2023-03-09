@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["SourcePos",""]]};
+window.SIDEBAR_ITEMS = {"struct":["SourcePos"]};

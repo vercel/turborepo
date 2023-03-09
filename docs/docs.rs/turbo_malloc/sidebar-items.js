@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["TurboMalloc","Turbo’s preferred global allocator. This is a new type instead of a type alias because you can’t use type aliases to instantiate unit types (E0423)."]]};
+window.SIDEBAR_ITEMS = {"struct":["TurboMalloc"]};

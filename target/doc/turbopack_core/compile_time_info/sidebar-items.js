@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["CompileTimeDefineValue",""]],"struct":[["CompileTimeDefines",""],["CompileTimeDefinesVc","Vc for [`CompileTimeDefines`]"],["CompileTimeInfo",""],["CompileTimeInfoVc","Vc for [`CompileTimeInfo`]"]],"type":[["CompileTimeDefinesReadRef","see [turbo_tasks::ReadRef]"],["CompileTimeInfoReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":["CompileTimeDefineValue"],"struct":["CompileTimeDefines","CompileTimeDefinesVc","CompileTimeInfo","CompileTimeInfoVc"],"type":["CompileTimeDefinesReadRef","CompileTimeInfoReadRef"]};

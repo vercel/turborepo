@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ChunkGroupFilesAsset","An asset that exports a list of chunk URLs by putting the [asset] into a ChunkGroup with the provided ChunkingContext."],["ChunkGroupFilesAssetVc","Vc for [`ChunkGroupFilesAsset`]"]],"type":[["ChunkGroupFilesAssetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["ChunkGroupFilesAsset","ChunkGroupFilesAssetVc"],"type":["ChunkGroupFilesAssetReadRef"]};

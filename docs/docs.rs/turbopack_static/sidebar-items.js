@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["register",""]],"struct":[["StaticModuleAsset",""],["StaticModuleAssetVc","Vc for [`StaticModuleAsset`]"]],"type":[["StaticModuleAssetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["StaticModuleAsset","StaticModuleAssetVc"],"type":["StaticModuleAssetReadRef"]};

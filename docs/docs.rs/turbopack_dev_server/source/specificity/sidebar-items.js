@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["SpecificityElementType","Type of something that affects the specificity of a URL, making a URL match less specific."]],"struct":[["Specificity","The specificity of a URL. Implements Ord to allow to compare two specificities. A match with higher specificity should be preferred."],["SpecificityVc","Vc for [`Specificity`]"]],"type":[["SpecificityReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":["SpecificityElementType"],"struct":["Specificity","SpecificityVc"],"type":["SpecificityReadRef"]};

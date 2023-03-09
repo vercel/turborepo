@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Code","Code stores combined output code and the source map of that output code."],["CodeBuilder","CodeBuilder provides a mutable container to append source code."],["CodeVc","Vc for [`Code`]"]],"type":[["CodeReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["Code","CodeBuilder","CodeVc"],"type":["CodeReadRef"]};

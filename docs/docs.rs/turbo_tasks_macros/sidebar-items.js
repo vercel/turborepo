@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"attr":[["function",""],["value","Creates a ValueVc struct for a `struct` or `enum` that represent that type placed into a cell in a Task."],["value_impl",""],["value_trait",""]],"derive":[["DeterministicHash",""],["TraceRawVcs",""],["ValueDebug",""],["ValueDebugFormat",""]]};
+window.SIDEBAR_ITEMS = {"attr":["function","value","value_impl","value_trait"],"derive":["DeterministicHash","TraceRawVcs","ValueDebug","ValueDebugFormat"]};

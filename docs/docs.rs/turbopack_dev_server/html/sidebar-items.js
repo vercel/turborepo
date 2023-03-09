@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["DevHtmlAsset","The HTML entry point of the dev server."],["DevHtmlAssetVc","Vc for [`DevHtmlAsset`]"]],"type":[["DevHtmlAssetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["DevHtmlAsset","DevHtmlAssetVc"],"type":["DevHtmlAssetReadRef"]};

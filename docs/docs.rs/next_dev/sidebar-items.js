@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["EntryRequest",""]],"fn":[["register",""],["start_server","Start a devserver with the given options."]],"mod":[["devserver_options",""]],"struct":[["NextDevServerBuilder",""]],"trait":[["IssueReporterProvider",""]]};
+window.SIDEBAR_ITEMS = {"enum":["EntryRequest"],"fn":["register","start_server"],"mod":["devserver_options"],"struct":["NextDevServerBuilder"],"trait":["IssueReporterProvider"]};

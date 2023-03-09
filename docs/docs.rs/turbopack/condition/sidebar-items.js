@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["ContextCondition",""]]};
+window.SIDEBAR_ITEMS = {"enum":["ContextCondition"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["THEMES",""]],"enum":[["Bundler",""],["FormatTimeStyle",""],["Theme",""]],"fn":[["generate",""],["generate_scaling",""]],"type":[["ByBench",""],["ByBundler",""],["ByModuleCount",""]]};
+window.SIDEBAR_ITEMS = {"constant":["THEMES"],"enum":["Bundler","FormatTimeStyle","Theme"],"fn":["generate","generate_scaling"],"type":["ByBench","ByBundler","ByModuleCount"]};

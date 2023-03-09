@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["test_app_builder",""]]};
+window.SIDEBAR_ITEMS = {"mod":["test_app_builder"]};

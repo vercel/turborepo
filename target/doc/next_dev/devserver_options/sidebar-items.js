@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["DevServerOptions",""]]};
+window.SIDEBAR_ITEMS = {"struct":["DevServerOptions"]};

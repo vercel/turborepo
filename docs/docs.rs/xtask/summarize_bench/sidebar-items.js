@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["process_all",""]],"mod":[["data",""]],"struct":[["BenchDataFile",""]]};
+window.SIDEBAR_ITEMS = {"fn":["correct","process_all"],"mod":["data"],"struct":["BenchDataFile"]};

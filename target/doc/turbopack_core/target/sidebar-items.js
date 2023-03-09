@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Arch",""],["Endianness",""],["Libc",""],["Platform",""]],"struct":[["CompileTarget",""],["CompileTargetVc","Vc for [`CompileTarget`]"]],"type":[["CompileTargetReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"enum":["Arch","Endianness","Libc","Platform"],"struct":["CompileTarget","CompileTargetVc"],"type":["CompileTargetReadRef"]};

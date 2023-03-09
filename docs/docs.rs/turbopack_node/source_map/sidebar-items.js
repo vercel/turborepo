@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["content_source",""],["trace",""]]};
+window.SIDEBAR_ITEMS = {"mod":["content_source","trace"]};

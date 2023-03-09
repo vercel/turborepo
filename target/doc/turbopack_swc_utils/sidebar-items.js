@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["emitter",""]]};
+window.SIDEBAR_ITEMS = {"mod":["emitter"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["postcss",""],["webpack",""]]};
+window.SIDEBAR_ITEMS = {"mod":["postcss","webpack"]};

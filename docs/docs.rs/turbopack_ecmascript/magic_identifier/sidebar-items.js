@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["encode",""]]};
+window.SIDEBAR_ITEMS = {"fn":["encode"]};

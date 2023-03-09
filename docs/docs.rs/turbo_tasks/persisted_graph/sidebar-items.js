@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["TaskCell",""]],"struct":[["ActivateResult",""],["DeactivateResult",""],["PersistResult",""],["PersistTaskState",""],["ReadTaskState",""],["TaskData",""]],"trait":[["PersistedGraph",""],["PersistedGraphApi",""]]};
+window.SIDEBAR_ITEMS = {"enum":["TaskCell"],"struct":["ActivateResult","DeactivateResult","PersistResult","PersistTaskState","ReadTaskState","TaskData"],"trait":["PersistedGraph","PersistedGraphApi"]};

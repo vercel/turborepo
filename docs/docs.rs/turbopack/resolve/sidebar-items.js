@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["resolve_options",""],["resolve_options_inline",""]]};
+window.SIDEBAR_ITEMS = {"fn":["resolve_options","resolve_options_inline"]};

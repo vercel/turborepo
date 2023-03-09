@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["MAX_LIST_SIZE","Maximum size of list variant. Must convert to HashMap when bigger."],["MIN_HASH_SIZE","Minimum size of HashMap variant. Must convert to List when smaller."]],"mod":[["map",""],["set",""]]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_LIST_SIZE","MIN_HASH_SIZE"],"mod":["map","set"]};

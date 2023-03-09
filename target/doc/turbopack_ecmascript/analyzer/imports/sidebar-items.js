@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ImportAnnotations",""],["ImportAnnotationsVc","Vc for [`ImportAnnotations`]"]],"type":[["ImportAnnotationsReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {"struct":["ImportAnnotations","ImportAnnotationsVc"],"type":["ImportAnnotationsReadRef"]};
