@@ -108,7 +108,7 @@ type TaskSummary struct {
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	Execution              *TaskExecutionSummary                 `json:"execution"`
+	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
