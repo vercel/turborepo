@@ -351,7 +351,10 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     let part_id = match part {
-        Some(part) => get_part_id(&split_data, part).await?,
+        Some(part) => match get_part_id(&split_data, part).await {
+            Ok(v) => v,
+            Err(_) => return Ok(split_data.parsed),
+        },
         None => return Ok(split_data.parsed),
     };
 
