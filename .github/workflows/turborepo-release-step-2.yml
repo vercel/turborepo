@@ -88,8 +88,11 @@ jobs:
           # for convenience we have precompiled libraries for the various toolchains (windows and musl)
           # these were built locally and are hosted on github releases, since we plan on stripping this
           # out entirely asap
+
+          # Create directory for aarch64-linux-musl libraries
+          mkdir -p /usr/aarch64-linux-musl/lib
           curl -L https://github.com/arlyon/turbo/releases/download/zlib/libz.a > /usr/x86_64-w64-mingw32/lib/libz.a
-          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-aarch64-linux-musl/libz.a > /usr/aarch64-linux-gnu/lib/libz.a
+          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-aarch64-linux-musl/libz.a > /usr/aarch64-linux-musl/lib/libz.a
           curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-x86_64-linux-musl/libz.a > /usr/lib/libz.a
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3

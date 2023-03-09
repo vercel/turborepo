@@ -31,7 +31,7 @@ builds:
       - goos: linux
         goarch: arm64
         env:
-          - CC=zig cc -target aarch64-linux-musl
+          - CC=zig cc -target aarch64-linux-musl -L/usr/aarch64-linux-musl/lib
           - CXX=zig c++ -target aarch64-linux-musl
       - goos: linux
         goarch: amd64
