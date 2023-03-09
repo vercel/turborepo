@@ -14,6 +14,9 @@ use crate::{
     reference::AssetReference,
 };
 
+/// Allows to gather information about which assets are already available.
+/// Adding more roots will form a linked list like structure to allow caching
+/// `include` queries.
 #[turbo_tasks::value]
 pub struct AvailableAssets {
     parent: Option<AvailableAssetsVc>,

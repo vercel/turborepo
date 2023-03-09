@@ -403,7 +403,7 @@ impl Asset for EcmascriptChunk {
             modifiers.extend(evaluate.entry_modules_ids.iter().map(|id| id.to_string()));
         }
 
-        // Available assets are include
+        // Available assets are included
         if let Some(available_assets) = this.available_assets {
             modifiers.push(available_assets.hash().to_string());
         }

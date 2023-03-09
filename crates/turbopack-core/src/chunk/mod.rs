@@ -266,7 +266,7 @@ pub enum ChunkingType {
     PlacedOrParallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     Parallel,
-    ///  Asset is always placed in a separate chunk that is loaded in parallel.
+    /// Asset is always placed in a separate chunk that is loaded in parallel.
     /// Referenced asset will not inherit the available modules, but form a
     /// new availablility root.
     IsolatedParallel,
