@@ -410,7 +410,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>WithClientChunksAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; ChunkingTypeOptionVc {
+    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::PlacedOrParallel))
     }
 }

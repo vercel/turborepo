@@ -457,7 +457,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>EsmAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkingTypeOptionVc&gt; {
+    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkingTypeOptionVc&gt; {
         <span class="prelude-val">Ok</span>(ChunkingTypeOptionVc::cell(
             <span class="kw">if let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="self">self</span>.annotations.chunking_type() {
                 <span class="kw">match </span>chunking_type {
@@ -482,7 +482,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
-        <span class="kw">let </span>chunking_type = self_vc.chunking_type(context).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunking_type = self_vc.chunking_type().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resolved = self_vc.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Insert code that throws immediately at time of import if a request is

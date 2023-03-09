@@ -162,10 +162,28 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Display};
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, registry, CellId, RawVc, TryJoinIterExt};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{StringReadRef, StringVc},
+    registry, CellId, RawVc, TryJoinIterExt,
+};
 <span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContent,
@@ -262,17 +280,29 @@
         } <span class="kw">else </span>{
             <span class="macro">unreachable!</span>()
         };
-        <span class="kw">let </span>ty = introspectable.ty().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>title = introspectable.title().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>details = introspectable.details().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">fn </span>str_or_err(s: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;StringReadRef&gt;) -&gt; Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; {
+            s.as_ref().map_or_else(
+                |e| Cow::&lt;<span class="lifetime">&#39;_</span>, str&gt;::Owned(<span class="macro">format!</span>(<span class="string">&quot;ERROR: {:?}&quot;</span>, e)),
+                |d| Cow::Borrowed(<span class="kw-2">&amp;**</span>d),
+            )
+        }
+        <span class="kw">let </span>ty = introspectable.ty().<span class="kw">await</span>;
+        <span class="kw">let </span>ty = str_or_err(<span class="kw-2">&amp;</span>ty);
+        <span class="kw">let </span>title = introspectable.title().<span class="kw">await</span>;
+        <span class="kw">let </span>title = str_or_err(<span class="kw-2">&amp;</span>title);
+        <span class="kw">let </span>details = introspectable.details().<span class="kw">await</span>;
+        <span class="kw">let </span>details = str_or_err(<span class="kw-2">&amp;</span>details);
         <span class="kw">let </span>children = introspectable.children().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>has_children = !children.is_empty();
         <span class="kw">let </span>children = children
             .iter()
             .map(|<span class="kw-2">&amp;</span>(name, child)| <span class="kw">async move </span>{
-                <span class="kw">let </span>name = name.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>ty = child.ty().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>title = child.title().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>name = name.<span class="kw">await</span>;
+                <span class="kw">let </span>name = str_or_err(<span class="kw-2">&amp;</span>name);
+                <span class="kw">let </span>ty = child.ty().<span class="kw">await</span>;
+                <span class="kw">let </span>ty = str_or_err(<span class="kw-2">&amp;</span>ty);
+                <span class="kw">let </span>title = child.title().<span class="kw">await</span>;
+                <span class="kw">let </span>title = str_or_err(<span class="kw-2">&amp;</span>title);
                 <span class="kw">let </span>path = serde_json::to_string(<span class="kw-2">&amp;</span>child)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
                     <span class="string">&quot;&lt;li&gt;{name} &lt;!-- {title} --&gt;&lt;a href=\&quot;./{path}\&quot;&gt;[{ty}] {title}&lt;/a&gt;&lt;/li&gt;&quot;</span>,

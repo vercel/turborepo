@@ -91,6 +91,51 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
@@ -99,6 +144,10 @@
 <span class="kw">use super</span>::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
+    chunk::{
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ParallelChunkReference,
+        ParallelChunkReferenceVc,
+    },
     reference::{AssetReference, AssetReferencesVc},
     resolve::PrimaryResolveResult,
 };
@@ -124,6 +173,31 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>reference_ty() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>placed_or_parallel_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;placed/parallel reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>placed_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;placed reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>parallel_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;parallel reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>separate_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;separate reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>async_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;async reference&quot;</span>.to_string())
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -176,6 +250,22 @@
     <span class="kw">let </span><span class="kw-2">mut </span>children = IndexSet::new();
     <span class="kw">let </span>references = references.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>reference <span class="kw">in </span><span class="kw-2">&amp;*</span>references {
+        <span class="kw">let </span><span class="kw-2">mut </span>key = key;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>chunkable.chunking_type().<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="prelude-val">None </span>=&gt; {}
+                <span class="prelude-val">Some</span>(ChunkingType::Placed) =&gt; key = placed_reference_ty(),
+                <span class="prelude-val">Some</span>(ChunkingType::Parallel) =&gt; key = parallel_reference_ty(),
+                <span class="prelude-val">Some</span>(ChunkingType::Separate) =&gt; key = separate_reference_ty(),
+                <span class="prelude-val">Some</span>(ChunkingType::PlacedOrParallel) =&gt; key = placed_or_parallel_reference_ty(),
+                <span class="prelude-val">Some</span>(ChunkingType::SeparateAsync) =&gt; key = async_reference_ty(),
+            }
+        } <span class="kw">else if let </span><span class="prelude-val">Some</span>(parallel) = ParallelChunkReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">if </span><span class="kw-2">*</span>parallel.is_loaded_in_parallel().<span class="kw">await</span><span class="question-mark">? </span>{
+                key = parallel_reference_ty();
+            }
+        }
+
         <span class="kw">for </span>result <span class="kw">in </span>reference.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
             <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
                 children.insert((key, IntrospectableAssetVc::new(<span class="kw-2">*</span>asset)));

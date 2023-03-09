@@ -986,7 +986,7 @@
 /// specific interface is implemented.
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ChunkableAssetReference: AssetReference + ValueToString {
-    <span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; ChunkingTypeOptionVc {
+    <span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::default()))
     }
 }
@@ -1154,7 +1154,7 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(<span class="prelude-val">None</span>, ChunkContentGraphNode::ExternalAssetReference(reference))]);
     };
 
-    <span class="kw">let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="kw-2">*</span>chunkable_asset_reference.chunking_type(context.chunking_context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+    <span class="kw">let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="kw-2">*</span>chunkable_asset_reference.chunking_type().<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(<span class="prelude-val">None</span>, ChunkContentGraphNode::ExternalAssetReference(reference))]);
     };
 

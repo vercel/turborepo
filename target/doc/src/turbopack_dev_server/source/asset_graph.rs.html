@@ -208,7 +208,46 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet, VecDeque};
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    collections::{HashMap, HashSet, VecDeque},
+    iter::once,
+};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{indexset, IndexSet};
@@ -398,24 +437,57 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
+    </span><span class="kw">async fn </span>children(self_vc: AssetGraphContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>key = StringVc::cell(<span class="string">&quot;root&quot;</span>.to_string());
         <span class="kw">let </span>expanded_key = StringVc::cell(<span class="string">&quot;expanded&quot;</span>.to_string());
 
-        <span class="kw">let </span>root_assets = <span class="self">self</span>.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>root_assets = this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>root_assets = root_assets
             .iter()
             .map(|<span class="kw-2">&amp;</span>asset| (key, IntrospectableAssetVc::new(asset)));
 
-        <span class="kw">let </span>expanded_assets =
-            expand(<span class="kw-2">&amp;*</span><span class="self">self</span>.root_assets.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;*</span><span class="self">self</span>.root_path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>expanded_assets = expanded_assets
-            .iter()
-            .map(|(_k, <span class="kw-2">&amp;</span>v)| (expanded_key, IntrospectableAssetVc::new(v)));
-
         <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(
-            root_assets.chain(expanded_assets).collect(),
+            root_assets
+                .chain(once((expanded_key, FullyExpaned(self_vc).cell().into())))
+                .collect(),
         ))
+    }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>fully_expaned_introspectable_type() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;fully expanded asset graph content source&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>FullyExpaned(AssetGraphContentSourceVc);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Introspectable <span class="kw">for </span>FullyExpaned {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        fully_expaned_introspectable_type()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.<span class="kw">await</span><span class="question-mark">?</span>.root_path.to_string())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
+        <span class="kw">let </span>source = <span class="self">self</span>.<span class="number">0</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>key = StringVc::cell(<span class="string">&quot;asset&quot;</span>.to_string());
+
+        <span class="kw">let </span>expanded_assets =
+            expand(<span class="kw-2">&amp;*</span>source.root_assets.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;*</span>source.root_path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>children = expanded_assets
+            .iter()
+            .map(|(_k, <span class="kw-2">&amp;</span>v)| (key, IntrospectableAssetVc::new(v)))
+            .collect();
+
+        <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(children))
     }
 }
 </code></pre></div>
