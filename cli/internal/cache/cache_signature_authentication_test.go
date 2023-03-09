@@ -23,11 +23,14 @@ var MinWordLength = 10
 var MaxWordLength = 100
 var ValidAsciiChars = 90
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ[]{}()<>!@#$%^&*0123456789~`-_=+|;:',./? ")
+
 func generateWord() string {
 	length := MinWordLength + rand.Intn(MaxWordLength-MinWordLength)
 	word := make([]rune, length)
 	for i := range word {
-		word[i] = rune(rand.Intn(ValidAsciiChars) + '#')
+		randIndex := rand.Intn(len(letters))
+		word[i] = letters[randIndex]
 	}
 
 	return string(word)
@@ -64,7 +67,7 @@ func Test_GenerateTestCases(t *testing.T) {
 	}
 	output := fmt.Sprintf("vec![%v]", strings.Join(testCases, "\n"))
 
-	os.WriteFile("tests.rs", []byte(output), 0644)
+	os.WriteFile("signature_authentication_test_cases.rs", []byte(output), 0644)
 }
 func Test_SecretKeySuccess(t *testing.T) {
 	teamId := "team_someid"
