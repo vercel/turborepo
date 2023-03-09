@@ -25,31 +25,32 @@ builds:
           output: true
     targets:
       - linux_arm64
-      - linux_amd64
-      - windows_amd64
+    #      - linux_amd64
+    #      - windows_amd64
     overrides:
       - goos: linux
         goarch: arm64
         env:
           - CC=zig cc -target aarch64-linux-musl -L/usr/aarch64-linux-musl/lib
           - CXX=zig c++ -target aarch64-linux-musl
-      - goos: linux
-        goarch: amd64
-        goamd64: v1
-        env:
-          - CC=zig cc -target x86_64-linux-musl -L/usr/lib
-          - CXX=zig c++ -target x86_64-linux-musl
-      - goos: windows
-        goarch: arm64
-        env:
-          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
-          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
-      - goos: windows
-        goarch: amd64
-        goamd64: v1
-        env:
-          - CC=x86_64-w64-mingw32-gcc
-          - CXX=x86_64-w64-mingw32-g++
+          - RUSTFLAGS=-C target-feature=+crt-static
+#      - goos: linux
+#        goarch: amd64
+#        goamd64: v1
+#        env:
+#          - CC=zig cc -target x86_64-linux-musl -L/usr/lib
+#          - CXX=zig c++ -target x86_64-linux-musl
+#      - goos: windows
+#        goarch: arm64
+#        env:
+#          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
+#          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
+#      - goos: windows
+#        goarch: amd64
+#        goamd64: v1
+#        env:
+#          - CC=x86_64-w64-mingw32-gcc
+#          - CXX=x86_64-w64-mingw32-g++
 
 archives:
   - format: binary
