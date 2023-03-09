@@ -2,23 +2,22 @@ use anyhow::Result;
 use turbo_tasks::ValueToString;
 use turbopack_core::chunk::{ChunkItem, ChunkingContext, ChunkingContextVc, ModuleId, ModuleIdVc};
 
-use super::item::EcmascriptChunkItemVc;
+use super::{item::EcmascriptChunkItemVc, EcmascriptChunkRuntimeVc};
 
-#[turbo_tasks::value]
-pub(super) struct EcmascriptChunkContext {
-    context: ChunkingContextVc,
-}
+/// [`EcmascriptChunkContext`] must be implemented by [`ChunkingContext`]
+/// implementors that want to operate on [`EcmascriptChunk`]s.
+#[turbo_tasks::value_trait]
+pub trait EcmascriptChunkContext: ChunkingContext {
+    /// Returns an EcmascriptChunkRuntime implementation that registers a
+    /// chunk's contents when executed.
+    fn ecmascript_runtime(&self) -> EcmascriptChunkRuntimeVc;
 
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkContextVc {
-    #[turbo_tasks::function]
-    pub fn of(context: ChunkingContextVc) -> EcmascriptChunkContextVc {
-        EcmascriptChunkContextVc::cell(EcmascriptChunkContext { context })
-    }
+    /// Returns an EcmascriptChunkRuntime implementation that registers a
+    /// chunk's contents and evaluates its main entries when executed.
+    fn evaluated_ecmascript_runtime(&self) -> EcmascriptChunkRuntimeVc;
 
-    #[turbo_tasks::function]
-    pub async fn chunk_item_id(self, chunk_item: EcmascriptChunkItemVc) -> Result<ModuleIdVc> {
-        let layer = self.await?.context.layer();
+    async fn chunk_item_id(&self, chunk_item: EcmascriptChunkItemVc) -> Result<ModuleIdVc> {
+        let layer = self.layer();
         let mut ident = chunk_item.asset_ident();
         if !layer.await?.is_empty() {
             ident = ident.with_modifier(layer)

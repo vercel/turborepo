@@ -6812,6 +6812,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-dev"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "indoc",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+ "turbopack-ecmascript",
+]
+
+[[package]]
 name = "turbopack-dev-server"
 version = "0.1.0"
 dependencies = [
@@ -7004,6 +7022,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-core",
+ "turbopack-dev",
  "turbopack-env",
  "turbopack-test-utils",
 ]

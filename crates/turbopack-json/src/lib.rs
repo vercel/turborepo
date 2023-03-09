@@ -22,9 +22,9 @@ use turbopack_core::{
     reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
-    EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
-    EcmascriptExports, EcmascriptExportsVc,
+    EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemContent,
+    EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
+    EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
 };
 
 #[turbo_tasks::function]
@@ -80,7 +80,7 @@ impl EcmascriptChunkPlaceable for JsonModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: JsonModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkContextVc,
     ) -> EcmascriptChunkItemVc {
         JsonChunkItemVc::cell(JsonChunkItem {
             module: self_vc,
@@ -98,7 +98,7 @@ impl EcmascriptChunkPlaceable for JsonModuleAsset {
 #[turbo_tasks::value]
 struct JsonChunkItem {
     module: JsonModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -117,7 +117,7 @@ impl ChunkItem for JsonChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for JsonChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkContextVc {
         self.context
     }
 
