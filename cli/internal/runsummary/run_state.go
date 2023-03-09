@@ -15,9 +15,9 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// RunResult represents a single event in the build process, i.e. a target starting or finishing
+// runResult represents a single event in the build process, i.e. a target starting or finishing
 // building, or reaching some milestone within those steps.
-type RunResult struct {
+type runResult struct {
 	// Timestamp of this event
 	Time time.Time
 	// Duration of this event
@@ -25,26 +25,26 @@ type RunResult struct {
 	// Target which has just changed
 	Label string
 	// Its current status
-	Status RunResultStatus
+	Status runResultStatus
 	// Error, only populated for failure statuses
 	Err error
 }
 
-// RunResultStatus represents the status of a target when we log a build result.
-type RunResultStatus int
+// runResultStatus represents the status of a target when we log a build result.
+type runResultStatus int
 
 // The collection of expected build result statuses.
 const (
-	TargetBuilding RunResultStatus = iota
+	targetBuilding runResultStatus = iota
 	TargetBuildStopped
 	TargetBuilt
 	TargetCached
 	TargetBuildFailed
 )
 
-func (rrs RunResultStatus) toString() string {
+func (rrs runResultStatus) toString() string {
 	switch rrs {
-	case TargetBuilding:
+	case targetBuilding:
 		return "building"
 	case TargetBuildStopped:
 		return "buildStopped"
@@ -59,33 +59,33 @@ func (rrs RunResultStatus) toString() string {
 	return ""
 }
 
-// RunState is the state of the entire `turbo run`. Individual task state in `Tasks` field
+// runState is the state of the entire `turbo run`. Individual task state in `Tasks` field
 // TODO(mehulkar): Can this be combined with the RunSummary?
-type RunState struct {
+type runState struct {
 	mu      sync.Mutex
 	state   map[string]*TaskExecutionSummary
-	Success int
-	Failure int
+	success int
+	failure int
 	// Is the output streaming?
-	Cached    int
-	Attempted int
+	cached    int
+	attempted int
 
 	startedAt time.Time
 
 	profileFilename string
 }
 
-// NewRunState creates a RunState instance to track events in a `turbo run`.`
-func NewRunState(start time.Time, tracingProfile string) *RunState {
+// newRunState creates a runState instance to track events in a `turbo run`.`
+func newRunState(start time.Time, tracingProfile string) *runState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
 
-	return &RunState{
-		Success:         0,
-		Failure:         0,
-		Cached:          0,
-		Attempted:       0,
+	return &runState{
+		success:         0,
+		failure:         0,
+		cached:          0,
+		attempted:       0,
 		state:           make(map[string]*TaskExecutionSummary),
 		startedAt:       start,
 		profileFilename: tracingProfile,
@@ -93,23 +93,23 @@ func NewRunState(start time.Time, tracingProfile string) *RunState {
 }
 
 // Run starts the Execution of a single task. It returns a function that can
-// be used to update the state of a given taskID with the RunResultStatus enum
-func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), *TaskExecutionSummary) {
+// be used to update the state of a given taskID with the runResultStatus enum
+func (r *runState) run(label string) (func(outcome runResultStatus, err error), *TaskExecutionSummary) {
 	start := time.Now()
-	taskExecutionSummary := r.add(&RunResult{
+	taskExecutionSummary := r.add(&runResult{
 		Time:   start,
 		Label:  label,
-		Status: TargetBuilding,
+		Status: targetBuilding,
 	})
 
 	tracer := chrometracing.Event(label)
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
-	tracerFn := func(outcome RunResultStatus, err error) {
+	tracerFn := func(outcome runResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
-		result := &RunResult{
+		result := &runResult{
 			Time:     now,
 			Duration: now.Sub(start),
 			Label:    label,
@@ -125,7 +125,7 @@ func (r *RunState) Run(label string) (func(outcome RunResultStatus, err error), 
 	return tracerFn, taskExecutionSummary
 }
 
-func (r *RunState) add(result *RunResult) *TaskExecutionSummary {
+func (r *runState) add(result *runResult) *TaskExecutionSummary {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.state[result.Label]; ok {
@@ -143,14 +143,14 @@ func (r *RunState) add(result *RunResult) *TaskExecutionSummary {
 	}
 	switch {
 	case result.Status == TargetBuildFailed:
-		r.Failure++
-		r.Attempted++
+		r.failure++
+		r.attempted++
 	case result.Status == TargetCached:
-		r.Cached++
-		r.Attempted++
+		r.cached++
+		r.attempted++
 	case result.Status == TargetBuilt:
-		r.Success++
-		r.Attempted++
+		r.success++
+		r.attempted++
 	}
 
 	return r.state[result.Label]
@@ -158,13 +158,13 @@ func (r *RunState) add(result *RunResult) *TaskExecutionSummary {
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
-func (r *RunState) Close(terminal cli.Ui) error {
+func (r *runState) close(terminal cli.Ui) error {
 	if err := writeChrometracing(r.profileFilename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	maybeFullTurbo := ""
-	if r.Cached == r.Attempted && r.Attempted > 0 {
+	if r.cached == r.attempted && r.attempted > 0 {
 		terminalProgram := os.Getenv("TERM_PROGRAM")
 		// On the macOS Terminal, the rainbow colors show up as a magenta background
 		// with a gray background on a single letter. Instead, we print in bold magenta
@@ -176,13 +176,13 @@ func (r *RunState) Close(terminal cli.Ui) error {
 		}
 	}
 
-	if r.Attempted == 0 {
+	if r.attempted == 0 {
 		terminal.Output("") // Clear the line
 		terminal.Warn("No tasks were executed as part of this run.")
 	}
 	terminal.Output("") // Clear the line
-	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
-	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
+	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.cached+r.success, r.attempted))
+	terminal.Output(util.Sprintf("${BOLD}cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.cached, r.attempted))
 	terminal.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", time.Since(r.startedAt).Truncate(time.Millisecond), maybeFullTurbo))
 	terminal.Output("")
 	return nil

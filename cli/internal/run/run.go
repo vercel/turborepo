@@ -348,12 +348,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	// RunState captures the runtime results for this run (e.g. timings of each task and profile)
-	runState := runsummary.NewRunState(startAt, rs.Opts.runOpts.profile)
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
-		runState,
+		startAt,
+		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,
 		packagesInScope,
 		runsummary.NewGlobalHashSummary(
