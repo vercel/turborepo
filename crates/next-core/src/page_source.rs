@@ -7,7 +7,7 @@ use turbo_tasks::{
     Value,
 };
 use turbo_tasks_env::{CustomProcessEnvVc, EnvMapVc, ProcessEnvVc};
-use turbo_tasks_fs::{rebase, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
     asset::AssetVc,
@@ -105,7 +105,7 @@ pub async fn create_page_source(
         next_config,
     );
     let client_resolve_options_context =
-        get_client_resolve_options_context(project_path, client_ty, next_config);
+        get_client_resolve_options_context(project_path, client_ty, next_config, execution_context);
 
     let client_chunking_context = get_client_chunking_context(
         project_path,
@@ -115,7 +115,7 @@ pub async fn create_page_source(
     );
 
     let client_runtime_entries =
-        get_client_runtime_entries(project_path, env, client_ty, next_config);
+        get_client_runtime_entries(project_path, env, client_ty, next_config, execution_context);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -144,11 +144,12 @@ pub async fn create_page_source(
     )
     .build();
     let edge_resolve_options_context =
-        get_edge_resolve_options_context(project_path, server_ty, next_config);
+        get_edge_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let next_edge_transition = NextEdgeTransition {
         edge_compile_time_info,
         edge_chunking_context,
+        edge_module_options_context: None,
         edge_resolve_options_context,
         output_path,
         base_path: project_path,
@@ -160,7 +161,7 @@ pub async fn create_page_source(
 
     let server_compile_time_info = get_server_compile_time_info(server_ty, env, server_addr);
     let server_resolve_options_context =
-        get_server_resolve_options_context(project_path, server_ty, next_config);
+        get_server_resolve_options_context(project_path, server_ty, next_config, execution_context);
 
     let server_module_options_context =
         get_server_module_options_context(project_path, execution_context, server_ty, next_config);
@@ -276,17 +277,21 @@ pub async fn create_page_source(
     let fallback_source =
         AssetGraphContentSourceVc::new_eager(server_root, fallback_page.as_asset());
 
-    Ok(CombinedContentSource {
+    let source = CombinedContentSource {
         sources: vec![
             // Match _next/404 first to ensure rewrites work properly.
-            force_not_found_source,
+            force_not_found_source.issue_context(pages_dir, "Next.js pages directory not found"),
             page_source,
-            fallback_source.into(),
-            fallback_not_found_source,
+            fallback_source
+                .as_content_source()
+                .issue_context(pages_dir, "Next.js pages directory fallback"),
+            fallback_not_found_source
+                .issue_context(pages_dir, "Next.js pages directory not found fallback"),
         ],
     }
     .cell()
-    .into())
+    .into();
+    Ok(source)
 }
 
 /// Handles a single page file in the pages directory
@@ -341,7 +346,7 @@ async fn create_page_source_for_file(
         Value::new(ClientContextType::Pages { pages_dir }),
     );
 
-    let pathname = pathname_for_path(server_root, server_path, true);
+    let pathname = pathname_for_path(server_root, server_path, true, false);
     let route_matcher = NextParamsMatcherVc::new(pathname);
 
     Ok(if is_api_path {
@@ -365,8 +370,9 @@ async fn create_page_source_for_file(
             runtime_entries,
         )
     } else {
+        let data_pathname = pathname_for_path(server_root, server_path, true, true);
         let data_route_matcher =
-            NextPrefixSuffixParamsMatcherVc::new(pathname, "_next/data/development/", ".json");
+            NextPrefixSuffixParamsMatcherVc::new(data_pathname, "_next/data/development/", ".json");
 
         let ssr_entry = SsrEntry {
             context: server_context,
@@ -554,54 +560,53 @@ async fn create_page_source_for_directory(
     let mut sources = vec![];
 
     for item in items.iter() {
-        match *item.await? {
+        let source = match *item.await? {
             PagesStructureItem::Page {
                 page,
                 specificity,
                 url,
-            } => {
-                sources.push(create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(page).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    false,
-                    rebase(page, project_path, output_root),
-                    output_root,
-                ));
-            }
+            } => create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(page).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                false,
+                output_root,
+                output_root,
+            )
+            .issue_context(page, "Next.js pages directory"),
             PagesStructureItem::Api {
                 api,
                 specificity,
                 url,
-            } => {
-                sources.push(create_page_source_for_file(
-                    project_path,
-                    env,
-                    server_context,
-                    server_data_context,
-                    client_context,
-                    pages_dir,
-                    specificity,
-                    SourceAssetVc::new(api).into(),
-                    runtime_entries,
-                    fallback_page,
-                    server_root,
-                    url,
-                    true,
-                    rebase(api, project_path, output_root),
-                    output_root,
-                ));
-            }
-        }
+            } => create_page_source_for_file(
+                project_path,
+                env,
+                server_context,
+                server_data_context,
+                client_context,
+                pages_dir,
+                specificity,
+                SourceAssetVc::new(api).into(),
+                runtime_entries,
+                fallback_page,
+                server_root,
+                url,
+                true,
+                output_root,
+                output_root,
+            )
+            .issue_context(api, "Next.js pages api directory"),
+        };
+        sources.push(source);
     }
 
     for child in children.iter() {

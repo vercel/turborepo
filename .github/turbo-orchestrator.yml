@@ -37,6 +37,9 @@ labeler:
     - label: "team: turbopack"
       when:
         isAnyFileOwnedByMatch: '@vercel\/web-tooling'
+    - label: "from: external"
+      when:
+        isNotPRAuthorCompanyMatch: "@vercel"
 
     # areas
     - label: "area: ci"

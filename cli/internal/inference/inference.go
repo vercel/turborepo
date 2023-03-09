@@ -5,7 +5,7 @@ import "github.com/vercel/turbo/cli/internal/fs"
 // Framework is an identifier for something that we wish to inference against.
 type Framework struct {
 	Slug            string
-	EnvPrefix       string
+	EnvMatcher      string
 	DependencyMatch matcher
 }
 
@@ -23,96 +23,96 @@ const (
 
 var _frameworks = []Framework{
 	{
-		Slug:      "blitzjs",
-		EnvPrefix: "NEXT_PUBLIC_",
+		Slug:       "blitzjs",
+		EnvMatcher: "^NEXT_PUBLIC_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"blitz"},
 		},
 	},
 	{
-		Slug:      "nextjs",
-		EnvPrefix: "NEXT_PUBLIC_",
+		Slug:       "nextjs",
+		EnvMatcher: "^NEXT_PUBLIC_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"next"},
 		},
 	},
 	{
-		Slug:      "gatsby",
-		EnvPrefix: "GATSBY_",
+		Slug:       "gatsby",
+		EnvMatcher: "^GATSBY_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"gatsby"},
 		},
 	},
 	{
-		Slug:      "astro",
-		EnvPrefix: "PUBLIC_",
+		Slug:       "astro",
+		EnvMatcher: "^PUBLIC_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"astro"},
 		},
 	},
 	{
-		Slug:      "solidstart",
-		EnvPrefix: "VITE_",
+		Slug:       "solidstart",
+		EnvMatcher: "^VITE_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"solid-js", "solid-start"},
 		},
 	},
 	{
-		Slug:      "vue",
-		EnvPrefix: "VUE_APP_",
+		Slug:       "vue",
+		EnvMatcher: "^VUE_APP_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@vue/cli-service"},
 		},
 	},
 	{
-		Slug:      "sveltekit",
-		EnvPrefix: "VITE_",
+		Slug:       "sveltekit",
+		EnvMatcher: "^VITE_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@sveltejs/kit"},
 		},
 	},
 	{
-		Slug:      "create-react-app",
-		EnvPrefix: "REACT_APP_",
+		Slug:       "create-react-app",
+		EnvMatcher: "^REACT_APP_",
 		DependencyMatch: matcher{
 			strategy:     some,
 			dependencies: []string{"react-scripts", "react-dev-utils"},
 		},
 	},
 	{
-		Slug:      "nuxtjs",
-		EnvPrefix: "NUXT_ENV_",
+		Slug:       "nuxtjs",
+		EnvMatcher: "^NUXT_ENV_",
 		DependencyMatch: matcher{
 			strategy:     some,
 			dependencies: []string{"nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"},
 		},
 	},
 	{
-		Slug:      "redwoodjs",
-		EnvPrefix: "REDWOOD_ENV_",
+		Slug:       "redwoodjs",
+		EnvMatcher: "^REDWOOD_ENV_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@redwoodjs/core"},
 		},
 	},
 	{
-		Slug:      "vite",
-		EnvPrefix: "VITE_",
+		Slug:       "vite",
+		EnvMatcher: "^VITE_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"vite"},
 		},
 	},
 	{
-		Slug:      "sanity",
-		EnvPrefix: "SANITY_STUDIO_",
+		Slug:       "sanity",
+		EnvMatcher: "^SANITY_STUDIO_",
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@sanity/cli"},

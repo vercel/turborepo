@@ -10,7 +10,7 @@ use std::{
     future::{join, Future},
     io::{stdout, Write},
     net::{IpAddr, SocketAddr},
-    path::MAIN_SEPARATOR,
+    path::{PathBuf, MAIN_SEPARATOR},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -29,7 +29,7 @@ use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    CompletionsVc, StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, Value,
+    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
@@ -206,6 +206,7 @@ impl NextDevServerBuilder {
         let browserslist_query = self.browserslist_query;
         let log_options = Arc::new(LogOptions {
             current_dir: current_dir().unwrap(),
+            project_dir: PathBuf::from(project_dir.clone()),
             show_all,
             log_detail,
             log_level: self.log_level,
@@ -362,10 +363,8 @@ async fn source(
         execution_context,
         next_config,
         server_addr,
-        CompletionsVc::all(vec![
-            app_structure.routes_changed(),
-            pages_structure.routes_changed(),
-        ]),
+        app_structure,
+        pages_structure,
     )
     .into();
     let source = RouterContentSource {
