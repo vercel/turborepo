@@ -171,18 +171,6 @@ where
     pub(super) fn get_node(&self, id: &T) -> u32 {
         self.graph_ix.get_index_of(id).unwrap() as _
     }
-
-    pub(super) fn map<N, F>(self, mut map: F) -> InternedGraph<N>
-    where
-        N: Clone + Eq + Hash,
-        F: FnMut(T) -> N,
-    {
-        let ix = self.graph_ix.into_iter().map(|v| map(v)).collect();
-        InternedGraph {
-            idx_graph: self.idx_graph,
-            graph_ix: ix,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]
