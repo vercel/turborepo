@@ -510,7 +510,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             command: Some(command),
             ..
         } => {
-            let command = command.clone();
+            let command = *command;
             let base = CommandBase::new(clap_args, repo_root)?;
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
