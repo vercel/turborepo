@@ -38,7 +38,7 @@ use turbopack_core::{
     ident::AssetIdentVc,
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
     reference::all_referenced_assets,
-    reference_type::ReferenceType,
+    reference_type::{EcmaScriptModulesReferenceSubType, ReferenceType},
     resolve::{
         options::ResolveOptionsVc,
         origin::PlainResolveOriginVc,
@@ -258,7 +258,12 @@ impl ModuleAssetContextVc {
         let options = ModuleOptionsVc::new(ident.path().parent(), self_vc.module_options_context());
 
         let reference_type = reference_type.into_value();
-        let mut current_part = None;
+        let part = match &reference_type {
+            ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportPart(
+                part,
+            )) => Some(*part),
+            _ => None,
+        };
         let mut current_source = source;
         let mut current_module_type = None;
         for rule in options.await?.rules.iter() {
@@ -268,10 +273,6 @@ impl ModuleAssetContextVc {
             {
                 for effect in rule.effects() {
                     match effect {
-                        ModuleRuleEffect::ModulePart(part) => {
-                            current_part = Some(*part);
-                        }
-
                         ModuleRuleEffect::SourceTransforms(transforms) => {
                             current_source = transforms.transform(current_source);
                             if current_source.ident().resolve().await? != ident {
@@ -346,7 +347,7 @@ impl ModuleAssetContextVc {
             current_source,
             self_vc,
             module_type,
-            current_part,
+            part,
         ))
     }
 }
