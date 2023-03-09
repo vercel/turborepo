@@ -28,17 +28,17 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
-	ExecutionSummary  *runState          `json:"executionSummary"`
+	ExecutionSummary  *executionSummary  `json:"executionSummary"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
 
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(startAt time.Time, profile string, turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
-	runState := newRunState(startAt, profile)
+	executionSummary := newExecutionSummary(startAt, profile)
 
 	return &RunSummary{
 		ID:                ksuid.New(),
-		ExecutionSummary:  runState,
+		ExecutionSummary:  executionSummary,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
 		Tasks:             []*TaskSummary{},
