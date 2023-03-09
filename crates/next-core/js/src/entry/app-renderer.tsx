@@ -37,7 +37,7 @@ import { headersFromEntries } from "@vercel/turbopack-next/internal/headers";
 import { parse, ParsedUrlQuery } from "node:querystring";
 
 globalThis.__next_require__ = (data) => {
-  const [, , ssr_id] = JSON.parse(data);
+  const [, , , ssr_id] = JSON.parse(data);
   return __turbopack_require__(ssr_id);
 };
 globalThis.__next_chunk_load__ = () => Promise.resolve();
@@ -138,10 +138,9 @@ async function runOperation(renderData: RenderData) {
   }
 
   const proxyMethodsForModule = (
-    id: string,
-    css: boolean
-  ): ProxyHandler<FlightManifest[""]> => ({
-    get(target, name, receiver) {
+    id: string
+  ): ProxyHandler<FlightManifest["__ssr_module_mapping__"][""]> => ({
+    get(_target, name) {
       return {
         id,
         chunks: JSON.parse(id)[1],
@@ -149,7 +148,9 @@ async function runOperation(renderData: RenderData) {
       };
     },
   });
-  const proxyMethods = (css: boolean): ProxyHandler<FlightManifest> => {
+  const proxyMethodsNested = (): ProxyHandler<
+    FlightManifest["__ssr_module_mapping__"]
+  > => {
     return {
       get(target, name, receiver) {
         if (name === "__ssr_module_mapping__") {
@@ -158,11 +159,43 @@ async function runOperation(renderData: RenderData) {
         if (name === "__entry_css_files__") {
           return __entry_css_files__;
         }
-        return new Proxy({}, proxyMethodsForModule(name as string, css));
+        return new Proxy({}, proxyMethodsForModule(name as string));
       },
     };
   };
-  const manifest: FlightManifest = new Proxy({} as any, proxyMethods(false));
+  const proxyMethods = (): ProxyHandler<FlightManifest> => {
+    return {
+      get(_target, key: string) {
+        if (key === "__ssr_module_mapping__") {
+          return new Proxy({} as any, proxyMethodsNested());
+        }
+        if (key === "__entry_css_files__") {
+          return __entry_css_files__;
+        }
+
+        // The key is a `${file}#${name}`, but `file` can contain `#` itself.
+        // There are 2 possibilities:
+        //   "file#"    => id = "file", name = ""
+        //   "file#foo" => id = "file", name = "foo"
+        const pos = key.lastIndexOf("#");
+        let id = key;
+        let name = "";
+        if (pos === -1) {
+          throw new Error("key need to be in format of ${file}#${name}");
+        } else {
+          id = key.slice(0, pos);
+          name = key.slice(pos + 1);
+        }
+
+        return {
+          id,
+          name,
+          chunks: JSON.parse(id)[1],
+        };
+      },
+    };
+  };
+  const manifest: FlightManifest = new Proxy({} as any, proxyMethods());
   const serverCSSManifest: FlightCSSManifest = {};
   const __entry_css_files__: FlightManifest["__entry_css_files__"] = {};
   for (const [key, chunks] of Object.entries(layoutInfoChunks)) {

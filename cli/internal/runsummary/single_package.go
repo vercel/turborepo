@@ -31,6 +31,6 @@ type singlePackageTaskSummary struct {
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	RunSummary             TaskExecutionSummary                  `json:"taskSummary"`
+	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"`
 	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOuputs"`
 }

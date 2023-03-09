@@ -2,7 +2,11 @@ const core = require("@actions/core");
 const exec = require("@actions/exec");
 
 async function runSweep(...args) {
-  await exec.exec("cargo", ["sweep", ...args]);
+  // TODO(alexkirsz) A cargo change introduced a regression where cargo can't
+  // find the sweep binary. This is a temporary workaround until the fix is
+  // released. See:
+  // https://github.com/rust-lang/cargo/pull/11814
+  await exec.exec("cargo-sweep", ["sweep", ...args]);
 }
 
 async function storeTimestamp() {

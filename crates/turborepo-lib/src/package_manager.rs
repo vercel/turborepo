@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct PnpmWorkspaces {
+struct PnpmWorkspace {
     pub packages: Vec<String>,
 }
 
@@ -54,10 +54,29 @@ pub enum PackageManager {
 
 #[derive(Debug)]
 pub struct Globs {
-    #[allow(dead_code)]
-    inclusions: Vec<PathBuf>,
-    #[allow(dead_code)]
-    exclusions: Vec<PathBuf>,
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
+}
+
+impl Globs {
+    pub fn test(&self, root: PathBuf, target: PathBuf) -> Result<bool> {
+        let search_value = target
+            .strip_prefix(root)?
+            .to_str()
+            .ok_or_else(|| anyhow!("The relative path is not UTF8."))?;
+
+        let includes = &self
+            .inclusions
+            .iter()
+            .any(|inclusion| glob_match::glob_match(inclusion, search_value));
+
+        let excludes = &self
+            .exclusions
+            .iter()
+            .any(|exclusion| glob_match::glob_match(exclusion, search_value));
+
+        Ok(*includes && !excludes)
+    }
 }
 
 impl PackageManager {
@@ -70,25 +89,21 @@ impl PackageManager {
     ///
     /// * `root_path`:
     ///
-    /// returns: Result<Globs, Error>
+    /// returns: Result<Option<Globs>, Error>
     ///
     /// # Examples
     ///
     /// ```
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
+    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Option<Globs>> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
-                let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
-                if workspaces.packages.is_empty() {
-                    return Err(anyhow!(
-                        "pnpm-workspace.yaml: no packages found. Turborepo requires pnpm \
-                         workspaces and thus packages to be defined in the root \
-                         pnpm-workspace.yaml"
-                    ));
+                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
+                if pnpm_workspace.packages.is_empty() {
+                    return Ok(None);
                 } else {
-                    workspaces.packages
+                    pnpm_workspace.packages
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
@@ -96,10 +111,7 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.as_ref().is_empty() {
-                    return Err(anyhow!(
-                        "package.json: no packages found. Turborepo requires packages to be \
-                         defined in the root package.json"
-                    ));
+                    return Ok(None);
                 } else {
                     package_json.workspaces.into()
                 }
@@ -111,16 +123,16 @@ impl PackageManager {
 
         for glob in globs {
             if let Some(exclusion) = glob.strip_prefix('!') {
-                exclusions.push(PathBuf::from(exclusion.to_string()));
+                exclusions.push(exclusion.to_string());
             } else {
-                inclusions.push(PathBuf::from(glob));
+                inclusions.push(glob);
             }
         }
 
-        Ok(Globs {
+        Ok(Some(Globs {
             inclusions,
             exclusions,
-        })
+        }))
     }
 }
 
@@ -135,12 +147,37 @@ mod tests {
         let package_manager = PackageManager::Npm;
         let globs = package_manager
             .get_workspace_globs(Path::new("../../examples/with-yarn"))
+            .unwrap()
             .unwrap();
 
-        assert_eq!(
-            globs.inclusions,
-            vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
-        );
+        assert_eq!(globs.inclusions, vec!["apps/*", "packages/*"]);
+    }
+
+    #[test]
+    fn test_globs_test() {
+        struct TestCase {
+            globs: Globs,
+            root: PathBuf,
+            target: PathBuf,
+            output: Result<bool>,
+        }
+
+        let tests = [TestCase {
+            globs: Globs {
+                inclusions: vec!["d/**".to_string()],
+                exclusions: vec![],
+            },
+            root: PathBuf::from("/a/b/c"),
+            target: PathBuf::from("/a/b/c/d/e/f"),
+            output: Ok(true),
+        }];
+
+        for test in tests {
+            match test.globs.test(test.root, test.target) {
+                Ok(value) => assert_eq!(value, test.output.unwrap()),
+                Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
+            };
+        }
     }
 
     #[test]

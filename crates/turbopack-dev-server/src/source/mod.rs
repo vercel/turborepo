@@ -202,19 +202,13 @@ pub struct NeededData {
     pub vary: ContentSourceDataVary,
 }
 
-impl From<VersionedContentVc> for ContentSourceContentVc {
-    fn from(content: VersionedContentVc) -> Self {
-        ContentSourceContentVc::static_content(content)
-    }
-}
-
 /// Additional info passed to the ContentSource. It was extracted from the http
 /// request.
 ///
 /// Note that you might not receive information that has not been requested via
 /// `ContentSource::vary()`. So make sure to request all information that's
 /// needed.
-#[turbo_tasks::value(serialization = "auto_for_input")]
+#[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 pub struct ContentSourceData {
     /// HTTP method, if requested.

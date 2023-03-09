@@ -5,7 +5,7 @@
   "scripts": {
     "build:main": "ncc build src/main.js -o dist/main --source-map",
     "build:post": "ncc build src/post.js -o dist/post --source-map",
-    "prepare": "npm run build:main && npm run build:post",
+    "prepare": "pnpm run build:main && pnpm run build:post",
     "lint": "eslint . --ext js,jsx,ts,tsx"
   },
   "dependencies": {

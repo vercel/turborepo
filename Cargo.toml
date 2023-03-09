@@ -43,6 +43,7 @@ members = [
   "crates/turborepo-ffi",
   "crates/turborepo-lib",
   "crates/turborepo-scm",
+  "crates/turborepo-paths",
   "xtask",
 ]
 
@@ -205,7 +206,7 @@ regex = "1.7.0"
 rstest = "0.16.0"
 rustc-hash = "1.1.0"
 semver = "1.0.16"
-serde = "1.0.152"
+serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 serde_qs = "0.11.0"
 serde_yaml = "0.9.17"
@@ -218,4 +219,5 @@ tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 url = "2.2.2"
+urlencoding = "2.1.2"
 webbrowser = "0.8.7"

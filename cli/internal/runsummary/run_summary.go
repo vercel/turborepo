@@ -2,11 +2,11 @@
 package runsummary
 
 import (
-	"time"
-
 	"fmt"
 	"path/filepath"
+	"time"
 
+	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -29,29 +29,37 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
+	ExecutionSummary  *executionSummary  `json:"executionSummary"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 	ExitCode          int                `json:"exitCode"`
 }
 
-// TaskExecutionSummary contains data about the actual execution of a task
-type TaskExecutionSummary struct {
-	Start    time.Time      `json:"start"`
-	Duration time.Duration  `json:"duration"`
-	Label    string         `json:"-"`      // Target which has just changed. Omit from JSOn
-	Status   string         `json:"status"` // Its current status
-	Err      error          `json:"error"`  // Error, only populated for failure statuses
-	Tasks    []*TaskSummary `json:"tasks"`
-}
-
 // NewRunSummary returns a RunSummary instance
-func NewRunSummary(turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+func NewRunSummary(startAt time.Time, profile string, turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+	executionSummary := newExecutionSummary(startAt, profile)
+
 	return &RunSummary{
 		ID:                ksuid.New(),
+		ExecutionSummary:  executionSummary,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
 		Tasks:             []*TaskSummary{},
 		GlobalHashSummary: globalHashSummary,
 	}
+}
+
+// Close wraps up the RunSummary at the end of a `turbo run`.
+func (summary *RunSummary) Close(terminal cli.Ui) {
+	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, terminal); err != nil {
+		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+	}
+
+	summary.printExecutionSummary(terminal)
+}
+
+// TrackTask makes it possible for the consumer to send information about the execution of a task.
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
+	return summary.ExecutionSummary.run(taskID)
 }
 
 func (summary *RunSummary) normalize() {
@@ -102,7 +110,7 @@ type TaskSummary struct {
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	RunSummary             *TaskExecutionSummary                 `json:"taskSummary"`
+	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOuputs"`
 }
 
@@ -137,5 +145,6 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
 		EnvVars:                ht.EnvVars,
+		Execution:              ht.Execution,
 	}
 }

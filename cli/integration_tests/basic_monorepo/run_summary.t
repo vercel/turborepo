@@ -9,6 +9,22 @@ Setup
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
+  {
+    "start": "[0-9-:\.TZ]+", (re)
+    "duration": [0-9]+, (re)
+    "status": "built",
+    "error": null
+  }
+
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "util#build")) | .[0].execution'
+  {
+    "start": "[0-9-:\.TZ]+", (re)
+    "duration": [0-9]+, (re)
+    "status": "built",
+    "error": null
+  }
+
 # Without env var, no summary file is generated
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null
