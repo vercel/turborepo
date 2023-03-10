@@ -10,15 +10,12 @@ import { TurboIgnoreArgs } from "./types";
 import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
-  const ignoreLog = "⬜️  ignoring the change";
-  console.log(`\n${ignoreLog}`);
+  console.log("⏭ Ignoring the change");
   return process.exit(0);
 }
 
 function continueBuild() {
-  const proceedLog = "✅  proceeding with deployment";
-
-  console.log(`\n${proceedLog}`);
+  console.log("✓ Proceeding with deployment");
   return process.exit(1);
 }
 
@@ -41,7 +38,7 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   // find the monorepo root
   const root = getTurboRoot(args.directory);
   if (!root) {
-    error("monorepo root not found. turbo-ignore inferencing failed");
+    error("Monorepo root not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
@@ -77,7 +74,7 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
 
   // Build, and execute the command
   const command = `npx turbo run ${task} --filter=${workspace}...[${comparison.ref}] --dry=json`;
-  info(`analyzing results of \`${command}\``);
+  info(`Analyzing results of \`${command}\``);
   exec(
     command,
     {
@@ -97,17 +94,17 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
       try {
         const parsed = JSON.parse(stdout);
         if (parsed == null) {
-          error(`failed to parse JSON output from \`${command}\`.`);
+          error(`Failed to parse JSON output from \`${command}\`.`);
           return continueBuild();
         }
         const { packages } = parsed;
         if (packages && packages.length > 0) {
           if (packages.length === 1) {
-            info(`this commit affects "${workspace}"`);
+            info(`This commit affects "${workspace}"`);
           } else {
             // subtract 1 because the first package is the workspace itself
             info(
-              `this commit affects "${workspace}" and ${packages.length - 1} ${
+              `This commit affects "${workspace}" and ${packages.length - 1} ${
                 packages.length - 1 === 1 ? "dependency" : "dependencies"
               } (${packages.slice(1).join(", ")})`
             );
@@ -115,11 +112,11 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
 
           return continueBuild();
         } else {
-          info(`this project and its dependencies are not affected`);
+          info(`This project and its dependencies are not affected`);
           return ignoreBuild();
         }
       } catch (e) {
-        error(`failed to parse JSON output from \`${command}\`.`);
+        error(`Failed to parse JSON output from \`${command}\`.`);
         error(e);
         return continueBuild();
       }

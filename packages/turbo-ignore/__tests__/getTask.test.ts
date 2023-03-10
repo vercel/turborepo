@@ -6,7 +6,7 @@ describe("getWorkspace()", () => {
   it("getTask defaults to build", async () => {
     expect(getTask({})).toEqual("build");
     validateLogs(
-      ['using "build" as the task as it was unspecified'],
+      ['Using "build" as the task as it was unspecified'],
       mockConsole.log,
       { prefix: "≫  " }
     );
@@ -19,7 +19,7 @@ describe("getWorkspace()", () => {
       })
     ).toEqual(`"workspace#task"`);
     validateLogs(
-      ['using "workspace#task" as the task from the arguments'],
+      ['Using "workspace#task" as the task from the arguments'],
       mockConsole.log,
       { prefix: "≫  " }
     );
