@@ -93,6 +93,28 @@
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -117,6 +139,28 @@
     <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, WebpackLoaderConfigItemsVc&gt;,
     <span class="kw">pub </span>loader_runner_package: <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
+}
+
+<span class="doccomment">/// Subset of Typescript options configured via tsconfig.json or jsconfig.json,
+/// which affects the runtime transform output.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+</span><span class="kw">pub struct </span>TypescriptTransformOptions {
+    <span class="kw">pub </span>use_define_for_class_fields: bool,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>TypescriptTransformOptionsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(Default::default())
+    }
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>TypescriptTransformOptionsVc {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::default()
+    }
 }
 
 <span class="kw">impl </span>WebpackLoadersOptions {
@@ -153,7 +197,7 @@
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>enable_types: bool,
     <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_typescript_transform: bool,
+    </span><span class="kw">pub </span>enable_typescript_transform: <span class="prelude-ty">Option</span>&lt;TypescriptTransformOptionsVc&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>enable_mdx: bool,
     <span class="attr">#[serde(default)]

@@ -119,6 +119,8 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -222,7 +224,9 @@
             virtual_asset.into(),
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields: <span class="bool-val">false</span>,
+            }]),
             context.compile_time_info(),
             InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
                 <span class="string">&quot;ENTRY&quot;</span>.to_string() =&gt; asset

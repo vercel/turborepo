@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ModuleOptionsContext","ModuleOptionsContextVc","PostCssTransformOptions","WebpackLoadersOptions","WebpackLoadersOptionsVc"],"type":["ModuleOptionsContextReadRef","WebpackLoadersOptionsReadRef"]};
+window.SIDEBAR_ITEMS = {"struct":["ModuleOptionsContext","ModuleOptionsContextVc","PostCssTransformOptions","TypescriptTransformOptions","TypescriptTransformOptionsVc","WebpackLoadersOptions","WebpackLoadersOptionsVc"],"type":["ModuleOptionsContextReadRef","TypescriptTransformOptionsReadRef","WebpackLoadersOptionsReadRef"]};

@@ -450,6 +450,12 @@
 <a href="#450" id="450">450</a>
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -521,7 +527,9 @@
         SourceAssetVc::new(embed_file_path(<span class="string">&quot;ipc/evaluate.ts&quot;</span>)).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: <span class="bool-val">false</span>,
+        }]),
         context.compile_time_info(),
     )
     .as_asset();
@@ -548,7 +556,9 @@
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: <span class="bool-val">false</span>,
+        }]),
         context.compile_time_info(),
         InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;INNER&quot;</span>.to_string() =&gt; module_asset,
@@ -565,7 +575,9 @@
             SourceAssetVc::new(embed_file_path(<span class="string">&quot;globals.ts&quot;</span>)).into(),
             context,
             Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields: <span class="bool-val">false</span>,
+            }]),
             context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();

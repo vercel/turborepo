@@ -188,6 +188,8 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -310,7 +312,9 @@
         SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: <span class="bool-val">false</span>,
+        }]),
         context.compile_time_info(),
     )
     .into()

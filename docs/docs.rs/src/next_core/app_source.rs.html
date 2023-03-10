@@ -749,6 +749,10 @@
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -1410,7 +1414,9 @@ import BOOTSTRAP from {};
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[
                     EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
-                    EcmascriptInputTransform::TypeScript,
+                    EcmascriptInputTransform::TypeScript {
+                        use_define_for_class_fields: <span class="bool-val">false</span>,
+                    },
                 ]),
                 context.compile_time_info(),
             ),
@@ -1478,7 +1484,9 @@ import BOOTSTRAP from {};
                 virtual_asset.into(),
                 this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
-                EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+                EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: <span class="bool-val">false</span>,
+                }]),
                 this.context.compile_time_info(),
                 InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
                     <span class="string">&quot;ROUTE_CHUNK_GROUP&quot;</span>.to_string() =&gt; entry

@@ -155,6 +155,8 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -243,7 +245,9 @@
             loader_entry_asset,
             this.client_context,
             Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields: <span class="bool-val">false</span>,
+            }]),
             this.client_context.compile_time_info(),
             InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
                 <span class="string">&quot;PAGE&quot;</span>.to_string() =&gt; this.client_context.process(this.entry_asset, Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)))

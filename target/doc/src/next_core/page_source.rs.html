@@ -740,6 +740,8 @@
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
 <a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1460,7 +1462,9 @@
                 this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[
-                    EcmascriptInputTransform::TypeScript,
+                    EcmascriptInputTransform::TypeScript {
+                        use_define_for_class_fields: <span class="bool-val">false</span>,
+                    },
                     EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
                 ]),
                 this.context.compile_time_info(),

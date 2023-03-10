@@ -282,6 +282,8 @@
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -322,6 +324,7 @@
         get_next_client_resolved_map,
     },
     react_refresh::assert_can_resolve_react_refresh,
+    typescript::get_typescript_transform_options,
     util::foreign_code_context_condition,
 };
 
@@ -412,6 +415,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.is_found();
 
+    <span class="kw">let </span>tsconfig = get_typescript_transform_options(project_path);
     <span class="kw">let </span>enable_webpack_loaders = {
         <span class="kw">let </span>options = <span class="kw-2">&amp;*</span>next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>loaders_options = WebpackLoadersOptions {
@@ -448,7 +452,7 @@
             ..Default::default()
         }),
         enable_webpack_loaders,
-        enable_typescript_transform: <span class="bool-val">true</span>,
+        enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
         rules: <span class="macro">vec!</span>[(
             foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
             module_options_context.clone().cell(),

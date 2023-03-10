@@ -338,6 +338,9 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -368,6 +371,7 @@
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::get_next_server_import_map,
+    typescript::get_typescript_transform_options,
     util::foreign_code_context_condition,
 };
 
@@ -568,6 +572,8 @@
             </span>.clone_if()
     };
 
+    <span class="kw">let </span>tsconfig = get_typescript_transform_options(project_path);
+
     <span class="kw">let </span>module_options_context = <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } =&gt; {
             <span class="kw">let </span>module_options_context = ModuleOptionsContext {
@@ -579,7 +585,7 @@
                 enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: <span class="bool-val">true</span>,
+                enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
                 rules: <span class="macro">vec!</span>[(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),
@@ -598,7 +604,7 @@
                 enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: <span class="bool-val">true</span>,
+                enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
                 rules: <span class="macro">vec!</span>[(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),
@@ -619,7 +625,7 @@
                 enable_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: <span class="bool-val">true</span>,
+                enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
                 rules: <span class="macro">vec!</span>[(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),
@@ -636,7 +642,7 @@
             ModuleOptionsContext {
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: <span class="bool-val">true</span>,
+                enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
                 rules: <span class="macro">vec!</span>[(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),
@@ -655,7 +661,7 @@
                 enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform,
                 enable_webpack_loaders,
-                enable_typescript_transform: <span class="bool-val">true</span>,
+                enable_typescript_transform: <span class="prelude-val">Some</span>(tsconfig),
                 rules: <span class="macro">vec!</span>[(
                     foreign_code_context_condition,
                     module_options_context.clone().cell(),
@@ -673,7 +679,7 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>get_build_module_options_context() -&gt; ModuleOptionsContextVc {
     ModuleOptionsContext {
-        enable_typescript_transform: <span class="bool-val">true</span>,
+        enable_typescript_transform: <span class="prelude-val">Some</span>(Default::default()),
         ..Default::default()
     }
     .cell()

@@ -286,6 +286,17 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -365,7 +376,12 @@
     },
     StyledComponents,
     StyledJsx,
-    TypeScript,
+    <span class="comment">// These options are subset of swc_core::ecma::transforms::typescript::Config, but
+    // it doesn&#39;t derive `Copy` so repeating values in here
+    </span>TypeScript {
+        <span class="attr">#[serde(default)]
+        </span>use_define_for_class_fields: bool,
+    },
 }
 
 <span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -486,9 +502,15 @@
                     </span>FileName::Anon,
                 ));
             }
-            EcmascriptInputTransform::TypeScript =&gt; {
-                <span class="kw">use </span>swc_core::ecma::transforms::typescript::strip;
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip(top_level_mark));
+            EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields,
+            } =&gt; {
+                <span class="kw">use </span>swc_core::ecma::transforms::typescript::{strip_with_config, Config};
+                <span class="kw">let </span>config = Config {
+                    use_define_for_class_fields,
+                    ..Default::default()
+                };
+                program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip_with_config(config, top_level_mark));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
                 <span class="kw">let </span>transition_name = <span class="kw-2">&amp;*</span>transition_name.<span class="kw">await</span><span class="question-mark">?</span>;

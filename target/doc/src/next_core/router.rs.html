@@ -402,6 +402,10 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::Deserialize;
@@ -571,7 +575,9 @@
         asset,
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: <span class="bool-val">false</span>,
+        }]),
         context.compile_time_info(),
     )
 }
@@ -654,7 +660,9 @@
         next_asset(<span class="string">&quot;entry/router.ts&quot;</span>),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: <span class="bool-val">false</span>,
+        }]),
         context.compile_time_info(),
         configs,
     )

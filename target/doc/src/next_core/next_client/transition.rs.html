@@ -102,6 +102,8 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -184,7 +186,9 @@
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[
-                EcmascriptInputTransform::TypeScript,
+                EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: <span class="bool-val">false</span>,
+                },
                 EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
             ]),
             context.compile_time_info(),
