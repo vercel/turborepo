@@ -12,6 +12,6 @@ void free_buffer(struct Buffer buffer);
 
 struct Buffer get_turbo_data_dir(void);
 
-struct Buffer changed_files(struct Buffer _buffer);
+struct Buffer changed_files(struct Buffer buffer);
 
-struct Buffer previous_content(struct Buffer _buffer);
+struct Buffer previous_content(struct Buffer buffer);
