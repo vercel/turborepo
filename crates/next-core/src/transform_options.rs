@@ -7,8 +7,8 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::typescript::resolve::{read_from_tsconfigs, read_tsconfigs, tsconfig};
 
-// Get the transform options for specifically for the typescript's runtime
-// outputs
+/// Build the transform options for specifically for the typescript's runtime
+/// outputs
 #[turbo_tasks::function]
 pub async fn get_typescript_transform_options(
     project_path: FileSystemPathVc,

@@ -38,7 +38,7 @@ use crate::{
         get_next_client_resolved_map,
     },
     react_refresh::assert_can_resolve_react_refresh,
-    typescript::get_typescript_transform_options,
+    transform_options::get_typescript_transform_options,
     util::foreign_code_context_condition,
 };
 

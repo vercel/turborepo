@@ -28,7 +28,7 @@ use crate::{
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::get_next_server_import_map,
-    typescript::get_typescript_transform_options,
+    transform_options::get_typescript_transform_options,
     util::foreign_code_context_condition,
 };
 
