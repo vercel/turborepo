@@ -34,6 +34,7 @@ builds:
         env:
           - CC=zig cc -target aarch64-linux-musl
           - CXX=zig c++ -target aarch64-linux-musl
+          - AR=llvm-ar
 #      - goos: linux
 #        goarch: amd64
 #        goamd64: v1
