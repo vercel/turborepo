@@ -447,13 +447,15 @@
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
-<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
+<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
@@ -512,11 +514,13 @@
         .flat_map(|e| e.iter().copied())
         .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="kw">let </span>evaluate = chunks.iter().find_map(|e| e.evaluate);
+    <span class="kw">let </span>first = first.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(EcmascriptChunkVc::new_normalized(
-        first.<span class="kw">await</span><span class="question-mark">?</span>.context,
+        first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         <span class="prelude-val">None</span>,
         evaluate,
+        Value::new(first.availability_info),
     ))
 }
 
@@ -848,10 +852,10 @@
                         EcmascriptChunkEvaluate {
                             evaluate_entries: evaluate.evaluate_entries,
                             chunk_group: <span class="prelude-val">Some</span>(chunk_group),
-                            chunk_list_path: evaluate.chunk_list_path,
                         }
                         .cell(),
                     ),
+                    Value::new(content.availability_info),
                 )
             }
         }

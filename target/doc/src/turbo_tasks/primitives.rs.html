@@ -85,6 +85,14 @@
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 
 <span class="kw">use </span>anyhow::Result;
@@ -111,6 +119,14 @@
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>U64(u64);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>U64 {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="self">self</span>.<span class="number">0</span>.to_string())
+    }
+}
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>OptionString(<span class="prelude-ty">Option</span>&lt;std::string::String&gt;);

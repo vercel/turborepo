@@ -453,6 +453,41 @@
 <a href="#453" id="453">453</a>
 <a href="#454" id="454">454</a>
 <a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -466,6 +501,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
+        availability_info::AvailabilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
@@ -496,22 +532,36 @@
 </span><span class="kw">pub struct </span>CssChunk {
     context: ChunkingContextVc,
     main_entries: CssChunkPlaceablesVc,
+    availability_info: AvailabilityInfo,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CssChunkVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new_normalized(context: ChunkingContextVc, main_entries: CssChunkPlaceablesVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_normalized(
+        context: ChunkingContextVc,
+        main_entries: CssChunkPlaceablesVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; <span class="self">Self </span>{
         CssChunk {
             context,
             main_entries,
+            availability_info: availability_info.into_value(),
         }
         .cell()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(context: ChunkingContextVc, entry: CssChunkPlaceableVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_normalized(context, CssChunkPlaceablesVc::cell(<span class="macro">vec!</span>[entry]))
+    </span><span class="kw">pub fn </span>new(
+        context: ChunkingContextVc,
+        entry: CssChunkPlaceableVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new_normalized(
+            context,
+            CssChunkPlaceablesVc::cell(<span class="macro">vec!</span>[entry]),
+            availability_info,
+        )
     }
 
     <span class="doccomment">/// Return the most specific directory which contains all elements of the
@@ -652,12 +702,13 @@
 </span><span class="kw">async fn </span>css_chunk_content(
     context: ChunkingContextVc,
     entries: CssChunkPlaceablesVc,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkContentResultVc&gt; {
     <span class="kw">let </span>entries = entries.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>entries = entries.iter().copied();
 
     <span class="kw">let </span>contents = entries
-        .map(|entry| css_chunk_content_single_entry(context, entry))
+        .map(|entry| css_chunk_content_single_entry(context, entry, availability_info))
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
     <span class="kw">if </span>contents.len() == <span class="number">1 </span>{
@@ -695,19 +746,27 @@
 </span><span class="kw">async fn </span>css_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: CssChunkPlaceableVc,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkContentResultVc&gt; {
     <span class="kw">let </span>asset = entry.as_asset();
-    <span class="kw">let </span>res = <span class="kw">if let </span><span class="prelude-val">Some</span>(res) = chunk_content::&lt;CssChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">let </span>res = <span class="kw">if let </span><span class="prelude-val">Some</span>(res) =
+        chunk_content::&lt;CssChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>, availability_info).<span class="kw">await</span><span class="question-mark">?
+    </span>{
         res
     } <span class="kw">else </span>{
-        chunk_content_split::&lt;CssChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?
+        chunk_content_split::&lt;CssChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>, availability_info).<span class="kw">await</span><span class="question-mark">?
     </span>};
 
     <span class="prelude-val">Ok</span>(CssChunkContentResultVc::cell(res.into()))
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Chunk <span class="kw">for </span>CssChunk {}
+</span><span class="kw">impl </span>Chunk <span class="kw">for </span>CssChunk {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+        <span class="self">self</span>.context
+    }
+}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>OptimizableChunk <span class="kw">for </span>CssChunk {
@@ -756,7 +815,12 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>content = css_chunk_content(this.context, this.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>content = css_chunk_content(
+            this.context,
+            this.main_entries,
+            Value::new(this.availability_info),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>r <span class="kw">in </span>content.external_asset_references.iter() {
             references.push(<span class="kw-2">*</span>r);
@@ -855,6 +919,7 @@
     <span class="kw">async fn </span>from_async_asset(
         _context: ChunkingContextVc,
         _asset: ChunkableAssetVc,
+        _availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
     }
@@ -887,7 +952,12 @@
         <span class="kw">let </span>content = content_to_details(self_vc.content());
         <span class="kw">let </span><span class="kw-2">mut </span>details = String::new();
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_content = css_chunk_content(this.context, this.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_content = css_chunk_content(
+            this.context,
+            this.main_entries,
+            Value::new(this.availability_info),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         details += <span class="string">&quot;Chunk items:\n\n&quot;</span>;
         <span class="kw">for </span>item <span class="kw">in </span>chunk_content.chunk_items.iter() {
             <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;

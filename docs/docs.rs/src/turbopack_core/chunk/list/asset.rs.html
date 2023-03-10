@@ -80,12 +80,6 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
@@ -110,22 +104,16 @@
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>ChunkListAsset {
     server_root: FileSystemPathVc,
     chunk_group: ChunkGroupVc,
-    path: FileSystemPathVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkListAssetVc {
     <span class="doccomment">/// Creates a new [`ChunkListAsset`].
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(
-        server_root: FileSystemPathVc,
-        chunk_group: ChunkGroupVc,
-        path: FileSystemPathVc,
-    ) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(server_root: FileSystemPathVc, chunk_group: ChunkGroupVc) -&gt; <span class="self">Self </span>{
         ChunkListAsset {
             server_root,
             chunk_group,
-            path,
         }
         .cell()
     }
@@ -149,7 +137,7 @@
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ChunkListAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
-        AssetIdentVc::from_path(<span class="self">self</span>.path)
+        AssetIdentVc::from_path(<span class="self">self</span>.chunk_group.chunk_list_path())
     }
 
     <span class="attr">#[turbo_tasks::function]

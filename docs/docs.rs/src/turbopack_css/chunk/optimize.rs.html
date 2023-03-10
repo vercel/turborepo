@@ -125,9 +125,10 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
-<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
+<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::chunk::{
     optimize::{ChunkOptimizer, ChunkOptimizerVc},
     ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
@@ -190,6 +191,7 @@
     <span class="prelude-val">Ok</span>(CssChunkVc::new_normalized(
         first.<span class="kw">await</span><span class="question-mark">?</span>.context,
         CssChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
+        Value::new(first.<span class="kw">await</span><span class="question-mark">?</span>.availability_info),
     ))
 }
 

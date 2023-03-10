@@ -136,6 +136,12 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
@@ -188,6 +194,11 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>parallel_reference_ty() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;parallel reference&quot;</span>.to_string())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>isolated_parallel_reference_ty() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;isolated parallel reference&quot;</span>.to_string())
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -256,6 +267,7 @@
                 <span class="prelude-val">None </span>=&gt; {}
                 <span class="prelude-val">Some</span>(ChunkingType::Placed) =&gt; key = placed_reference_ty(),
                 <span class="prelude-val">Some</span>(ChunkingType::Parallel) =&gt; key = parallel_reference_ty(),
+                <span class="prelude-val">Some</span>(ChunkingType::IsolatedParallel) =&gt; key = isolated_parallel_reference_ty(),
                 <span class="prelude-val">Some</span>(ChunkingType::Separate) =&gt; key = separate_reference_ty(),
                 <span class="prelude-val">Some</span>(ChunkingType::PlacedOrParallel) =&gt; key = placed_or_parallel_reference_ty(),
                 <span class="prelude-val">Some</span>(ChunkingType::SeparateAsync) =&gt; key = async_reference_ty(),

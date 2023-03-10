@@ -136,14 +136,26 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -196,8 +208,12 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>ProcessEnvAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk(self_vc: ProcessEnvAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+    </span><span class="kw">fn </span>as_chunk(
+        self_vc: ProcessEnvAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; ChunkVc {
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

@@ -1348,7 +1348,7 @@
 
         <span class="kw">for </span>(<span class="kw">_</span>, imports) <span class="kw">in </span>segments.iter() {
             <span class="kw">for </span>(p, identifier, chunks_identifier) <span class="kw">in </span>imports.values() {
-                result += <span class="string">r#&quot;(&quot;TURBOPACK { transition: next-layout-entry; chunking-type: parallel }&quot;);
+                result += <span class="string">r#&quot;(&quot;TURBOPACK { transition: next-layout-entry; chunking-type: isolatedParallel }&quot;);
 &quot;#</span>;
                 <span class="macro">writeln!</span>(
                     result,

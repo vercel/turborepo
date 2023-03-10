@@ -124,15 +124,36 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt};
+<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
     chunk::{
-        ChunkItem, ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
+        availability_info::AvailabilityInfo, available_assets::AvailableAssetsVc, ChunkItem,
+        ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
     },
 };
 
@@ -186,9 +207,28 @@
     <span class="kw">async fn </span>from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
-        <span class="kw">let </span>chunk = ManifestChunkAssetVc::new(asset, context);
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(ManifestLoaderItemVc::new(context, chunk).into()))
+        <span class="kw">let </span>next_availability_info = <span class="kw">match </span>availability_info.into_value() {
+            AvailabilityInfo::Untracked =&gt; AvailabilityInfo::Untracked,
+            AvailabilityInfo::Root {
+                current_availability_root,
+            } =&gt; AvailabilityInfo::Inner {
+                available_assets: AvailableAssetsVc::new(<span class="macro">vec!</span>[current_availability_root]),
+                current_availability_root: asset.as_asset(),
+            },
+            AvailabilityInfo::Inner {
+                available_assets,
+                current_availability_root,
+            } =&gt; AvailabilityInfo::Inner {
+                available_assets: available_assets.with_roots(<span class="macro">vec!</span>[current_availability_root]),
+                current_availability_root: asset.as_asset(),
+            },
+        };
+        <span class="kw">let </span>manifest_asset =
+            ManifestChunkAssetVc::new(asset, context, Value::new(next_availability_info));
+        <span class="kw">let </span>manifest_loader = ManifestLoaderItemVc::new(manifest_asset);
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(manifest_loader.into()))
     }
 }
 

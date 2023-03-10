@@ -187,6 +187,16 @@
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
@@ -196,7 +206,10 @@
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleId},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkableAssetVc, ChunkingContextVc,
+        FromChunkableAsset, ModuleId,
+    },
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -346,8 +359,15 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if </span><span class="kw-2">*</span>resolve_type == ResolveType::EsmAsync {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(loader) =
-                    EcmascriptChunkItemVc::from_async_asset(context, chunkable).<span class="kw">await</span><span class="question-mark">?
+                <span class="comment">// Passing [AvailabilityInfo::Untracked] works here because the manifest loader
+                // has an id that is independent of them. So luckily we don&#39;t need chunk
+                // dependent code generation.
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(loader) = EcmascriptChunkItemVc::from_async_asset(
+                    context,
+                    chunkable,
+                    Value::new(AvailabilityInfo::Untracked),
+                )
+                .<span class="kw">await</span><span class="question-mark">?
                 </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Single(
                         loader.id().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),

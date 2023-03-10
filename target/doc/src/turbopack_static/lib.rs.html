@@ -232,6 +232,15 @@
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -245,13 +254,13 @@
 </span><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileContent;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
@@ -314,8 +323,17 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>StaticModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk(self_vc: StaticModuleAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
+    </span><span class="kw">fn </span>as_chunk(
+        self_vc: StaticModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.as_ecmascript_chunk_placeable(),
+            availability_info,
+        )
+        .into()
     }
 }
 

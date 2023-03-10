@@ -92,16 +92,13 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -133,7 +130,9 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.manifest.chunk_group().chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_group = <span class="self">self</span>.manifest.chunk_group();
+        <span class="kw">let </span>chunks = chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>output_root = <span class="self">self</span>.context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>chunk_server_paths = IndexSet::new();
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
@@ -142,8 +141,7 @@
             // item is one of several that are contained in that chunk file.
             </span><span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="comment">// The pathname is the file path necessary to load the chunk from the server.
-            </span><span class="kw">let </span>output_root = <span class="self">self</span>.context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>chunk_server_path = <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(chunk_path) {
+            </span><span class="kw">let </span>chunk_server_path = <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(chunk_path) {
                 path
             } <span class="kw">else </span>{
                 <span class="macro">bail!</span>(
@@ -155,11 +153,17 @@
             chunk_server_paths.insert(chunk_server_path.to_string());
         }
 
+        <span class="kw">let </span>chunk_list_path = chunk_group.chunk_list_path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_list_path = output_root
+            .get_path_to(<span class="kw-2">&amp;*</span>chunk_list_path)
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;chunk list path is not in output root&quot;</span>))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>code = <span class="macro">formatdoc! </span>{
             <span class="string">r#&quot;
-                __turbopack_export_value__({chunk_paths});
+                __turbopack_export_value__({{ chunks: {chunk_paths}, list: {chunk_list_path} }});
             &quot;#</span>,
-            chunk_paths = stringify_js_pretty(<span class="kw-2">&amp;</span>chunk_server_paths)
+            chunk_paths = stringify_js_pretty(<span class="kw-2">&amp;</span>chunk_server_paths),
+            chunk_list_path = stringify_js_pretty(<span class="kw-2">&amp;</span>chunk_list_path),
         };
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
@@ -178,18 +182,8 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.manifest.chunk_group().chunks();
-
-        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(
-            chunks
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
-                .copied()
-                .map(ChunkReferenceVc::new)
-                .map(Into::into)
-                .collect(),
-        ))
+    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
+        <span class="self">self</span>.manifest.references()
     }
 }
 </code></pre></div>

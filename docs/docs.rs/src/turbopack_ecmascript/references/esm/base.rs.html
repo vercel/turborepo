@@ -300,6 +300,7 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -463,6 +464,7 @@
                 <span class="kw">match </span>chunking_type {
                     <span class="string">&quot;separate&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::Separate),
                     <span class="string">&quot;parallel&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::Parallel),
+                    <span class="string">&quot;isolatedParallel&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::IsolatedParallel),
                     <span class="string">&quot;none&quot; </span>=&gt; <span class="prelude-val">None</span>,
                     <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unknown chunking_type: {}&quot;</span>, chunking_type)),
                 }

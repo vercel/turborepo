@@ -151,43 +151,19 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::writedoc;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{
-        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkableAsset, ChunkingContext,
-        ChunkingContextVc,
-    },
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 
-<span class="kw">use </span><span class="kw">super</span>::chunk_asset::{ManifestChunkAssetReference, ManifestChunkAssetVc};
+<span class="kw">use </span><span class="kw">super</span>::chunk_asset::ManifestChunkAssetVc;
 <span class="kw">use crate</span>::{
     chunk::{
         item::{
@@ -218,21 +194,14 @@
 /// import appears in.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>ManifestLoaderItem {
-    context: ChunkingContextVc,
     manifest: ManifestChunkAssetVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ManifestLoaderItemVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(context: ChunkingContextVc, manifest: ManifestChunkAssetVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(ManifestLoaderItem { context, manifest })
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_list_path(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="kw">let </span>this = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(this.context.chunk_list_path(this.manifest.ident()))
+    </span><span class="kw">pub fn </span>new(manifest: ManifestChunkAssetVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(ManifestLoaderItem { manifest })
     }
 }
 
@@ -244,30 +213,19 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(self_vc: ManifestLoaderItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>this = <span class="kw-2">&amp;*</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[
-            ManifestChunkAssetReference {
-                manifest: this.manifest,
-            }
-            .cell()
-            .into(),
-            <span class="comment">// This creates the chunk list corresponding to the manifest chunk&#39;s chunk group.
-            </span>ChunkListReferenceVc::new(
-                this.context.output_root(),
-                this.manifest.chunk_group(),
-                self_vc.chunk_list_path(),
-            )
-            .into(),
-        ]))
+    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[ChunkReferenceVc::new(
+            <span class="self">self</span>.manifest.manifest_chunk(),
+        )
+        .into()]))
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ManifestLoaderItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
-        <span class="self">self</span>.context
+    </span><span class="kw">async fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkingContextVc&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.manifest.<span class="kw">await</span><span class="question-mark">?</span>.chunking_context)
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -277,10 +235,10 @@
 
         <span class="kw">let </span>manifest = this.manifest.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>asset = manifest.asset.as_asset();
-        <span class="kw">let </span>chunk = this.manifest.as_chunk(this.context);
+        <span class="kw">let </span>chunk = this.manifest.manifest_chunk();
         <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>output_root = this.context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>output_root = manifest.chunking_context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// We need several items in order for a dynamic import to fully load. First, we
         // need the chunk path of the manifest chunk, relative from the output root. The
@@ -292,20 +250,27 @@
             <span class="macro">bail!</span>(
                 <span class="string">&quot;chunk path {} is not in output root {}&quot;</span>,
                 chunk.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
-                this.context.output_root().to_string().<span class="kw">await</span><span class="question-mark">?
+                manifest.chunking_context.output_root().to_string().<span class="kw">await</span><span class="question-mark">?
             </span>);
         };
 
         <span class="comment">// We also need the manifest chunk item&#39;s id, which points to a CJS module that
         // exports a promise for all of the necessary chunk loads.
-        </span><span class="kw">let </span>item_id = <span class="kw-2">&amp;*</span>this.manifest.as_chunk_item(this.context).id().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>item_id = <span class="kw-2">&amp;*</span>this
+            .manifest
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Finally, we need the id of the module that we&#39;re actually trying to
         // dynamically import.
         </span><span class="kw">let </span>placeable = EcmascriptChunkPlaceableVc::resolve_from(asset)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;asset is not placeable in ecmascript chunk&quot;</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>dynamic_id = <span class="kw-2">&amp;*</span>placeable.as_chunk_item(this.context).id().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>dynamic_id = <span class="kw-2">&amp;*</span>placeable
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// This is the code that will be executed when the dynamic import is reached.
         // It will load the manifest chunk, which will load all the chunks needed by
@@ -319,9 +284,9 @@
                 __turbopack_export_value__((__turbopack_import__) =&gt; {{
                     return __turbopack_load__({chunk_server_path}).then(() =&gt; {{
                         return __turbopack_require__({item_id});
-                    }}).then((chunks_paths) =&gt; {{
-                        __turbopack_register_chunk_list__({chunk_list_path}, chunks_paths);
-                        return Promise.all(chunks_paths.map((chunk_path) =&gt; __turbopack_load__(chunk_path)));
+                    }}).then(({{ chunks, list }}) =&gt; {{
+                        __turbopack_register_chunk_list__(list, chunks);
+                        return Promise.all(chunks.map((chunk_path) =&gt; __turbopack_load__(chunk_path)));
                     }}).then(() =&gt; {{
                         return __turbopack_import__({dynamic_id});
                     }});
@@ -330,11 +295,6 @@
             chunk_server_path = stringify_js(chunk_server_path),
             item_id = stringify_js(item_id),
             dynamic_id = stringify_js(dynamic_id),
-            chunk_list_path = stringify_js(
-                output_root
-                    .get_path_to(<span class="kw-2">&amp;*</span>self_vc.chunk_list_path().<span class="kw">await</span><span class="question-mark">?</span>)
-                    .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;chunk list path is not in output root&quot;</span>))<span class="question-mark">?
-            </span>)
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

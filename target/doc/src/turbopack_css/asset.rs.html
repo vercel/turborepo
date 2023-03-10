@@ -294,6 +294,13 @@
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -307,7 +314,10 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     context::AssetContextVc,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferencesVc},
@@ -411,8 +421,12 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>CssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk(self_vc: CssModuleAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
-        CssChunkVc::new(context, self_vc.into()).into()
+    </span><span class="kw">fn </span>as_chunk(
+        self_vc: CssModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; ChunkVc {
+        CssChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

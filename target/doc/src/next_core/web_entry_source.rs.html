@@ -104,13 +104,16 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::ecmascript::EcmascriptModuleAssetVc;
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkGroupVc, ChunkableAsset, ChunkableAssetVc},
+    chunk::{availability_info::AvailabilityInfo, ChunkGroupVc, ChunkableAsset, ChunkableAssetVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
 };
@@ -186,9 +189,12 @@
             } <span class="kw">else if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(module).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="comment">// TODO this is missing runtime code, so it&#39;s probably broken and we should also
                 // add an ecmascript chunk with the runtime code
-                </span><span class="prelude-val">Ok</span>(ChunkGroupVc::from_chunk(
-                    chunkable.as_chunk(chunking_context),
-                ))
+                </span><span class="prelude-val">Ok</span>(ChunkGroupVc::from_chunk(chunkable.as_chunk(
+                    chunking_context,
+                    Value::new(AvailabilityInfo::Root {
+                        current_availability_root: module,
+                    }),
+                )))
             } <span class="kw">else </span>{
                 <span class="comment">// TODO convert into a serve-able asset
                 </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(

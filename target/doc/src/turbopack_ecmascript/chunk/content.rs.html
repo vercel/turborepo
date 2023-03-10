@@ -383,18 +383,28 @@
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
 <a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::{indoc, writedoc};
-<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
+<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::{embed_file, File, FileContent, FileSystemPathReadRef, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContentVc,
     chunk::{
-        chunk_content, chunk_content_split, ChunkContentResult, ChunkGroupVc, ChunkVc,
-        ChunkingContext, ChunkingContextVc, ModuleId,
+        availability_info::AvailabilityInfo, chunk_content, chunk_content_split,
+        ChunkContentResult, ChunkGroupVc, ChunkVc, ChunkingContext, ChunkingContextVc, ModuleId,
     },
     code_builder::{CodeBuilder, CodeVc},
     environment::{ChunkLoading, EnvironmentVc},
@@ -449,10 +459,13 @@
     context: ChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; EcmascriptChunkContentResultVc {
-    <span class="kw">let </span><span class="kw-2">mut </span>chunk_content = ecmascript_chunk_content_internal(context, main_entries);
+    <span class="kw">let </span><span class="kw-2">mut </span>chunk_content =
+        ecmascript_chunk_content_internal(context, main_entries, availability_info);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(omit_entries) = omit_entries {
-        <span class="kw">let </span>omit_chunk_content = ecmascript_chunk_content_internal(context, omit_entries);
+        <span class="kw">let </span>omit_chunk_content =
+            ecmascript_chunk_content_internal(context, omit_entries, availability_info);
         chunk_content = chunk_content.filter(omit_chunk_content);
     }
     chunk_content
@@ -462,12 +475,13 @@
 </span><span class="kw">async fn </span>ecmascript_chunk_content_internal(
     context: ChunkingContextVc,
     entries: EcmascriptChunkPlaceablesVc,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentResultVc&gt; {
     <span class="kw">let </span>entries = entries.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>entries = entries.iter().copied();
 
     <span class="kw">let </span>contents = entries
-        .map(|entry| ecmascript_chunk_content_single_entry(context, entry))
+        .map(|entry| ecmascript_chunk_content_single_entry(context, entry, availability_info))
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
     <span class="kw">if </span>contents.len() == <span class="number">1 </span>{
@@ -509,14 +523,18 @@
 </span><span class="kw">async fn </span>ecmascript_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: EcmascriptChunkPlaceableVc,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentResultVc&gt; {
     <span class="kw">let </span>asset = entry.as_asset();
 
     <span class="prelude-val">Ok</span>(EcmascriptChunkContentResultVc::cell(
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(res) = chunk_content::&lt;EcmascriptChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(res) =
+            chunk_content::&lt;EcmascriptChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>, availability_info).<span class="kw">await</span><span class="question-mark">?
+        </span>{
             res
         } <span class="kw">else </span>{
-            chunk_content_split::&lt;EcmascriptChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?
+            chunk_content_split::&lt;EcmascriptChunkItemVc&gt;(context, asset, <span class="prelude-val">None</span>, availability_info)
+                .<span class="kw">await</span><span class="question-mark">?
         </span>}
         .into(),
     ))
@@ -540,10 +558,12 @@
         omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
         chunk_path: FileSystemPathVc,
         evaluate: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkContentEvaluateVc&gt;,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="comment">// TODO(alexkirsz) All of this should be done in a transition, otherwise we run
         // the risks of values not being strongly consistent with each other.
-        </span><span class="kw">let </span>chunk_content = ecmascript_chunk_content(context, main_entries, omit_entries);
+        </span><span class="kw">let </span>chunk_content =
+            ecmascript_chunk_content(context, main_entries, omit_entries, availability_info);
         <span class="kw">let </span>chunk_content = chunk_content.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunk_path = chunk_path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>module_factories = chunk_content.chunk_items.to_entry_snapshot().<span class="kw">await</span><span class="question-mark">?</span>;

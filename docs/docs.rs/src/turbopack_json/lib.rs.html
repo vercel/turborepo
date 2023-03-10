@@ -155,6 +155,18 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
 </pre><pre class="rust"><code><span class="doccomment">//! JSON asset support for turbopack.
 //!
 //! JSON assets are parsed to ensure they contain valid JSON.
@@ -167,11 +179,14 @@
 </span><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::{bail, Error, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileJsonContent};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -215,8 +230,17 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>JsonModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk(self_vc: JsonModuleAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
+    </span><span class="kw">fn </span>as_chunk(
+        self_vc: JsonModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.as_ecmascript_chunk_placeable(),
+            availability_info,
+        )
+        .into()
     }
 }
 

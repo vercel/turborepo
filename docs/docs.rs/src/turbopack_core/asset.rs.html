@@ -155,12 +155,12 @@
 };
 
 <span class="doccomment">/// A list of [Asset]s
-</span><span class="attr">#[turbo_tasks::value(shared, transparent)]
+</span><span class="attr">#[turbo_tasks::value(transparent)]
 #[derive(Hash)]
 </span><span class="kw">pub struct </span>Assets(Vec&lt;AssetVc&gt;);
 
 <span class="doccomment">/// A set of [Asset]s
-</span><span class="attr">#[turbo_tasks::value(shared, transparent)]
+</span><span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>AssetsSet(IndexSet&lt;AssetVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -168,7 +168,7 @@
     <span class="doccomment">/// Creates an empty list of [Asset]s
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
-        Assets(Vec::new()).into()
+        AssetsVc::cell(Vec::new())
     }
 }
 

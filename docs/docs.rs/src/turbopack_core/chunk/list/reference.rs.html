@@ -64,14 +64,6 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -79,8 +71,8 @@
 <span class="kw">use </span><span class="kw">super</span>::asset::ChunkListAssetVc;
 <span class="kw">use crate</span>::{
     chunk::{
-        ChunkGroupVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc,
-        ChunkingType, ChunkingTypeOptionVc,
+        ChunkGroupVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType,
+        ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
@@ -96,22 +88,16 @@
 </span><span class="kw">pub struct </span>ChunkListReference {
     server_root: FileSystemPathVc,
     chunk_group: ChunkGroupVc,
-    path: FileSystemPathVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkListReferenceVc {
     <span class="doccomment">/// Creates a new [`ChunkListReference`].
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(
-        server_root: FileSystemPathVc,
-        chunk_group: ChunkGroupVc,
-        path: FileSystemPathVc,
-    ) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(server_root: FileSystemPathVc, chunk_group: ChunkGroupVc) -&gt; <span class="self">Self </span>{
         ChunkListReference {
             server_root,
             chunk_group,
-            path,
         }
         .cell()
     }
@@ -123,7 +109,7 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;referenced chunk list {}&quot;</span>,
-            <span class="self">self</span>.path.to_string().<span class="kw">await</span><span class="question-mark">?
+            <span class="self">self</span>.chunk_group.chunk_list_path().to_string().<span class="kw">await</span><span class="question-mark">?
         </span>)))
     }
 }
@@ -132,10 +118,8 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ChunkListReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(
-            ChunkListAssetVc::new(<span class="self">self</span>.server_root, <span class="self">self</span>.chunk_group, <span class="self">self</span>.path).into(),
-        )
-        .cell()
+        ResolveResult::asset(ChunkListAssetVc::new(<span class="self">self</span>.server_root, <span class="self">self</span>.chunk_group).into())
+            .cell()
     }
 }
 

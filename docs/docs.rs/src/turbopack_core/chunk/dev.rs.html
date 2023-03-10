@@ -269,6 +269,12 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -494,8 +500,14 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunk_list_path(self_vc: DevChunkingContextVc, ident: AssetIdentVc) -&gt; FileSystemPathVc {
-        self_vc.chunk_path(ident.with_modifier(chunk_list_modifier()), <span class="string">&quot;.json&quot;</span>)
+    </span><span class="kw">async fn </span>chunk_list_path(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        entry_chunk_path: FileSystemPathVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+        <span class="prelude-val">Ok</span>(entry_chunk_path.parent().join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+            <span class="string">&quot;{}.chunk-list.json&quot;</span>,
+            entry_chunk_path.<span class="kw">await</span><span class="question-mark">?</span>.file_name()
+        )))
     }
 
     <span class="attr">#[turbo_tasks::function]

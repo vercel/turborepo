@@ -130,13 +130,18 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 
 <span class="kw">use super</span>::{Chunk, ChunkVc, ParallelChunkReferenceVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::ParallelChunkReference,
+    chunk::{ChunkingContextVc, ParallelChunkReference},
     ident::AssetIdentVc,
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
@@ -169,7 +174,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Chunk <span class="kw">for </span>ChunkInGroup {}
+</span><span class="kw">impl </span>Chunk <span class="kw">for </span>ChunkInGroup {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+        <span class="self">self</span>.inner.chunking_context()
+    }
+}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ChunkInGroup {

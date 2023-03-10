@@ -137,17 +137,32 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
+
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        ChunkGroupVc, ChunkVc, ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc,
-        ChunkableAssetVc, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkListReferenceVc, ChunkReferenceVc,
+        ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    reference::AssetReferencesVc,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::chunk_item::ManifestChunkItem;
@@ -165,6 +180,11 @@
     StringVc::cell(<span class="string">&quot;manifest chunk&quot;</span>.to_string())
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>chunk_list_modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;chunks list&quot;</span>.to_string())
+}
+
 <span class="doccomment">/// The manifest chunk is deferred until requested by the manifest loader
 /// item when the dynamic `import()` expression is reached. Its responsibility
 /// is to generate a Promise that will resolve only after all the necessary
@@ -179,22 +199,38 @@
 </span><span class="kw">pub struct </span>ManifestChunkAsset {
     <span class="kw">pub </span>asset: ChunkableAssetVc,
     <span class="kw">pub </span>chunking_context: ChunkingContextVc,
+    <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ManifestChunkAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(asset: ChunkableAssetVc, chunking_context: ChunkingContextVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        asset: ChunkableAssetVc,
+        chunking_context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(ManifestChunkAsset {
             asset,
             chunking_context,
+            availability_info: availability_info.into_value(),
         })
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>chunk_group(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkGroupVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ChunkGroupVc::from_asset(this.asset, this.chunking_context))
+        <span class="prelude-val">Ok</span>(ChunkGroupVc::from_asset(
+            this.asset,
+            this.chunking_context,
+            Value::new(this.availability_info),
+        ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>manifest_chunk(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.as_chunk(this.chunking_context, Value::new(this.availability_info)))
     }
 }
 
@@ -211,16 +247,40 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        <span class="macro">todo!</span>()
+    </span><span class="kw">async fn </span>references(self_vc: ManifestChunkAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>chunk_group = self_vc.chunk_group();
+        <span class="kw">let </span>chunks = chunk_group.chunks();
+
+        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(
+            chunks
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.iter()
+                .copied()
+                .map(ChunkReferenceVc::new)
+                .map(Into::into)
+                .chain(once(
+                    <span class="comment">// This creates the chunk list corresponding to the manifest chunk&#39;s chunk
+                    // group.
+                    </span>ChunkListReferenceVc::new(
+                        self_vc.<span class="kw">await</span><span class="question-mark">?</span>.chunking_context.output_root(),
+                        chunk_group,
+                    )
+                    .into(),
+                ))
+                .collect(),
+        ))
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>ManifestChunkAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk(self_vc: ManifestChunkAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+    </span><span class="kw">fn </span>as_chunk(
+        self_vc: ManifestChunkAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; ChunkVc {
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 
@@ -242,38 +302,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>get_exports(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptExportsVc {
         EcmascriptExports::Value.cell()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>ManifestChunkAssetReference {
-    <span class="kw">pub </span>manifest: ManifestChunkAssetVc,
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ManifestChunkAssetReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;referenced manifest {}&quot;</span>,
-            <span class="self">self</span>.manifest.ident().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ManifestChunkAssetReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(<span class="self">self</span>.manifest.into()).cell()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>ManifestChunkAssetReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
-        ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::Separate))
     }
 }
 </code></pre></div>
