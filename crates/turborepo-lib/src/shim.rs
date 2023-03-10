@@ -213,26 +213,26 @@ impl TurboState {
         let arch = {
             #[cfg(target_arch = "x86_64")]
             {
-                "64"
+                String::from("64")
             }
             #[cfg(target_arch = "aarch64")]
             {
-                "arm64"
+                String::from("arm64")
             }
         };
 
         let os = {
             #[cfg(target_os = "macos")]
             {
-                "darwin"
+                String::from("darwin")
             }
             #[cfg(target_arch = "windows")]
             {
-                "windows"
+                String::from("windows")
             }
             #[cfg(target_arch = "linux")]
             {
-                "linux"
+                String::from("linux")
             }
         };
 
