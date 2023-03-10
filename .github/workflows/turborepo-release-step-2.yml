@@ -72,7 +72,7 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - run: apt-get install -y build-essential musl-tools gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+      - run: apt-get install -y build-essential binutils-aarch64-linux-gnu
         # Yes, I'm aware of the irony of installing Zig to compile our Go + Rust project
       - run: |
           mkdir ../zig
