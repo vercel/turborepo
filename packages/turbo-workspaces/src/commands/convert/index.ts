@@ -75,7 +75,7 @@ export default async function convertCommand(
   const packageManagerAnswer = await inquirer.prompt<{
     packageManagerInput?: PackageManager;
   }>({
-    name: "packageManager",
+    name: "packageManagerInput",
     type: "list",
     message: `Convert from ${project.packageManager} workspaces to:`,
     when:

@@ -70,20 +70,13 @@ async function read(args: ReadArgs): Promise<Project> {
  */
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
+  const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  logger.mainStep(`Creating yarn workspaces`);
+  logger.mainStep(
+    `Creating ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+  );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
-  // workspaces
-  if (project.packageManager !== "npm") {
-    logger.rootStep(
-      `adding "workspaces" field to ${path.relative(
-        project.paths.root,
-        project.paths.packageJson
-      )}`
-    );
-    packageJson.workspaces = project.workspaceData.globs;
-  }
 
   // package manager
   logger.rootStep(
@@ -94,24 +87,35 @@ async function create(args: CreateArgs): Promise<void> {
   );
   packageJson.packageManager = `${to.name}@${to.version}`;
 
+  if (hasWorkspaces) {
+    // workspaces field
+    logger.rootStep(
+      `adding "workspaces" field to ${path.relative(
+        project.paths.root,
+        project.paths.packageJson
+      )}`
+    );
+    packageJson.workspaces = project.workspaceData.globs;
+
+    // root dependencies
+    updateDependencies({
+      workspace: { name: "root", paths: project.paths },
+      project,
+      to,
+      logger,
+      options,
+    });
+
+    // workspace dependencies
+    logger.workspaceHeader();
+    project.workspaceData.workspaces.forEach((workspace) =>
+      updateDependencies({ workspace, project, to, logger, options })
+    );
+  }
+
   if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
-
-  // root dependencies
-  updateDependencies({
-    workspace: { name: "root", paths: project.paths },
-    project,
-    to,
-    logger,
-    options,
-  });
-
-  // workspace dependencies
-  logger.workspaceHeader();
-  project.workspaceData.workspaces.forEach((workspace) =>
-    updateDependencies({ workspace, project, to, logger, options })
-  );
 }
 
 /**
@@ -122,37 +126,44 @@ async function create(args: CreateArgs): Promise<void> {
  *  2. Removing the node_modules directory
  */
 async function remove(args: RemoveArgs): Promise<void> {
-  const { project, to, logger, options } = args;
+  const { project, logger, options } = args;
+  const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  logger.mainStep(`Removing yarn workspaces`);
-  if (to.name !== "npm") {
-    const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
-    delete packageJson.workspaces;
+  logger.mainStep(
+    `Removing ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+  );
+  const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
+
+  if (hasWorkspaces) {
     logger.subStep(
       `removing "workspaces" field in ${project.name} root "package.json"`
     );
+    delete packageJson.workspaces;
+  }
 
-    if (!options?.dry) {
-      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
-      // collect all workspace node_modules directories
-      const allModulesDirs = [
-        project.paths.nodeModules,
-        ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules),
-      ];
+  logger.subStep(
+    `removing "packageManager" field in ${project.name} root "package.json"`
+  );
+  delete packageJson.packageManager;
 
-      try {
-        logger.subStep(`removing "node_modules"`);
-        await Promise.all(
-          allModulesDirs.map((dir) =>
-            fs.rm(dir, { recursive: true, force: true })
-          )
-        );
-      } catch (err) {
-        throw new ConvertError("Failed to remove node_modules");
-      }
+  if (!options?.dry) {
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+
+    // collect all workspace node_modules directories
+    const allModulesDirs = [
+      project.paths.nodeModules,
+      ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules),
+    ];
+    try {
+      logger.subStep(`removing "node_modules"`);
+      await Promise.all(
+        allModulesDirs.map((dir) =>
+          fs.rm(dir, { recursive: true, force: true })
+        )
+      );
+    } catch (err) {
+      throw new ConvertError("Failed to remove node_modules");
     }
-  } else {
-    logger.subStep(`nothing to be done`);
   }
 }
 
@@ -180,9 +191,11 @@ async function clean(args: CleanArgs): Promise<void> {
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, options } = args;
 
-  // remove the lockfile
-  if (!options?.dry) {
-    fs.rmSync(project.paths.lockfile, { force: true });
+  if (project.packageManager !== "yarn") {
+    // remove the lockfile
+    if (!options?.dry) {
+      fs.rmSync(project.paths.lockfile, { force: true });
+    }
   }
 }
 

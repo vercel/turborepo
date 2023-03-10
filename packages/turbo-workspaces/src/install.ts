@@ -79,23 +79,28 @@ async function install(args: InstallArgs) {
     `running "${packageManager.command} ${packageManager.installArgs}"`
   );
   if (!options?.dry) {
-    const spinner = ora({
-      text: "Installing dependencies...",
-      spinner: {
-        frames: logger.installerFrames(),
-      },
-    }).start();
+    let spinner;
+    if (options?.interactive) {
+      spinner = ora({
+        text: "Installing dependencies...",
+        spinner: {
+          frames: logger.installerFrames(),
+        },
+      }).start();
+    }
 
     try {
       await execa(packageManager.command, packageManager.installArgs, {
         cwd: args.project.paths.root,
       });
-      spinner.stop();
       logger.subStep(`dependencies installed`);
     } catch (err) {
-      spinner.stop();
       logger.subStepFailure(`failed to install dependencies`);
       throw err;
+    } finally {
+      if (spinner) {
+        spinner.stop();
+      }
     }
   }
 }

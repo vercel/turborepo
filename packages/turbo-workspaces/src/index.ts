@@ -1,8 +1,10 @@
 import { getAvailablePackageManagers } from "turbo-utils";
 import getWorkspaceDetails from "./getWorkspaceDetails";
-import { PackageManager, Options } from "./types";
+import type { PackageManager, Options, InstallArgs } from "./types";
 import { default as convert } from "./convert";
 import { Logger } from "./logger";
+import install from "./install";
+import MANAGERS from "./managers";
 
 async function convertMonorepo({
   root,
@@ -29,5 +31,5 @@ async function convertMonorepo({
   });
 }
 
-export { convertMonorepo, getWorkspaceDetails };
-export { default as MANAGERS } from "./managers";
+export type { PackageManager, Options, InstallArgs };
+export { convertMonorepo, getWorkspaceDetails, install, MANAGERS };

@@ -7,12 +7,13 @@ module.exports = {
   transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   collectCoverage: true,
+  verbose: true,
   coverageThreshold: {
     global: {
-      branches: 83,
-      functions: 80,
-      lines: 86,
-      statements: 86,
+      branches: 87,
+      functions: 92,
+      lines: 93,
+      statements: 93,
     },
   },
 };

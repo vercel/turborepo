@@ -1,6 +1,6 @@
 # `@turbo/workspaces`
 
-Easily convert your monorepo between package managers. Supports monorepos using either npm, yarn, or pnpm workspaces.
+Easily convert your repo between package managers. Supports both non-monorepos and monorepos (using package manager workspaces).
 
 ## CLI
 
