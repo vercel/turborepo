@@ -1,12 +1,13 @@
 use std::{
     env,
     env::current_dir,
+    ffi::OsString,
     fs::{self},
     io::Write,
     path::{Path, PathBuf},
     process,
     process::Stdio,
-    time::Duration, ffi::OsString,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -165,7 +166,7 @@ impl ShimArgs {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -176,13 +177,7 @@ struct PackageJson {
     version: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LocalTurboState {
-    bin_path: PathBuf,
-    version: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct YarnRc {
     pnp_unplugged_folder: PathBuf,
@@ -191,27 +186,30 @@ struct YarnRc {
 impl Default for YarnRc {
     fn default() -> Self {
         Self {
-            pnp_unplugged_folder: PathBuf::from("./.yarn/unplugged")
+            pnp_unplugged_folder: PathBuf::from("").join(".yarn").join("unplugged"),
         }
     }
 }
 
-fn get_unplugged_base_path(root_path: &Path) -> Result<PathBuf> {
-    let yarn_rc_filename = env::var_os("YARN_RC_FILENAME").unwrap_or(OsString::from(".yarnrc.yml"));
-    let yarn_rc_filepath = root_path.join(yarn_rc_filename);
-
-    let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath)?;
-    let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string)?;
-
-    Ok(yarn_rc.pnp_unplugged_folder)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurboState {
+    bin_path: Option<PathBuf>,
+    version: &'static str,
+    repo_state: Option<RepoState>,
 }
 
-impl LocalTurboState {
-    pub fn infer(repo_root: &Path) -> Option<Self> {
-        // We support six per-platform packages and one `turbo` package which handles
-        // indirection. We identify the per-platform package and execute the appropriate
-        // binary directly. We can choose to operate this aggressively because the
-        // _worst_ outcome is that we run global `turbo`.
+impl Default for TurboState {
+    fn default() -> Self {
+        Self {
+            bin_path: env::current_exe().ok(),
+            version: get_version(),
+            repo_state: None,
+        }
+    }
+}
+
+impl TurboState {
+    pub fn platform_package_name() -> String {
         let arch = {
             #[cfg(target_arch = "x86_64")]
             {
@@ -238,18 +236,114 @@ impl LocalTurboState {
             }
         };
 
-        let binary_name = {
+        format!("turbo-{}-{}", os, arch)
+    }
+
+    pub fn binary_name() -> String {
+        {
             #[cfg(windows)]
             {
-                "turbo.exe"
+                String::from("turbo.exe")
             }
             #[cfg(not(windows))]
             {
-                "turbo"
+                String::from("turbo")
             }
-        };
+        }
+    }
+}
 
-        let platform_package_name = format!("turbo-{}-{}", os, arch);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalTurboState {
+    bin_path: PathBuf,
+    version: String,
+}
+
+impl LocalTurboState {
+    // Hoisted strategy:
+    // - `npm install`
+    // - `yarn`
+    // - `yarn install --flat`
+    // - berry (nodeLinker: "node-modules")
+    //
+    // This also supports people directly depending upon the platform version.
+    fn generate_hoisted_path(root_path: &Path) -> Option<PathBuf> {
+        Some(root_path.join("node_modules"))
+    }
+
+    // Nested strategy:
+    // - `npm install --install-strategy=shallow` (`npm install --global-style`)
+    // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
+    // - berry (nodeLinker: "pnpm")
+    fn generate_nested_path(root_path: &Path) -> Option<PathBuf> {
+        Some(
+            root_path
+                .join("node_modules")
+                .join("turbo")
+                .join("node_modules"),
+        )
+    }
+
+    // Linked strategy:
+    // - `pnpm install`
+    // - `npm install --install-strategy=linked`
+    fn generate_linked_path(root_path: &Path) -> Option<PathBuf> {
+        fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()
+    }
+
+    // The unplugged directory doesn't have a fixed path.
+    fn get_unplugged_base_path(root_path: &Path) -> PathBuf {
+        let yarn_rc_filename =
+            env::var_os("YARN_RC_FILENAME").unwrap_or(OsString::from(".yarnrc.yml"));
+        let yarn_rc_filepath = root_path.join(yarn_rc_filename);
+
+        let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or(String::from(""));
+        let yarn_rc: YarnRc =
+            serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or(Default::default());
+
+        root_path.join(yarn_rc.pnp_unplugged_folder)
+    }
+
+    // Unplugged strategy:
+    // - berry 2.1+
+    fn generate_unplugged_path(root_path: &Path) -> Option<PathBuf> {
+        let platform_package_name = TurboState::platform_package_name();
+        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
+
+        unplugged_base_path
+            .read_dir()
+            .ok()
+            .and_then(|mut read_dir| {
+                // berry includes additional metadata in the filename.
+                // We actually have to find the platform package.
+                read_dir.find_map(|item| match item {
+                    Ok(entry) => {
+                        let file_name = entry.file_name();
+                        if file_name
+                            .to_string_lossy()
+                            .starts_with(&platform_package_name)
+                        {
+                            Some(unplugged_base_path.join(file_name).join("node_modules"))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                })
+            })
+    }
+
+    // We support six per-platform packages and one `turbo` package which handles
+    // indirection. We identify the per-platform package and execute the appropriate
+    // binary directly. We can choose to operate this aggressively because the
+    // _worst_ outcome is that we run global `turbo`.
+    //
+    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
+    // 2.1 PnP
+    pub fn infer(root_path: &Path) -> Option<Self> {
+        let platform_package_name = TurboState::platform_package_name();
+        let binary_name = TurboState::binary_name();
+
         let platform_package_json_path = Path::new("")
             .join(&platform_package_name)
             .join("package.json");
@@ -258,103 +352,45 @@ impl LocalTurboState {
             .join("bin")
             .join(&binary_name);
 
-        // Hoisted strategy:
-        // - `npm install`
-        // - `yarn`
-        // - berry (nodeLinker: "node-modules")
-        //
-        // This also supports people directly depending upon the platform version.
-        let hoisted_base_path_option = Some(
-            repo_root
-                .join("node_modules")
-        );
-
-        // Nested strategy:
-        // - `npm install --install-strategy=shallow` (`npm install --global-style`)
-        // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
-        let nested_base_path_option = Some(
-            repo_root
-                .join("node_modules")
-                .join("turbo")
-                .join("node_modules")
-        );
-
-        // Linked strategy:
-        // - `pnpm install`
-        // - `npm install --install-strategy=linked`
-        let linked_base_path_option = repo_root
-            .join("node_modules")
-            .join("turbo")
-            .join("..")
-            .canonicalize()
-            .ok();
-
-        // pnpm: with hoisting.
-        // TODO:
-
-        // yarn: we construct this so we can use it later in the closure.
-        let unplugged_base_path = repo_root
-            .join(".yarn")
-            .join("unplugged");
-
-        // yarn: unplugged directories don't have an obvious installation path.
-        let unplugged_base_path_option = unplugged_base_path
-            .read_dir()
-            .ok()
-            .and_then(|mut read_dir| {
-                read_dir.find_map(|item| {
-                    match item {
-                        Ok(entry) => {
-                            let file_name = entry.file_name();
-                            if file_name.to_string_lossy().starts_with(&platform_package_name) {
-                                Some(
-                                    unplugged_base_path
-                                        .join(file_name)
-                                        .join("node_modules")
-                                )
-                            } else {
-                                None
-                            }
-                        },
-                        Err(_) => None
-                    }
-                })
-            });
-
-        println!("{:?}", unplugged_base_path_option);
-
-        let search_locations = [
-            hoisted_base_path_option,
-            nested_base_path_option,
-            linked_base_path_option,
-            unplugged_base_path_option,
+        // These are lazy because the last two are more expensive.
+        let search_functions = [
+            Self::generate_hoisted_path,
+            Self::generate_nested_path,
+            Self::generate_linked_path,
+            Self::generate_unplugged_path,
         ];
 
-        for root in search_locations.iter().flatten() {
+        // Detecting the package manager is more expensive than just doing an exhaustive
+        // search.
+        for root in search_functions
+            .iter()
+            .filter_map(|search_function| search_function(&root_path))
+        {
             let bin_path = root.join(&platform_package_executable_path);
-            if bin_path.exists() {
-                let resolved_package_json_path = root.join(platform_package_json_path);
-                let platform_package_json_string =
-                    fs::read_to_string(&resolved_package_json_path).ok()?;
-                let platform_package_json: PackageJson =
-                    serde_json::from_str(&platform_package_json_string).ok()?;
+            match fs_canonicalize(&bin_path) {
+                Ok(bin_path) => {
+                    let resolved_package_json_path = root.join(platform_package_json_path);
+                    let platform_package_json_string =
+                        fs::read_to_string(&resolved_package_json_path).ok()?;
+                    let platform_package_json: PackageJson =
+                        serde_json::from_str(&platform_package_json_string).ok()?;
 
-                debug!("Local turbo path: {}", bin_path.display());
-                debug!("Local turbo version: {}", platform_package_json.version);
-                return Some(Self {
-                    bin_path,
-                    version: platform_package_json.version,
-                });
-            } else {
-                debug!("No local turbo binary found at: {}", bin_path.display());
+                    debug!("Local turbo path: {}", bin_path.display());
+                    debug!("Local turbo version: {}", platform_package_json.version);
+                    return Some(Self {
+                        bin_path,
+                        version: platform_package_json.version,
+                    });
+                }
+                Err(_) => debug!("No local turbo binary found at: {}", bin_path.display()),
             }
         }
 
-        return None
+        return None;
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepoState {
     pub root: PathBuf,
     pub mode: RepoMode,
@@ -1074,19 +1110,178 @@ mod test {
 
     #[test]
     fn test_local_state_infer() {
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm5-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm6-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm7-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm6-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm7-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm8-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-global-style")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-legacy-bundling")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-linked")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn1-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn2-turbo")).unwrap().bin_path);
-        println!("{:?}", LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn3-turbo")).unwrap().bin_path);
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm5-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("pnpm5-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm6-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("pnpm6-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm7-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("pnpm7-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/pnpm7-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("pnpm7-shame"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm6-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("npm6-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm7-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("npm7-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm8-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("npm8-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("npm9-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new(
+                "/Users/nathanhammond/repos/npm9-turbo-global-style"
+            ))
+            .unwrap_or(LocalTurboState {
+                bin_path: PathBuf::from("npm9-turbo-global-style"),
+                version: String::from("1"),
+            })
+            .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new(
+                "/Users/nathanhammond/repos/npm9-turbo-legacy-bundling"
+            ))
+            .unwrap_or(LocalTurboState {
+                bin_path: PathBuf::from("npm9-turbo-legacy-bundling"),
+                version: String::from("1"),
+            })
+            .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/npm9-turbo-linked"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("npm9-turbo-linked"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn1-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("yarn1-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn2-turbo"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("yarn2-turbo"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new(
+                "/Users/nathanhammond/repos/yarn3-nm-linker-global"
+            ))
+            .unwrap_or(LocalTurboState {
+                bin_path: PathBuf::from("yarn3-nm-linker-global"),
+                version: String::from("1"),
+            })
+            .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new(
+                "/Users/nathanhammond/repos/yarn3-nm-linker-local"
+            ))
+            .unwrap_or(LocalTurboState {
+                bin_path: PathBuf::from("yarn3-nm-linker-local"),
+                version: String::from("1"),
+            })
+            .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new(
+                "/Users/nathanhammond/repos/yarn3-nm-linker-classic"
+            ))
+            .unwrap_or(LocalTurboState {
+                bin_path: PathBuf::from("yarn3-nm-linker-classic"),
+                version: String::from("1"),
+            })
+            .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn3-pnp"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("yarn3-pnp"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
+        println!(
+            "{:?}",
+            LocalTurboState::infer(Path::new("/Users/nathanhammond/repos/yarn3-pnpm"))
+                .unwrap_or(LocalTurboState {
+                    bin_path: PathBuf::from("yarn3-pnpm"),
+                    version: String::from("1"),
+                })
+                .bin_path
+        );
     }
 
     #[test]
