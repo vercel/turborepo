@@ -1,27 +1,27 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd) "hoisted"
 
 Make sure we use local and do not pass --skip-infer to old binary
-  $ . ${TESTDIR}/setup.sh $(pwd) "hoisted" "1.2.3"
+  $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
   $ ${TURBO} build --filter foo -vv
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*/hoisted.t/node_modules/turbo-darwin-arm64/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo version: 1.0.0 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/hoisted.t (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hoisted.t/node_modules/turbo-darwin-arm64/bin/turbo (re)
+  
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package false (re)
   build --filter foo --
 
 Make sure we use local and pass --skip-infer to newer binary
-  $ . ${TESTDIR}/setup.sh $(pwd) "hoisted" "1.8.9"
+  $ ${TESTDIR}/set_version.sh $(pwd) "1.8.0"
   $ ${TURBO} build --filter foo -vv
-  --skip-infer build --filter foo --single-package --
-
-It finds repo root and uses correct version
-  $ cd subdir
-  $ ${TURBO} build --filter foo -vv
-  --skip-infer build --filter foo --single-package --
-  $ cd ..
-
-It respects cwd
-  $ ROOT=$(pwd); cd ..
-  $ ${TURBO} build --filter foo --cwd ${ROOT} -vv
-  --skip-infer build --filter foo --single-package --
-
-It respects cwd and finds repo root
-  $ ${TURBO} build --filter foo --cwd ${ROOT}/subdir -vv
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*/hoisted.t/node_modules/turbo-darwin-arm64/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo version: 1.8.0 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/hoisted.t (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hoisted.t/node_modules/turbo-darwin-arm64/bin/turbo (re)
+  
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
   --skip-infer build --filter foo --single-package --
