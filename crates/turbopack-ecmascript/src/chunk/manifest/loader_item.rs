@@ -5,10 +5,7 @@ use indoc::writedoc;
 use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbopack_core::{
     asset::Asset,
-    chunk::{
-        Chunk, ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkReferenceVc, ChunkingContext,
-        ChunkingContextVc,
-    },
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -64,16 +61,10 @@ impl ChunkItem for ManifestLoaderItem {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
-        Ok(AssetReferencesVc::cell(vec![
-            ChunkReferenceVc::new(self.manifest.manifest_chunk()).into(),
-            // This creates the chunk list corresponding to the manifest chunk's chunk group.
-            ChunkListReferenceVc::new(
-                self.manifest.await?.chunking_context.output_root(),
-                self.manifest.chunk_group(),
-                self.manifest.chunk_list_path(),
-            )
-            .into(),
-        ]))
+        Ok(AssetReferencesVc::cell(vec![ChunkReferenceVc::new(
+            self.manifest.manifest_chunk(),
+        )
+        .into()]))
     }
 }
 
@@ -140,9 +131,9 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
                 __turbopack_export_value__((__turbopack_import__) => {{
                     return __turbopack_load__({chunk_server_path}).then(() => {{
                         return __turbopack_require__({item_id});
-                    }}).then((chunks_paths) => {{
-                        __turbopack_register_chunk_list__({chunk_list_path}, chunks_paths);
-                        return Promise.all(chunks_paths.map((chunk_path) => __turbopack_load__(chunk_path)));
+                    }}).then(({{ chunks, list }}) => {{
+                        __turbopack_register_chunk_list__(list, chunks);
+                        return Promise.all(chunks.map((chunk_path) => __turbopack_load__(chunk_path)));
                     }}).then(() => {{
                         return __turbopack_import__({dynamic_id});
                     }});
@@ -151,11 +142,6 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
             chunk_server_path = stringify_js(chunk_server_path),
             item_id = stringify_js(item_id),
             dynamic_id = stringify_js(dynamic_id),
-            chunk_list_path = stringify_js(
-                output_root
-                    .get_path_to(&*this.manifest.chunk_list_path().await?)
-                    .ok_or(anyhow!("chunk list path is not in output root"))?
-            )
         )?;
 
         Ok(EcmascriptChunkItemContent {

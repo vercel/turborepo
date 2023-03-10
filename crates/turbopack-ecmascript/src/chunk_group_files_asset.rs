@@ -6,8 +6,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         availability_info::AvailabilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc,
+        ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc,
     },
     ident::AssetIdentVc,
     introspect::{
@@ -63,12 +62,6 @@ impl ChunkGroupFilesAssetVc {
                 )
             };
         Ok(chunk_group)
-    }
-
-    #[turbo_tasks::function]
-    async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
-        let this = &*self.await?;
-        Ok(this.chunking_context.chunk_list_path(this.asset.ident()))
     }
 }
 

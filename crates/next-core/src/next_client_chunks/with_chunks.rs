@@ -15,7 +15,7 @@ use turbopack_core::{
     chunk::{
         availability_info::AvailabilityInfo, Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem,
         ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc,
+        ChunkingContextVc,
     },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
@@ -49,14 +49,10 @@ impl Asset for WithChunksAsset {
     #[turbo_tasks::function]
     async fn references(self_vc: WithChunksAssetVc) -> Result<AssetReferencesVc> {
         let this = self_vc.await?;
+        let chunk_group = self_vc.chunk_group();
         Ok(AssetReferencesVc::cell(vec![
-            ChunkGroupReferenceVc::new(self_vc.chunk_group()).into(),
-            ChunkListReferenceVc::new(
-                this.server_root,
-                self_vc.chunk_group(),
-                self_vc.chunk_list_path(),
-            )
-            .into(),
+            ChunkGroupReferenceVc::new(chunk_group).into(),
+            ChunkListReferenceVc::new(this.server_root, chunk_group).into(),
         ]))
     }
 }
@@ -103,12 +99,6 @@ impl EcmascriptChunkPlaceable for WithChunksAsset {
 #[turbo_tasks::value_impl]
 impl WithChunksAssetVc {
     #[turbo_tasks::function]
-    async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
-        let this = self.await?;
-        Ok(this.chunking_context.chunk_list_path(self.ident()))
-    }
-
-    #[turbo_tasks::function]
     async fn chunk_group(self) -> Result<ChunkGroupVc> {
         let this = self.await?;
         Ok(ChunkGroupVc::from_asset(
@@ -142,7 +132,7 @@ impl EcmascriptChunkItem for WithChunksChunkItem {
         let server_root = inner.server_root.await?;
         let mut client_chunks = Vec::new();
 
-        let chunk_list_path = self.inner.chunk_list_path().await?;
+        let chunk_list_path = group.chunk_list_path().await?;
         let chunk_list_path = if let Some(path) = server_root.get_path_to(&chunk_list_path) {
             path
         } else {

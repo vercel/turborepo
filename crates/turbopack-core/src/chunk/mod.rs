@@ -89,9 +89,9 @@ pub trait ChunkingContext {
 
     fn chunk_path(&self, ident: AssetIdentVc, extension: &str) -> FileSystemPathVc;
 
-    /// Returns the path to the chunk list file for the given entry module
-    /// ident.
-    fn chunk_list_path(&self, ident: AssetIdentVc) -> FileSystemPathVc;
+    /// Returns the path to the chunk list file for the given unoptimized entry
+    /// chunk path.
+    fn chunk_list_path(&self, entry_chunk_path: FileSystemPathVc) -> FileSystemPathVc;
 
     fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> BoolVc;
 
@@ -142,6 +142,22 @@ impl ChunkGroupVc {
     #[turbo_tasks::function]
     pub fn from_chunk(chunk: ChunkVc) -> Self {
         Self::cell(ChunkGroup { entry: chunk })
+    }
+
+    /// Returns the entry chunk of this chunk group.
+    #[turbo_tasks::function]
+    pub async fn entry(self) -> Result<ChunkVc> {
+        Ok(self.await?.entry)
+    }
+
+    /// Returns the chunk list path for this chunk group.
+    #[turbo_tasks::function]
+    pub async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
+        let this = self.await?;
+        Ok(this
+            .entry
+            .chunking_context()
+            .chunk_list_path(this.entry.ident().path()))
     }
 
     /// Lists all chunks that are in this chunk group.
@@ -231,6 +247,7 @@ impl ValueToString for ChunkGroup {
 /// same chunk group.
 #[turbo_tasks::value_trait]
 pub trait Chunk: Asset {
+    fn chunking_context(&self) -> ChunkingContextVc;
     // TODO Once output assets have their own trait, this path() method will move
     // into that trait and ident() will be removed from that. Assets on the
     // output-level only have a path and no complex ident.

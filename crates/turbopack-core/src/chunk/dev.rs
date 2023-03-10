@@ -223,8 +223,14 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
-    fn chunk_list_path(self_vc: DevChunkingContextVc, ident: AssetIdentVc) -> FileSystemPathVc {
-        self_vc.chunk_path(ident.with_modifier(chunk_list_modifier()), ".json")
+    fn chunk_list_path(
+        self_vc: DevChunkingContextVc,
+        entry_chunk_path: FileSystemPathVc,
+    ) -> FileSystemPathVc {
+        self_vc.chunk_path(
+            AssetIdentVc::from_path(entry_chunk_path).with_modifier(chunk_list_modifier()),
+            ".json",
+        )
     }
 
     #[turbo_tasks::function]

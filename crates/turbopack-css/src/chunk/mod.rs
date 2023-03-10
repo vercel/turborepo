@@ -271,7 +271,12 @@ async fn css_chunk_content_single_entry(
 }
 
 #[turbo_tasks::value_impl]
-impl Chunk for CssChunk {}
+impl Chunk for CssChunk {
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.context
+    }
+}
 
 #[turbo_tasks::value_impl]
 impl OptimizableChunk for CssChunk {

@@ -121,7 +121,6 @@ impl EcmascriptChunkVc {
                 EcmascriptChunkEvaluate {
                     evaluate_entries: entries,
                     chunk_group: None,
-                    chunk_list_path: Some(context.chunk_list_path(main_entry.ident())),
                 }
                 .cell(),
             ),
@@ -213,7 +212,12 @@ pub struct EcmascriptChunkComparison {
 }
 
 #[turbo_tasks::value_impl]
-impl Chunk for EcmascriptChunk {}
+impl Chunk for EcmascriptChunk {
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.context
+    }
+}
 
 #[turbo_tasks::value_impl]
 impl OptimizableChunk for EcmascriptChunk {
@@ -378,22 +382,25 @@ impl Asset for EcmascriptChunk {
         // Evaluate info is included
         let mut modifiers = Vec::new();
         if let Some(evaluate) = this.evaluate {
-            let evaluate = evaluate.content(this.context, self_vc).await?;
+            let evaluate = evaluate.await?;
             modifiers.extend(
                 evaluate
-                    .ecma_chunks_server_paths
+                    .evaluate_entries
+                    .await?
                     .iter()
-                    .cloned()
-                    .map(StringVc::cell),
+                    .map(|entry| entry.ident().to_string()),
             );
-            modifiers.extend(
-                evaluate
-                    .other_chunks_server_paths
-                    .iter()
-                    .cloned()
-                    .map(StringVc::cell),
-            );
-            modifiers.extend(evaluate.entry_modules_ids.iter().map(|id| id.to_string()));
+            // When the chunk group has changed, e.g. due to optimization, we want to
+            // include the information too. Since the optimization is
+            // deterministic, it's enough to include the entry chunk which is the only
+            // factor that influences the chunk group chunks.
+            // We want to avoid a cycle when this chunk is the entry chunk.
+            if let Some(chunk_group) = evaluate.chunk_group {
+                let entry = chunk_group.entry().resolve().await?;
+                if entry != self_vc.into() {
+                    modifiers.push(entry.ident().to_string());
+                }
+            }
         }
 
         // Available assets are included
@@ -445,23 +452,11 @@ impl Asset for EcmascriptChunk {
             references.push(ChunkGroupReferenceVc::new(*chunk_group).into());
         }
         if let Some(evaluate) = this.evaluate {
-            let EcmascriptChunkEvaluate {
-                chunk_list_path,
-                chunk_group,
-                ..
-            } = *evaluate.await?;
-            if let Some(chunk_list_path) = chunk_list_path {
-                let chunk_group =
-                    chunk_group.unwrap_or_else(|| ChunkGroupVc::from_chunk(self_vc.into()));
-                references.push(
-                    ChunkListReferenceVc::new(
-                        this.context.output_root(),
-                        chunk_group,
-                        chunk_list_path,
-                    )
-                    .into(),
-                );
-            }
+            let EcmascriptChunkEvaluate { chunk_group, .. } = *evaluate.await?;
+            let chunk_group =
+                chunk_group.unwrap_or_else(|| ChunkGroupVc::from_chunk(self_vc.into()));
+            references
+                .push(ChunkListReferenceVc::new(this.context.output_root(), chunk_group).into());
         }
         references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
 

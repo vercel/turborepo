@@ -1,11 +1,12 @@
+use std::iter::once;
+
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
-        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkListReferenceVc, ChunkReferenceVc,
+        ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
@@ -74,23 +75,9 @@ impl ManifestChunkAssetVc {
     }
 
     #[turbo_tasks::function]
-    pub(super) async fn chunk_list_path(self) -> Result<FileSystemPathVc> {
-        let this = &*self.await?;
-        Ok(this.chunking_context.chunk_list_path(self.ident()))
-    }
-
-    #[turbo_tasks::function]
     pub async fn manifest_chunk(self) -> Result<ChunkVc> {
         let this = self.await?;
         Ok(self.as_chunk(this.chunking_context, Value::new(this.availability_info)))
-    }
-
-    #[turbo_tasks::function]
-    async fn chunks_list_path(self) -> Result<FileSystemPathVc> {
-        Ok(self
-            .await?
-            .chunking_context
-            .chunk_path(self.ident().with_modifier(chunk_list_modifier()), ".json"))
     }
 }
 
@@ -108,7 +95,8 @@ impl Asset for ManifestChunkAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: ManifestChunkAssetVc) -> Result<AssetReferencesVc> {
-        let chunks = self_vc.chunk_group().chunks();
+        let chunk_group = self_vc.chunk_group();
+        let chunks = chunk_group.chunks();
 
         Ok(AssetReferencesVc::cell(
             chunks
@@ -117,6 +105,15 @@ impl Asset for ManifestChunkAsset {
                 .copied()
                 .map(ChunkReferenceVc::new)
                 .map(Into::into)
+                .chain(once(
+                    // This creates the chunk list corresponding to the manifest chunk's chunk
+                    // group.
+                    ChunkListReferenceVc::new(
+                        self_vc.await?.chunking_context.output_root(),
+                        chunk_group,
+                    )
+                    .into(),
+                ))
                 .collect(),
         ))
     }
