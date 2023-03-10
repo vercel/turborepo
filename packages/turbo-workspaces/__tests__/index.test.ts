@@ -1,7 +1,7 @@
 import path from "path";
 import * as turboUtils from "turbo-utils";
 import { setupTestFixtures } from "turbo-test-utils";
-import { getWorkspaceDetails, convertMonorepo } from "../src";
+import { getWorkspaceDetails, convert } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 import execa from "execa";
 
@@ -49,19 +49,19 @@ describe("Node entrypoint", () => {
         expect(details.packageManager).toBe(fixtureManager);
 
         // convert
-        const convert = () =>
-          convertMonorepo({
+        const convertWrapper = () =>
+          convert({
             root,
             to: toManager,
             options: { interactive, dry, skipInstall: !install },
           });
 
         if (fixtureManager === toManager) {
-          await expect(convert()).rejects.toThrowError(
+          await expect(convertWrapper()).rejects.toThrowError(
             "You are already using this package manager"
           );
         } else {
-          await expect(convert()).resolves.toBeUndefined();
+          await expect(convertWrapper()).resolves.toBeUndefined();
           // read again
           const convertedDetails = await getWorkspaceDetails({
             root,

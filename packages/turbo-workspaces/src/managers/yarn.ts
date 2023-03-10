@@ -12,7 +12,7 @@ import {
   Project,
 } from "../types";
 import {
-  getWorkspaceName,
+  getWorkspaceInfo,
   getPackageJson,
   expandPaths,
   expandWorkspaces,
@@ -43,8 +43,10 @@ async function read(args: ReadArgs): Promise<Project> {
   }
 
   const packageJson = getPackageJson(args);
+  const { name, description } = getWorkspaceInfo(args);
   return {
-    name: getWorkspaceName(args),
+    name,
+    description,
     packageManager: "yarn",
     paths: expandPaths({
       root: args.workspaceRoot,
@@ -97,6 +99,10 @@ async function create(args: CreateArgs): Promise<void> {
     );
     packageJson.workspaces = project.workspaceData.globs;
 
+    if (!options?.dry) {
+      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    }
+
     // root dependencies
     updateDependencies({
       workspace: { name: "root", paths: project.paths },
@@ -111,10 +117,10 @@ async function create(args: CreateArgs): Promise<void> {
     project.workspaceData.workspaces.forEach((workspace) =>
       updateDependencies({ workspace, project, to, logger, options })
     );
-  }
-
-  if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+  } else {
+    if (!options?.dry) {
+      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    }
   }
 }
 

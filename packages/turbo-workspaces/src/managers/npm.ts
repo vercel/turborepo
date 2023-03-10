@@ -13,7 +13,7 @@ import {
   ManagerHandler,
 } from "../types";
 import {
-  getWorkspaceName,
+  getWorkspaceInfo,
   getPackageJson,
   expandWorkspaces,
   getWorkspacePackageManager,
@@ -44,8 +44,10 @@ async function read(args: ReadArgs): Promise<Project> {
   }
 
   const packageJson = getPackageJson(args);
+  const { name, description } = getWorkspaceInfo(args);
   return {
-    name: getWorkspaceName(args),
+    name,
+    description,
     packageManager: "npm",
     paths: expandPaths({
       root: args.workspaceRoot,
@@ -79,18 +81,29 @@ async function create(args: CreateArgs): Promise<void> {
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
 
-  // set package manager field
+  // package manager
   logger.rootStep(
-    `adding "packageManager" field to ${project.name} root "package.json"`
+    `adding "packageManager" field to ${path.relative(
+      project.paths.root,
+      project.paths.packageJson
+    )}`
   );
   packageJson.packageManager = `${to.name}@${to.version}`;
 
   if (hasWorkspaces) {
     // workspaces field
     logger.rootStep(
-      `adding "workspaces" field to ${project.name} root "package.json"`
+      `adding "workspaces" field to ${path.relative(
+        project.paths.root,
+        project.paths.packageJson
+      )}`
     );
     packageJson.workspaces = project.workspaceData.globs;
+
+    // write package.json here instead of deferring to avoid negating the changes made by updateDependencies
+    if (!options?.dry) {
+      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    }
 
     // root dependencies
     updateDependencies({
@@ -106,10 +119,10 @@ async function create(args: CreateArgs): Promise<void> {
     project.workspaceData.workspaces.forEach((workspace) =>
       updateDependencies({ workspace, project, to, logger, options })
     );
-  }
-
-  if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+  } else {
+    if (!options?.dry) {
+      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    }
   }
 }
 

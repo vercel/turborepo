@@ -2,8 +2,10 @@ import execa from "execa";
 import ora from "ora";
 import { satisfies } from "semver";
 import { ConvertError } from "./errors";
+import { Logger } from "./logger";
 import {
   PackageManager,
+  PackageManagerDetails,
   PackageManagerInstallDetails,
   InstallArgs,
 } from "./types";
@@ -21,6 +23,7 @@ export const PACKAGE_MANAGERS: Record<
       version: "latest",
       executable: "npx",
       semver: "*",
+      default: true,
     },
   ],
   pnpm: [
@@ -41,6 +44,7 @@ export const PACKAGE_MANAGERS: Record<
       version: "latest",
       executable: "pnpm dlx",
       semver: ">=7",
+      default: true,
     },
   ],
   yarn: [
@@ -52,6 +56,7 @@ export const PACKAGE_MANAGERS: Record<
       version: "1.x",
       executable: "npx",
       semver: "<2",
+      default: true,
     },
     {
       name: "berry",
@@ -65,17 +70,33 @@ export const PACKAGE_MANAGERS: Record<
   ],
 };
 
-async function install(args: InstallArgs) {
+export function getPackageManagerMeta(packageManager: PackageManagerDetails) {
+  const { version, name } = packageManager;
+
+  let pm = PACKAGE_MANAGERS[name].find((manager) => {
+    return manager.default;
+  });
+
+  if (version) {
+    pm = PACKAGE_MANAGERS[name].find((manager) =>
+      satisfies(version, manager.semver)
+    );
+  }
+
+  return pm;
+}
+
+export default async function install(args: InstallArgs) {
   const { to, logger, options } = args;
-  let packageManager = PACKAGE_MANAGERS[to.name].find((manager) =>
-    satisfies(to.version, manager.semver)
-  );
+
+  const installLogger = logger ?? new Logger(options);
+  const packageManager = getPackageManagerMeta(to);
 
   if (!packageManager) {
     throw new ConvertError("Unsupported package manager version.");
   }
 
-  logger.subStep(
+  installLogger.subStep(
     `running "${packageManager.command} ${packageManager.installArgs}"`
   );
   if (!options?.dry) {
@@ -84,7 +105,7 @@ async function install(args: InstallArgs) {
       spinner = ora({
         text: "Installing dependencies...",
         spinner: {
-          frames: logger.installerFrames(),
+          frames: installLogger.installerFrames(),
         },
       }).start();
     }
@@ -93,9 +114,9 @@ async function install(args: InstallArgs) {
       await execa(packageManager.command, packageManager.installArgs, {
         cwd: args.project.paths.root,
       });
-      logger.subStep(`dependencies installed`);
+      installLogger.subStep(`dependencies installed`);
     } catch (err) {
-      logger.subStepFailure(`failed to install dependencies`);
+      installLogger.subStepFailure(`failed to install dependencies`);
       throw err;
     } finally {
       if (spinner) {
@@ -104,5 +125,3 @@ async function install(args: InstallArgs) {
     }
   }
 }
-
-export default install;

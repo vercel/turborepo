@@ -15,7 +15,7 @@ import {
 } from "../types";
 import {
   expandPaths,
-  getWorkspaceName,
+  getWorkspaceInfo,
   expandWorkspaces,
   getPnpmWorkspaces,
   getPackageJson,
@@ -50,8 +50,10 @@ async function read(args: ReadArgs): Promise<Project> {
     throw new ConvertError("Not a pnpm project");
   }
 
+  const { name, description } = getWorkspaceInfo(args);
   return {
-    name: getWorkspaceName(args),
+    name,
+    description,
     packageManager: "pnpm",
     paths: expandPaths({
       root: args.workspaceRoot,

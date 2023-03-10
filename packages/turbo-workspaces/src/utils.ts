@@ -54,17 +54,19 @@ function getWorkspacePackageManager({
   return undefined;
 }
 
-function getWorkspaceName({
-  workspaceRoot,
-}: {
-  workspaceRoot: string;
-}): string {
+function getWorkspaceInfo({ workspaceRoot }: { workspaceRoot: string }): {
+  name: string;
+  description?: string;
+} {
   const packageJson = getPackageJson({ workspaceRoot });
-  if (packageJson.name) {
-    return packageJson.name;
-  }
   const workspaceDirectory = path.basename(workspaceRoot);
-  return workspaceDirectory;
+
+  const { name = workspaceDirectory, description } = packageJson;
+
+  return {
+    name,
+    description,
+  };
 }
 
 function getPnpmWorkspaces({
@@ -137,9 +139,10 @@ function expandWorkspaces({
     })
     .map((workspacePackageJson) => {
       const workspaceRoot = path.dirname(workspacePackageJson);
-      const name = getWorkspaceName({ workspaceRoot });
+      const { name, description } = getWorkspaceInfo({ workspaceRoot });
       return {
         name,
+        description,
         paths: {
           root: workspaceRoot,
           packageJson: workspacePackageJson,
@@ -157,7 +160,7 @@ function directoryInfo({ directory }: { directory: string }) {
 export {
   getPackageJson,
   getWorkspacePackageManager,
-  getWorkspaceName,
+  getWorkspaceInfo,
   expandPaths,
   expandWorkspaces,
   getPnpmWorkspaces,
