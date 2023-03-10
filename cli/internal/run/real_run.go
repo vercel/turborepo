@@ -44,7 +44,6 @@ func RealRun(
 	runSummary *runsummary.RunSummary,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
-	runState *RunState,
 ) error {
 	singlePackage := rs.Opts.runOpts.singlePackage
 
@@ -72,7 +71,7 @@ func RealRun(
 
 	ec := &execContext{
 		colorCache:      colorCache,
-		runState:        runState,
+		runSummary:      runSummary,
 		rs:              rs,
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
@@ -94,8 +93,14 @@ func RealRun(
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		taskSummaries = append(taskSummaries, taskSummary)
+
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
+		if err != nil {
+			return err
+		}
+		taskSummary.Execution = taskExecutionSummary
+		return nil
 	}
 
 	getArgs := func(taskID string) []string {
@@ -124,9 +129,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	if err := runState.Close(base.UI); err != nil {
-		return errors.Wrap(err, "error with profiler")
-	}
+	runSummary.Close(base.UI)
 
 	// Write Run Summary if we wanted to
 	if rs.Opts.runOpts.summarize {
@@ -145,7 +148,7 @@ func RealRun(
 
 type execContext struct {
 	colorCache      *colorcache.ColorCache
-	runState        *RunState
+	runSummary      *runsummary.RunSummary
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
@@ -167,14 +170,14 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
 	cmdTime := time.Now()
 
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer := ec.runState.Run(packageTask.TaskID)
+	tracer, taskExecutionSummary := ec.runSummary.TrackTask(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
@@ -187,7 +190,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
+		return taskExecutionSummary, nil
 	}
 
 	var prefix string
@@ -214,8 +217,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
-		tracer(TargetCached, nil)
-		return nil
+		tracer(runsummary.TargetCached, nil)
+		return taskExecutionSummary, nil
 	}
 
 	// Setup command execution
@@ -236,7 +239,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// be careful about this conditional given the default of cache = true
 	writer, err := taskCache.OutputWriter(prettyPrefix)
 	if err != nil {
-		tracer(TargetBuildFailed, err)
+		tracer(runsummary.TargetBuildFailed, err)
+
 		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			os.Exit(1)
@@ -285,9 +289,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
-			return nil
+			return taskExecutionSummary, nil
 		}
-		tracer(TargetBuildFailed, err)
+		tracer(runsummary.TargetBuildFailed, err)
+
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.continueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -299,7 +304,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 
-		return err
+		return taskExecutionSummary, err
 	}
 
 	duration := time.Since(cmdTime)
@@ -313,7 +318,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(TargetBuilt, nil)
+	tracer(runsummary.TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
+	return taskExecutionSummary, nil
 }

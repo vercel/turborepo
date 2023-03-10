@@ -351,6 +351,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
+		startAt,
+		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,
 		packagesInScope,
 		runsummary.NewGlobalHashSummary(
@@ -376,8 +378,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		)
 	}
 
-	// RunState captures the runtime results for this run (e.g. timings of each task and profile)
-	runState := NewRunState(startAt, r.opts.runOpts.profile)
 	// Regular run
 	return RealRun(
 		ctx,
@@ -392,7 +392,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
 		r.processes,
-		runState,
 	)
 }
 
