@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -89,9 +90,15 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	mu := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		mu.Lock()
+		taskSummaries = append(taskSummaries, taskSummary)
+		// don't hold the lock while we run ec.exec
+		mu.Unlock()
+
 		taskSummaries = append(taskSummaries, taskSummary)
 
 		// deps here are passed in to calculate the task hash
