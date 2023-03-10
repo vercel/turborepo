@@ -41,17 +41,17 @@ builds:
         env:
           - CC=zig cc -target x86_64-linux-musl
           - CXX=zig c++ -target x86_64-linux-musl
-#      - goos: windows
-#        goarch: arm64
-#        env:
-#          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
-#          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
-#      - goos: windows
-#        goarch: amd64
-#        goamd64: v1
-#        env:
-#          - CC=x86_64-w64-mingw32-gcc
-#          - CXX=x86_64-w64-mingw32-g++
+      - goos: windows
+        goarch: arm64
+        env:
+          - CC=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-gcc
+          - CXX=/llvm-mingw/llvm-mingw/bin/aarch64-w64-mingw32-g++
+      - goos: windows
+        goarch: amd64
+        goamd64: v1
+        env:
+          - CC=x86_64-w64-mingw32-gcc
+          - CXX=x86_64-w64-mingw32-g++
 
 archives:
   - format: binary
