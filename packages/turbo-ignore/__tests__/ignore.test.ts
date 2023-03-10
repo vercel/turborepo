@@ -220,7 +220,7 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
     expect(mockConsole.error).toHaveBeenLastCalledWith(
       "≫  ",
-      "monorepo root not found. turbo-ignore inferencing failed"
+      "Monorepo root not found. turbo-ignore inferencing failed"
     );
   });
 
@@ -250,7 +250,7 @@ describe("turboIgnore()", () => {
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       4,
       "≫  ",
-      'no previous deployments found for "test-app" on branch "my-branch".'
+      'No previous deployments found for "test-app" on branch "my-branch".'
     );
     expectBuild(mockExit);
   });
@@ -279,12 +279,12 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        `found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
-        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
-        "this project and its dependencies are not affected",
-        () => expect.stringContaining("⬜️  ignoring the change"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        `Found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
+        "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        "This project and its dependencies are not affected",
+        () => expect.stringContaining("⏭ Ignoring the change"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -319,12 +319,12 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "workspace#build" as the task from the arguments',
-        'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        'analyzing results of `npx turbo run "workspace#build" --filter=test-app...[last-deployed-sha] --dry=json`',
-        'this commit affects "test-app"',
-        () => expect.stringContaining("✅  proceeding with deployment"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "workspace#build" as the task from the arguments',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        'Analyzing results of `npx turbo run "workspace#build" --filter=test-app...[last-deployed-sha] --dry=json`',
+        'This commit affects "test-app"',
+        () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -358,12 +358,12 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
-        'this commit affects "test-app" and 1 dependency (ui)',
-        () => expect.stringContaining("✅  proceeding with deployment"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        'This commit affects "test-app" and 1 dependency (ui)',
+        () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -397,12 +397,12 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
-        'this commit affects "test-app" and 2 dependencies (ui, tsconfig)',
-        () => expect.stringContaining("✅  proceeding with deployment"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        'This commit affects "test-app" and 2 dependencies (ui, tsconfig)',
+        () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -435,7 +435,7 @@ describe("turboIgnore()", () => {
     );
     validateLogs(
       [
-        "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
+        "Failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
       ],
       mockConsole.error,
       { prefix: "≫  " }
@@ -472,7 +472,7 @@ describe("turboIgnore()", () => {
     );
     validateLogs(
       [
-        "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
+        "Failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
       ],
       mockConsole.error,
       { prefix: "≫  " }
@@ -495,10 +495,10 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        "found commit message: [vercel skip]",
-        () => expect.stringContaining("⬜️  ignoring the change"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        "Found commit message: [vercel skip]",
+        () => expect.stringContaining("⏭ Ignoring the change"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -520,10 +520,10 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        "found commit message: [vercel deploy]",
-        () => expect.stringContaining("✅  proceeding with deployment"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        "Found commit message: [vercel deploy]",
+        () => expect.stringContaining("✓ Proceeding with deployment"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
@@ -560,13 +560,13 @@ describe("turboIgnore()", () => {
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
-        'inferred "test-app" as workspace from "package.json"',
-        'using "build" as the task as it was unspecified',
-        "conflicting commit messages found: [vercel deploy] and [vercel skip]",
-        `found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
-        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
-        "this project and its dependencies are not affected",
-        () => expect.stringContaining("⬜️  ignoring the change"),
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "build" as the task as it was unspecified',
+        "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
+        `Found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
+        "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        "This project and its dependencies are not affected",
+        () => expect.stringContaining("⏭ Ignoring the change"),
       ],
       mockConsole.log,
       { prefix: "≫  " }
