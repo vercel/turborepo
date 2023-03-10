@@ -21,7 +21,7 @@ __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/imports/d
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/bb804_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js_e3a1b5._.json", []);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js.chunk-list.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/index.js (ecmascript)");
 }
 ]);

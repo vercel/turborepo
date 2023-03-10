@@ -7,7 +7,7 @@
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/b4f97_tests_snapshot_css_absolute-uri-import_input_index_e73f78.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_e73f78.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)");
 }
 ]);

@@ -25,7 +25,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/b58a4_tests_snapshot_import-meta_esm-multiple_input_index_8687d1.js_e3a1b5._.json", []);
+    registerChunkList("output/79fb1_turbopack-tests_tests_snapshot_import-meta_esm-multiple_input_index_8687d1.js.chunk-list.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-multiple/input/index.js (ecmascript)");
 }
 ]);

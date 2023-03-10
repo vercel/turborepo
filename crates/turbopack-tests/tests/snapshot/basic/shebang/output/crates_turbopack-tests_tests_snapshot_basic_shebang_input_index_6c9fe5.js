@@ -10,7 +10,7 @@ __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/d1787_foo_index_ea748e.js"))) return true;
-    registerChunkList("output/89a5c_turbopack-tests_tests_snapshot_basic_shebang_input_index_fdfba0.js_e3a1b5._.json", ["output/d1787_foo_index_ea748e.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_fdfba0.js.chunk-list.json", ["output/d1787_foo_index_ea748e.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/shebang/input/index.js (ecmascript)");
 }
 ]);

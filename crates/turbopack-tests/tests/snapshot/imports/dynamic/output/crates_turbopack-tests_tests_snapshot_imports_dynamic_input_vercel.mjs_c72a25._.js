@@ -4,7 +4,7 @@
 
 __turbopack_export_value__({ chunks: [
   "output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_vercel.mjs_d12c37._.js"
-], list: "output/254ef_tests_snapshot_imports_dynamic_input_vercel.mjs_d12c37._.js_e3a1b5._.json" });
+], list: "output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_vercel.mjs_d12c37._.js.chunk-list.json" });
 
 })()),
 }]);

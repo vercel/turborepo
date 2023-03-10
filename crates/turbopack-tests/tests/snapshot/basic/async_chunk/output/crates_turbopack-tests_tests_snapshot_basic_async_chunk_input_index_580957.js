@@ -33,7 +33,7 @@ __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/basic/asy
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_450749.js") && loadedChunks.has("output/20803_bar_index_309a59.js"))) return true;
-    registerChunkList("output/269ea_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_580957.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_450749.js","output/20803_bar_index_309a59.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_580957.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_basic_async_chunk_input_index_450749.js","output/20803_bar_index_309a59.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/index.js (ecmascript)");
 }
 ]);

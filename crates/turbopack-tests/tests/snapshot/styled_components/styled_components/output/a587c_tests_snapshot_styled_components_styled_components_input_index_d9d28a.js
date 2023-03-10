@@ -16,7 +16,7 @@ console.log(MyButton);
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/63a02_styled-components_index_7ff1d5.js") && loadedChunks.has("output/a587c_tests_snapshot_styled_components_styled_components_input_index_56786e.js"))) return true;
-    registerChunkList("output/90245_tests_snapshot_styled_components_styled_components_input_index_d9d28a.js_e3a1b5._.json", ["output/63a02_styled-components_index_7ff1d5.js","output/a587c_tests_snapshot_styled_components_styled_components_input_index_56786e.js"]);
+    registerChunkList("output/a587c_tests_snapshot_styled_components_styled_components_input_index_d9d28a.js.chunk-list.json", ["output/63a02_styled-components_index_7ff1d5.js","output/a587c_tests_snapshot_styled_components_styled_components_input_index_56786e.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/styled_components/styled_components/input/index.js (ecmascript)");
 }
 ]);

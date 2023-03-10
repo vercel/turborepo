@@ -9,7 +9,7 @@ var __TURBOPACK__external__node$3a$fs__ = __turbopack_external_require__("node:f
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/f1985_tests_snapshot_node_node_protocol_external_input_index_69be78.js_e3a1b5._.json", []);
+    registerChunkList("output/79fb1_turbopack-tests_tests_snapshot_node_node_protocol_external_input_index_69be78.js.chunk-list.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/node/node_protocol_external/input/index.js (ecmascript)");
 }
 ]);

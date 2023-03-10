@@ -7,7 +7,7 @@ console.log("hello world");
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/bee30_turbopack-tests_tests_snapshot_example_example_input_index_0a08ce.js_e3a1b5._.json", []);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_example_example_input_index_0a08ce.js.chunk-list.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/example/example/input/index.js (ecmascript)");
 }
 ]);

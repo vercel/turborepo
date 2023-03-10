@@ -24,7 +24,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_c686f7.js"))) return true;
-    registerChunkList("output/de719_turbopack-tests_tests_snapshot_import-meta_url_input_index_5f69bf.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_c686f7.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_5f69bf.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_c686f7.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/index.js (ecmascript)");
 }
 ]);

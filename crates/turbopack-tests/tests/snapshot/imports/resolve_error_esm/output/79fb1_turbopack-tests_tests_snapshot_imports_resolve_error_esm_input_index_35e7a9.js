@@ -15,7 +15,7 @@ console.log({}[dne]);
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true)) return true;
-    registerChunkList("output/e04c9_tests_snapshot_imports_resolve_error_esm_input_index_af6491.js_e3a1b5._.json", []);
+    registerChunkList("output/79fb1_turbopack-tests_tests_snapshot_imports_resolve_error_esm_input_index_af6491.js.chunk-list.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/resolve_error_esm/input/index.js (ecmascript)");
 }
 ]);

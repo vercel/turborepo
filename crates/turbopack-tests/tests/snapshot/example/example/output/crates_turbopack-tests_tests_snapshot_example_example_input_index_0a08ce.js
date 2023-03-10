@@ -7,7 +7,7 @@ console.log("hello world");
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_example_example_input_index_673f1c.js"))) return true;
-    registerChunkList("output/bee30_turbopack-tests_tests_snapshot_example_example_input_index_0a08ce.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_example_example_input_index_673f1c.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_example_example_input_index_0a08ce.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_example_example_input_index_673f1c.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/example/example/input/index.js (ecmascript)");
 }
 ]);

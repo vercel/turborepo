@@ -15,7 +15,7 @@ console.log(Foo, [].includes("foo"));
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/63a02_@swc_helpers_src__class_call_check.mjs_926eaa._.js") && loadedChunks.has("output/79fb1_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_bc3760.js"))) return true;
-    registerChunkList("output/822b1_tests_snapshot_swc_transforms_preset_env_input_index_83e217.js_e3a1b5._.json", ["output/63a02_@swc_helpers_src__class_call_check.mjs_926eaa._.js","output/79fb1_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_bc3760.js"]);
+    registerChunkList("output/79fb1_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_83e217.js.chunk-list.json", ["output/63a02_@swc_helpers_src__class_call_check.mjs_926eaa._.js","output/79fb1_turbopack-tests_tests_snapshot_swc_transforms_preset_env_input_index_bc3760.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/preset_env/input/index.js (ecmascript)");
 }
 ]);

@@ -33,7 +33,7 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_82c83d.js"))) return true;
-    registerChunkList("output/24bd4_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_d5f22a.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_82c83d.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_d5f22a.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_82c83d.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-2/input/index.js (ecmascript)");
 }
 ]);

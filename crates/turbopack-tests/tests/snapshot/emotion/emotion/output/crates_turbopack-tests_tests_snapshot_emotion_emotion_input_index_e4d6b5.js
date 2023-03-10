@@ -30,7 +30,7 @@ console.log(StyledButton, ClassNameButton);
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/63a02_@emotion_react_jsx-dev-runtime_5103e7.js") && loadedChunks.has("output/63a02_@emotion_react_index_19c07f.js") && loadedChunks.has("output/63a02_@emotion_styled_index_f6fc75.js"))) return true;
-    registerChunkList("output/c4aa1_turbopack-tests_tests_snapshot_emotion_emotion_input_index_71d1a4.js_e3a1b5._.json", ["output/63a02_@emotion_react_jsx-dev-runtime_5103e7.js","output/63a02_@emotion_react_index_19c07f.js","output/63a02_@emotion_styled_index_f6fc75.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_emotion_emotion_input_index_71d1a4.js.chunk-list.json", ["output/63a02_@emotion_react_jsx-dev-runtime_5103e7.js","output/63a02_@emotion_react_index_19c07f.js","output/63a02_@emotion_styled_index_f6fc75.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/emotion/emotion/input/index.js (ecmascript)");
 }
 ]);

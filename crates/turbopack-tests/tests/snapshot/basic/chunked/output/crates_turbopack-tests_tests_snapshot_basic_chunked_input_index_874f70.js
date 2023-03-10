@@ -10,7 +10,7 @@ __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js") && loadedChunks.has("output/39e84_foo_index_a20770.js"))) return true;
-    registerChunkList("output/946d2_turbopack-tests_tests_snapshot_basic_chunked_input_index_874f70.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js","output/39e84_foo_index_a20770.js"]);
+    registerChunkList("output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_874f70.js.chunk-list.json", ["output/crates_turbopack-tests_tests_snapshot_basic_chunked_input_index_9e2ad0.js","output/39e84_foo_index_a20770.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/basic/chunked/input/index.js (ecmascript)");
 }
 ]);

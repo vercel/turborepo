@@ -12,7 +12,7 @@ console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$
 })()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
     if (!(true && loadedChunks.has("output/63a02_react_jsx-dev-runtime_a01403.js") && loadedChunks.has("output/8562f_snapshot_swc_transforms_mono_transforms_input_packages_component_index_13a243.js") && loadedChunks.has("output/7b7bf_third_party_component_index_c2ffe3.js"))) return true;
-    registerChunkList("output/eabb6_swc_transforms_mono_transforms_input_packages_app_index_e02442.js_e3a1b5._.json", ["output/63a02_react_jsx-dev-runtime_a01403.js","output/8562f_snapshot_swc_transforms_mono_transforms_input_packages_component_index_13a243.js","output/7b7bf_third_party_component_index_c2ffe3.js"]);
+    registerChunkList("output/a587c_tests_snapshot_swc_transforms_mono_transforms_input_packages_app_index_e02442.js.chunk-list.json", ["output/63a02_react_jsx-dev-runtime_a01403.js","output/8562f_snapshot_swc_transforms_mono_transforms_input_packages_component_index_13a243.js","output/7b7bf_third_party_component_index_c2ffe3.js"]);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/swc_transforms/mono_transforms/input/packages/app/index.js (ecmascript)");
 }
 ]);
