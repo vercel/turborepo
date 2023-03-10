@@ -25,7 +25,7 @@ Setup
     "error": null
   }
 
-# validte expandedOutputs since it won't be in dry runs and we want some testing around that
+# validate expandedOutputs since it won't be in dry runs and we want some testing around that
   $ cat $(ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].expandedOutputs'
   [
     "apps/my-app/.turbo/turbo-build.log"
