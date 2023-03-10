@@ -342,10 +342,6 @@
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{de::DeserializeOwned, Deserialize, Serialize};
 <span class="kw">use </span>swc_core::ecma::ast::Program;
@@ -395,14 +391,10 @@
     </span>} <span class="kw">else </span>{
         path
     };
-    <span class="kw">let </span>path = <span class="kw">if </span>data {
-        path
-    } <span class="kw">else </span>{
-        <span class="kw">if </span>path == <span class="string">&quot;index&quot; </span>{
-            <span class="string">&quot;&quot;
-        </span>} <span class="kw">else </span>{
-            path.strip_suffix(<span class="string">&quot;/index&quot;</span>).unwrap_or(path)
-        }
+    <span class="kw">let </span>path = <span class="kw">if </span>path == <span class="string">&quot;index&quot; </span>&amp;&amp; !data {
+        <span class="string">&quot;&quot;
+    </span>} <span class="kw">else </span>{
+        path.strip_suffix(<span class="string">&quot;/index&quot;</span>).unwrap_or(path)
     };
 
     <span class="prelude-val">Ok</span>(StringVc::cell(path.to_string()))
