@@ -25,6 +25,7 @@ type git struct {
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
 func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+	fmt.Println("NOT using ffi")
 	if relativeTo == "" {
 		relativeTo = g.repoRoot
 	}
@@ -79,6 +80,7 @@ func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked 
 }
 
 func (g *git) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	fmt.Println("NOT using ffi")
 	if fromCommit == "" {
 		return nil, fmt.Errorf("Need commit sha to inspect file contents")
 	}
