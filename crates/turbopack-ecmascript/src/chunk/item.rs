@@ -6,7 +6,7 @@ use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::AssetVc,
     chunk::{
-        available_assets::AvailableAssetsVc, availablility_info::AvailablilityInfo, ChunkItem,
+        availability_info::AvailabilityInfo, available_assets::AvailableAssetsVc, ChunkItem,
         ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
     },
 };
@@ -61,26 +61,26 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
     async fn from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Self>> {
-        let next_availablility_info = match availablility_info.into_value() {
-            AvailablilityInfo::Untracked => AvailablilityInfo::Untracked,
-            AvailablilityInfo::Root {
+        let next_availability_info = match availability_info.into_value() {
+            AvailabilityInfo::Untracked => AvailabilityInfo::Untracked,
+            AvailabilityInfo::Root {
                 current_availability_root,
-            } => AvailablilityInfo::Inner {
+            } => AvailabilityInfo::Inner {
                 available_assets: AvailableAssetsVc::new(vec![current_availability_root]),
                 current_availability_root: asset.as_asset(),
             },
-            AvailablilityInfo::Inner {
+            AvailabilityInfo::Inner {
                 available_assets,
                 current_availability_root,
-            } => AvailablilityInfo::Inner {
+            } => AvailabilityInfo::Inner {
                 available_assets: available_assets.with_roots(vec![current_availability_root]),
                 current_availability_root: asset.as_asset(),
             },
         };
         let manifest_asset =
-            ManifestChunkAssetVc::new(asset, context, Value::new(next_availablility_info));
+            ManifestChunkAssetVc::new(asset, context, Value::new(next_availability_info));
         let manifest_loader = ManifestLoaderItemVc::new(manifest_asset);
         Ok(Some(manifest_loader.into()))
     }

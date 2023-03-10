@@ -63,7 +63,7 @@ async fn merge_chunks(
     Ok(CssChunkVc::new_normalized(
         first.await?.context,
         CssChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
-        Value::new(first.await?.availablility_info),
+        Value::new(first.await?.availability_info),
     ))
 }
 

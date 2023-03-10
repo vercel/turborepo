@@ -11,7 +11,7 @@ use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc}
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo,
+        availability_info::AvailabilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
@@ -42,7 +42,7 @@ use crate::{
 pub struct CssChunk {
     context: ChunkingContextVc,
     main_entries: CssChunkPlaceablesVc,
-    availablility_info: AvailablilityInfo,
+    availability_info: AvailabilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -51,12 +51,12 @@ impl CssChunkVc {
     pub fn new_normalized(
         context: ChunkingContextVc,
         main_entries: CssChunkPlaceablesVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         CssChunk {
             context,
             main_entries,
-            availablility_info: availablility_info.into_value(),
+            availability_info: availability_info.into_value(),
         }
         .cell()
     }
@@ -65,12 +65,12 @@ impl CssChunkVc {
     pub fn new(
         context: ChunkingContextVc,
         entry: CssChunkPlaceableVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         Self::new_normalized(
             context,
             CssChunkPlaceablesVc::cell(vec![entry]),
-            availablility_info,
+            availability_info,
         )
     }
 
@@ -212,13 +212,13 @@ impl From<ChunkContentResult<CssChunkItemVc>> for CssChunkContentResult {
 async fn css_chunk_content(
     context: ChunkingContextVc,
     entries: CssChunkPlaceablesVc,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<CssChunkContentResultVc> {
     let entries = entries.await?;
     let entries = entries.iter().copied();
 
     let contents = entries
-        .map(|entry| css_chunk_content_single_entry(context, entry, availablility_info))
+        .map(|entry| css_chunk_content_single_entry(context, entry, availability_info))
         .collect::<Vec<_>>();
 
     if contents.len() == 1 {
@@ -256,15 +256,15 @@ async fn css_chunk_content(
 async fn css_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: CssChunkPlaceableVc,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<CssChunkContentResultVc> {
     let asset = entry.as_asset();
     let res = if let Some(res) =
-        chunk_content::<CssChunkItemVc>(context, asset, None, availablility_info).await?
+        chunk_content::<CssChunkItemVc>(context, asset, None, availability_info).await?
     {
         res
     } else {
-        chunk_content_split::<CssChunkItemVc>(context, asset, None, availablility_info).await?
+        chunk_content_split::<CssChunkItemVc>(context, asset, None, availability_info).await?
     };
 
     Ok(CssChunkContentResultVc::cell(res.into()))
@@ -323,7 +323,7 @@ impl Asset for CssChunk {
         let content = css_chunk_content(
             this.context,
             this.main_entries,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         )
         .await?;
         let mut references = Vec::new();
@@ -424,7 +424,7 @@ impl FromChunkableAsset for CssChunkItemVc {
     async fn from_async_asset(
         _context: ChunkingContextVc,
         _asset: ChunkableAssetVc,
-        _availablility_info: Value<AvailablilityInfo>,
+        _availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Self>> {
         Ok(None)
     }
@@ -460,7 +460,7 @@ impl Introspectable for CssChunk {
         let chunk_content = css_chunk_content(
             this.context,
             this.main_entries,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         )
         .await?;
         details += "Chunk items:\n\n";

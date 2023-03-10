@@ -24,7 +24,7 @@ use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo,
+        availability_info::AvailabilityInfo,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkListReferenceVc,
         ChunkReferenceVc, ChunkVc, ChunkingContext, ChunkingContextVc,
@@ -63,7 +63,7 @@ pub struct EcmascriptChunk {
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
     evaluate: Option<EcmascriptChunkEvaluateVc>,
-    availablility_info: AvailablilityInfo,
+    availability_info: AvailabilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -74,14 +74,14 @@ impl EcmascriptChunkVc {
         main_entries: EcmascriptChunkPlaceablesVc,
         omit_entries: Option<EcmascriptChunkPlaceablesVc>,
         evaluate: Option<EcmascriptChunkEvaluateVc>,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         EcmascriptChunk {
             context,
             main_entries,
             omit_entries,
             evaluate,
-            availablility_info: availablility_info.into_value(),
+            availability_info: availability_info.into_value(),
         }
         .cell()
     }
@@ -90,14 +90,14 @@ impl EcmascriptChunkVc {
     pub fn new(
         context: ChunkingContextVc,
         main_entry: EcmascriptChunkPlaceableVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         Self::new_normalized(
             context,
             EcmascriptChunkPlaceablesVc::cell(vec![main_entry]),
             None,
             None,
-            availablility_info,
+            availability_info,
         )
     }
 
@@ -125,7 +125,7 @@ impl EcmascriptChunkVc {
                 }
                 .cell(),
             ),
-            Value::new(AvailablilityInfo::Root {
+            Value::new(AvailabilityInfo::Root {
                 current_availability_root: main_entry.as_asset(),
             }),
         ))
@@ -170,13 +170,13 @@ impl EcmascriptChunkVc {
             a.context,
             a.main_entries,
             a.omit_entries,
-            Value::new(a.availablility_info),
+            Value::new(a.availability_info),
         );
         let b = ecmascript_chunk_content(
             b.context,
             b.main_entries,
             b.omit_entries,
-            Value::new(b.availablility_info),
+            Value::new(b.availability_info),
         );
 
         let a = a.await?.chunk_items.to_set();
@@ -285,7 +285,7 @@ impl EcmascriptChunkVc {
             this.context,
             this.main_entries,
             this.omit_entries,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         ))
     }
 
@@ -318,7 +318,7 @@ impl EcmascriptChunkVc {
             this.omit_entries,
             chunk_path,
             evaluate,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         );
         Ok(content)
     }
@@ -361,7 +361,7 @@ impl Asset for EcmascriptChunk {
         }
 
         // Current availability root is included
-        if let Some(current_availability_root) = this.availablility_info.current_availability_root()
+        if let Some(current_availability_root) = this.availability_info.current_availability_root()
         {
             let ident = current_availability_root.ident();
             let need_root = if let [(_, main_entry)] = &assets[..] {
@@ -397,7 +397,7 @@ impl Asset for EcmascriptChunk {
         }
 
         // Available assets are included
-        if let Some(available_assets) = this.availablility_info.available_assets() {
+        if let Some(available_assets) = this.availability_info.available_assets() {
             modifiers.push(available_assets.hash().to_string());
         }
 
@@ -431,7 +431,7 @@ impl Asset for EcmascriptChunk {
             this.context,
             this.main_entries,
             this.omit_entries,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         )
         .await?;
         let mut references = Vec::new();
@@ -505,7 +505,7 @@ impl Introspectable for EcmascriptChunk {
             this.context,
             this.main_entries,
             this.omit_entries,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         )
         .await?;
         let chunk_items = chunk_content.chunk_items.await?;

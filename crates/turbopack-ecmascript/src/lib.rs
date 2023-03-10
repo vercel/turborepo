@@ -49,7 +49,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContextVc,
     },
     compile_time_info::CompileTimeInfoVc,
@@ -259,12 +259,12 @@ impl ChunkableAsset for EcmascriptModuleAsset {
     fn as_chunk(
         self_vc: EcmascriptModuleAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            availablility_info,
+            availability_info,
         )
         .into()
     }

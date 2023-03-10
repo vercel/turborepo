@@ -8,7 +8,7 @@ use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value, ValueToString}
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkableAssetVc, ChunkingContextVc,
         FromChunkableAsset, ModuleId,
     },
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
@@ -160,13 +160,13 @@ impl PatternMappingVc {
 
         if let Some(chunkable) = ChunkableAssetVc::resolve_from(asset).await? {
             if *resolve_type == ResolveType::EsmAsync {
-                // Passing [AvailablilityInfo::Untracked] works here because the manifest loader
+                // Passing [AvailabilityInfo::Untracked] works here because the manifest loader
                 // has an id that is independent of them. So luckily we don't need chunk
                 // dependent code generation.
                 if let Some(loader) = EcmascriptChunkItemVc::from_async_asset(
                     context,
                     chunkable,
-                    Value::new(AvailablilityInfo::Untracked),
+                    Value::new(AvailabilityInfo::Untracked),
                 )
                 .await?
                 {

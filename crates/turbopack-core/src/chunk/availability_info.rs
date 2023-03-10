@@ -3,7 +3,7 @@ use crate::asset::AssetVc;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Copy, Debug)]
-pub enum AvailablilityInfo {
+pub enum AvailabilityInfo {
     Untracked,
     Root {
         current_availability_root: AssetVc,
@@ -14,7 +14,7 @@ pub enum AvailablilityInfo {
     },
 }
 
-impl AvailablilityInfo {
+impl AvailabilityInfo {
     pub fn current_availability_root(&self) -> Option<AssetVc> {
         match self {
             Self::Untracked => None,

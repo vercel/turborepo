@@ -12,7 +12,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContextVc,
     },
     context::AssetContextVc,
@@ -121,9 +121,9 @@ impl ChunkableAsset for CssModuleAsset {
     fn as_chunk(
         self_vc: CssModuleAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
-        CssChunkVc::new(context, self_vc.into(), availablility_info).into()
+        CssChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

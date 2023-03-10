@@ -13,8 +13,8 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, Chunk, ChunkGroupReferenceVc, ChunkGroupVc,
-        ChunkItem, ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem,
+        ChunkItemVc, ChunkListReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc,
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -67,12 +67,12 @@ impl ChunkableAsset for WithChunksAsset {
     fn as_chunk(
         self_vc: WithChunksAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            availablility_info,
+            availability_info,
         )
         .into()
     }
@@ -114,7 +114,7 @@ impl WithChunksAssetVc {
         Ok(ChunkGroupVc::from_asset(
             this.asset.into(),
             this.chunking_context,
-            Value::new(AvailablilityInfo::Root {
+            Value::new(AvailabilityInfo::Root {
                 current_availability_root: this.asset.into(),
             }),
         ))

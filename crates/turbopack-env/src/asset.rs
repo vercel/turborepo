@@ -7,7 +7,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -65,9 +65,9 @@ impl ChunkableAsset for ProcessEnvAsset {
     fn as_chunk(
         self_vc: ProcessEnvAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into(), availablility_info).into()
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

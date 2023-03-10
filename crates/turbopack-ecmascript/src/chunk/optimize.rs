@@ -69,7 +69,7 @@ async fn merge_chunks(
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         None,
         evaluate,
-        Value::new(first.availablility_info),
+        Value::new(first.availability_info),
     ))
 }
 
@@ -405,7 +405,7 @@ async fn optimize_ecmascript(
                         }
                         .cell(),
                     ),
-                    Value::new(content.availablility_info),
+                    Value::new(content.availability_info),
                 )
             }
         }

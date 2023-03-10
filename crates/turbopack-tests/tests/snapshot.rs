@@ -28,7 +28,7 @@ use turbopack::{
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, dev::DevChunkingContextVc, ChunkableAsset,
+        availability_info::AvailabilityInfo, dev::DevChunkingContextVc, ChunkableAsset,
         ChunkableAssetVc,
     },
     compile_time_defines,
@@ -253,7 +253,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
             } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
                 Ok(chunkable.as_chunk(
                     chunking_context,
-                    Value::new(AvailablilityInfo::Root {
+                    Value::new(AvailabilityInfo::Root {
                         current_availability_root: chunkable.into(),
                     }),
                 ))

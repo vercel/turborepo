@@ -13,9 +13,9 @@ use turbopack::ecmascript::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkVc, ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc,
+        ChunkableAsset, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunkingType, ChunkingTypeOptionVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -62,12 +62,12 @@ impl ChunkableAsset for WithClientChunksAsset {
     fn as_chunk(
         self_vc: WithClientChunksAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context.with_layer("rsc"),
             self_vc.as_ecmascript_chunk_placeable(),
-            availablility_info,
+            availability_info,
         )
         .into()
     }
@@ -114,7 +114,7 @@ impl EcmascriptChunkItem for WithClientChunksChunkItem {
         let group = ChunkGroupVc::from_asset(
             inner.asset.into(),
             self.context,
-            Value::new(AvailablilityInfo::Root {
+            Value::new(AvailabilityInfo::Root {
                 current_availability_root: inner.asset.into(),
             }),
         );

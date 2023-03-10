@@ -7,7 +7,7 @@ use turbopack::ecmascript::chunk::{
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        availability_info::AvailabilityInfo, ChunkVc, ChunkableAsset, ChunkableAssetVc,
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -49,12 +49,12 @@ impl ChunkableAsset for WithChunkingContextScopeAsset {
     fn as_chunk(
         &self,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context.with_layer(&self.layer),
             self.asset,
-            availablility_info,
+            availability_info,
         )
         .into()
     }

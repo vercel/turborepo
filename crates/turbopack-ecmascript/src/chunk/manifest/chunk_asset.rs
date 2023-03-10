@@ -4,7 +4,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
+        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkReferenceVc, ChunkVc,
         ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
@@ -45,7 +45,7 @@ fn chunk_list_modifier() -> StringVc {
 pub struct ManifestChunkAsset {
     pub asset: ChunkableAssetVc,
     pub chunking_context: ChunkingContextVc,
-    pub availablility_info: AvailablilityInfo,
+    pub availability_info: AvailabilityInfo,
 }
 
 #[turbo_tasks::value_impl]
@@ -54,12 +54,12 @@ impl ManifestChunkAssetVc {
     pub fn new(
         asset: ChunkableAssetVc,
         chunking_context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         Self::cell(ManifestChunkAsset {
             asset,
             chunking_context,
-            availablility_info: availablility_info.into_value(),
+            availability_info: availability_info.into_value(),
         })
     }
 
@@ -69,7 +69,7 @@ impl ManifestChunkAssetVc {
         Ok(ChunkGroupVc::from_asset(
             this.asset,
             this.chunking_context,
-            Value::new(this.availablility_info),
+            Value::new(this.availability_info),
         ))
     }
 
@@ -82,7 +82,7 @@ impl ManifestChunkAssetVc {
     #[turbo_tasks::function]
     pub async fn manifest_chunk(self) -> Result<ChunkVc> {
         let this = self.await?;
-        Ok(self.as_chunk(this.chunking_context, Value::new(this.availablility_info)))
+        Ok(self.as_chunk(this.chunking_context, Value::new(this.availability_info)))
     }
 
     #[turbo_tasks::function]
@@ -128,9 +128,9 @@ impl ChunkableAsset for ManifestChunkAsset {
     fn as_chunk(
         self_vc: ManifestChunkAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into(), availablility_info).into()
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

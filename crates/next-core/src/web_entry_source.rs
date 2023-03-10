@@ -4,9 +4,7 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::EcmascriptModuleAssetVc;
 use turbopack_core::{
-    chunk::{
-        availablility_info::AvailablilityInfo, ChunkGroupVc, ChunkableAsset, ChunkableAssetVc,
-    },
+    chunk::{availability_info::AvailabilityInfo, ChunkGroupVc, ChunkableAsset, ChunkableAssetVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
 };
@@ -84,7 +82,7 @@ pub async fn create_web_entry_source(
                 // add an ecmascript chunk with the runtime code
                 Ok(ChunkGroupVc::from_chunk(chunkable.as_chunk(
                     chunking_context,
-                    Value::new(AvailablilityInfo::Root {
+                    Value::new(AvailabilityInfo::Root {
                         current_availability_root: module,
                     }),
                 )))

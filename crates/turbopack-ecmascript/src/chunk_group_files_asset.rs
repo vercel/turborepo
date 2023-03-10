@@ -5,7 +5,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availablility_info::AvailablilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
         ChunkingContextVc,
     },
@@ -57,7 +57,7 @@ impl ChunkGroupFilesAssetVc {
                 ChunkGroupVc::from_asset(
                     this.asset,
                     this.chunking_context,
-                    Value::new(AvailablilityInfo::Root {
+                    Value::new(AvailabilityInfo::Root {
                         current_availability_root: this.asset.into(),
                     }),
                 )
@@ -106,12 +106,12 @@ impl ChunkableAsset for ChunkGroupFilesAsset {
     fn as_chunk(
         self_vc: ChunkGroupFilesAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc {
         EcmascriptChunkVc::new(
             context,
             self_vc.as_ecmascript_chunk_placeable(),
-            availablility_info,
+            availability_info,
         )
         .into()
     }
@@ -130,7 +130,7 @@ impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
             inner: self_vc,
             chunk: this.asset.as_chunk(
                 context,
-                Value::new(AvailablilityInfo::Root {
+                Value::new(AvailabilityInfo::Root {
                     current_availability_root: this.asset.into(),
                 }),
             ),

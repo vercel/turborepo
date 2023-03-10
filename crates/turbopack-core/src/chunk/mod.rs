@@ -1,5 +1,5 @@
+pub mod availability_info;
 pub mod available_assets;
-pub mod availablility_info;
 pub mod chunk_in_group;
 pub mod dev;
 pub(crate) mod list;
@@ -29,7 +29,7 @@ use turbo_tasks_hash::DeterministicHash;
 
 pub use self::list::reference::{ChunkListReference, ChunkListReferenceVc};
 use self::{
-    availablility_info::AvailablilityInfo, chunk_in_group::ChunkInGroupVc, optimize::optimize,
+    availability_info::AvailabilityInfo, chunk_in_group::ChunkInGroupVc, optimize::optimize,
 };
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -114,7 +114,7 @@ pub trait ChunkableAsset: Asset {
     fn as_chunk(
         &self,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc;
 }
 
@@ -133,9 +133,9 @@ impl ChunkGroupVc {
     pub fn from_asset(
         asset: ChunkableAssetVc,
         context: ChunkingContextVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Self {
-        Self::from_chunk(asset.as_chunk(context, availablility_info))
+        Self::from_chunk(asset.as_chunk(context, availability_info))
     }
 
     /// Creates a chunk group from an chunk as entrypoint
@@ -267,7 +267,7 @@ pub enum ChunkingType {
     Parallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     /// Referenced asset will not inherit the available modules, but form a
-    /// new availablility root.
+    /// new availability root.
     IsolatedParallel,
     /// Asset is placed in a separate chunk group that is referenced from the
     /// referencing chunk group, but not loaded.
@@ -401,7 +401,7 @@ pub trait FromChunkableAsset: ChunkItem + Sized + Debug {
     async fn from_async_asset(
         context: ChunkingContextVc,
         asset: ChunkableAssetVc,
-        availablility_info: Value<AvailablilityInfo>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Self>>;
 }
 
@@ -409,12 +409,12 @@ pub async fn chunk_content_split<I>(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<ChunkContentResult<I>>
 where
     I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
 {
-    chunk_content_internal_parallel(context, entry, additional_entries, availablility_info, true)
+    chunk_content_internal_parallel(context, entry, additional_entries, availability_info, true)
         .await
         .map(|o| o.unwrap())
 }
@@ -423,19 +423,13 @@ pub async fn chunk_content<I>(
     context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
     I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
 {
-    chunk_content_internal_parallel(
-        context,
-        entry,
-        additional_entries,
-        availablility_info,
-        false,
-    )
-    .await
+    chunk_content_internal_parallel(context, entry, additional_entries, availability_info, false)
+        .await
 }
 
 #[derive(Eq, PartialEq, Clone, Hash)]
@@ -456,7 +450,7 @@ enum ChunkContentGraphNode<I> {
 struct ChunkContentContext {
     chunking_context: ChunkingContextVc,
     entry: AssetVc,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
     split: bool,
 }
 
@@ -489,7 +483,7 @@ where
     let mut graph_nodes = vec![];
 
     for asset in assets {
-        if let Some(available_assets) = context.availablility_info.available_assets() {
+        if let Some(available_assets) = context.availability_info.available_assets() {
             if *available_assets.includes(asset).await? {
                 graph_nodes.push((
                     Some((asset, chunking_type)),
@@ -526,7 +520,7 @@ where
             }
             ChunkingType::Parallel => {
                 let chunk =
-                    chunkable_asset.as_chunk(context.chunking_context, context.availablility_info);
+                    chunkable_asset.as_chunk(context.chunking_context, context.availability_info);
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -535,7 +529,7 @@ where
             ChunkingType::IsolatedParallel => {
                 let chunk = chunkable_asset.as_chunk(
                     context.chunking_context,
-                    Value::new(AvailablilityInfo::Root {
+                    Value::new(AvailabilityInfo::Root {
                         current_availability_root: chunkable_asset.into(),
                     }),
                 );
@@ -564,7 +558,7 @@ where
                 }
 
                 let chunk =
-                    chunkable_asset.as_chunk(context.chunking_context, context.availablility_info);
+                    chunkable_asset.as_chunk(context.chunking_context, context.availability_info);
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -576,7 +570,7 @@ where
                     ChunkContentGraphNode::AsyncChunkGroup(ChunkGroupVc::from_asset(
                         chunkable_asset,
                         context.chunking_context,
-                        context.availablility_info,
+                        context.availability_info,
                     )),
                 ));
             }
@@ -584,7 +578,7 @@ where
                 if let Some(manifest_loader_item) = I::from_async_asset(
                     context.chunking_context,
                     chunkable_asset,
-                    context.availablility_info,
+                    context.availability_info,
                 )
                 .await?
                 {
@@ -688,7 +682,7 @@ async fn chunk_content_internal_parallel<I>(
     chunking_context: ChunkingContextVc,
     entry: AssetVc,
     additional_entries: Option<AssetsVc>,
-    availablility_info: Value<AvailablilityInfo>,
+    availability_info: Value<AvailabilityInfo>,
     split: bool,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
@@ -718,7 +712,7 @@ where
         chunking_context,
         entry,
         split,
-        availablility_info,
+        availability_info,
     };
 
     let visit = ChunkContentVisit {
