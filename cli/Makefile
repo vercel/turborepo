@@ -31,7 +31,7 @@ turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+	CGO_ENABLED=1 go build --ldflags='-s -w -linkmode external -extldflags="-static"' -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
