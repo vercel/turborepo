@@ -71,11 +71,16 @@ func RealRun(
 
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 
+	concurrentUIFactory := ui.ConcurrentUiFactory{
+		Base: base.UIFactory,
+	}
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
 		rs:              rs,
-		ui:              &cli.ConcurrentUi{Ui: base.UI},
+		ui:              concurrentUIFactory.Build(os.Stdin, os.Stdin, os.Stderr),
+		uiFactory:       &concurrentUIFactory,
 		runCache:        runCache,
 		logger:          base.Logger,
 		packageManager:  packageManager,
@@ -151,6 +156,7 @@ type execContext struct {
 	runState        *RunState
 	rs              *runSpec
 	ui              cli.Ui
+	uiFactory       ui.UiFactory
 	runCache        *runcache.RunCache
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
