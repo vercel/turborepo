@@ -432,9 +432,10 @@ const SourceType = {
  * @param {ModuleId} id
  * @param {SourceType} sourceType
  * @param {ModuleId} [sourceId]
+ * @param {ModuleId[]} [parents]
  * @returns {Module}
  */
-function instantiateModule(id, sourceType, sourceId) {
+function instantiateModule(id, sourceType, sourceId, parents) {
   const moduleFactory = moduleFactories[id];
   if (typeof moduleFactory !== "function") {
     // This can happen if modules incorrectly handle HMR disposes/updates,
@@ -465,7 +466,7 @@ function instantiateModule(id, sourceType, sourceId) {
     exports: {},
     loaded: false,
     id,
-    parents: [],
+    parents: parents || [],
     children: [],
     interopNamespace: undefined,
     hot,
@@ -739,6 +740,7 @@ function updateChunksPhase(chunksAddedModules, chunksDeletedModules) {
 /**
  * @param {Iterable<ModuleId>} outdatedModules
  * @param {Set<ModuleId>} disposedModules
+ * @return {{ outdatedModuleParents: Map<ModuleId, Array<ModuleId>> }}
  */
 function disposePhase(outdatedModules, disposedModules) {
   for (const moduleId of outdatedModules) {
@@ -749,8 +751,17 @@ function disposePhase(outdatedModules, disposedModules) {
     disposeModule(moduleId, "clear");
   }
 
+  const outdatedModuleParents = new Map();
+  for (const moduleId of outdatedModules) {
+    const oldModule = moduleCache[moduleId];
+    outdatedModuleParents.set(moduleId, oldModule?.parents);
+    delete moduleCache[moduleId];
+  }
+
   // TODO(alexkirsz) Dependencies: remove outdated dependency from module
   // children.
+
+  return { outdatedModuleParents };
 }
 
 /**
@@ -781,7 +792,6 @@ function disposeModule(moduleId, mode) {
   // module is still importing other modules.
   module.hot.active = false;
 
-  delete moduleCache[module.id];
   moduleHotState.delete(module);
 
   // TODO(alexkirsz) Dependencies: delete the module from outdated deps.
@@ -803,6 +813,7 @@ function disposeModule(moduleId, mode) {
 
   switch (mode) {
     case "clear":
+      delete moduleCache[module.id];
       moduleHotData.delete(module.id);
       break;
     case "replace":
@@ -817,8 +828,13 @@ function disposeModule(moduleId, mode) {
  *
  * @param {{ moduleId: ModuleId, errorHandler: true | Function }[]} outdatedSelfAcceptedModules
  * @param {Map<ModuleId, ModuleFactory>} newModuleFactories
+ * @param {Map<ModuleId, Array<ModuleId>>} outdatedModuleParents
  */
-function applyPhase(outdatedSelfAcceptedModules, newModuleFactories) {
+function applyPhase(
+  outdatedSelfAcceptedModules,
+  newModuleFactories,
+  outdatedModuleParents
+) {
   // Update module factories.
   for (const [moduleId, factory] of newModuleFactories.entries()) {
     moduleFactories[moduleId] = factory;
@@ -831,7 +847,12 @@ function applyPhase(outdatedSelfAcceptedModules, newModuleFactories) {
   // Re-instantiate all outdated self-accepted modules.
   for (const { moduleId, errorHandler } of outdatedSelfAcceptedModules) {
     try {
-      instantiateModule(moduleId, SourceType.Update);
+      instantiateModule(
+        moduleId,
+        SourceType.Update,
+        undefined,
+        outdatedModuleParents.get(moduleId)
+      );
     } catch (err) {
       if (typeof errorHandler === "function") {
         try {
@@ -932,8 +953,15 @@ function applyEcmascriptMergedUpdate(chunkPath, update) {
   const outdatedSelfAcceptedModules =
     computeOutdatedSelfAcceptedModules(outdatedModules);
   const { disposedModules } = updateChunksPhase(chunksAdded, chunksDeleted);
-  disposePhase(outdatedModules, disposedModules);
-  applyPhase(outdatedSelfAcceptedModules, newModuleFactories);
+  const { outdatedModuleParents } = disposePhase(
+    outdatedModules,
+    disposedModules
+  );
+  applyPhase(
+    outdatedSelfAcceptedModules,
+    newModuleFactories,
+    outdatedModuleParents
+  );
 }
 
 /**
@@ -1334,6 +1362,8 @@ function disposeChunk(chunkPath) {
   }
   chunkModules.delete(chunkPath);
 
+  const disposedModules = [];
+
   for (const moduleId of chunkModules) {
     const moduleChunks = moduleChunksMap.get(moduleId);
     moduleChunks.delete(chunkPath);
@@ -1342,7 +1372,11 @@ function disposeChunk(chunkPath) {
     if (noRemainingChunks) {
       moduleChunksMap.delete(moduleId);
       disposeModule(moduleId, "clear");
+      disposedModules.push(moduleId);
     }
+  }
+  for (const moduleId of disposedModules) {
+    delete moduleCache[moduleId];
   }
 
   return true;
