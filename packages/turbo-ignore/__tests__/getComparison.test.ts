@@ -20,7 +20,7 @@ describe("getComparison()", () => {
     expect(getComparison({ workspace: "test-workspace" })).toBeNull();
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
-      'no previous deployments found for "test-workspace" on branch "my-branch".'
+      'No previous deployments found for "test-workspace" on branch "my-branch".'
     );
   });
 
@@ -37,12 +37,12 @@ describe("getComparison()", () => {
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       1,
       "≫  ",
-      'no previous deployments found for "test-workspace" on branch "my-branch".'
+      'No previous deployments found for "test-workspace" on branch "my-branch".'
     );
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       2,
       "≫  ",
-      "falling back to ref HEAD^2"
+      "Falling back to ref HEAD^2"
     );
   });
 
