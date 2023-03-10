@@ -52,12 +52,11 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
     // note: this is _not_ recommended, but it the current behaviour go-side
     //       ideally we should use the platform specific convention
     //       (which we get from using ProjectDirs::from)
-    // let dirs =
-    //     directories::ProjectDirs::from_path("turborepo".into()).expect("user has
-    // a home dir");
-    //
-    // let dir = dirs.data_dir().to_string_lossy().to_string();
-    proto::TurboDataDirResp { dir: String::new() }.into()
+    let dirs =
+        directories::ProjectDirs::from_path("turborepo".into()).expect("user has a home dir");
+
+    let dir = dirs.data_dir().to_string_lossy().to_string();
+    proto::TurboDataDirResp { dir }.into()
 }
 
 #[no_mangle]

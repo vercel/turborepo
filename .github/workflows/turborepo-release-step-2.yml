@@ -84,8 +84,6 @@ jobs:
           override: true
       - run: |
           rustup target add aarch64-unknown-linux-musl
-          rustup component add rust-src
-          rustup component add rust-src --target aarch64-unknown-linux-musl --toolchain nightly
           rustup target add x86_64-unknown-linux-musl
       - run: |
           # for convenience we have precompiled libraries for the various toolchains (windows and musl)
