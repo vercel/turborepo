@@ -3,7 +3,7 @@
 //! Please read the notes about safety (marked with `SAFETY`) in both this file,
 //! and in ffi.go before modifying this file.
 
-use std::mem::ManuallyDrop;
+use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));

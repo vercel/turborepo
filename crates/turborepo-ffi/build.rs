@@ -3,7 +3,7 @@ use std::io::Result;
 use cbindgen::Language;
 
 fn main() -> Result<()> {
-    let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     cbindgen::Builder::new()
         .with_crate(crate_dir)
