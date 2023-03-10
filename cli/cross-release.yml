@@ -30,15 +30,15 @@ builds:
     overrides:
       - goos: linux
         goarch: arm64
+        ldflags: -linkmode external -extldflags="-static" -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
         env:
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
+          - CC=/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc
       - goos: linux
         goarch: amd64
         goamd64: v1
+        ldflags: -linkmode external -extldflags="-static" -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
         env:
-          - CC=x86_64-linux-gnu-gcc
-          - CXX=x86_64-linux-gnu-g++
+          - CC=musl-gcc
       - goos: windows
         goarch: arm64
         env:

@@ -54,3 +54,39 @@ ARG MAINTAINER
 ARG GIT_REPO
 LABEL maintainer=${MAINTAINER}
 LABEL "org.opencontainers.image.source"=${GIT_REPO}
+
+ENV SSL_VER="1.1.1q" \
+    ZLIB_VER="1.2.13"
+
+WORKDIR /musl-amd64
+ENV PREFIX=/musl-amd64
+RUN curl -sSL https://zlib.net/zlib-$ZLIB_VER.tar.gz | tar xz && \
+    cd zlib-$ZLIB_VER && \
+    CC="musl-gcc -fPIC -pie" LDFLAGS="-L$PREFIX/lib" CFLAGS="-I$PREFIX/include" ./configure --static --prefix=$PREFIX && \
+    make -j$(nproc) && make install
+
+RUN curl -sSL https://www.openssl.org/source/openssl-$SSL_VER.tar.gz | tar xz && \
+    cd openssl-$SSL_VER && \
+    ./Configure no-zlib no-shared -fPIC --prefix=$PREFIX --openssldir=$PREFIX/ssl linux-x86_64 && \
+    env C_INCLUDE_PATH=$PREFIX/include make depend 2> /dev/null && \
+    make -j$(nproc) && make install
+
+WORKDIR /cross
+RUN wget https://more.musl.cc/11.2.1/x86_64-linux-musl/aarch64-linux-musl-cross.tgz
+RUN tar -xvf aarch64-linux-musl-cross.tgz
+ENV CC="/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc -fPIC -pie"
+WORKDIR /musl-arm64
+
+ENV PREFIX=/musl-arm64
+RUN curl -sSL https://zlib.net/zlib-$ZLIB_VER.tar.gz | tar xz && \
+    cd zlib-$ZLIB_VER && \
+    LDFLAGS="-L$PREFIX/lib" CFLAGS="-I$PREFIX/include" ./configure --static --prefix=$PREFIX && \
+    make -j$(nproc) && make install
+
+RUN curl -sSL https://www.openssl.org/source/openssl-$SSL_VER.tar.gz | tar xz && \
+    cd openssl-$SSL_VER && \
+    ./Configure no-zlib no-shared -fPIC --prefix=$PREFIX --openssldir=$PREFIX/ssl linux-aarch64 && \
+    env C_INCLUDE_PATH=$PREFIX/include make depend 2> /dev/null && \
+    make -j$(nproc) && make install
+
+ENV CC=

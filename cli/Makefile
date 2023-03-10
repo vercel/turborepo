@@ -21,7 +21,7 @@ GO_FLAGS += -trimpath
 CLI_DIR = $(shell pwd)
 
 # allow opting in to the rust codepaths
-GO_TAG ?= go
+GO_TAG ?= rust
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
@@ -29,6 +29,10 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 
 turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+
+.PHONY: musl-go-turbo
+musl-go-turbo:
+	CGO_ENABLED=1 go build --ldflags='-s -w -linkmode external -extldflags="-static"' -tags $(GO_TAG) -o go-turbo ./cmd/turbo
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
@@ -87,7 +91,7 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC=/cross/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
@@ -327,4 +331,3 @@ testbed-%:
 	rm -rf testbed
 	mkdir -p testbed
 	./integration_tests/$($@_TEST)/setup.sh testbed
-
