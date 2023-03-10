@@ -30,6 +30,7 @@ builds:
     overrides:
       - goos: linux
         goarch: arm64
+        ldflags: -linkmode external -extldflags="-static" -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
         env:
           - CC=zig cc -target aarch64-linux-musl -L/usr/aarch64-linux-musl/lib
           - CXX=zig c++ -target aarch64-linux-musl
