@@ -10,7 +10,7 @@
         "CONVERTKIT_API_KEY",
         "CONVERTKIT_API_SECRET"
       ],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build", "rss", "schema"]
     },
     "dev": {
