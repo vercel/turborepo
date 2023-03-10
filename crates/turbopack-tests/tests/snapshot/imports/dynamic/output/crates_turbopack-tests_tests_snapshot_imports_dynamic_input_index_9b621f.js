@@ -1,4 +1,4 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js", {
 
 "[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/vercel.mjs (ecmascript, manifest chunk, loader)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
@@ -20,8 +20,8 @@ __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/imports/d
 
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
-    if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js"))) return true;
-    registerChunkList("output/bb804_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js"]);
+    if (!(true)) return true;
+    registerChunkList("output/bb804_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js_e3a1b5._.json", []);
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/index.js (ecmascript)");
 }
 ]);
@@ -1498,4 +1498,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js.map

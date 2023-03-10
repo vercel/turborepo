@@ -1,28 +1,32 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_css_css_input_index_e01293.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/vercel.mjs (ecmascript, manifest chunk, loader)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css, css module)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
-__turbopack_export_value__((__turbopack_import__) => {
-    return __turbopack_load__("output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_vercel.mjs_c72a25._.js").then(() => {
-        return __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/vercel.mjs (ecmascript, manifest chunk)");
-    }).then(({ chunks, list }) => {
-        __turbopack_register_chunk_list__(list, chunks);
-        return Promise.all(chunks.map((chunk_path) => __turbopack_load__(chunk_path)));
-    }).then(() => {
-        return __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/vercel.mjs (ecmascript)");
-    });
+__turbopack_export_value__({
+  "another-composed-module-style": "another-composed-module-style__style__9bcf751c" + " " + __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css, css module)")["foo-module-style"],
+  "composed-module-style": "composed-module-style__style__9bcf751c" + " " + __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css, css module)")["foo-module-style"],
+  "inner": "inner__style__9bcf751c",
+  "module-style": "module-style__style__9bcf751c",
 });
 
 })()),
-"[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
-__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/vercel.mjs (ecmascript, manifest chunk, loader)")(__turbopack_import__).then(console.log);
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$node_modules$2f$foo$2f$style$2e$module$2e$css__$28$css$2c$__css__module$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css, css module)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$style$2e$module$2e$css__$28$css$2c$__css__module$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css, css module)");
+"__TURBOPACK__ecmascript__hoisting__location__";
+;
+;
+;
+;
+;
+console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$style$2e$module$2e$css__$28$css$2c$__css__module$29__["default"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$css$2f$css$2f$input$2f$node_modules$2f$foo$2f$style$2e$module$2e$css__$28$css$2c$__css__module$29__["default"]);
 
-}.call(this) }),
+})()),
 }, ({ loadedChunks, instantiateRuntimeModule, registerChunkList }) => {
-    if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js"))) return true;
-    registerChunkList("output/bb804_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_9b621f.js"]);
-    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/imports/dynamic/input/index.js (ecmascript)");
+    if (!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_css_css_input_index_e969fb.js") && loadedChunks.has("output/8697f_foo_style.module.css_8b24e0._.js"))) return true;
+    registerChunkList("output/38609_crates_turbopack-tests_tests_snapshot_css_css_input_index_e01293.js_e3a1b5._.json", ["output/crates_turbopack-tests_tests_snapshot_css_css_input_index_e969fb.js","output/8697f_foo_style.module.css_8b24e0._.js","output/8697f_foo_style.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_style.css","output/8697f_foo_style.module_b5a149.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_style.module_b5a149.css"]);
+    instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)");
 }
 ]);
 (() => {
@@ -1498,4 +1502,4 @@ globalThis.TURBOPACK = {
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_imports_dynamic_input_index_56419a.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_css_css_input_index_e01293.js.map
