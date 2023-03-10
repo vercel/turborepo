@@ -87,7 +87,7 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && RUSTFLAGS="-C target-feature=+crt-static -Cpanic=abort" cargo build -Zbuild-std=panic_abort,std --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" LD_LIBRARY_PATH=../../cli/internal/ffi cargo build -Zbuild-std=panic_abort,std --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
