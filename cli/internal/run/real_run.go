@@ -100,6 +100,7 @@ func RealRun(
 			return err
 		}
 		taskSummary.Execution = taskExecutionSummary
+		taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 		return nil
 	}
 
@@ -113,12 +114,6 @@ func RealRun(
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
-
-	// Gather expandedOutputs into task summaries
-	for _, taskSummary := range taskSummaries {
-		outputs := taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
-		taskSummary.ExpandedOutputs = outputs
-	}
 
 	// Assign tasks after execution
 	runSummary.Tasks = taskSummaries
