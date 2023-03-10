@@ -626,7 +626,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn relative_symlink_from_symlinked_dir_windows() -> anyhow::Result<()> {
-        use crate::fs::fs_util::read_link;
+        use crate::fs_util::read_link;
 
         // tmp1 -- dir1 -- subdir1 -- file1
         // tmp2 -- symlink_to_subdir1 (points to /tmp1/dir1/subdir1) -- (file1)
