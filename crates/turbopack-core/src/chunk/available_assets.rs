@@ -54,6 +54,8 @@ impl AvailableAssetsVc {
         let mut hasher = Xxh3Hash64Hasher::new();
         if let Some(parent) = this.parent {
             hasher.write_value(parent.hash().await?);
+        } else {
+            hasher.write_value(0u64);
         }
         for root in &this.roots {
             hasher.write_value(root.ident().to_string().await?);
