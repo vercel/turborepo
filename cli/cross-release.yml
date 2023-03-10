@@ -33,7 +33,6 @@ builds:
         env:
           - CC=zig cc -target aarch64-linux-musl -L/usr/aarch64-linux-musl/lib
           - CXX=zig c++ -target aarch64-linux-musl
-          - RUSTFLAGS=-C target-feature=+crt-static -Cpanic=abort
 #      - goos: linux
 #        goarch: amd64
 #        goamd64: v1
