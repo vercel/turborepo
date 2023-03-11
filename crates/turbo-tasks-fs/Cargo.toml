@@ -13,6 +13,9 @@ name = "mod"
 harness = false
 
 [features]
+# Enables dynamic linking (and hot reloading) of embedded files/dirs.
+# A binary built with this option **is not portable**, the directory
+# path will be embedded into the binary.
 dynamic_embed_contents = []
 
 [dependencies]
