@@ -3,7 +3,6 @@ package runsummary
 import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -29,8 +28,8 @@ type singlePackageTaskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"`
-	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOuputs"`
 }

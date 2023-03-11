@@ -45,6 +45,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
+	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,6 @@ import (
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -108,10 +107,10 @@ type TaskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
-	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOuputs"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
@@ -144,6 +143,7 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
+		ExpandedOutputs:        ht.ExpandedOutputs,
 		EnvVars:                ht.EnvVars,
 		Execution:              ht.Execution,
 	}

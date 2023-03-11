@@ -25,6 +25,12 @@ Setup
     "error": null
   }
 
+# validate expandedOutputs since it won't be in dry runs and we want some testing around that
+  $ cat $(ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].expandedOutputs'
+  [
+    "apps/my-app/.turbo/turbo-build.log"
+  ]
+
 # Without env var, no summary file is generated
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null
