@@ -331,8 +331,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		return taskExecutionSummary, err
 	}
 
-	var expandedOutputs runcache.ExpandedOutputs
-
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
@@ -344,8 +342,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		}
 	}
-
-	fmt.Printf("[debug] expandedOutputs %#v\n", expandedOutputs)
 
 	// Clean up tracing
 	tracer(runsummary.TargetBuilt, nil)
