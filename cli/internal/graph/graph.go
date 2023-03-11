@@ -194,8 +194,7 @@ func repoRelativeLogFile(dir turbopath.AnchoredSystemPath, taskName string) stri
 }
 
 // getTaskGraphAncestors gets all the ancestors for a given task in the graph.
-// "Ancestors" are all tasks that the given task depends on.
-// This is only used by DryRun output right now.
+// "ancestors" are all tasks that the given task depends on.
 func (g *CompleteGraph) getTaskGraphAncestors(taskGraph *dag.AcyclicGraph, taskID string) ([]string, error) {
 	ancestors, err := taskGraph.Ancestors(taskID)
 	if err != nil {
@@ -213,8 +212,7 @@ func (g *CompleteGraph) getTaskGraphAncestors(taskGraph *dag.AcyclicGraph, taskI
 }
 
 // getTaskGraphDescendants gets all the descendants for a given task in the graph.
-// "Descendants" are all tasks that depend on the given taskID.
-// This is only used by DryRun output right now.
+// "descendants" are all tasks that depend on the given taskID.
 func (g *CompleteGraph) getTaskGraphDescendants(taskGraph *dag.AcyclicGraph, taskID string) ([]string, error) {
 	descendents, err := taskGraph.Descendents(taskID)
 	if err != nil {
