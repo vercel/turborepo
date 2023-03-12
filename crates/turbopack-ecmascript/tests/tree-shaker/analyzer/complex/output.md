@@ -352,10 +352,10 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(3, Normal), ItemId(6, Normal), ItemId(9, VarDeclarator(0)), ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
+    N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0))), ItemId(3, Normal), ItemId(6, Normal), ItemId(9, VarDeclarator(0))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
-    N3["Items: [ItemId(11, VarDeclarator(0)), ItemId(Export((Atom('initialCat' type=dynamic), #0)))]"];
-    N4["Items: [ItemId(12, Normal), ItemId(Export((Atom('getChimera' type=dynamic), #0)))]"];
+    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(11, VarDeclarator(0))]"];
+    N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal)]"];
     N5["Items: [ItemId(0, VarDeclarator(0))]"];
     N6["Items: [ItemId(1, Normal)]"];
     N7["Items: [ItemId(2, Normal)]"];
@@ -440,6 +440,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 11
 };
+export { dogRef };
 function getDog() {
     return dog;
 }
@@ -452,9 +453,6 @@ const dogRef = {
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -474,11 +472,9 @@ export { cat };
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
 };
+export { initialCat };
 const initialCat = cat;
 export { initialCat };
-export { initialCat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -500,10 +496,10 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 10
 };
+export { getChimera };
 function getChimera() {
     return cat + dog;
 }
-export { getChimera };
 
 ```
 
@@ -511,10 +507,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { dog };
 ```
 
 ## Part 6
@@ -610,19 +603,14 @@ console.log(dog);
 
 ```js
 let cat = "cat";
-export { cat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { cat };
 ```
 
 ## Merged (module eval)
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
+export { dog };
 dog += "!";
 export { dog };
 console.log(dog);
@@ -632,8 +620,7 @@ console.log(dog);
 dog += "!";
 export { dog };
 console.log(dog);
-"module evaluation";
-
+("module evaluation");
 ```
 
 # Modules (prod)
@@ -653,10 +640,10 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 8
 };
-console.log(dog);
-console.log(dog);
-console.log(dog);
 "module evaluation";
+console.log(dog);
+console.log(dog);
+console.log(dog);
 
 ```
 
@@ -675,6 +662,7 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 8
 };
+export { dogRef };
 function getDog() {
     return dog;
 }
@@ -687,9 +675,6 @@ const dogRef = {
     set: setDog
 };
 export { dogRef };
-export { dogRef } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -709,11 +694,9 @@ export { cat };
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
 };
+export { initialCat };
 const initialCat = cat;
 export { initialCat };
-export { initialCat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -735,10 +718,10 @@ import "entry.js" assert {
 import "entry.js" assert {
     __turbopack_chunk__: 8
 };
+export { getChimera };
 function getChimera() {
     return cat + dog;
 }
-export { getChimera };
 
 ```
 
@@ -746,10 +729,7 @@ export { getChimera };
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { dog };
 ```
 
 ## Part 6
@@ -777,28 +757,22 @@ export { dog };
 
 ```js
 let cat = "cat";
-export { cat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { cat };
 ```
 
 ## Merged (module eval)
 
 ```js
 let dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-dog += "!";
 export { dog };
 dog += "!";
 export { dog };
 dog += "!";
 export { dog };
+dog += "!";
+export { dog };
+("module evaluation");
 console.log(dog);
 console.log(dog);
 console.log(dog);
-"module evaluation";
-
 ```

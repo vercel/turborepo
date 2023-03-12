@@ -120,8 +120,8 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(2, VarDeclarator(0)), ItemId(Export((Atom('DOG' type=inline), #0)))]"];
-    N2["Items: [ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0)), ItemId(Export((Atom('CHIMERA' type=inline), #0)))]"];
+    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
     N3["Items: [ItemId(0, VarDeclarator(0))]"];
     N1 --> N3;
     N2 --> N3;
@@ -141,11 +141,9 @@ graph TD
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
+export { DOG };
 const DOG = dog;
 export { DOG };
-export { DOG } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -155,15 +153,11 @@ export { DOG } from "__turbopack_fake_url__" assert {
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
+export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
+export { cat };
 export { CHIMERA };
-export { cat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-export { CHIMERA } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -171,10 +165,7 @@ export { CHIMERA } from "__turbopack_fake_url__" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { dog };
 ```
 
 ## Merged (module eval)
@@ -197,11 +188,9 @@ export { dog } from "__turbopack_fake_url__" assert {
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
+export { DOG };
 const DOG = dog;
 export { DOG };
-export { DOG } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -211,15 +200,11 @@ export { DOG } from "__turbopack_fake_url__" assert {
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 3
 };
+export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
+export { cat };
 export { CHIMERA };
-export { cat } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-export { CHIMERA } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
 
 ```
 
@@ -227,10 +212,7 @@ export { CHIMERA } from "__turbopack_fake_url__" assert {
 
 ```js
 const dog = "dog";
-export { dog } from "__turbopack_fake_url__" assert {
-    __turbopack_var__: true
-};
-
+export { dog };
 ```
 
 ## Merged (module eval)
