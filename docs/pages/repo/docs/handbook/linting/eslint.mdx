@@ -105,6 +105,8 @@ module.exports = {
 
 By adding `custom` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom` - and it finds our workspace.
 
+Another way would be to instead have the same file as above on the root of the monorepo, since ESLint will look up the directory tree if it doesn't find a configuration file in the current directory.
+
 ### Summary
 
 This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.

@@ -288,12 +288,15 @@ The way ESLint finds its configuration file is by looking at the closest `.eslin
 
 So that means that if we're working on code inside `packages/ui` (which doesn't have a `.eslintrc.js`) it'll refer to the _root_ instead.
 
-Apps that _do_ have an `.eslintrc.js` can refer to `custom` in the same way. For instance, in `docs`:
+Apps and packages are able to extend this configuration the same way. For instance, if we want to add a new rule specific to the `docs` app, we would do so by creating a file like this in said directory:
 
 ```ts filename="apps/docs/.eslintrc.js"
 module.exports = {
   root: true,
   extends: ["custom"],
+    rules: {
+      "no-debugger": 2,
+  },
 };
 ```
 

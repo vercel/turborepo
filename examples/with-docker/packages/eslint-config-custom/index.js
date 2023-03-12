@@ -10,4 +10,7 @@ module.exports = {
       presets: [require.resolve("next/babel")],
     },
   },
+  rules: {
+    "@next/next/no-html-link-for-pages": "off",
+  },
 };
