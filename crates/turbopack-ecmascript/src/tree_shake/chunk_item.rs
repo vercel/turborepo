@@ -13,6 +13,9 @@ use crate::{
     gen_content, EcmascriptModuleAssetVc,
 };
 
+/// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].
+///
+/// This is a pointer to a part of an ES module.
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartChunkItem {
     pub(super) full_module: EcmascriptModuleAssetVc,
