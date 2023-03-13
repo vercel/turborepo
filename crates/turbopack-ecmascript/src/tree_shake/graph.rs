@@ -69,7 +69,7 @@ type FxBuildHasher = BuildHasherDefault<FxHasher>;
 /// Data about a module item
 #[derive(Debug)]
 pub(crate) struct ItemData {
-    /// If the module item is hoisted?
+    /// Is the module item hoisted?
     pub is_hoisted: bool,
 
     pub pure: bool,
