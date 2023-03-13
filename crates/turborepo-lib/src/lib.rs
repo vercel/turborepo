@@ -2,6 +2,7 @@ mod cli;
 mod client;
 mod commands;
 mod config;
+mod files;
 mod package_manager;
 mod retry;
 mod shim;

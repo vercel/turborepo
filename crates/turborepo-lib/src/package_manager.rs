@@ -1,45 +1,8 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
-struct PnpmWorkspace {
-    pub packages: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PackageJsonWorkspaces {
-    workspaces: Workspaces,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-#[serde(untagged)]
-enum Workspaces {
-    TopLevel(Vec<String>),
-    Nested { packages: Vec<String> },
-}
-
-impl AsRef<[String]> for Workspaces {
-    fn as_ref(&self) -> &[String] {
-        match self {
-            Workspaces::TopLevel(packages) => packages.as_slice(),
-            Workspaces::Nested { packages } => packages.as_slice(),
-        }
-    }
-}
-
-impl From<Workspaces> for Vec<String> {
-    fn from(value: Workspaces) -> Self {
-        match value {
-            Workspaces::TopLevel(packages) => packages,
-            Workspaces::Nested { packages } => packages,
-        }
-    }
-}
+use crate::files::{package_json, pnpm_workspace};
 
 pub enum PackageManager {
     #[allow(dead_code)]
@@ -98,22 +61,19 @@ impl PackageManager {
     pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Option<Globs>> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
-                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
-                if pnpm_workspace.packages.is_empty() {
-                    return Ok(None);
-                } else {
-                    pnpm_workspace.packages
+                let pnpm_workspace = pnpm_workspace::read(root_path.join("pnpm-workspace.yaml"))?;
+
+                match pnpm_workspace.packages {
+                    Some(packages) => packages,
+                    None => return Ok(None),
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
-                let package_json_text = fs::read_to_string(root_path.join("package.json"))?;
-                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
+                let package_json = package_json::read(root_path.join("package.json"))?;
 
-                if package_json.workspaces.as_ref().is_empty() {
-                    return Ok(None);
-                } else {
-                    package_json.workspaces.into()
+                match package_json.workspaces {
+                    Some(workspaces) => workspaces.into(),
+                    None => return Ok(None),
                 }
             }
         };
@@ -178,16 +138,5 @@ mod tests {
                 Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
             };
         }
-    }
-
-    #[test]
-    fn test_nested_workspace_globs() -> Result<()> {
-        let top_level: PackageJsonWorkspaces =
-            serde_json::from_str("{ \"workspaces\": [\"packages/**\"]}")?;
-        assert_eq!(top_level.workspaces.as_ref(), vec!["packages/**"]);
-        let nested: PackageJsonWorkspaces =
-            serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
-        assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
-        Ok(())
     }
 }
