@@ -188,7 +188,7 @@ impl DepGraph {
     /// is production-only, and weak dependencies are treated as strong
     /// dependencies in development mode.
     pub(super) fn handle_weak(&mut self, mode: Mode) {
-        if !matches(mode, Mode::Production) {
+        if !matches!(mode, Mode::Production) {
             return;
         }
 
