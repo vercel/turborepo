@@ -237,7 +237,10 @@ impl EcmascriptInputTransform {
                 };
 
                 let p = std::mem::replace(program, Program::Module(Module::dummy()));
-                *program = p.fold_with(&mut decorators(config));
+                *program = p.fold_with(&mut chain!(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
+                ));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) => {
                 let transition_name = &*transition_name.await?;

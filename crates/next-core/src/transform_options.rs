@@ -65,7 +65,10 @@ pub async fn get_decorators_transform_options(
 
     let decorators_transform_options = if let Some(tsconfig) = tsconfig {
         read_from_tsconfigs(&tsconfig, |json, _| {
-            let decorators_kind = if json["compilerOptions"]["experimentalDecorators"].as_bool()? {
+            let decorators_kind = if json["compilerOptions"]["experimentalDecorators"]
+                .as_bool()
+                .unwrap_or(false)
+            {
                 Some(DecoratorsKind::Legacy)
             } else {
                 // ref: https://devblogs.microsoft.com/typescript/announcing-typescript-5-0-rc/#differences-with-experimental-legacy-decorators
@@ -82,7 +85,9 @@ pub async fn get_decorators_transform_options(
                         // ref: This new decorators proposal is not compatible with
                         // --emitDecoratorMetadata, and it does not allow decorating parameters.
                         // Future ECMAScript proposals may be able to help bridge that gap
-                        json["compilerOptions"]["emitDecoratorMetadata"].as_bool()?
+                        json["compilerOptions"]["emitDecoratorMetadata"]
+                            .as_bool()
+                            .unwrap_or(false)
                     }
                     DecoratorsKind::Ecma => false,
                 }
@@ -94,7 +99,8 @@ pub async fn get_decorators_transform_options(
                 decorators_kind,
                 emit_decorators_metadata,
                 use_define_for_class_fields: json["compilerOptions"]["useDefineForClassFields"]
-                    .as_bool()?,
+                    .as_bool()
+                    .unwrap_or(false),
                 ..Default::default()
             })
         })
