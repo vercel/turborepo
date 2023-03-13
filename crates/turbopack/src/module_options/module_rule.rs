@@ -64,7 +64,7 @@ pub enum ModuleType {
     Custom(u8),
 }
 
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct EcmascriptOptions {
     /// module is split into smaller module parts and they can selectively
     /// imported
