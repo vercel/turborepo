@@ -102,7 +102,7 @@ pub(crate) struct ImportMap {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ImportedSymbols {
+pub(crate) enum ImportedSymbols {
     Symbols(Vec<JsWord>),
     Namespace,
 }
