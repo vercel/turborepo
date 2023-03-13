@@ -3,7 +3,21 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
-      "inputs": ["internal/**"],
+      "inputs": [
+        // rust related code should also trigger integration tests
+        "../crates/turborepo*",
+        "../crates/turborepo*/**",
+        "../crates/turbo-updater",
+        "../Cargo.lock",
+        // changes to integration tests themselves
+        "scripts/e2e/e2e.ts",
+        // all turborepo go related code
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "package.json",
+        "package-lock.json"
+      ],
       "outputs": ["turbo", "turbo.exe"]
     },
 
