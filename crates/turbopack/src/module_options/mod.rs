@@ -90,13 +90,13 @@ impl ModuleOptionsVc {
         // Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won't be JSX nodes for Styled JSX to transform.
         if enable_styled_jsx {
-            transforms.push(EcmascriptInputTransform::StyledJsx)
+            transforms.push(EcmascriptInputTransform::StyledJsx);
         }
         if enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion)
+            transforms.push(EcmascriptInputTransform::Emotion);
         }
         if enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents)
+            transforms.push(EcmascriptInputTransform::StyledComponents);
         }
         if enable_jsx {
             transforms.push(EcmascriptInputTransform::React {
@@ -117,7 +117,7 @@ impl ModuleOptionsVc {
             None
         };
 
-        let decorators_transform = if let Some(options) = decorators {
+        let decorators_transform = if let Some(options) = &decorators {
             let options = options.await?;
             options
                 .decorators_kind
@@ -132,21 +132,10 @@ impl ModuleOptionsVc {
             None
         };
 
-        // if typescript transform is not enabled, push decorators transform without
-        // considering transform order. otherwise, push decorators transform
-        // _before_ typescript transform since some of the typescript's decorator
-        // options may require type information.
-        if ts_transform.is_none() {
-            if let Some(decorators_transform) = decorators_transform {
-                transforms.push(decorators_transform);
-            }
-        }
-
-        let app_transforms = EcmascriptInputTransformsVc::cell(transforms);
         let vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
         let ts_app_transforms = if let Some(transform) = &ts_transform {
-            let mut base_transforms = if let Some(decorators_transform) = decorators_transform {
+            let mut base_transforms = if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone(), transform.clone()]
             } else {
                 vec![transform.clone()]
@@ -156,17 +145,17 @@ impl ModuleOptionsVc {
                 base_transforms
                     .iter()
                     .cloned()
-                    .chain(app_transforms.await?.iter().cloned())
+                    .chain(transforms.iter().cloned())
                     .collect(),
             )
         } else {
-            app_transforms
+            EcmascriptInputTransformsVc::cell(transforms.clone())
         };
 
         let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
         let mdx_transforms = EcmascriptInputTransformsVc::cell(
             if let Some(transform) = &ts_transform {
-                if let Some(decorators_transform) = decorators_transform {
+                if let Some(decorators_transform) = &decorators_transform {
                     vec![decorators_transform.clone(), transform.clone()]
                 } else {
                     vec![transform.clone()]
@@ -175,8 +164,28 @@ impl ModuleOptionsVc {
                 vec![]
             }
             .iter()
-            .chain(app_transforms.await?.iter())
             .cloned()
+            .chain(transforms.iter().cloned())
+            .collect(),
+        );
+
+        // Apply decorators transform for the ModuleType::Ecmascript as well after
+        // constructing ts_app_transforms. Ecmascript can have decorators for
+        // the cases of 1. using jsconfig, to enable ts-specific runtime
+        // decorators (i.e legacy) 2. ecma spec decorators
+        //
+        // Since typescript transform (`ts_app_transforms`) needs to apply decorators
+        // _before_ stripping types, we create ts_app_transforms first in a
+        // specific order with typescript, then apply decorators to app_transforms.
+        let app_transforms = EcmascriptInputTransformsVc::cell(
+            if let Some(decorators_transform) = &decorators_transform {
+                vec![decorators_transform.clone()]
+            } else {
+                vec![]
+            }
+            .iter()
+            .cloned()
+            .chain(transforms.iter().cloned())
             .collect(),
         );
 

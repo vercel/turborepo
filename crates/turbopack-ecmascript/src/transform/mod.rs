@@ -211,13 +211,16 @@ impl EcmascriptInputTransform {
             } => {
                 use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
                 let config = Config {
-                    legacy: is_legacy,
-                    emit_metadata: emit_decorators_metadata,
-                    use_define_for_class_fields,
+                    legacy: *is_legacy,
+                    emit_metadata: *emit_decorators_metadata,
+                    use_define_for_class_fields: *use_define_for_class_fields,
                 };
 
                 let p = std::mem::replace(program, Program::Module(Module::dummy()));
-                *program = p.fold_with(&mut decorators(config));
+                *program = p.fold_with(&mut chain!(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
+                ));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) => {
                 let transition_name = &*transition_name.await?;
