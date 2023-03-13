@@ -89,9 +89,9 @@ impl AssetIdentVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_part(self, part: Option<ModulePartVc>) -> Result<Self> {
+    pub async fn with_part(self, part: ModulePartVc) -> Result<Self> {
         let mut this = self.await?.clone_value();
-        this.part = part;
+        this.part = Some(part);
         Ok(Self::new(Value::new(this)))
     }
 
