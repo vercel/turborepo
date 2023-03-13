@@ -598,10 +598,7 @@ impl DepGraph {
                             ItemData {
                                 is_hoisted: true,
                                 var_decls: {
-                                    let mut v =
-                                        IndexSet::with_capacity_and_hasher(1, Default::default());
-                                    v.insert(local);
-                                    v
+                                    [v].into_iter().collect()
                                 },
                                 pure: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
