@@ -94,9 +94,7 @@ pub(crate) struct ImportMap {
     /// List of (index in references, imported symbol, exported symbol)
     reexports: Vec<(usize, Reexport)>,
 
-    /// Ordered list of (module path, imported symbols, annotations)
-    ///
-    /// imported symbols is `None` when it's a namespace import.
+    /// Ordered list of imported symbols
     references: IndexSet<ImportMapReference>,
 
     /// True, when the module has exports
