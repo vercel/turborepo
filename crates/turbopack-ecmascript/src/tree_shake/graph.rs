@@ -550,7 +550,7 @@ impl DepGraph {
                         exports.push((js_word!("default"), Default::default()));
                     }
                     ModuleDecl::ExportAll(_) => {
-                        // noop as this is an reexport.
+                        // noop as this is a reexport.
                     }
                     _ => {}
                 }
