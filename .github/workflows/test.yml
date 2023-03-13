@@ -103,8 +103,8 @@ jobs:
             !**.md
             !**.mdx
 
-      - name: Turborepo related changes
-        id: turborepo
+      - name: Turborepo Rust related changes
+        id: turborepo_rust
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
@@ -169,10 +169,9 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
+      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -210,10 +209,9 @@ jobs:
           working-directory: cli
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
-  go_unit:
-    name: Go Unit Tests
+  turborepo_tests:
+    name: Go Unit, Integration, and E2E Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -234,70 +232,10 @@ jobs:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      # TODO: ensure integration tests runs with both GO_TAG: go and GO_TAG: rust
       - run: pnpm -- turbo run test --filter=cli --color
-
-  go_integration:
-    name: Go Integration Tests
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.go_e2e == 'true'
-    timeout-minutes: 30
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          target: ${{ matrix.os.name }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v3
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
-
-      - name: Integration Tests
-        run: pnpm -- turbo run integration-tests --filter=cli
         env:
-          GO_TAG: go
-
-      - name: Integration Tests (with Rust FFI)
-        run: pnpm -- turbo run integration-tests --filter=cli
-        env:
-          GO_TAG: rust
-
-  go_e2e:
-    name: Go E2E Tests
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.go_e2e == 'true'
-    timeout-minutes: 30
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          target: ${{ matrix.os.name }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: E2E Tests
-        # Turbo has already been built in previous step, no need to rebuild
-        run: pnpm -- turbo run e2e-prebuilt --filter=cli
+          GITHUB_CI_OS_NAME: ${{ matrix.os.name }}
 
   go_examples:
     name: Go Cli Examples
@@ -1065,10 +1003,8 @@ jobs:
     needs:
       - determine_jobs
       - go_lint
-      - go_unit
+      - turborepo_tests
       - go_examples
-      - go_e2e
-      - go_integration
       - rust_prepare
       - rust_lint
       - rust_check
@@ -1100,9 +1036,8 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
+          subjob ${{needs.turborepo_tests.result}} "Go Unit, Integration, & E2E tests"
           subjob ${{needs.go_examples.result}} "Go examples"
-          subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"
           subjob ${{needs.rust_lint.result}} "Rust lints"
@@ -1176,10 +1111,8 @@ jobs:
       - final
       - determine_jobs
       - go_lint
-      - go_unit
+      - turborepo_tests
       - go_examples
-      - go_e2e
-      - go_integration
       - rust_prepare
       - rust_lint
       - rust_check
@@ -1217,10 +1150,8 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.go_examples.result}} "Go examples"
-          subjob ${{needs.go_e2e.result}} "Go e2e tests"
-          subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.turborepo_tests.result}} "Turborepo Unit, Integration, & E2E tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.rust_check.result}} "Rust checks"

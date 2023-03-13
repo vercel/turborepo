@@ -3,19 +3,72 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
+      "inputs": ["internal/**"],
       "outputs": ["turbo", "turbo.exe"]
     },
 
-    "e2e": {
-      "outputs": [],
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
+    // Pseudo wrapper task
+    // test task doesn't depend on `build` because it's executing
+    // via a local `turbo` build, which means that `build` has already run.
+    // The `test` task runs e2e tests, but expects unit and integration tests to run
+    // in parallel first.
+    "test": {
+      "dependsOn": ["test:e2e"],
+      // Nullifies `outputs` in the root turbo.json
+      "outputs": []
     },
-    "e2e-prebuilt": {
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
+
+
+    "test:e2e": {
+      // test:e2e depends on test:integration. This is just a way to specify order
+      "dependsOn": ["test:integration"],
+      "inputs": [
+        // rust related code should also trigger integration tests
+        "../crates/turborepo*",
+        "../crates/turborepo*/**",
+        "../crates/turbo-updater",
+        "../Cargo.lock",
+        // changes to integration tests themselves
+        "scripts/e2e/e2e.ts",
+        // all turborepo go related code
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "package.json",
+        "package-lock.json"
+      ],
+      "env": ["GITHUB_CI_OS_NAME"]
     },
-    "integration-tests": {
-      "inputs": ["integration_tests/**"],
+
+
+    "test:integration": {
+      // test:integration depends on test:unit. This is just way to specify order
+      "dependsOn": ["test:unit"],
+      "inputs": [
+        // rust related code should also trigger integration tests
+        "../crates/turborepo*",
+        "../crates/turborepo*/**",
+        "../crates/turbo-updater",
+        "../Cargo.lock",
+        // changes to integration tests themselves
+        "integration_tests/**",
+        // all turborepo go related code
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "package.json",
+        "package-lock.json"
+      ],
+      // Note: does not depend on `GITHUB_CI_OS_NAME`, because we don't run these on each
+      // machine matrix in Github CI. It will still execute on the full matrix,
+      // but should get a cache hit.
       "env": ["GO_TAG"]
+    },
+
+    // test:unit are Go tests, and will be less useful as we migrate utilities to Rust.
+    "test:unit": {
+      "inputs": ["**/*.go"],
+      "env": ["GITHUB_CI_OS_NAME"]
     }
   }
 }

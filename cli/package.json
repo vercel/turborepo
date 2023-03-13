@@ -5,12 +5,12 @@
   "scripts": {
     "clean": "make clean",
     "build": "make",
-    "test": "make test-go",
-    "e2e": "make e2e",
-    "e2e-prebuilt": "make e2e-prebuilt",
+    "test": "echo \"running all tests\"",
+    "test:e2e": "make e2e-prebuilt",
+    "test:unit": "make test-go",
+    "test:integration": "make integration-tests",
     "format": "make fmt-go",
-    "lint": "make lint-go",
-    "integration-tests": "make integration-tests"
+    "lint": "make lint-go"
   },
   "devDependencies": {
     "copy-template-dir": "^1.4.0",
