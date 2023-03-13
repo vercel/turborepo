@@ -210,46 +210,54 @@ impl Default for TurboState {
 
 impl TurboState {
     pub fn platform_package_name() -> String {
-        let arch = {
+        let arch: &'static str = {
             #[cfg(target_arch = "x86_64")]
             {
-                String::from("64")
+                "64"
             }
             #[cfg(target_arch = "aarch64")]
             {
-                String::from("arm64")
+                "arm64"
             }
         };
 
-        let os = {
+        let os: &'static str = {
             #[cfg(target_os = "macos")]
             {
-                String::from("darwin")
+                "darwin"
             }
             #[cfg(target_arch = "windows")]
             {
-                String::from("windows")
+                "windows"
             }
             #[cfg(target_arch = "linux")]
             {
-                String::from("linux")
+                "linux"
             }
         };
 
         format!("turbo-{}-{}", os, arch)
     }
 
-    pub fn binary_name() -> String {
+    pub fn binary_name() -> &'static str {
         {
             #[cfg(windows)]
             {
-                String::from("turbo.exe")
+                "turbo.exe"
             }
             #[cfg(not(windows))]
             {
-                String::from("turbo")
+                "turbo"
             }
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn version() -> &'static str {
+        include_str!("../../../version.txt")
+            .lines()
+            .next()
+            .expect("Failed to read version from version.txt")
     }
 }
 
