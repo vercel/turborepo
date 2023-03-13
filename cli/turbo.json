@@ -21,33 +21,21 @@
       "outputs": ["turbo", "turbo.exe"]
     },
 
-    // Pseudo wrapper task
-    // test task doesn't depend on `build` because it's executing
-    // via a local `turbo` build, which means that `build` has already run.
-    // The `test` task runs e2e tests, but expects unit and integration tests to run
-    // in parallel first.
+    // `test` is a pseudo-wrapper task
     "test": {
+      // only needs to define the entrypoint dependency to `test:e2e`, which will have its own dependencies
       "dependsOn": ["test:e2e"],
       // Nullifies `outputs` in the root turbo.json
       "outputs": []
     },
 
 
+    // test:e2e exercise different package manager and generate a test repo as part of the test
     "test:e2e": {
       // test:e2e depends on test:integration. This is just a way to specify order
       "dependsOn": ["build", "test:integration"],
       "inputs": [
-        // rust related code should also trigger integration tests
-        "../crates/turborepo*",
-        "../crates/turborepo*/**",
-        "../crates/turbo-updater",
-        "../Cargo.lock",
-        // changes to integration tests themselves
         "scripts/e2e/e2e.ts",
-        // all turborepo go related code
-        "**/*.go",
-        "go.mod",
-        "go.sum",
         "package.json",
         "package-lock.json"
       ],
@@ -55,24 +43,13 @@
     },
 
 
+    // test:integration are Prysk tests that invoke turbo through the Rust shim
     "test:integration": {
-      // test:integration depends on test:unit. This is just way to specify order
+      // dependsOn build, so that local binary is built first
+      // depends on test:unit. This is just way to specify order.
       "dependsOn": ["build", "test:unit"],
-      "inputs": [
-        // rust related code should also trigger integration tests
-        "../crates/turborepo*",
-        "../crates/turborepo*/**",
-        "../crates/turbo-updater",
-        "../Cargo.lock",
-        // changes to integration tests themselves
-        "integration_tests/**",
-        // all turborepo go related code
-        "**/*.go",
-        "go.mod",
-        "go.sum",
-        "package.json",
-        "package-lock.json"
-      ],
+      // changes to integration tests themselves
+      "inputs": ["integration_tests/**"],
       // Note: does not depend on `GITHUB_CI_OS_NAME`, because we don't run these on each
       // machine matrix in Github CI. It will still execute on the full matrix,
       // but should get a cache hit.
@@ -81,8 +58,9 @@
 
     // test:unit are Go tests, and will be less useful as we migrate utilities to Rust.
     "test:unit": {
+      // dependsOn build, so that local binary is built first
       "dependsOn": ["build"],
-      "inputs": ["**/*.go"],
+      "inputs": ["**/*_test.go"],
       "env": ["GITHUB_CI_OS_NAME"]
     }
   }
