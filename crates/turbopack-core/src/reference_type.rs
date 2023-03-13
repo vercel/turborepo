@@ -16,10 +16,11 @@ pub enum CommonJsReferenceSubType {
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmaScriptModulesReferenceSubType {
     ImportPart(ModulePartVc),
     Custom(u8),
+    #[default]
     Undefined,
 }
 
