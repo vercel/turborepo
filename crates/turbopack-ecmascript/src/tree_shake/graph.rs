@@ -360,7 +360,7 @@ impl DepGraph {
             global_done: &mut FxHashSet<u32>,
             group_done: &mut FxHashSet<u32>,
         ) -> bool {
-            // TODO: Consider cycles
+            // TODO(WEB-706): Consider cycles
             //
 
             let mut changed = false;
