@@ -96,7 +96,7 @@ fn add_changed_files_from_unstaged_changes(
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
             let project_relative_file_path = relative_to.map_or(Ok(file_path), |relative_to| {
-                file_path.strip_prefix(relative_to.to_string())
+                file_path.strip_prefix(relative_to.as_forward_relative_path().as_path())
             })?;
 
             files.insert(
@@ -138,7 +138,7 @@ fn add_changed_files_from_commits(
         let file = delta.old_file();
         if let Some(path) = file.path() {
             let path = relative_to.map_or(Ok(path), |relative_to| {
-                path.strip_prefix(relative_to.to_string())
+                path.strip_prefix(relative_to.as_forward_relative_path().as_path())
             })?;
             files.insert(
                 path.to_str()
