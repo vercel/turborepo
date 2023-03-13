@@ -79,8 +79,9 @@ impl Analyzer<'_> {
                 eventual_ids.extend(item.eventual_write_vars.iter().cloned());
 
                 if item.is_hoisted && item.side_effects {
-                    self.g
-                        .add_strong_deps(item_id, self.last_side_effect.take().iter());
+                    if let Some(last) = self.last_side_effect.take() {
+                        self.g.add_strong_dep(item_id, &last)
+                    }
 
                     self.last_side_effects.push(item_id.clone());
                 }
