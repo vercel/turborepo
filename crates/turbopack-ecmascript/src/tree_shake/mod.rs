@@ -33,7 +33,7 @@ pub struct Analyzer<'a> {
 
 #[derive(Debug, Default)]
 struct VarState {
-    /// The module items that might triggered side effects on that variable.
+    /// The module items that might trigger side effects on that variable.
     /// We also store if this is a `const` write, so no further change will
     /// happen to this var.
     last_writes: Vec<ItemId>,
