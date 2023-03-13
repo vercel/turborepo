@@ -161,14 +161,16 @@ impl Visit for CapturedIdCollector {
     }
 
     fn visit_ident(&mut self, n: &Ident) {
-        if self.is_nested {
-            match self.mode {
-                Mode::Read => {
-                    self.vars.read.insert(n.to_id());
-                }
-                Mode::Write => {
-                    self.vars.write.insert(n.to_id());
-                }
+        if !self.is_nested {
+            return;
+        }
+    
+        match self.mode {
+            Mode::Read => {
+                self.vars.read.insert(n.to_id());
+            }
+            Mode::Write => {
+                self.vars.write.insert(n.to_id());
             }
         }
     }
