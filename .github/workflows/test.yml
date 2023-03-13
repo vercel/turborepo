@@ -746,41 +746,6 @@ jobs:
         run: |
           cargo test --benches --release
 
-  rust_bench_pr:
-    needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
-    name: Benchmark and compare performance
-    runs-on: ubuntu-latest-16-core-oss
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Fetch the base branch
-        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
-
-      - name: Benchmark and compare with base branch
-        uses: sokra/criterion-compare-action@main
-        timeout-minutes: 180
-        with:
-          branchName: base
-
   rust_bench:
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
@@ -1038,7 +1003,6 @@ jobs:
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
       - rust_bench
-      - rust_bench_pr
       - format_lint
     if: always()
     permissions:
@@ -1079,7 +1043,6 @@ jobs:
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.format_lint.result}} "Formatting"
           subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
-          subjob ${{needs.rust_bench_pr.result}} "Turbopack Rust PR benchmarks (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
