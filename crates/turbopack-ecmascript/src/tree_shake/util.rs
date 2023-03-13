@@ -164,7 +164,7 @@ impl Visit for CapturedIdCollector {
         if !self.is_nested {
             return;
         }
-    
+
         match self.mode {
             Mode::Read => {
                 self.vars.read.insert(n.to_id());

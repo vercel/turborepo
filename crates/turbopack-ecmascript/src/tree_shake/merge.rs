@@ -7,7 +7,7 @@ use swc_core::ecma::{
 
 use super::graph::find_turbopack_chunk_id_in_asserts;
 
-/// A lodaer used to merge module items after splitting.
+/// A loader used to merge module items after splitting.
 pub trait Load {
     /// Loads a module while returning [None] if the module is already loaded.
     fn load(&mut self, uri: &str, part_id: u32) -> Result<Option<Module>, Error>;
