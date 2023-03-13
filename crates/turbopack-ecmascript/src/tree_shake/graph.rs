@@ -83,8 +83,7 @@ pub(crate) struct ItemData {
     /// Variables read by this module item eventually
     ///
     /// - e.g. variables read in the body of function declarations are
-    ///   considered
-    ///  as eventually read
+    ///   considered as eventually read
     /// - This is only used when reads are not trigger directly by this module
     ///   item, but require a side effect to be triggered. We don’t know when
     ///   this is executed.
