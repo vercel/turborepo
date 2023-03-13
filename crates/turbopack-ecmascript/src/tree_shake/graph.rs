@@ -596,7 +596,7 @@ impl DepGraph {
                             id,
                             ItemData {
                                 is_hoisted: true,
-                                var_decls: { [local].into_iter().collect() },
+                                var_decls: [local].into_iter().collect(),
                                 pure: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                                     specifiers: vec![s.clone()],
