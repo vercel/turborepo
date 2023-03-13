@@ -33,7 +33,7 @@ pub fn changed_files(
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
-    let repo = Repository::open(&repo_root)?;
+    let repo = Repository::discover(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
 
     let relative_to = if let Some(relative_to) = relative_to {
@@ -158,7 +158,7 @@ pub fn previous_content(
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let repo = Repository::open(&repo_root)?;
+    let repo = Repository::discover(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
     let from_commit_ref = repo.revparse_single(from_commit)?;
     let from_commit = from_commit_ref.peel_to_commit()?;
