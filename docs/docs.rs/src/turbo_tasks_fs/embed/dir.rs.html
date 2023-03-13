@@ -91,12 +91,12 @@
 
         <span class="comment">// make sure the types the `include_dir!` proc macro refers to are in scope
         </span><span class="kw">use </span>turbo_tasks_fs::embed::include_dir;
-        <span class="attr">#[cfg(debug_assertions)]
+        <span class="attr">#[cfg(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>))]
         </span>{
           <span class="kw">let </span>path = <span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_MANIFEST_DIR&quot;</span>));
           turbo_tasks_fs::embed::directory_from_relative_path(<span class="macro-nonterminal">$name</span>, path)
         }
-        <span class="attr">#[cfg(not(debug_assertions))]
+        <span class="attr">#[cfg(not(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>)))]
         </span>{
            <span class="comment">// check that the directory exists at compile time even for debug builds
            </span><span class="kw">static </span>dir: include_dir::Dir&lt;<span class="lifetime">&#39;static</span>&gt; = <span class="macro">turbo_tasks_fs::embed::include_dir!</span>(<span class="macro-nonterminal">$path</span>);

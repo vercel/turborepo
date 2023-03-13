@@ -89,7 +89,7 @@
 <span class="doccomment">/// Loads a file&#39;s content from disk and invalidates on change (debug builds).
 ///
 /// In production, this will embed a file&#39;s content into the binary directly.
-</span><span class="attr">#[cfg(debug_assertions)]
+</span><span class="attr">#[cfg(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>))]
 #[macro_export]
 </span><span class="macro">macro_rules! </span>embed_file {
     (<span class="macro-nonterminal">$path</span>:expr) =&gt; {{
@@ -101,7 +101,7 @@
 }
 
 <span class="doccomment">/// Embeds a file&#39;s content into the binary (production).
-</span><span class="attr">#[cfg(not(debug_assertions))]
+</span><span class="attr">#[cfg(not(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>)))]
 #[macro_export]
 </span><span class="macro">macro_rules! </span>embed_file {
     (<span class="macro-nonterminal">$path</span>:expr) =&gt; {
