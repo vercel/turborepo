@@ -220,52 +220,6 @@ impl EcmascriptInputTransform {
                     program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
                 }
             }
-            EcmascriptInputTransform::NextJsStripPageExports(export_type) => {
-                // TODO(alexkirsz) Connect the eliminated_packages to telemetry.
-                let eliminated_packages = Default::default();
-
-                let module_program = unwrap_module_program(program);
-
-                *program = module_program.fold_with(&mut next_transform_strip_page_exports(
-                    export_type.into(),
-                    eliminated_packages,
-                ));
-            }
-            EcmascriptInputTransform::NextJsDynamic {
-                is_development,
-                is_server,
-                is_server_components,
-                pages_dir,
-            } => {
-                let module_program = unwrap_module_program(program);
-
-                let pages_dir = if let Some(pages_dir) = pages_dir {
-                    Some(pages_dir.await?.path.clone().into())
-                } else {
-                    None
-                };
-
-                *program = module_program.fold_with(&mut next_dynamic(
-                    is_development,
-                    is_server,
-                    is_server_components,
-                    NextDynamicMode::Turbo,
-                    FileName::Real(file_path_str.into()),
-                    pages_dir,
-                ));
-            }
-            EcmascriptInputTransform::NextJsFont(font_loaders_vc) => {
-                let mut font_loaders = vec![];
-                for loader in &(*font_loaders_vc.await?) {
-                    font_loaders.push(std::convert::Into::<JsWord>::into(&**loader));
-                }
-                let mut next_font = next_font::next_font_loaders(next_font::Config {
-                    font_loaders,
-                    relative_file_path_from_root: file_name_str.into(),
-                });
-
-                program.visit_mut_with(&mut next_font);
-            }
             EcmascriptInputTransform::Custom => todo!(),
         }
         Ok(())
