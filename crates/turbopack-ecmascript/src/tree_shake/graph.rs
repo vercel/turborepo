@@ -99,7 +99,7 @@ pub(crate) struct ItemData {
     /// Side effects that are triggered on local variables eventually
     pub eventual_write_vars: IndexSet<Id, FxBuildHasher>,
 
-    /// Are other unknown side effects that are trigger during evaluation
+    /// Any other unknown side effects that are trigger during evaluation
     pub side_effects: bool,
 
     pub content: ModuleItem,
