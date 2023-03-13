@@ -129,7 +129,7 @@ async fn apply_module_type(
 
             if options.import_parts {
                 if let Some(part) = part {
-                    if let Ok(v) = EcmascriptModulePartAssetVc::from_split(base, part).await {
+                    if let Ok(v) = EcmascriptModulePartAssetVc::new(base, part) {
                         return Ok(v.into());
                     }
                 }

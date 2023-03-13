@@ -34,11 +34,10 @@ pub struct EcmascriptModulePartAsset {
 }
 
 impl EcmascriptModulePartAssetVc {
-    pub(super) fn new(data: EcmascriptModulePartAsset) -> Self {
-        data.cell()
-    }
-
-    pub async fn from_split(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Result<Self> {
+    /// Create a new instance of [EcmascriptModulePartAssetVc], whcih consists
+    /// of a pointer to the full module and the [ModulePart] pointing the part
+    /// of the module.
+    pub fn new(module: EcmascriptModuleAssetVc, part: ModulePartVc) -> Result<Self> {
         Ok(EcmascriptModulePartAsset {
             full_module: module,
             part,
@@ -72,17 +71,17 @@ impl Asset for EcmascriptModulePartAsset {
         let mut assets = deps
             .iter()
             .map(|&part_id| {
-                SingleAssetReferenceVc::new(
-                    EcmascriptModulePartAssetVc::new(EcmascriptModulePartAsset {
-                        full_module: self.full_module,
-                        part: ModulePartVc::new(ModulePart::Internal(part_id)),
-                    })
+                Ok(SingleAssetReferenceVc::new(
+                    EcmascriptModulePartAssetVc::new(
+                        self.full_module,
+                        ModulePartVc::new(ModulePart::Internal(part_id)),
+                    )?
                     .as_asset(),
                     StringVc::cell("ecmascript module part".to_string()),
                 )
-                .as_asset_reference()
+                .as_asset_reference())
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         let external = self.full_module.references().await?;
 
