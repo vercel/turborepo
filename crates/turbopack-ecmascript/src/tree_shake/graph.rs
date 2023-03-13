@@ -191,7 +191,7 @@ impl DepGraph {
         if !matches(mode, Mode::Production) {
             return;
         }
-        
+
         for start in self.g.graph_ix.iter() {
             let start = self.g.get_node(start);
             for end in self.g.graph_ix.iter() {
@@ -433,7 +433,6 @@ impl DepGraph {
             }
         }
 
-
         loop {
             let mut changed = false;
 
@@ -597,9 +596,7 @@ impl DepGraph {
                             id,
                             ItemData {
                                 is_hoisted: true,
-                                var_decls: {
-                                    [v].into_iter().collect()
-                                },
+                                var_decls: { [v].into_iter().collect() },
                                 pure: true,
                                 content: ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                                     specifiers: vec![s.clone()],

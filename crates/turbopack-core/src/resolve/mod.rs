@@ -1283,10 +1283,17 @@ pub async fn handle_resolve_error(
     })
 }
 
+/// ModulePart represnts a part of a module.
+///
+/// Currently this is used only for ESMs.
 #[turbo_tasks::value]
 pub enum ModulePart {
+    /// Represents the side effects of a module. This part is evaluated even if
+    /// all exports are unused.
     ModuleEvaluation,
+    /// Represents an export of a module.
     Export(StringVc),
+    /// A pointer to a specific part.
     Internal(u32),
 }
 
