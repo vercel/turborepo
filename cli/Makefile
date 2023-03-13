@@ -321,7 +321,7 @@ integration-tests-serial: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) 
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
 integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES)
+	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES) --prysk-shell=`which bash`
 
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
