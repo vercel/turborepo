@@ -124,6 +124,7 @@ fn add_changed_files_from_commits(
     let to_commit = to_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
     let to_tree = to_commit.tree()?;
+
     let mut options = relative_to.map(|relative_to| {
         let mut options = DiffOptions::new();
         options.pathspec(relative_to.to_string());
@@ -136,7 +137,14 @@ fn add_changed_files_from_commits(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(path) = file.path() {
-            files.insert(path.to_string_lossy().to_string());
+            let path = relative_to.map_or(Ok(path), |relative_to| {
+                path.strip_prefix(relative_to.to_string())
+            })?;
+            files.insert(
+                path.to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
+                    .to_string(),
+            );
         }
     }
 
