@@ -22,7 +22,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, EcmascriptOptions, InnerAssetsVc,
 };
 
 use crate::{
@@ -62,6 +62,7 @@ pub async fn get_evaluate_pool(
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: false,
         }]),
+        Value::new(EcmascriptOptions::default()),
         context.compile_time_info(),
     )
     .as_asset();
@@ -91,6 +92,7 @@ pub async fn get_evaluate_pool(
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: false,
         }]),
+        Value::new(EcmascriptOptions::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
@@ -110,6 +112,7 @@ pub async fn get_evaluate_pool(
             EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
                 use_define_for_class_fields: false,
             }]),
+            Value::new(EcmascriptOptions::default()),
             context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();

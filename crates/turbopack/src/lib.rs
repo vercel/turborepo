@@ -47,6 +47,7 @@ use turbopack_core::{
         resolve, ModulePartVc, ResolveResultVc,
     },
 };
+use turbopack_ecmascript::EcmascriptOptions;
 
 use crate::transition::Transition;
 
@@ -123,6 +124,7 @@ async fn apply_module_type(
                 context.into(),
                 Value::new(EcmascriptModuleAssetType::Ecmascript),
                 *transforms,
+                Value::new(*options),
                 context.compile_time_info(),
             );
 
@@ -141,6 +143,7 @@ async fn apply_module_type(
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             *transforms,
+            Value::new(EcmascriptOptions::default()),
             context.compile_time_info(),
         )
         .into(),
@@ -149,6 +152,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             *transforms,
+            Value::new(EcmascriptOptions::default()),
             context.compile_time_info(),
         )
         .into(),
@@ -157,6 +161,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             *transforms,
+            Value::new(EcmascriptOptions::default()),
             context.compile_time_info(),
         )
         .into(),

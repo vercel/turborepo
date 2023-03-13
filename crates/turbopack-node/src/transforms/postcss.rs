@@ -23,7 +23,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptModuleAssetVc, EcmascriptOptions, InnerAssetsVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -152,6 +152,7 @@ async fn extra_configs(
                             context,
                             Value::new(EcmascriptModuleAssetType::Ecmascript),
                             EcmascriptInputTransformsVc::cell(vec![]),
+                            Value::new(EcmascriptOptions::default()),
                             context.compile_time_info(),
                         )
                         .into(),
@@ -186,6 +187,7 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: false,
         }]),
+        Value::new(EcmascriptOptions::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
