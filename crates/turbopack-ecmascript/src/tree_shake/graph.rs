@@ -188,15 +188,17 @@ impl DepGraph {
     /// is production-only, and weak dependencies are treated as strong
     /// dependencies in development mode.
     pub(super) fn handle_weak(&mut self, mode: Mode) {
-        if let Mode::Production = mode {
-            for start in self.g.graph_ix.iter() {
-                let start = self.g.get_node(start);
-                for end in self.g.graph_ix.iter() {
-                    let end = self.g.get_node(end);
+        if !matches(mode, Mode::Production) {
+            return;
+        }
+        
+        for start in self.g.graph_ix.iter() {
+            let start = self.g.get_node(start);
+            for end in self.g.graph_ix.iter() {
+                let end = self.g.get_node(end);
 
-                    if let Some(Dependency::Weak) = self.g.idx_graph.edge_weight(start, end) {
-                        self.g.idx_graph.remove_edge(start, end);
-                    }
+                if let Some(Dependency::Weak) = self.g.idx_graph.edge_weight(start, end) {
+                    self.g.idx_graph.remove_edge(start, end);
                 }
             }
         }
