@@ -49,7 +49,7 @@ impl AssetReference for EsmAsyncAssetReference {
         esm_resolve(
             self.origin,
             self.request,
-            Value::new(EcmaScriptModulesReferenceSubType::Undefined),
+            Default::default(),
         )
     }
 }
