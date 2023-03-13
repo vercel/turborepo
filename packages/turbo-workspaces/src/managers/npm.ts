@@ -13,6 +13,7 @@ import {
   ManagerHandler,
 } from "../types";
 import {
+  getMainStep,
   getWorkspaceInfo,
   getPackageJson,
   expandWorkspaces,
@@ -40,7 +41,9 @@ async function detect(args: DetectArgs): Promise<boolean> {
 async function read(args: ReadArgs): Promise<Project> {
   const isNpm = await detect(args);
   if (!isNpm) {
-    throw new ConvertError("Not an npm project");
+    throw new ConvertError("Not an npm project", {
+      type: "package_manager-unexpected",
+    });
   }
 
   const packageJson = getPackageJson(args);
@@ -76,7 +79,7 @@ async function create(args: CreateArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    `Creating ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+    getMainStep({ packageManager: "npm", action: "create", project })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
@@ -137,7 +140,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    `Creating ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+    getMainStep({ packageManager: "npm", action: "remove", project })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -169,7 +172,9 @@ async function remove(args: RemoveArgs): Promise<void> {
         )
       );
     } catch (err) {
-      throw new ConvertError("Failed to remove node_modules");
+      throw new ConvertError("Failed to remove node_modules", {
+        type: "error_removing_node_modules",
+      });
     }
   }
 }

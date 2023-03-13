@@ -72,18 +72,15 @@ export const PACKAGE_MANAGERS: Record<
 
 export function getPackageManagerMeta(packageManager: PackageManagerDetails) {
   const { version, name } = packageManager;
-
-  let pm = PACKAGE_MANAGERS[name].find((manager) => {
-    return manager.default;
-  });
-
   if (version) {
-    pm = PACKAGE_MANAGERS[name].find((manager) =>
+    return PACKAGE_MANAGERS[name].find((manager) =>
       satisfies(version, manager.semver)
     );
+  } else {
+    return PACKAGE_MANAGERS[name].find((manager) => {
+      return manager.default;
+    });
   }
-
-  return pm;
 }
 
 export default async function install(args: InstallArgs) {
@@ -93,7 +90,9 @@ export default async function install(args: InstallArgs) {
   const packageManager = getPackageManagerMeta(to);
 
   if (!packageManager) {
-    throw new ConvertError("Unsupported package manager version.");
+    throw new ConvertError("Unsupported package manager version.", {
+      type: "package_manager-unsupported_version",
+    });
   }
 
   installLogger.subStep(
@@ -101,9 +100,9 @@ export default async function install(args: InstallArgs) {
   );
   if (!options?.dry) {
     let spinner;
-    if (options?.interactive) {
+    if (installLogger?.interactive) {
       spinner = ora({
-        text: "Installing dependencies...",
+        text: "installing dependencies...",
         spinner: {
           frames: installLogger.installerFrames(),
         },
@@ -114,14 +113,13 @@ export default async function install(args: InstallArgs) {
       await execa(packageManager.command, packageManager.installArgs, {
         cwd: args.project.paths.root,
       });
+      if (spinner) {
+        spinner.stop();
+      }
       installLogger.subStep(`dependencies installed`);
     } catch (err) {
       installLogger.subStepFailure(`failed to install dependencies`);
       throw err;
-    } finally {
-      if (spinner) {
-        spinner.stop();
-      }
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   Project,
 } from "../types";
 import {
+  getMainStep,
   getWorkspaceInfo,
   getPackageJson,
   expandPaths,
@@ -39,7 +40,9 @@ async function detect(args: DetectArgs): Promise<boolean> {
 async function read(args: ReadArgs): Promise<Project> {
   const isYarn = await detect(args);
   if (!isYarn) {
-    throw new ConvertError("Not a yarn project");
+    throw new ConvertError("Not a yarn project", {
+      type: "package_manager-unexpected",
+    });
   }
 
   const packageJson = getPackageJson(args);
@@ -75,7 +78,7 @@ async function create(args: CreateArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    `Creating ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+    getMainStep({ packageManager: "yarn", action: "create", project })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
@@ -136,7 +139,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    `Removing ${project.packageManager}${hasWorkspaces ? "workspaces" : ""}`
+    getMainStep({ packageManager: "yarn", action: "remove", project })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -168,7 +171,9 @@ async function remove(args: RemoveArgs): Promise<void> {
         )
       );
     } catch (err) {
-      throw new ConvertError("Failed to remove node_modules");
+      throw new ConvertError("Failed to remove node_modules", {
+        type: "error_removing_node_modules",
+      });
     }
   }
 }

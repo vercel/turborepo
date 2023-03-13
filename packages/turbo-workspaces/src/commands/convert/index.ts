@@ -6,7 +6,7 @@ import { getAvailablePackageManagers } from "turbo-utils";
 import { directoryInfo } from "../../utils";
 import getWorkspaceDetails from "../../getWorkspaceDetails";
 import { PackageManager } from "../../types";
-import convert from "../../convert";
+import { convertProject } from "../../convert";
 
 function isPackageManagerDisabled({
   packageManager,
@@ -96,7 +96,7 @@ export default async function convertCommand(
       selectedPackageManager = packageManager as PackageManager,
   } = packageManagerAnswer;
 
-  await convert({
+  await convertProject({
     project,
     to: {
       name: selectedPackageManager,

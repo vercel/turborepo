@@ -1,10 +1,19 @@
 import { getAvailablePackageManagers } from "turbo-utils";
 import getWorkspaceDetails from "./getWorkspaceDetails";
-import type { PackageManager, Options, InstallArgs, Workspace } from "./types";
-import { default as convertProject } from "./convert";
+import { convertProject } from "./convert";
 import { Logger } from "./logger";
 import install, { getPackageManagerMeta } from "./install";
+import { ConvertError } from "./errors";
 import MANAGERS from "./managers";
+
+import type {
+  PackageManager,
+  Options,
+  InstallArgs,
+  Workspace,
+  Project,
+} from "./types";
+import type { ConvertErrorType } from "./errors";
 
 async function convert({
   root,
@@ -31,11 +40,19 @@ async function convert({
   });
 }
 
-export type { PackageManager, Options, InstallArgs, Workspace };
+export type {
+  PackageManager,
+  Options,
+  InstallArgs,
+  Workspace,
+  Project,
+  ConvertErrorType,
+};
 export {
   convert,
   getWorkspaceDetails,
   install,
   MANAGERS,
   getPackageManagerMeta,
+  ConvertError,
 };

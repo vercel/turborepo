@@ -34,6 +34,8 @@ export type Workspace = {
   };
 };
 
+export type WorkspaceInfo = Pick<Workspace, "name" | "description">;
+
 export type DependencyList = Record<string, string>;
 
 export type PackageJsonDependencies = {

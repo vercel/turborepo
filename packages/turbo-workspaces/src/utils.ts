@@ -2,8 +2,13 @@ import fs from "fs-extra";
 import path from "path";
 import glob from "fast-glob";
 import yaml from "js-yaml";
-import semver from "semver";
-import { PackageJson, Project, Workspace } from "./types";
+import {
+  PackageJson,
+  PackageManager,
+  Project,
+  Workspace,
+  WorkspaceInfo,
+} from "./types";
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
@@ -20,11 +25,16 @@ function getPackageJson({
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) {
       if (err.code === "ENOENT") {
-        throw new ConvertError(`no "package.json" found at ${workspaceRoot}`);
+        throw new ConvertError(`no "package.json" found at ${workspaceRoot}`, {
+          type: "package_json-missing",
+        });
       }
       if (err.code === "EJSONPARSE") {
         throw new ConvertError(
-          `failed to parse "package.json" at ${workspaceRoot}`
+          `failed to parse "package.json" at ${workspaceRoot}`,
+          {
+            type: "package_json-parse_error",
+          }
         );
       }
     }
@@ -54,10 +64,11 @@ function getWorkspacePackageManager({
   return undefined;
 }
 
-function getWorkspaceInfo({ workspaceRoot }: { workspaceRoot: string }): {
-  name: string;
-  description?: string;
-} {
+function getWorkspaceInfo({
+  workspaceRoot,
+}: {
+  workspaceRoot: string;
+}): WorkspaceInfo {
   const packageJson = getPackageJson({ workspaceRoot });
   const workspaceDirectory = path.basename(workspaceRoot);
 
@@ -87,7 +98,9 @@ function getPnpmWorkspaces({
         return workspaceConfig.packages as Array<string>;
       }
     } catch (err) {
-      throw new ConvertError(`failed to parse ${workspaceFile}`);
+      throw new ConvertError(`failed to parse ${workspaceFile}`, {
+        type: "pnpm-workspace_parse_error",
+      });
     }
   }
 
@@ -157,6 +170,21 @@ function directoryInfo({ directory }: { directory: string }) {
   return { exists: fs.existsSync(dir), absolute: dir };
 }
 
+function getMainStep({
+  packageManager,
+  action,
+  project,
+}: {
+  packageManager: PackageManager;
+  action: "create" | "remove";
+  project: Project;
+}) {
+  const hasWorkspaces = project.workspaceData.globs.length > 0;
+  return `${action === "remove" ? "Removing" : "Adding"} ${packageManager} ${
+    hasWorkspaces ? "workspaces" : ""
+  } ${action === "remove" ? "from" : "to"} ${project.name}`;
+}
+
 export {
   getPackageJson,
   getWorkspacePackageManager,
@@ -165,4 +193,5 @@ export {
   expandWorkspaces,
   getPnpmWorkspaces,
   directoryInfo,
+  getMainStep,
 };
