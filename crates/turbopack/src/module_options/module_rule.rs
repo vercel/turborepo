@@ -47,7 +47,10 @@ pub enum ModuleRuleEffect {
 #[turbo_tasks::value(serialization = "auto_for_input", shared)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub enum ModuleType {
-    Ecmascript(EcmascriptInputTransformsVc),
+    Ecmascript {
+        transforms: EcmascriptInputTransformsVc,
+        options: EcmascriptOptions,
+    },
     Typescript(EcmascriptInputTransformsVc),
     TypescriptWithTypes(EcmascriptInputTransformsVc),
     TypescriptDeclaration(EcmascriptInputTransformsVc),
@@ -59,4 +62,13 @@ pub enum ModuleType {
     Static,
     // TODO allow custom function when we support function pointers
     Custom(u8),
+}
+
+#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+pub struct EcmascriptOptions {
+    /// module is split into smaller module parts and they can selectively
+    /// imported
+    pub split_into_parts: bool,
+    /// imports will import parts of modules
+    pub import_parts: bool,
 }
