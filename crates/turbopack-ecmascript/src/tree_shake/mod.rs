@@ -93,7 +93,7 @@ impl Analyzer<'_> {
                     if item.is_hoisted {
                         state.last_writes.push(item_id.clone());
                     } else {
-                        // TODO: Create a fake module item
+                        // TODO(WEB-705): Create a fake module item
                         // state.last_writes.push(item_id.clone());
                     }
                 }
