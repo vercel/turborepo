@@ -343,8 +343,6 @@ pub(crate) async fn analyze_ecmascript_module(
                             }
                         }
                         ImportedSymbols::Namespace => {
-                            // Namespace import
-
                             let r = EsmAssetReferenceVc::new(
                                 origin,
                                 RequestVc::parse(Value::new(r.module_path.to_string().into())),
