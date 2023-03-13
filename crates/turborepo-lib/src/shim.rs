@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use chrono::offset::Local;
+use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};
@@ -186,7 +187,7 @@ struct YarnRc {
 impl Default for YarnRc {
     fn default() -> Self {
         Self {
-            pnp_unplugged_folder: PathBuf::from("").join(".yarn").join("unplugged"),
+            pnp_unplugged_folder: [".yarn", "unplugged"].iter().collect(),
         }
     }
 }
@@ -209,8 +210,8 @@ impl Default for TurboState {
 }
 
 impl TurboState {
-    pub fn platform_package_name() -> String {
-        let arch: &'static str = {
+    pub fn platform_package_name() -> &'static str {
+        const ARCH: &str = {
             #[cfg(target_arch = "x86_64")]
             {
                 "64"
@@ -225,7 +226,7 @@ impl TurboState {
             }
         };
 
-        let os: &'static str = {
+        const OS: &str = {
             #[cfg(target_os = "macos")]
             {
                 "darwin"
@@ -244,7 +245,7 @@ impl TurboState {
             }
         };
 
-        format!("turbo-{}-{}", os, arch)
+        formatcp!("turbo-{}-{}", OS, ARCH)
     }
 
     pub fn binary_name() -> &'static str {
@@ -336,7 +337,7 @@ impl LocalTurboState {
                         let file_name = entry.file_name();
                         if file_name
                             .to_string_lossy()
-                            .starts_with(&platform_package_name)
+                            .starts_with(platform_package_name)
                         {
                             Some(unplugged_base_path.join(file_name).join("node_modules"))
                         } else {
@@ -359,13 +360,10 @@ impl LocalTurboState {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path = Path::new("")
-            .join(&platform_package_name)
-            .join("package.json");
-        let platform_package_executable_path: PathBuf = Path::new("")
-            .join(&platform_package_name)
-            .join("bin")
-            .join(binary_name);
+        let platform_package_json_path: PathBuf =
+            [platform_package_name, "package.json"].iter().collect();
+        let platform_package_executable_path: PathBuf =
+            [platform_package_name, "bin", binary_name].iter().collect();
 
         // These are lazy because the last two are more expensive.
         let search_functions = [
