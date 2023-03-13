@@ -108,7 +108,7 @@ pub(crate) enum ImportedSymbols {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ImportMapReference {
+pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
     pub imported_symbols: ImportedSymbols,
     pub annotations: ImportAnnotations,
