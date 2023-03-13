@@ -271,6 +271,8 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
         ModulePart::Internal(part_id) => return Ok(*part_id),
     };
 
+    // If 'split' fails, it stores an empty value in result.data and this match will
+    // fail.
     let part_id = match result.data.get(&key) {
         Some(id) => *id,
         None => {
