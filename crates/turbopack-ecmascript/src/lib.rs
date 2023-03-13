@@ -35,7 +35,6 @@ use parse::{parse, ParseResult};
 pub use parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 use path_visitor::ApplyVisitors;
 use references::AnalyzeEcmascriptModuleResult;
-use serde::{Deserialize, Serialize};
 use swc_core::{
     common::GLOBALS,
     ecma::{
@@ -82,9 +81,8 @@ use crate::{
     transform::remove_shebang,
 };
 
-#[derive(
-    Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Default, Copy, Clone, Serialize, Deserialize,
-)]
+#[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub struct EcmascriptOptions {
     /// module is split into smaller module parts and they can selectively
     /// imported
@@ -127,6 +125,7 @@ pub struct EcmascriptModuleAsset {
     pub context: AssetContextVc,
     pub ty: EcmascriptModuleAssetType,
     pub transforms: EcmascriptInputTransformsVc,
+    pub options: EcmascriptOptions,
     pub compile_time_info: CompileTimeInfoVc,
     pub inner_assets: Option<InnerAssetsVc>,
     #[turbo_tasks(debug_ignore)]
@@ -146,6 +145,7 @@ impl EcmascriptModuleAssetVc {
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
         transforms: EcmascriptInputTransformsVc,
+        options: Value<EcmascriptOptions>,
         compile_time_info: CompileTimeInfoVc,
     ) -> Self {
         Self::cell(EcmascriptModuleAsset {
@@ -153,6 +153,7 @@ impl EcmascriptModuleAssetVc {
             context,
             ty: ty.into_value(),
             transforms,
+            options: options.into_value(),
             compile_time_info,
             inner_assets: None,
             last_successful_analysis: Default::default(),
@@ -165,6 +166,7 @@ impl EcmascriptModuleAssetVc {
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
         transforms: EcmascriptInputTransformsVc,
+        options: Value<EcmascriptOptions>,
         compile_time_info: CompileTimeInfoVc,
         inner_assets: InnerAssetsVc,
     ) -> Self {
@@ -173,6 +175,7 @@ impl EcmascriptModuleAssetVc {
             context,
             ty: ty.into_value(),
             transforms,
+            options: options.into_value(),
             compile_time_info,
             inner_assets: Some(inner_assets),
             last_successful_analysis: Default::default(),
@@ -231,6 +234,7 @@ impl EcmascriptModuleAssetVc {
             self.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
+            Value::new(this.options),
             this.compile_time_info,
             None,
         ))

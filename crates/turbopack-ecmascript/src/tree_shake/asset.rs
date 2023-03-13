@@ -148,6 +148,7 @@ impl EcmascriptModulePartAssetVc {
             part.full_module.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
+            Value::new(this.options),
             this.compile_time_info,
             Some(part.part),
         ))
