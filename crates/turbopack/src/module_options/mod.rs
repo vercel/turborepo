@@ -64,6 +64,7 @@ impl ModuleOptionsVc {
             enable_styled_components,
             enable_types,
             ref enable_typescript_transform,
+            ref decorators,
             enable_mdx,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
@@ -116,11 +117,39 @@ impl ModuleOptionsVc {
             None
         };
 
+        let decorators_transform = if let Some(options) = decorators {
+            let options = options.await?;
+            options
+                .decorators_kind
+                .as_ref()
+                .map(|kind| EcmascriptInputTransform::Decorators {
+                    is_legacy: kind == &DecoratorsKind::Legacy,
+                    is_ecma: kind == &DecoratorsKind::Ecma,
+                    emit_decorators_metadata: options.emit_decorators_metadata,
+                })
+        } else {
+            None
+        };
+
+        // if typescript transform is not enabled, push decorators transform without
+        // considering transform order. otherwise, push decorators transform
+        // _before_ typescript transform since some of the typescript's decorator
+        // options may require type information.
+        if ts_transform.is_none() {
+            if let Some(decorators_transform) = decorators_transform {
+                transforms.push(decorators_transform);
+            }
+        }
+
         let app_transforms = EcmascriptInputTransformsVc::cell(transforms);
         let vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
         let ts_app_transforms = if let Some(transform) = &ts_transform {
-            let mut base_transforms = vec![transform.clone()];
+            let mut base_transforms = if let Some(decorators_transform) = decorators_transform {
+                vec![decorators_transform.clone(), transform.clone()]
+            } else {
+                vec![transform.clone()]
+            };
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms
@@ -136,7 +165,11 @@ impl ModuleOptionsVc {
         let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
         let mdx_transforms = EcmascriptInputTransformsVc::cell(
             if let Some(transform) = &ts_transform {
-                vec![transform.clone()]
+                if let Some(decorators_transform) = decorators_transform {
+                    vec![decorators_transform.clone(), transform.clone()]
+                } else {
+                    vec![transform.clone()]
+                }
             } else {
                 vec![]
             }
