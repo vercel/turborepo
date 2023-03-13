@@ -210,107 +210,16 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>next_transform_dynamic::{next_dynamic, NextDynamicMode};
-<span class="kw">use </span>next_transform_strip_page_exports::{next_transform_strip_page_exports, ExportFilter};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>swc_core::{
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program},
-        atoms::JsWord,
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
@@ -319,34 +228,11 @@
         visit::{FoldWith, VisitMutWith},
     },
 };
-<span class="kw">use </span>turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    trace::TraceRawVcs,
-};
-<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
-
-<span class="attr">#[derive(
-    Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
-)]
-</span><span class="kw">pub enum </span>NextJsPageExportFilter {
-    <span class="doccomment">/// Strip all data exports (getServerSideProps,
-    /// getStaticProps, getStaticPaths exports.) and their unique dependencies.
-    </span>StripDataExports,
-    <span class="doccomment">/// Strip default export and all its unique dependencies.
-    </span>StripDefaultExport,
-}
-
-<span class="kw">impl </span>From&lt;NextJsPageExportFilter&gt; <span class="kw">for </span>ExportFilter {
-    <span class="kw">fn </span>from(val: NextJsPageExportFilter) -&gt; <span class="self">Self </span>{
-        <span class="kw">match </span>val {
-            NextJsPageExportFilter::StripDataExports =&gt; ExportFilter::StripDataExports,
-            NextJsPageExportFilter::StripDefaultExport =&gt; ExportFilter::StripDefaultExport,
-        }
-    }
-}
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
@@ -355,20 +241,6 @@
     CommonJs,
     Custom,
     Emotion,
-    <span class="doccomment">/// This enables a Next.js transform which will eliminate some exports
-    /// from a page file, as well as any imports exclusively used by these
-    /// exports.
-    ///
-    /// It also provides diagnostics for improper use of `getServerSideProps`.
-    </span>NextJsStripPageExports(NextJsPageExportFilter),
-    <span class="doccomment">/// Enables the Next.js transform for next/dynamic.
-    </span>NextJsDynamic {
-        is_development: bool,
-        is_server: bool,
-        is_server_components: bool,
-        pages_dir: <span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;,
-    },
-    NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
         <span class="attr">#[serde(default)]
@@ -417,9 +289,9 @@
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_path_str,
             file_name_str,
             file_name_hash,
+            ..
         }: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
@@ -518,52 +390,6 @@
                     <span class="kw-2">*</span>program = create_proxy_module(transition_name, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;./{file_name_str}&quot;</span>));
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
-            }
-            EcmascriptInputTransform::NextJsStripPageExports(export_type) =&gt; {
-                <span class="comment">// TODO(alexkirsz) Connect the eliminated_packages to telemetry.
-                </span><span class="kw">let </span>eliminated_packages = Default::default();
-
-                <span class="kw">let </span>module_program = unwrap_module_program(program);
-
-                <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_transform_strip_page_exports(
-                    export_type.into(),
-                    eliminated_packages,
-                ));
-            }
-            EcmascriptInputTransform::NextJsDynamic {
-                is_development,
-                is_server,
-                is_server_components,
-                pages_dir,
-            } =&gt; {
-                <span class="kw">let </span>module_program = unwrap_module_program(program);
-
-                <span class="kw">let </span>pages_dir = <span class="kw">if let </span><span class="prelude-val">Some</span>(pages_dir) = pages_dir {
-                    <span class="prelude-val">Some</span>(pages_dir.<span class="kw">await</span><span class="question-mark">?</span>.path.clone().into())
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">None
-                </span>};
-
-                <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_dynamic(
-                    is_development,
-                    is_server,
-                    is_server_components,
-                    NextDynamicMode::Turbo,
-                    FileName::Real(file_path_str.into()),
-                    pages_dir,
-                ));
-            }
-            EcmascriptInputTransform::NextJsFont(font_loaders_vc) =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>font_loaders = <span class="macro">vec!</span>[];
-                <span class="kw">for </span>loader <span class="kw">in </span><span class="kw-2">&amp;</span>(<span class="kw-2">*</span>font_loaders_vc.<span class="kw">await</span><span class="question-mark">?</span>) {
-                    font_loaders.push(std::convert::Into::&lt;JsWord&gt;::into(<span class="kw-2">&amp;**</span>loader));
-                }
-                <span class="kw">let </span><span class="kw-2">mut </span>next_font = next_font::next_font_loaders(next_font::Config {
-                    font_loaders,
-                    relative_file_path_from_root: file_name_str.into(),
-                });
-
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>next_font);
             }
             EcmascriptInputTransform::Custom =&gt; <span class="macro">todo!</span>(),
         }
