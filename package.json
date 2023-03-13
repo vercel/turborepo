@@ -13,7 +13,6 @@
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
     "turbo": "pnpm run build:turbo && node turbow.js",
-    "test": "turbo run test",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh",

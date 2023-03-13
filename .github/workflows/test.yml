@@ -225,7 +225,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       # TODO: ensure integration tests runs with both GO_TAG: go and GO_TAG: rust
-      - run: pnpm run test --filter=cli --color
+      - run: pnpm -- turbo run test --filter=cli --color
         env:
           GITHUB_CI_OS_NAME: ${{ matrix.os.name }}
 
