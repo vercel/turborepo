@@ -433,7 +433,6 @@ impl DepGraph {
             }
         }
 
-        //
 
         loop {
             let mut changed = false;
