@@ -31,7 +31,7 @@ turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
@@ -87,11 +87,11 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target x86_64-linux-musl" cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
 
 #
 # end
