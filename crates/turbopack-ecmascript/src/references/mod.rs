@@ -318,40 +318,52 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            for r in eval_context.imports.references() {
-                match &r.imported_symbols {
-                    ImportedSymbols::Symbols(symbols) => {
-                        let vc = EsmAssetReferenceVc::new(
-                            origin,
-                            RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                            Value::new(r.annotations.clone()),
-                            Some(ModulePartVc::new(ModulePart::ModuleEvaluation)),
-                        );
-                        import_references.push(vc);
+            if options.split_into_parts {
+                for r in eval_context.imports.references() {
+                    match &r.imported_symbols {
+                        ImportedSymbols::Symbols(symbols) => {
+                            let vc = EsmAssetReferenceVc::new(
+                                origin,
+                                RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                                Value::new(r.annotations.clone()),
+                                Some(ModulePartVc::new(ModulePart::ModuleEvaluation)),
+                            );
+                            import_references.push(vc);
 
-                        for symbol in symbols {
+                            for symbol in symbols {
+                                let r = EsmAssetReferenceVc::new(
+                                    origin,
+                                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                                    Value::new(r.annotations.clone()),
+                                    Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
+                                        symbol.to_string(),
+                                    )))),
+                                );
+                                import_references.push(r);
+                            }
+                        }
+                        ImportedSymbols::Namespace => {
+                            // Namespace import
+
                             let r = EsmAssetReferenceVc::new(
                                 origin,
                                 RequestVc::parse(Value::new(r.module_path.to_string().into())),
                                 Value::new(r.annotations.clone()),
-                                Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
-                                    symbol.to_string(),
-                                )))),
+                                None,
                             );
                             import_references.push(r);
                         }
                     }
-                    ImportedSymbols::Namespace => {
-                        // Namespace import
-
-                        let r = EsmAssetReferenceVc::new(
-                            origin,
-                            RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                            Value::new(r.annotations.clone()),
-                            None,
-                        );
-                        import_references.push(r);
-                    }
+                }
+            } else {
+                for r in eval_context.imports.references() {
+                    let vc = EsmAssetReferenceVc::new(
+                        origin,
+                        RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                        Value::new(r.annotations.clone()),
+                        None,
+                    );
+                    import_references.push(vc);
                 }
             }
             for r in import_references.iter_mut() {
