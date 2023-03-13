@@ -219,6 +219,10 @@ impl TurboState {
             {
                 "arm64"
             }
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+            {
+                "unknown"
+            }
         };
 
         let os: &'static str = {
@@ -226,13 +230,17 @@ impl TurboState {
             {
                 "darwin"
             }
-            #[cfg(target_arch = "windows")]
+            #[cfg(target_os = "windows")]
             {
                 "windows"
             }
-            #[cfg(target_arch = "linux")]
+            #[cfg(target_os = "linux")]
             {
                 "linux"
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+            {
+                "unknown"
             }
         };
 
