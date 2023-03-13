@@ -143,7 +143,7 @@ async fn apply_module_type(
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             *transforms,
-            Value::new(EcmascriptOptions::default()),
+            Value::new(Default::default()),
             context.compile_time_info(),
         )
         .into(),
@@ -152,7 +152,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             *transforms,
-            Value::new(EcmascriptOptions::default()),
+            Value::new(Default::default()),
             context.compile_time_info(),
         )
         .into(),
@@ -161,7 +161,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             *transforms,
-            Value::new(EcmascriptOptions::default()),
+            Value::new(Default::default()),
             context.compile_time_info(),
         )
         .into(),
