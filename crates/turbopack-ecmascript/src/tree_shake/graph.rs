@@ -205,7 +205,7 @@ impl DepGraph {
     /// Split modules into parts. Additionally, this function adds imports to
     /// _connect_ variables.
     ///
-    /// _connect_ here means if a variable in declared in a different part than
+    /// _connect_ here means if a variable is declared in a different part than
     /// a usage side, `import` and `export` will be added.
     ///
     /// This returns a tuple of `(exports, part_deps, modules)`.
