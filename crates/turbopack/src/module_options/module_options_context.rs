@@ -39,7 +39,7 @@ pub enum DecoratorsKind {
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 pub struct DecoratorsOptions {
-    pub decorators_type: Option<DecoratorsKind>,
+    pub decorators_kind: Option<DecoratorsKind>,
     /// Option to control whether to emit decorator metadata.
     /// (https://www.typescriptlang.org/tsconfig#emitDecoratorMetadata)
     /// This'll be applied only if `decorators_type` and
