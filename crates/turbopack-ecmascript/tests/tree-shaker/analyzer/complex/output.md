@@ -6,6 +6,7 @@ Count: 18
 
 ```js
 let dog = "dog";
+
 ```
 
 - Declares: `dog`
@@ -15,6 +16,7 @@ let dog = "dog";
 
 ```js
 dog += "!";
+
 ```
 
 - Write: `dog`
@@ -23,6 +25,7 @@ dog += "!";
 
 ```js
 console.log(dog);
+
 ```
 
 - Side effects
@@ -32,8 +35,9 @@ console.log(dog);
 
 ```js
 function getDog() {
-  return dog;
+    return dog;
 }
+
 ```
 
 - Hoisted
@@ -44,6 +48,7 @@ function getDog() {
 
 ```js
 dog += "!";
+
 ```
 
 - Write: `dog`
@@ -52,6 +57,7 @@ dog += "!";
 
 ```js
 console.log(dog);
+
 ```
 
 - Side effects
@@ -61,8 +67,9 @@ console.log(dog);
 
 ```js
 function setDog(newDog) {
-  dog = newDog;
+    dog = newDog;
 }
+
 ```
 
 - Hoisted
@@ -74,6 +81,7 @@ function setDog(newDog) {
 
 ```js
 dog += "!";
+
 ```
 
 - Write: `dog`
@@ -82,6 +90,7 @@ dog += "!";
 
 ```js
 console.log(dog);
+
 ```
 
 - Side effects
@@ -91,10 +100,11 @@ console.log(dog);
 
 ```js
 export const dogRef = {
-  initial: dog,
-  get: getDog,
-  set: setDog,
+    initial: dog,
+    get: getDog,
+    set: setDog
 };
+
 ```
 
 - Declares: `dogRef`
@@ -105,6 +115,7 @@ export const dogRef = {
 
 ```js
 export let cat = "cat";
+
 ```
 
 - Declares: `cat`
@@ -114,6 +125,7 @@ export let cat = "cat";
 
 ```js
 export const initialCat = cat;
+
 ```
 
 - Declares: `initialCat`
@@ -124,8 +136,9 @@ export const initialCat = cat;
 
 ```js
 export function getChimera() {
-  return cat + dog;
+    return cat + dog;
 }
+
 ```
 
 - Hoisted
@@ -133,7 +146,6 @@ export function getChimera() {
 - Reads (eventual): `cat`, `dog`
 
 # Phase 1
-
 ```mermaid
 graph TD
     Item1;
@@ -160,9 +172,7 @@ graph TD
     Item18;
     Item18["export getChimera"];
 ```
-
 # Phase 2
-
 ```mermaid
 graph TD
     Item1;
@@ -211,9 +221,7 @@ graph TD
     Item10 --> Item7;
     Item12 --> Item11;
 ```
-
 # Phase 3
-
 ```mermaid
 graph TD
     Item1;
@@ -275,9 +283,7 @@ graph TD
     Item13 --> Item5;
     Item13 --> Item8;
 ```
-
 # Phase 4
-
 ```mermaid
 graph TD
     Item1;
@@ -346,9 +352,7 @@ graph TD
     Item17 --> Item12;
     Item18 --> Item13;
 ```
-
 # Final
-
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
@@ -397,11 +401,8 @@ graph TD
     N11 --> N9;
     N11 --> N7;
 ```
-
 # Modules (dev)
-
 ## Part 0
-
 ```js
 import "entry.js" assert {
     __turbopack_chunk__: 7
@@ -415,9 +416,7 @@ import "entry.js" assert {
 "module evaluation";
 
 ```
-
 ## Part 1
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -455,9 +454,7 @@ const dogRef = {
 export { dogRef };
 
 ```
-
 ## Part 2
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
@@ -465,9 +462,7 @@ import { cat } from "entry.js" assert {
 export { cat };
 
 ```
-
 ## Part 3
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
@@ -477,9 +472,7 @@ const initialCat = cat;
 export { initialCat };
 
 ```
-
 ## Part 4
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 12
@@ -502,23 +495,19 @@ function getChimera() {
 }
 
 ```
-
 ## Part 5
-
 ```js
 let dog = "dog";
 export { dog };
+
 ```
-
 ## Part 6
-
 ```js
 dog += "!";
 export { dog };
+
 ```
-
 ## Part 7
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -529,9 +518,7 @@ import "entry.js" assert {
 console.log(dog);
 
 ```
-
 ## Part 8
-
 ```js
 import "entry.js" assert {
     __turbopack_chunk__: 7
@@ -540,9 +527,7 @@ dog += "!";
 export { dog };
 
 ```
-
 ## Part 9
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -559,9 +544,7 @@ import "entry.js" assert {
 console.log(dog);
 
 ```
-
 ## Part 10
-
 ```js
 import "entry.js" assert {
     __turbopack_chunk__: 7
@@ -573,9 +556,7 @@ dog += "!";
 export { dog };
 
 ```
-
 ## Part 11
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -598,16 +579,13 @@ import "entry.js" assert {
 console.log(dog);
 
 ```
-
 ## Part 12
-
 ```js
 let cat = "cat";
 export { cat };
+
 ```
-
 ## Merged (module eval)
-
 ```js
 let dog = "dog";
 export { dog };
@@ -620,13 +598,11 @@ console.log(dog);
 dog += "!";
 export { dog };
 console.log(dog);
-("module evaluation");
+"module evaluation";
+
 ```
-
 # Modules (prod)
-
 ## Part 0
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -646,9 +622,7 @@ console.log(dog);
 console.log(dog);
 
 ```
-
 ## Part 1
-
 ```js
 import { dog } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -677,9 +651,7 @@ const dogRef = {
 export { dogRef };
 
 ```
-
 ## Part 2
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
@@ -687,9 +659,7 @@ import { cat } from "entry.js" assert {
 export { cat };
 
 ```
-
 ## Part 3
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
@@ -699,9 +669,7 @@ const initialCat = cat;
 export { initialCat };
 
 ```
-
 ## Part 4
-
 ```js
 import { cat } from "entry.js" assert {
     __turbopack_chunk__: 9
@@ -724,44 +692,37 @@ function getChimera() {
 }
 
 ```
-
 ## Part 5
-
 ```js
 let dog = "dog";
 export { dog };
-```
 
+```
 ## Part 6
-
 ```js
 dog += "!";
 export { dog };
-```
 
+```
 ## Part 7
-
 ```js
 dog += "!";
 export { dog };
-```
 
+```
 ## Part 8
-
 ```js
 dog += "!";
 export { dog };
+
 ```
-
 ## Part 9
-
 ```js
 let cat = "cat";
 export { cat };
+
 ```
-
 ## Merged (module eval)
-
 ```js
 let dog = "dog";
 export { dog };
@@ -771,8 +732,9 @@ dog += "!";
 export { dog };
 dog += "!";
 export { dog };
-("module evaluation");
+"module evaluation";
 console.log(dog);
 console.log(dog);
 console.log(dog);
+
 ```
