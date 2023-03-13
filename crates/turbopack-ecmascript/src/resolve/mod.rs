@@ -53,7 +53,6 @@ pub async fn esm_resolve(
     request: RequestVc,
     ty: Value<EcmaScriptModulesReferenceSubType>,
 ) -> Result<ResolveResultVc> {
-    // TODO pass EcmaScriptModulesReferenceSubType
     let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
     specific_resolve(origin, request, options, ty).await
