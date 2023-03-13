@@ -340,7 +340,7 @@ impl DepGraph {
         (exports, chunk_deps, modules)
     }
 
-    /// Merges a dependency group between [ModuleItem]s into a depdendency graph
+    /// Merges a dependency group between [ModuleItem]s into a dependency graph
     /// of [Module]s.
     ///
     /// Note that [ModuleItem] and [Module] are represented as [ItemId] for
