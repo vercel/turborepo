@@ -35,6 +35,7 @@ use parse::{parse, ParseResult};
 pub use parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 use path_visitor::ApplyVisitors;
 use references::AnalyzeEcmascriptModuleResult;
+use serde::{Deserialize, Serialize};
 use swc_core::{
     common::GLOBALS,
     ecma::{
@@ -80,6 +81,17 @@ use crate::{
     references::analyze_ecmascript_module,
     transform::remove_shebang,
 };
+
+#[derive(
+    Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Default, Copy, Clone, Serialize, Deserialize,
+)]
+pub struct EcmascriptOptions {
+    /// module is split into smaller module parts and they can selectively
+    /// imported
+    pub split_into_parts: bool,
+    /// imports will import parts of modules
+    pub import_parts: bool,
+}
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
