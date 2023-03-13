@@ -84,7 +84,7 @@ use crate::{
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {
-    /// module is split into smaller module parts and they can selectively
+    /// module is split into smaller module parts which can be selectively
     /// imported
     pub split_into_parts: bool,
     /// imports will import parts of modules
