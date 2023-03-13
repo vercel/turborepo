@@ -450,6 +450,8 @@ impl DepGraph {
 
         let mut groups = groups.into_iter().map(|v| v.0).collect::<Vec<_>>();
 
+        // We need to sort, because we start from the group item and add others start
+        // from them. But the final module should be in the order of the original code.
         for group in groups.iter_mut() {
             group.sort()
         }
@@ -753,7 +755,6 @@ impl DepGraph {
                         specifiers: vec![ExportSpecifier::Named(ExportNamedSpecifier {
                             span: DUMMY_SP,
                             orig: ModuleExportName::Ident(export.clone().into()),
-                            // TODO
                             exported: None,
                             is_type_only: false,
                         })],
