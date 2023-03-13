@@ -50,6 +50,7 @@ pub struct DecoratorsOptions {
     /// ref: https://github.com/swc-project/swc/blob/d4ebb5e6efbed0758f25e46e8f74d7c47ec6cb8f/crates/swc_ecma_parser/src/lib.rs#L327
     /// [TODO]: this option is not actively being used currently.
     pub decorators_before_export: bool,
+    pub use_define_for_class_fields: bool,
 }
 
 #[turbo_tasks::value_impl]

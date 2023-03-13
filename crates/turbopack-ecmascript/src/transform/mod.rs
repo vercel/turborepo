@@ -90,6 +90,8 @@ pub enum EcmascriptInputTransform {
         is_ecma: bool,
         #[serde(default)]
         emit_decorators_metadata: bool,
+        #[serde(default)]
+        use_define_for_class_fields: bool,
     },
 }
 
@@ -225,6 +227,7 @@ impl EcmascriptInputTransform {
                 is_legacy,
                 is_ecma,
                 emit_decorators_metadata,
+                use_define_for_class_fields,
             } => {
                 unimplemented!("a")
             }

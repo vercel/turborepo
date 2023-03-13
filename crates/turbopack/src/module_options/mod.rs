@@ -126,6 +126,7 @@ impl ModuleOptionsVc {
                     is_legacy: kind == &DecoratorsKind::Legacy,
                     is_ecma: kind == &DecoratorsKind::Ecma,
                     emit_decorators_metadata: options.emit_decorators_metadata,
+                    use_define_for_class_fields: options.use_define_for_class_fields,
                 })
         } else {
             None
