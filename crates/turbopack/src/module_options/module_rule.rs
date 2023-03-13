@@ -49,6 +49,7 @@ pub enum ModuleRuleEffect {
 pub enum ModuleType {
     Ecmascript {
         transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
         options: EcmascriptOptions,
     },
     Typescript(EcmascriptInputTransformsVc),
@@ -64,7 +65,9 @@ pub enum ModuleType {
     Custom(u8),
 }
 
-#[derive(Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(
+    Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Default, Copy, Clone, Serialize, Deserialize,
+)]
 pub struct EcmascriptOptions {
     /// module is split into smaller module parts and they can selectively
     /// imported

@@ -244,21 +244,24 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
                 ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: Default::default(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: Default::default(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: Default::default(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::any(vec![
@@ -294,9 +297,10 @@ impl ModuleOptionsVc {
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: vendor_transforms,
+                    options: Default::default(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ReferenceType(ReferenceType::Url(
@@ -333,7 +337,10 @@ impl ModuleOptionsVc {
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     vec![
-                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: Default::default(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(

@@ -114,7 +114,10 @@ async fn apply_module_type(
     part: Option<ModulePartVc>,
 ) -> Result<AssetVc> {
     Ok(match &*module_type.await? {
-        ModuleType::Ecmascript(transforms) => {
+        ModuleType::Ecmascript {
+            transforms,
+            options,
+        } => {
             let base = EcmascriptModuleAssetVc::new(
                 source,
                 context.into(),
@@ -123,9 +126,11 @@ async fn apply_module_type(
                 context.compile_time_info(),
             );
 
-            if let Some(part) = part {
-                if let Ok(v) = EcmascriptModulePartAssetVc::from_split(base, part).await {
-                    return Ok(v.into());
+            if options.import_parts {
+                if let Some(part) = part {
+                    if let Ok(v) = EcmascriptModulePartAssetVc::from_split(base, part).await {
+                        return Ok(v.into());
+                    }
                 }
             }
 
@@ -286,11 +291,13 @@ impl ModuleAssetContextVc {
                         }
                         ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
                             current_module_type = match current_module_type {
-                                Some(ModuleType::Ecmascript(transforms)) => {
-                                    Some(ModuleType::Ecmascript(
-                                        transforms.extend(*additional_transforms),
-                                    ))
-                                }
+                                Some(ModuleType::Ecmascript {
+                                    transforms,
+                                    options,
+                                }) => Some(ModuleType::Ecmascript {
+                                    transforms: transforms.extend(*additional_transforms),
+                                    options,
+                                }),
                                 Some(ModuleType::Typescript(transforms)) => {
                                     Some(ModuleType::Typescript(
                                         transforms.extend(*additional_transforms),
