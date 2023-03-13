@@ -47,7 +47,6 @@ use turbopack_core::{
         resolve, ModulePartVc, ResolveResultVc,
     },
 };
-use turbopack_ecmascript::EcmascriptOptions;
 
 use crate::transition::Transition;
 

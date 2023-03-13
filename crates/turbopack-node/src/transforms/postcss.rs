@@ -23,7 +23,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, EcmascriptOptions, InnerAssetsVc,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};

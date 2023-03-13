@@ -23,7 +23,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, EcmascriptOptions,
+    EcmascriptModuleAssetVc,
 };
 
 #[turbo_tasks::function]

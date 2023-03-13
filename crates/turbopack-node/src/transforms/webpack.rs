@@ -13,7 +13,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, EcmascriptOptions,
+    EcmascriptModuleAssetVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
