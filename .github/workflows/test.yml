@@ -202,7 +202,7 @@ jobs:
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
   turborepo_tests:
-    name: Go Unit, Integration, and E2E Tests
+    name: Turborepo Tests
     needs: determine_jobs
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
