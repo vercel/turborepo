@@ -46,11 +46,7 @@ impl EsmAsyncAssetReferenceVc {
 impl AssetReference for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(
-            self.origin,
-            self.request,
-            Default::default(),
-        )
+        esm_resolve(self.origin, self.request, Default::default())
     }
 }
 
