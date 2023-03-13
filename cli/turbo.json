@@ -35,7 +35,7 @@
 
     "test:e2e": {
       // test:e2e depends on test:integration. This is just a way to specify order
-      "dependsOn": ["test:integration"],
+      "dependsOn": ["build", "test:integration"],
       "inputs": [
         // rust related code should also trigger integration tests
         "../crates/turborepo*",
@@ -57,7 +57,7 @@
 
     "test:integration": {
       // test:integration depends on test:unit. This is just way to specify order
-      "dependsOn": ["test:unit"],
+      "dependsOn": ["build", "test:unit"],
       "inputs": [
         // rust related code should also trigger integration tests
         "../crates/turborepo*",
@@ -81,6 +81,7 @@
 
     // test:unit are Go tests, and will be less useful as we migrate utilities to Rust.
     "test:unit": {
+      "dependsOn": ["build"],
       "inputs": ["**/*.go"],
       "env": ["GITHUB_CI_OS_NAME"]
     }
