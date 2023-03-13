@@ -24,11 +24,8 @@ use crate::{
     AnalyzeEcmascriptModuleResultVc, EcmascriptModuleAssetVc,
 };
 
-/// A reference to part of an ES module.
-///
-/// This type is used for an advanced tree shkaing.
 #[turbo_tasks::value]
-pub struct EcmascritModulePartAsset {
+pub struct EcmascriptModulePartAsset {
     full_module: EcmascriptModuleAssetVc,
     part: ModulePartVc,
 }
@@ -51,9 +48,7 @@ impl EcmascriptModulePartAssetVc {
 impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     fn content(&self) -> AssetContentVc {
-        // This is not reachable because EcmascriptModulePartAsset implements
-        // ChunkableAsset and ChunkableAsset::as_chunk is called instead.
-        unreachable!("EcmascriptModulePartAsset::content cannot be called directly")
+        todo!()
     }
 
     #[turbo_tasks::function]
