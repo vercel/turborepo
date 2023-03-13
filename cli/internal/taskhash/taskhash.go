@@ -1,6 +1,4 @@
-// package taskhash handles calculating dependency hashes for nodes in the task execution
-// graph.
-
+// Package taskhash handles calculating dependency hashes for nodes in the task execution graph.
 package taskhash
 
 import (
@@ -47,6 +45,7 @@ type Tracker struct {
 	packageTaskEnvVars   map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
 	packageTaskHashes    map[string]string          // taskID -> hash
 	packageTaskFramework map[string]string          // taskID -> inferred framework for package
+	packageTaskOutputs   map[string][]turbopath.AnchoredSystemPath
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -58,6 +57,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		packageTaskHashes:    make(map[string]string),
 		packageTaskFramework: make(map[string]string),
 		packageTaskEnvVars:   make(map[string]env.DetailedMap),
+		packageTaskOutputs:   make(map[string][]turbopath.AnchoredSystemPath),
 	}
 }
 
@@ -400,4 +400,24 @@ func (th *Tracker) GetFramework(taskID string) string {
 	th.mu.RLock()
 	defer th.mu.RUnlock()
 	return th.packageTaskFramework[taskID]
+}
+
+// GetExpandedOutputs returns a list of outputs for a given taskID
+func (th *Tracker) GetExpandedOutputs(taskID string) []turbopath.AnchoredSystemPath {
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	outputs, ok := th.packageTaskOutputs[taskID]
+
+	if !ok {
+		return []turbopath.AnchoredSystemPath{}
+	}
+
+	return outputs
+}
+
+// SetExpandedOutputs a list of outputs for a given taskID so it can be read later
+func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.AnchoredSystemPath) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.packageTaskOutputs[taskID] = outputs
 }

@@ -114,6 +114,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			LogFile:                logFile,
 			ResolvedTaskDefinition: taskDefinition,
 			ExpandedInputs:         expandedInputs,
+			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
 			Command:                command,
 			Framework:              framework,
 			EnvVars: runsummary.TaskEnvVarSummary{
