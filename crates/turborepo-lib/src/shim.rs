@@ -302,12 +302,11 @@ impl LocalTurboState {
     // The unplugged directory doesn't have a fixed path.
     fn get_unplugged_base_path(root_path: &Path) -> PathBuf {
         let yarn_rc_filename =
-            env::var_os("YARN_RC_FILENAME").unwrap_or(OsString::from(".yarnrc.yml"));
+            env::var_os("YARN_RC_FILENAME").unwrap_or_else(|| OsString::from(".yarnrc.yml"));
         let yarn_rc_filepath = root_path.join(yarn_rc_filename);
 
-        let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or(String::from(""));
-        let yarn_rc: YarnRc =
-            serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or(Default::default());
+        let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
+        let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
 
         root_path.join(yarn_rc.pnp_unplugged_folder)
     }
@@ -355,10 +354,10 @@ impl LocalTurboState {
         let platform_package_json_path = Path::new("")
             .join(&platform_package_name)
             .join("package.json");
-        let platform_package_executable_path = Path::new("")
+        let platform_package_executable_path: PathBuf = Path::new("")
             .join(&platform_package_name)
             .join("bin")
-            .join(&binary_name);
+            .join(binary_name);
 
         // These are lazy because the last two are more expensive.
         let search_functions = [
@@ -372,14 +371,16 @@ impl LocalTurboState {
         // search.
         for root in search_functions
             .iter()
-            .filter_map(|search_function| search_function(&root_path))
+            .filter_map(|search_function| search_function(root_path))
         {
+            // Needs borrow because of the loop.
+            #[allow(clippy::needless_borrow)]
             let bin_path = root.join(&platform_package_executable_path);
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
                     let resolved_package_json_path = root.join(platform_package_json_path);
                     let platform_package_json_string =
-                        fs::read_to_string(&resolved_package_json_path).ok()?;
+                        fs::read_to_string(resolved_package_json_path).ok()?;
                     let platform_package_json: PackageJson =
                         serde_json::from_str(&platform_package_json_string).ok()?;
 
@@ -394,7 +395,7 @@ impl LocalTurboState {
             }
         }
 
-        return None;
+        None
     }
 }
 
