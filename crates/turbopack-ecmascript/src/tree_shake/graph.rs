@@ -344,7 +344,7 @@ impl DepGraph {
     /// of [Module]s.
     ///
     /// Note that [ModuleItem] and [Module] are represented as [ItemId] for
-    /// perforamnce.
+    /// performance.
     pub(super) fn finalize(
         &self,
         data: &FxHashMap<ItemId, ItemData>,
