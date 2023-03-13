@@ -83,6 +83,7 @@ impl Analyzer<'_> {
                         self.g.add_strong_dep(item_id, &last)
                     }
 
+                    self.last_side_effect = Some(item_id.clone());
                     self.last_side_effects.push(item_id.clone());
                 }
 
