@@ -13,7 +13,10 @@ export default async function getWorkspaceDetails({
   });
   if (!exists) {
     throw new ConvertError(
-      `Could not find directory at ${workspaceRoot}. Ensure the directory exists.`
+      `Could not find directory at ${workspaceRoot}. Ensure the directory exists.`,
+      {
+        type: "invalid_directory",
+      }
     );
   }
 
@@ -24,6 +27,9 @@ export default async function getWorkspaceDetails({
   }
 
   throw new ConvertError(
-    "Could not determine workspace manager. Add `packageManager` to `package.json` or ensure a lockfile is present."
+    "Could not determine package manager. Add `packageManager` to `package.json` or ensure a lockfile is present.",
+    {
+      type: "package_manager-unable_to_detect",
+    }
   );
 }
