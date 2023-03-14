@@ -4,17 +4,17 @@
   "pipeline": {
     "build": {
       "inputs": [
-        // rust related code should also trigger integration tests
+        // rust related code should rebuild
         "../crates/turborepo*",
         "../crates/turborepo*/**",
         "../crates/turbo-updater",
         "../Cargo.lock",
-        // changes to integration tests themselves
-        "scripts/e2e/e2e.ts",
-        // all turborepo go related code
+        // turbo go related code in cli/ should rebuild
         "**/*.go",
         "go.mod",
         "go.sum",
+        // this is for good measure, JS dependencies shouldn't
+        // really cause a rebuild.
         "package.json",
         "package-lock.json"
       ],
