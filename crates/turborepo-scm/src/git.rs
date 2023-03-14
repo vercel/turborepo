@@ -19,35 +19,34 @@ use crate::Error;
 ///   changes
 /// * `include_untracked`: If true, untracked files will be included in the
 ///   result, i.e. files not yet in git.
-/// * `relative_to`: The path to which the results should be relative. Must be
+/// * `monorepo_root`: The path to which the results should be relative. Must be
 ///   an absolute path
 ///
 /// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
     repo_root: PathBuf,
+    monorepo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
-    relative_to: &str,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
     let repo = Repository::open(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
 
-    let relative_to_path = Path::new(relative_to);
-    if relative_to_path.is_relative() {
+    if monorepo_root.is_relative() {
         return Err(Error::PathError(anyhow!(
-            "relative_to must be an absolute path: {:?}",
-            relative_to
+            "monorepo_root must be an absolute path: {:?}",
+            monorepo_root
         )));
     }
 
-    let relative_to = fs_util::canonicalize(relative_to)?;
-    let relative_to = repo_root.relativize(&relative_to)?;
+    let monorepo_root = fs_util::canonicalize(monorepo_root)?;
+    let monorepo_root = repo_root.relativize(&monorepo_root)?;
 
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(
         &repo,
-        relative_to.as_ref(),
+        monorepo_root.as_ref(),
         &mut files,
         include_untracked,
     )?;
@@ -55,8 +54,8 @@ pub fn changed_files(
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
             &repo,
+            monorepo_root.as_ref(),
             &mut files,
-            relative_to.as_ref(),
             from_commit,
             to_commit,
         )?;
@@ -67,7 +66,7 @@ pub fn changed_files(
 
 fn add_changed_files_from_unstaged_changes(
     repo: &Repository,
-    relative_to: &ProjectRelativePath,
+    monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
     include_untracked: bool,
 ) -> Result<(), Error> {
@@ -75,7 +74,7 @@ fn add_changed_files_from_unstaged_changes(
     options.include_untracked(include_untracked);
     options.recurse_untracked_dirs(include_untracked);
 
-    options.pathspec(relative_to.to_string());
+    options.pathspec(monorepo_root.to_string());
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
@@ -88,7 +87,7 @@ fn add_changed_files_from_unstaged_changes(
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
             let project_relative_file_path =
-                file_path.strip_prefix(relative_to.as_forward_relative_path().as_path())?;
+                file_path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
 
             files.insert(
                 project_relative_file_path
@@ -104,8 +103,8 @@ fn add_changed_files_from_unstaged_changes(
 
 fn add_changed_files_from_commits(
     repo: &Repository,
+    monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
-    relative_to: &ProjectRelativePath,
     from_commit: &str,
     to_commit: &str,
 ) -> Result<(), Error> {
@@ -117,7 +116,7 @@ fn add_changed_files_from_commits(
     let to_tree = to_commit.tree()?;
 
     let mut options = DiffOptions::new();
-    options.pathspec(relative_to.to_string());
+    options.pathspec(monorepo_root.to_string());
 
     let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
     diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
@@ -125,7 +124,7 @@ fn add_changed_files_from_commits(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(path) = file.path() {
-            let path = path.strip_prefix(relative_to.as_forward_relative_path().as_path())?;
+            let path = path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
             files.insert(
                 path.to_str()
                     .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
@@ -216,7 +215,7 @@ mod tests {
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
-        let relative_to = repo_root.path().to_str().unwrap();
+        let monorepo_root = repo_root.path();
         let mut config = repo.config()?;
         config.set_str("user.name", "test")?;
         config.set_str("user.email", "test@example.com")?;
@@ -231,12 +230,22 @@ mod tests {
         fs::write(new_file, "let y = 1;")?;
 
         // Test that uncommitted file is marked as changed with `include_untracked`
-        let files = super::changed_files(repo_root.path().to_path_buf(), None, true, relative_to)?;
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            monorepo_root.to_path_buf(),
+            None,
+            true,
+        )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Test that uncommitted file is *not* marked as changed without
         // `include_untracked`
-        let files = super::changed_files(repo_root.path().to_path_buf(), None, false, relative_to)?;
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            monorepo_root.to_path_buf(),
+            None,
+            false,
+        )?;
         assert_eq!(files, HashSet::from([]));
 
         // Now commit file
@@ -245,12 +254,12 @@ mod tests {
         // Test that only second file is marked as changed when we check commit range
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
+            monorepo_root.to_path_buf(),
             Some((
                 first_commit_oid.to_string().as_str(),
                 second_commit_oid.to_string().as_str(),
             )),
             false,
-            relative_to,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -259,15 +268,15 @@ mod tests {
         let new_file = repo_root.path().join("subdir").join("baz.js");
         fs::write(new_file, "let x = 2;")?;
 
-        // Test that `relative_to` filters out files not in the specified directory
+        // Test that `monorepo_root` filters out files not in the specified directory
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
+            repo_root.path().join("subdir"),
             Some((
                 first_commit_oid.to_string().as_str(),
                 second_commit_oid.to_string().as_str(),
             )),
             true,
-            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -295,21 +304,19 @@ mod tests {
         // include_untracked` with the parameters that Go wil pass
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
             None,
             true,
-            // Go will pass the absolute repo root as the relative_to if there
-            // isn't a more specific subdir that should be used
-            repo_root.path().to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         Ok(())
     }
 
-    // Tests that we can use a subdir as the relative_to path
+    // Tests that we can use a subdir as the monorepo_root path
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
-    fn test_changed_files_with_subdir_as_relative_to() -> Result<(), Error> {
+    fn test_changed_files_with_subdir_as_monorepo_root() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
         let mut config = repo.config()?;
@@ -327,11 +334,9 @@ mod tests {
 
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
+            repo_root.path().join("subdir"),
             None,
             true,
-            // Go will pass the absolute repo root as the relative_to if there
-            // isn't a more specific subdir that should be used
-            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -339,12 +344,12 @@ mod tests {
 
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
+            repo_root.path().join("subdir"),
             Some((
                 first_commit.to_string().as_str(),
                 repo.head()?.peel_to_commit()?.id().to_string().as_str(),
             )),
             false,
-            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
 
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));

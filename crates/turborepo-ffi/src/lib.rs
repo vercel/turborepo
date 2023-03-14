@@ -74,9 +74,9 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
     let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match turborepo_scm::git::changed_files(
         req.repo_root.into(),
+        req.monorepo_root.into(),
         commit_range,
         req.include_untracked,
-        &req.relative_to,
     ) {
         Ok(files) => {
             let files: Vec<_> = files.into_iter().collect();
