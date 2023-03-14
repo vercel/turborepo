@@ -30,19 +30,13 @@
       "outputs": []
     },
 
-
     // test:e2e exercise different package manager and generate a test repo as part of the test
     "test:e2e": {
       // test:e2e depends on test:integration. This is just a way to specify order
       "dependsOn": ["build", "test:integration"],
-      "inputs": [
-        "scripts/e2e/e2e.ts",
-        "package.json",
-        "package-lock.json"
-      ],
+      "inputs": ["scripts/e2e/e2e.ts", "package.json", "package-lock.json"],
       "env": ["GITHUB_CI_OS_NAME"]
     },
-
 
     // test:integration are Prysk tests that invoke turbo through the Rust shim
     "test:integration": {
