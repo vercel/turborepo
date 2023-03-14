@@ -12,7 +12,7 @@ function exec(command, opts) {
 }
 
 if (!existsSync("./next.js")) {
-  exec("git clone 'https://github.com/vercel/next.js.git' --depth 100");
+  exec('git clone "https://github.com/vercel/next.js.git" --depth 100');
 }
 
 writeFileSync(
