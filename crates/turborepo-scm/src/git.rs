@@ -17,7 +17,7 @@ use crate::Error;
 ///
 /// # Arguments
 ///
-/// * `repo_root`: The root of the repository.
+/// * `repo_root`: The root of the repository. Guaranteed to be the root.
 /// * `commit_range`: If Some, the range of commits that should be searched for
 ///   changes
 /// * `include_untracked`: If true, untracked files will be included in the
@@ -33,7 +33,7 @@ pub fn changed_files(
     relative_to: Option<&str>,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
-    let repo = Repository::discover(&repo_root)?;
+    let repo = Repository::open(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
 
     let relative_to = if let Some(relative_to) = relative_to {
@@ -166,7 +166,7 @@ pub fn previous_content(
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let repo = Repository::discover(&repo_root)?;
+    let repo = Repository::open(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
     let from_commit_ref = repo.revparse_single(from_commit)?;
     let from_commit = from_commit_ref.peel_to_commit()?;
@@ -314,6 +314,52 @@ mod tests {
             // isn't a more specific subdir that should be used
             Some(repo_root.path().to_str().unwrap()),
         )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        Ok(())
+    }
+
+    // Tests that we can use a subdir as the relative_to path
+    // (occurs when the monorepo is nested inside a subdirectory of git repository)
+    #[test]
+    fn test_changed_files_with_subdir_as_relative_to() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        fs::create_dir(repo_root.path().join("subdir"))?;
+
+        let file = repo_root.path().join("subdir").join("foo.js");
+        fs::write(file, "let z = 0;")?;
+        let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None)?;
+
+        let new_file = repo_root.path().join("subdir").join("bar.js");
+        fs::write(new_file, "let y = 1;")?;
+
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            None,
+            true,
+            // Go will pass the absolute repo root as the relative_to if there
+            // isn't a more specific subdir that should be used
+            Some(repo_root.path().join("subdir").to_str().unwrap()),
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        commit_file(&repo, Path::new("subdir/bar.js"), Some(first_commit))?;
+
+        let files = super::changed_files(
+            repo_root.path().to_path_buf(),
+            Some((
+                first_commit.to_string().as_str(),
+                repo.head()?.peel_to_commit()?.id().to_string().as_str(),
+            )),
+            false,
+            Some(repo_root.path().join("subdir").to_str().unwrap()),
+        )?;
+
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         Ok(())
