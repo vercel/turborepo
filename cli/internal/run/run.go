@@ -226,7 +226,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
-			r.base.LogWarning("", err)
+			r.base.Logger.Debug("", err)
 		} else {
 			return errors.Wrap(err, "failed to create SCM")
 		}
