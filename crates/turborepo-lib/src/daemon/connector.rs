@@ -259,14 +259,23 @@ fn win(
         .map(FuturesAsyncReadCompatExt::compat)
 }
 
+#[derive(Debug, Error)]
+enum FileWaitError {
+    #[error("failed to register notifier {0}")]
+    Notify(notify::Error),
+    #[error("invalid path {0}")]
+    InvalidPath(PathBuf),
+}
+
 /// Waits for a file at some path on the filesystem to be created or deleted.
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
-async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), notify::Error> {
+async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitError> {
     let parent = match path.parent() {
         Some(p) => p,
-        None => return Ok(()), // the root can neither be created nor deleted
+        // the root can neither be created nor deleted, indicating a logic error
+        None => return Err(FileWaitError::InvalidPath(path.into())),
     };
 
     let file_name = match path.file_name().map(|f| f.to_owned()) {
