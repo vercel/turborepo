@@ -3,11 +3,12 @@ import { Logger } from "./logger";
 export type PackageManager = "npm" | "pnpm" | "yarn";
 export type PackageManagerDetails = {
   name: PackageManager;
-  version: string;
+  version?: string;
 };
 
 export type Project = {
   name: string;
+  description?: string;
   packageManager: PackageManager;
   paths: {
     root: string;
@@ -25,12 +26,15 @@ export type Project = {
 
 export type Workspace = {
   name: string;
+  description?: string;
   paths: {
     root: string;
     packageJson: string;
     nodeModules: string;
   };
 };
+
+export type WorkspaceInfo = Pick<Workspace, "name" | "description">;
 
 export type DependencyList = Record<string, string>;
 
@@ -43,6 +47,7 @@ export type PackageJsonDependencies = {
 
 export type PackageJson = PackageJsonDependencies & {
   name?: string;
+  description?: string;
   workspaces?: Array<string>;
   packageManager?: string;
 };
@@ -84,7 +89,7 @@ export type ConvertArgs = {
 export type InstallArgs = {
   project: Project;
   to: PackageManagerDetails;
-  logger: Logger;
+  logger?: Logger;
   options?: Options;
 };
 
@@ -102,6 +107,7 @@ export type PackageManagerInstallDetails = {
   version: string;
   executable: string;
   semver: string;
+  default?: boolean;
 };
 
 export type ManagerDetect = (args: DetectArgs) => Promise<boolean>;
