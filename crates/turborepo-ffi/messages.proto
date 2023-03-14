@@ -28,7 +28,7 @@ message ChangedFilesReq {
   optional string from_commit = 2;
   optional string to_commit = 3;
   bool include_untracked = 4;
-  optional string relative_to = 5;
+  string relative_to = 5;
 }
 
 message ChangedFilesResp {

@@ -3,12 +3,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::anyhow;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{
-    fs_util,
-    project::ProjectRoot,
-    project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
-};
+use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath};
 
 use crate::Error;
 
@@ -22,38 +19,35 @@ use crate::Error;
 ///   changes
 /// * `include_untracked`: If true, untracked files will be included in the
 ///   result, i.e. files not yet in git.
-/// * `relative_to`: If Some, only the results relative to this path will be
-///   returned
+/// * `relative_to`: The path to which the results should be relative. Must be
+///   an absolute path
 ///
 /// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
     repo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
     include_untracked: bool,
-    relative_to: Option<&str>,
+    relative_to: &str,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
     let repo = Repository::open(&repo_root)?;
     let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
 
-    let relative_to = if let Some(relative_to) = relative_to {
-        let relative_to_path = Path::new(relative_to);
-        if relative_to_path.is_relative() {
-            Some(ProjectRelativePathBuf::unchecked_new(
-                relative_to.to_string(),
-            ))
-        } else {
-            let relative_to = fs_util::canonicalize(relative_to)?;
-            Some(repo_root.relativize(&relative_to)?.to_buf())
-        }
-    } else {
-        None
-    };
+    let relative_to_path = Path::new(relative_to);
+    if relative_to_path.is_relative() {
+        return Err(Error::PathError(anyhow!(
+            "relative_to must be an absolute path: {:?}",
+            relative_to
+        )));
+    }
+
+    let relative_to = fs_util::canonicalize(relative_to)?;
+    let relative_to = repo_root.relativize(&relative_to)?;
 
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(
         &repo,
-        relative_to.as_deref(),
+        relative_to.as_ref(),
         &mut files,
         include_untracked,
     )?;
@@ -62,7 +56,7 @@ pub fn changed_files(
         add_changed_files_from_commits(
             &repo,
             &mut files,
-            relative_to.as_deref(),
+            relative_to.as_ref(),
             from_commit,
             to_commit,
         )?;
@@ -73,7 +67,7 @@ pub fn changed_files(
 
 fn add_changed_files_from_unstaged_changes(
     repo: &Repository,
-    relative_to: Option<&ProjectRelativePath>,
+    relative_to: &ProjectRelativePath,
     files: &mut HashSet<String>,
     include_untracked: bool,
 ) -> Result<(), Error> {
@@ -81,9 +75,7 @@ fn add_changed_files_from_unstaged_changes(
     options.include_untracked(include_untracked);
     options.recurse_untracked_dirs(include_untracked);
 
-    if let Some(relative_to) = relative_to {
-        options.pathspec(relative_to.to_string());
-    }
+    options.pathspec(relative_to.to_string());
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
@@ -95,9 +87,8 @@ fn add_changed_files_from_unstaged_changes(
             // error if the base path is not a prefix of the original path.
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
-            let project_relative_file_path = relative_to.map_or(Ok(file_path), |relative_to| {
-                file_path.strip_prefix(relative_to.as_forward_relative_path().as_path())
-            })?;
+            let project_relative_file_path =
+                file_path.strip_prefix(relative_to.as_forward_relative_path().as_path())?;
 
             files.insert(
                 project_relative_file_path
@@ -114,7 +105,7 @@ fn add_changed_files_from_unstaged_changes(
 fn add_changed_files_from_commits(
     repo: &Repository,
     files: &mut HashSet<String>,
-    relative_to: Option<&ProjectRelativePath>,
+    relative_to: &ProjectRelativePath,
     from_commit: &str,
     to_commit: &str,
 ) -> Result<(), Error> {
@@ -125,21 +116,16 @@ fn add_changed_files_from_commits(
     let from_tree = from_commit.tree()?;
     let to_tree = to_commit.tree()?;
 
-    let mut options = relative_to.map(|relative_to| {
-        let mut options = DiffOptions::new();
-        options.pathspec(relative_to.to_string());
-        options
-    });
+    let mut options = DiffOptions::new();
+    options.pathspec(relative_to.to_string());
 
-    let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), options.as_mut())?;
+    let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
     diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
 
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(path) = file.path() {
-            let path = relative_to.map_or(Ok(path), |relative_to| {
-                path.strip_prefix(relative_to.as_forward_relative_path().as_path())
-            })?;
+            let path = path.strip_prefix(relative_to.as_forward_relative_path().as_path())?;
             files.insert(
                 path.to_str()
                     .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
@@ -230,6 +216,7 @@ mod tests {
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
+        let relative_to = repo_root.path().to_str().unwrap();
         let mut config = repo.config()?;
         config.set_str("user.name", "test")?;
         config.set_str("user.email", "test@example.com")?;
@@ -244,12 +231,12 @@ mod tests {
         fs::write(new_file, "let y = 1;")?;
 
         // Test that uncommitted file is marked as changed with `include_untracked`
-        let files = super::changed_files(repo_root.path().to_path_buf(), None, true, None)?;
+        let files = super::changed_files(repo_root.path().to_path_buf(), None, true, relative_to)?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Test that uncommitted file is *not* marked as changed without
         // `include_untracked`
-        let files = super::changed_files(repo_root.path().to_path_buf(), None, false, None)?;
+        let files = super::changed_files(repo_root.path().to_path_buf(), None, false, relative_to)?;
         assert_eq!(files, HashSet::from([]));
 
         // Now commit file
@@ -263,7 +250,7 @@ mod tests {
                 second_commit_oid.to_string().as_str(),
             )),
             false,
-            None,
+            relative_to,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -280,7 +267,7 @@ mod tests {
                 second_commit_oid.to_string().as_str(),
             )),
             true,
-            Some("subdir"),
+            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -312,7 +299,7 @@ mod tests {
             true,
             // Go will pass the absolute repo root as the relative_to if there
             // isn't a more specific subdir that should be used
-            Some(repo_root.path().to_str().unwrap()),
+            repo_root.path().to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -344,7 +331,7 @@ mod tests {
             true,
             // Go will pass the absolute repo root as the relative_to if there
             // isn't a more specific subdir that should be used
-            Some(repo_root.path().join("subdir").to_str().unwrap()),
+            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -357,7 +344,7 @@ mod tests {
                 repo.head()?.peel_to_commit()?.id().to_string().as_str(),
             )),
             false,
-            Some(repo_root.path().join("subdir").to_str().unwrap()),
+            repo_root.path().join("subdir").to_str().unwrap(),
         )?;
 
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));

@@ -76,7 +76,7 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
         req.repo_root.into(),
         commit_range,
         req.include_untracked,
-        req.relative_to.as_deref(),
+        &req.relative_to,
     ) {
         Ok(files) => {
             let files: Vec<_> = files.into_iter().collect();
