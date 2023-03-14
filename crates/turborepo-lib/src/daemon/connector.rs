@@ -280,7 +280,8 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitEr
 
     let file_name = match path.file_name().map(|f| f.to_owned()) {
         Some(p) => Arc::new(p),
-        None => return Ok(()), // you cannot watch `..`
+        // if there is no file name, then the path is invalid
+        None => return Err(FileWaitError::InvalidPath(path.into())),
     };
 
     let (tx, mut rx) = mpsc::channel(1);
@@ -311,7 +312,9 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitEr
                         .unwrap_or_default()
                 }) {
                     futures::executor::block_on(async {
-                        tx.send(()).await.expect("will send a message");
+                        // if the receiver is dropped, it is because the future has
+                        // been cancelled, so we don't need to do anything
+                        tx.send(()).await.ok();
                     })
                 }
             }
@@ -332,6 +335,9 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitEr
         _ => return Ok(()),
     };
 
+    // this can only fail if the channel has been closed, which will
+    // always happen either after this call ends, or after this future
+    // is cancelled
     rx.recv().await.expect("will receive a message");
 
     Ok(())
