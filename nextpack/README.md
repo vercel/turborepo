@@ -10,9 +10,10 @@ There are two steps:
 ```bash
 # This will clone next.js into ./next.js
 # if you wanted, you can link your own already-checked-out next.js repo.
+# This will automatically run the next step.
 $ node ./scripts/init.cjs
 
-# This read the Cargo.toml from Next.js and Turbo, generating a new
+# This reads the Cargo.toml from Next.js and Turbo, generating a new
 # Cargo.toml workspace in this directory.
 $ cargo run --bin sync-workspace
 ```

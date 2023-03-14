@@ -22,12 +22,12 @@ const DEFAULT_TOML: &str = indoc!(
 fn read_toml(file: &str) -> Table {
     let mut cargo_toml = String::new();
     let n = File::open(file)
-        .expect(&format!("failed to open {file}"))
+        .unwrap_or_else(|_| panic!("failed to open {file}"))
         .read_to_string(&mut cargo_toml)
-        .expect(&format!("failed to read {file}"));
+        .unwrap_or_else(|_| panic!("failed to read {file}"));
     cargo_toml.truncate(n);
 
-    toml::from_str(&cargo_toml).expect(&format!("failed to parse {file}"))
+    toml::from_str(&cargo_toml).unwrap_or_else(|_| panic!("failed to parse {file}"))
 }
 
 fn remap_path_dependencies(toml: &mut Table, path_prefix: &str) {
@@ -49,6 +49,8 @@ fn remap_git_dependencies(toml: &mut Table, git_repo: &str, path_prefix: &str) {
                 if git.as_str().unwrap() == git_repo {
                     attrs.remove("git");
                     attrs.remove("rev");
+                    attrs.remove("tag");
+                    attrs.remove("branch");
                     attrs.insert(
                         "path".to_string(),
                         Value::String(format!("{path_prefix}{}", key)),
@@ -172,7 +174,7 @@ fn sync_cargo_toml() -> Result<usize> {
         .as_table()
         .unwrap()
         .clone();
-    remap_path_dependencies(&mut next_dependencies, TURBO_PATH);
+    remap_path_dependencies(&mut next_dependencies, NEXT_PATH);
     remap_git_dependencies(
         &mut next_dependencies,
         "https://github.com/vercel/turbo.git",
@@ -195,9 +197,9 @@ fn sync_cargo_toml() -> Result<usize> {
                     println!(
                         "conflicting dependency:\nnext:  {} = {}\nturbo: {} = {}",
                         key,
-                        get_diff_only(&next_value, &turbo_value),
+                        get_diff_only(next_value, &turbo_value),
                         key,
-                        get_diff_only(&turbo_value, &next_value)
+                        get_diff_only(&turbo_value, next_value)
                     );
                     conflicts_count += 1;
                 }
@@ -211,7 +213,7 @@ fn sync_cargo_toml() -> Result<usize> {
     // Ensure workspace path deps to members at least.
     for member in members.iter() {
         let dep = member.as_str().unwrap();
-        if let Some((path, name)) = dep.rsplit_once("/") {
+        if let Some((path, name)) = dep.rsplit_once('/') {
             if path == "crates" {
                 // ignore the nexpack helper crates.
                 continue;
@@ -243,7 +245,7 @@ fn sync_cargo_toml() -> Result<usize> {
         toml_file,
         "# Do NOT make changes to this file, instead change"
     )?;
-    writeln!(toml_file, "# - {}Cargo.toml", TURBO_PATH)?;
+    writeln!(toml_file, "# - ../Cargo.toml")?;
     writeln!(toml_file, "# - {}Cargo.toml", NEXT_PATH)?;
     writeln!(toml_file, "# and run `cargo run --bin sync-workspace`.")?;
     toml_file.write_all(toml::to_string_pretty(&cargo_toml)?.as_bytes())?;
@@ -275,9 +277,9 @@ fn sync_cargo_lock() -> Result<usize> {
                     println!(
                         "conflicting lockfile entry:\nnext:  {} = {}\nturbo: {} = {}",
                         key,
-                        get_diff_only(&next_value, &turbo_value),
+                        get_diff_only(next_value, &turbo_value),
                         key,
-                        get_diff_only(&turbo_value, &next_value)
+                        get_diff_only(&turbo_value, next_value)
                     );
                     conflicts_count += 1;
                 }
@@ -304,7 +306,7 @@ fn sync_cargo_lock() -> Result<usize> {
     )?;
     writeln!(lock_file, "# It is not intended for manual editing.")?;
     writeln!(lock_file, "version = 3")?;
-    writeln!(lock_file, "")?;
+    writeln!(lock_file)?;
     lock_file.write_all(toml::to_string_pretty(&cargo_lock)?.as_bytes())?;
 
     Ok(conflicts_count)
