@@ -179,6 +179,13 @@ pub enum RepoMode {
     MultiPackage,
 }
 
+/**
+ * TurboState is used for calculating information about the
+ * currently-running executable. It does not specify whether it is local or
+ * global, it just reports information about itself. Depending upon the
+ * environment and how it was invoked it _may_ go look for a different
+ * executable to delegate to.
+ */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TurboState {
     bin_path: Option<PathBuf>,
