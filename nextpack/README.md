@@ -10,7 +10,7 @@ There are two steps:
 ```bash
 # This will clone next.js into ./next.js
 # if you wanted, you can link your own already-checked-out next.js repo.
-$ ./scripts/init.cjs
+$ node ./scripts/init.cjs
 
 # This read the Cargo.toml from Next.js and Turbo, generating a new
 # Cargo.toml workspace in this directory.
@@ -25,7 +25,7 @@ You can't have an optional workspace member (or if you can, I can't
 figure it out). So the `./next.js/…` crate members are gonna error out
 if you try to run a Turbo crate without first cloning next.js.
 
-To fix, run `./scripts/init.js` again. It'll resync your Cargo
+To fix, run `node ./scripts/init.js` again. It'll resync your Cargo
 workspace.
 
 ### Why is `init` written in JS?
