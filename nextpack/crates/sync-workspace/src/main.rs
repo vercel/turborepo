@@ -243,8 +243,8 @@ fn sync_cargo_toml() -> Result<usize> {
         toml_file,
         "# Do NOT make changes to this file, instead change"
     )?;
-    writeln!(toml_file, "# - {}/Cargo.toml, and", TURBO_PATH)?;
-    writeln!(toml_file, "# - {}/Cargo.toml", TURBO_PATH)?;
+    writeln!(toml_file, "# - {}Cargo.toml", TURBO_PATH)?;
+    writeln!(toml_file, "# - {}Cargo.toml", NEXT_PATH)?;
     writeln!(toml_file, "# and run `cargo run --bin sync-workspace`.")?;
     toml_file.write_all(toml::to_string_pretty(&cargo_toml)?.as_bytes())?;
 
