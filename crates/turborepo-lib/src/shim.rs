@@ -209,21 +209,6 @@ pub fn init_env_logger(verbosity: usize) {
 }
 
 pub fn run() -> Result<Payload> {
-    let turbo: TurboState = Default::default();
+    let mut turbo: TurboState = Default::default();
     turbo.run()
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[cfg(windows)]
-    #[test]
-    fn test_windows_path_normalization() -> Result<()> {
-        let cwd = current_dir()?;
-        let normalized = fs_canonicalize(&cwd)?;
-        // Just make sure it isn't a UNC path
-        assert!(!normalized.starts_with("\\\\?"));
-        Ok(())
-    }
 }

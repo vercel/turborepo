@@ -158,7 +158,7 @@ impl TurboState {
             .expect("Failed to read version from version.txt")
     }
 
-    pub fn run(self) -> Result<Payload> {
+    pub fn run(&mut self) -> Result<Payload> {
         let args = ShimArgs::parse()?;
 
         init_env_logger(args.verbosity);
@@ -182,7 +182,11 @@ impl TurboState {
 
         match RepoState::infer(&args.cwd) {
             Ok(repo_state) => {
-                debug!("Repository Root: {}", repo_state.root.to_string_lossy());
+                self.repo_state = Some(repo_state);
+                debug!(
+                    "Repository Root: {}",
+                    self.repo_state.clone().unwrap().root.to_string_lossy()
+                );
                 self.run_correct_turbo(args)
             }
             Err(err) => {
@@ -205,7 +209,7 @@ impl TurboState {
     /// * `turbo_state`: state for current execution
     ///
     /// returns: Result<i32, Error>
-    fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
+    fn run_correct_turbo(&self, shim_args: ShimArgs) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) =
             self.repo_state.clone().unwrap().local_turbo_state
         {
@@ -245,7 +249,7 @@ impl TurboState {
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
             env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
-            cli::run(Some(self.repo_state.unwrap()))
+            cli::run(Some(self.repo_state.clone().unwrap()))
         }
     }
 
