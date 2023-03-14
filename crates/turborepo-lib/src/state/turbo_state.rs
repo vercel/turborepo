@@ -1,9 +1,5 @@
 use std::{
     env,
-    env::current_dir,
-    ffi::OsString,
-    fs::{self},
-    io::Write,
     path::{Path, PathBuf},
     process,
     process::Stdio,
@@ -11,11 +7,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use chrono::offset::Local;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
-use env_logger::{fmt::Color, Builder, Env, WriteStyle};
-use log::{debug, Level, LevelFilter};
+use log::debug;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
@@ -24,12 +18,11 @@ use turbo_updater::check_for_updates;
 use super::{local_turbo_state::LocalTurboState, repo_state::RepoState};
 use crate::{
     cli,
-    files::{package_json, turbo_json, yarn_rc},
+    files::turbo_json,
     get_version,
-    package_manager::Globs,
     shim::{init_env_logger, ShimArgs},
     state::repo_state::RepoMode,
-    PackageManager, Payload,
+    Payload,
 };
 
 fn turbo_version_has_shim(version: &str) -> bool {
@@ -165,7 +158,7 @@ impl TurboState {
             .expect("Failed to read version from version.txt")
     }
 
-    pub fn run(&self) -> Result<Payload> {
+    pub fn run(self) -> Result<Payload> {
         let args = ShimArgs::parse()?;
 
         init_env_logger(args.verbosity);
@@ -214,9 +207,9 @@ impl TurboState {
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) =
-            &self.repo_state.unwrap().local_turbo_state
+            self.repo_state.clone().unwrap().local_turbo_state
         {
-            try_check_for_updates(&shim_args, version);
+            try_check_for_updates(&shim_args, &version);
             let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
@@ -227,7 +220,8 @@ impl TurboState {
             debug!("Running command as global turbo");
 
             // Absence of turbo.json is not an error per business logic.
-            if let Ok(turbo_json) = turbo_json::read(&self.repo_state.unwrap().root) {
+            let turbo_json_root = self.repo_state.clone().unwrap().root;
+            if let Ok(turbo_json) = turbo_json::read(&turbo_json_root) {
                 match turbo_json.check_version(global_version) {
                     Ok(version_match) => {
                         if !version_match {
@@ -256,8 +250,10 @@ impl TurboState {
     }
 
     fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
-        if let Some(LocalTurboState { version, .. }) = &self.repo_state.unwrap().local_turbo_state {
-            Ok(turbo_version_has_shim(version))
+        if let Some(LocalTurboState { version, .. }) =
+            self.repo_state.clone().unwrap().local_turbo_state
+        {
+            Ok(turbo_version_has_shim(&version))
         } else {
             Ok(false)
         }
@@ -274,7 +270,7 @@ impl TurboState {
         let already_has_single_package_flag = shim_args
             .remaining_turbo_args
             .contains(&"--single-package".to_string());
-        let should_add_single_package_flag = self.repo_state.unwrap().mode
+        let should_add_single_package_flag = self.repo_state.clone().unwrap().mode
             == RepoMode::SinglePackage
             && !already_has_single_package_flag
             && supports_skip_infer_and_single_package;
@@ -283,7 +279,7 @@ impl TurboState {
             "supports_skip_infer_and_single_package {:?}",
             supports_skip_infer_and_single_package
         );
-        let cwd = fs_canonicalize(&self.repo_state.unwrap().root)?;
+        let cwd = fs_canonicalize(self.repo_state.clone().unwrap().root)?;
         let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
             vec!["--skip-infer".to_string()]
         } else {
@@ -315,5 +311,31 @@ impl TurboState {
             .expect("Failed to execute turbo.");
 
         Ok(command.wait()?.code().unwrap_or(2))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_skip_infer_version_constraint() {
+        let canary = "1.7.0-canary.0";
+        let newer_canary = "1.7.0-canary.1";
+        let newer_minor_canary = "1.7.1-canary.6";
+        let release = "1.7.0";
+        let old = "1.6.3";
+        let old_canary = "1.6.2-canary.1";
+        let new = "1.8.0";
+        let new_major = "2.1.0";
+
+        assert!(turbo_version_has_shim(release));
+        assert!(turbo_version_has_shim(canary));
+        assert!(turbo_version_has_shim(newer_canary));
+        assert!(turbo_version_has_shim(newer_minor_canary));
+        assert!(turbo_version_has_shim(new));
+        assert!(turbo_version_has_shim(new_major));
+        assert!(!turbo_version_has_shim(old));
+        assert!(!turbo_version_has_shim(old_canary));
     }
 }

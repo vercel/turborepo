@@ -13,8 +13,8 @@ use crate::files::{package_json, yarn_rc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalTurboState {
-    bin_path: PathBuf,
-    version: String,
+    pub bin_path: PathBuf,
+    pub version: String,
 }
 
 impl LocalTurboState {

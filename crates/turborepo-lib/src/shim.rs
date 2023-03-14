@@ -1,34 +1,12 @@
-use std::{
-    env,
-    env::current_dir,
-    ffi::OsString,
-    fs::{self},
-    io::Write,
-    path::{Path, PathBuf},
-    process,
-    process::Stdio,
-    time::Duration,
-};
+use std::{env, env::current_dir, io::Write, path::PathBuf};
 
 use anyhow::{anyhow, Result};
 use chrono::offset::Local;
-use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
-use log::{debug, Level, LevelFilter};
-use semver::Version;
-use serde::{Deserialize, Serialize};
-use tiny_gradient::{GradientStr, RGB};
-use turbo_updater::check_for_updates;
+use log::{Level, LevelFilter};
 
-use crate::{
-    cli,
-    files::{package_json, turbo_json, yarn_rc},
-    get_version,
-    package_manager::Globs,
-    state::turbo_state::TurboState,
-    PackageManager, Payload,
-};
+use crate::{state::turbo_state::TurboState, Payload};
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -44,16 +22,6 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
 
 static TURBO_SKIP_NOTIFIER_ARGS: [&str; 5] =
     ["--help", "--h", "--version", "--v", "--no-update-notifier"];
-
-fn turbo_version_has_shim(version: &str) -> bool {
-    let version = Version::parse(version).unwrap();
-    // only need to check major and minor (this will include canaries)
-    if version.major == 1 {
-        return version.minor >= 7;
-    }
-
-    version.major > 1
-}
 
 #[derive(Debug)]
 pub struct ShimArgs {
@@ -248,27 +216,6 @@ pub fn run() -> Result<Payload> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn test_skip_infer_version_constraint() {
-        let canary = "1.7.0-canary.0";
-        let newer_canary = "1.7.0-canary.1";
-        let newer_minor_canary = "1.7.1-canary.6";
-        let release = "1.7.0";
-        let old = "1.6.3";
-        let old_canary = "1.6.2-canary.1";
-        let new = "1.8.0";
-        let new_major = "2.1.0";
-
-        assert!(turbo_version_has_shim(release));
-        assert!(turbo_version_has_shim(canary));
-        assert!(turbo_version_has_shim(newer_canary));
-        assert!(turbo_version_has_shim(newer_minor_canary));
-        assert!(turbo_version_has_shim(new));
-        assert!(turbo_version_has_shim(new_major));
-        assert!(!turbo_version_has_shim(old));
-        assert!(!turbo_version_has_shim(old_canary));
-    }
 
     #[cfg(windows)]
     #[test]

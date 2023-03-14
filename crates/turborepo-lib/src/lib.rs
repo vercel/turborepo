@@ -13,7 +13,6 @@ use anyhow::Result;
 use log::error;
 
 pub use crate::cli::Args;
-use crate::package_manager::PackageManager;
 
 /// The payload from running main, if the program can complete without using Go
 /// the Rust variant will be returned. If Go is needed then the args that
