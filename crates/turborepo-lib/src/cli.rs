@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::{
     commands::{bin, link, login, logout, unlink, CommandBase},
     get_version,
-    shim::{RepoMode, RepoState},
+    state::repo_state::{RepoMode, RepoState},
     ui::UI,
     Payload,
 };

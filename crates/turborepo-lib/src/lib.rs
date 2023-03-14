@@ -6,6 +6,7 @@ mod files;
 mod package_manager;
 mod retry;
 mod shim;
+mod state;
 mod ui;
 
 use anyhow::Result;
