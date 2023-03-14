@@ -354,24 +354,17 @@ func (p *PnpmLockfile) prunePatches(patches map[string]PatchFile, packages map[s
 	}
 
 	patchPackages := make(map[string]PatchFile, len(patches))
-	for dependency, entry := range patches {
-		var dependencyString string
+	for dependency := range packages {
 		if p.isV6 {
-			dependencyString = "/" + dependency
-		} else {
-			// The name for patches is of the form name@version
-			// https://github.com/pnpm/pnpm/blob/2895389ae1f2bf7346e140c017f495aa47186eba/packages/plugin-commands-patching/src/patchCommit.ts#L38
-			lastAt := strings.LastIndex(dependency, "@")
-			if lastAt == -1 {
-				panic(fmt.Sprintf("No '@' found in patch key: %s", dependency))
-			}
-			name := strings.Replace(dependency[:lastAt], "/", "-", 1)
-			version := dependency[lastAt+1:]
-			dependencyString = fmt.Sprintf("%s_%s", p.formatKey(name, version), entry.Hash)
+			// Internally pnpm partially converts the new path format to the old
+			// format in order for existing parsing logic to work.
+			dependency = convertNewToOldDepPath(dependency)
 		}
-		_, inPackages := packages[dependencyString]
-		if inPackages {
-			patchPackages[dependency] = entry
+		dp := parseDepPath(dependency)
+		patchKey := fmt.Sprintf("%s@%s", dp.name, dp.version)
+
+		if patch, ok := patches[patchKey]; ok && patch.Hash == dp.patchHash() {
+			patchPackages[patchKey] = patch
 		}
 	}
 
@@ -477,17 +470,122 @@ func formatPnpmKeyV6(name string, version string) string {
 }
 
 func getVersionFromKey(key string) string {
-	atIndex := strings.LastIndex(key, "/")
-	if atIndex == -1 || len(key) == atIndex+1 {
-		return ""
+	dp := parseDepPath(key)
+	if dp.peerSuffix != "" {
+		return fmt.Sprintf("%s_%s", dp.version, dp.peerSuffix)
 	}
-	return key[atIndex+1:]
+	return dp.version
 }
 
 func getVersionFromKeyV6(key string) string {
-	atIndex := strings.LastIndex(key, "@")
-	if atIndex == -1 || len(key) == atIndex+1 {
+	oldKey := convertNewToOldDepPath(key)
+	dp := parseDepPath(oldKey)
+	if dp.peerSuffix != "" {
+		return dp.version + dp.peerSuffix
+	}
+	return dp.version
+}
+
+// Parsed representation of a pnpm lockfile key
+type depPath struct {
+	host       string
+	name       string
+	version    string
+	peerSuffix string
+}
+
+func parseDepPath(dependency string) depPath {
+	// See https://github.com/pnpm/pnpm/blob/185ab01adfc927ea23d2db08a14723bf51d0025f/packages/dependency-path/src/index.ts#L96
+	var dp depPath
+	parts := strings.Split(dependency, "/")
+	shift := func() string {
+		if len(parts) == 0 {
+			return ""
+		}
+		val := parts[0]
+		parts = parts[1:]
+		return val
+	}
+
+	isAbsolute := dependency[0] != '/'
+	// Skip leading '/'
+	if !isAbsolute {
+		shift()
+	}
+
+	if isAbsolute {
+		dp.host = shift()
+	}
+
+	if len(parts) == 0 {
+		return dp
+	}
+
+	if strings.HasPrefix(parts[0], "@") {
+		dp.name = fmt.Sprintf("%s/%s", shift(), shift())
+	} else {
+		dp.name = shift()
+	}
+
+	version := strings.Join(parts, "/")
+	if len(version) > 0 {
+		var peerSuffixIndex int
+		if strings.Contains(version, "(") && strings.HasSuffix(version, ")") {
+			// v6 encodes peers deps using (peer=version)
+			// also used to encode patches using (path_hash=hash)
+			peerSuffixIndex = strings.Index(version, "(")
+			dp.peerSuffix = version[peerSuffixIndex:]
+			dp.version = version[0:peerSuffixIndex]
+		} else {
+			// pre v6 uses _ to separate version from peer dependencies
+			// if a dependency is patched and has peer dependencies its version will
+			// be encoded as version_patchHash_peerDepsHash
+			peerSuffixIndex = strings.Index(version, "_")
+			if peerSuffixIndex != -1 {
+				dp.peerSuffix = version[peerSuffixIndex+1:]
+				dp.version = version[0:peerSuffixIndex]
+			}
+		}
+		if peerSuffixIndex == -1 {
+			dp.version = version
+		}
+	}
+
+	return dp
+}
+
+var _patchHashKey = "patch_hash="
+
+func (d depPath) patchHash() string {
+	if strings.HasPrefix(d.peerSuffix, "(") && strings.HasSuffix(d.peerSuffix, ")") {
+		for _, part := range strings.Split(d.peerSuffix, "(") {
+			if strings.HasPrefix(part, _patchHashKey) {
+				// drop the enclosing ')'
+				return part[len(_patchHashKey) : len(part)-1]
+			}
+		}
+		// no patch entry found
 		return ""
 	}
-	return key[atIndex+1:]
+
+	sepIndex := strings.Index(d.peerSuffix, "_")
+	if sepIndex != -1 {
+		return d.peerSuffix[:sepIndex]
+	}
+	// if a dependency just has a single suffix we can't tell if it's a patch or peer hash
+	// return it in case it's a patch hash
+	return d.peerSuffix
+}
+
+func convertNewToOldDepPath(newPath string) string {
+	// Used to convert v6's dep path of /name@version to v5's /name/version
+	if len(newPath) > 2 && !strings.Contains(newPath[2:], "@") {
+		return newPath
+	}
+	searchStartIndex := strings.Index(newPath, "/@") + 2
+	index := strings.Index(newPath[searchStartIndex:], "@") + searchStartIndex
+	if strings.Contains(newPath, "(") && index > strings.Index(newPath, "(") {
+		return newPath
+	}
+	return fmt.Sprintf("%s/%s", newPath[0:index], newPath[index+1:])
 }

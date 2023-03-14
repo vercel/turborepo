@@ -189,7 +189,7 @@ func Test_PnpmLockfilePatches(t *testing.T) {
 	assert.NilError(t, err)
 
 	patches := lockfile.Patches()
-	assert.Equal(t, len(patches), 2)
+	assert.Equal(t, len(patches), 3)
 	assert.Equal(t, patches[0], turbopath.AnchoredUnixPath("patches/@babel__core@7.20.12.patch"))
 	assert.Equal(t, patches[1], turbopath.AnchoredUnixPath("patches/is-odd@3.0.1.patch"))
 }
@@ -203,11 +203,11 @@ func Test_PnpmPrunePatches(t *testing.T) {
 
 	prunedLockfile, err := lockfile.Subgraph(
 		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/dependency")},
-		[]string{"/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq", "/is-number/6.0.0", "/@babel-core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y"},
+		[]string{"/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq", "/is-number/6.0.0", "/@babel/core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y", "/moleculer/0.14.28_5pk7ojv7qbqha75ozglk4y4f74_kumip57h7zlinbhp4gz3jrbqry"},
 	)
 	assert.NilError(t, err)
 
-	assert.Equal(t, len(prunedLockfile.Patches()), 2)
+	assert.Equal(t, len(prunedLockfile.Patches()), 3)
 }
 
 func Test_PnpmPrunePatchesV6(t *testing.T) {
@@ -219,7 +219,7 @@ func Test_PnpmPrunePatchesV6(t *testing.T) {
 
 	prunedLockfile, err := lockfile.Subgraph(
 		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/a")},
-		[]string{"/lodash@4.17.21"},
+		[]string{"/lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)"},
 	)
 	assert.NilError(t, err)
 
@@ -227,7 +227,7 @@ func Test_PnpmPrunePatchesV6(t *testing.T) {
 
 	prunedLockfile, err = lockfile.Subgraph(
 		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/b")},
-		[]string{"/@babel/helper-string-parser@7.19.4"},
+		[]string{"/@babel/helper-string-parser@7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)"},
 	)
 	assert.NilError(t, err)
 
@@ -307,4 +307,71 @@ func Test_PnpmOverride(t *testing.T) {
 	assert.Assert(t, pkg.Found)
 	assert.DeepEqual(t, pkg.Key, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
 	assert.DeepEqual(t, pkg.Version, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
+}
+
+func Test_DepPathParsing(t *testing.T) {
+	type testCase struct {
+		input string
+		dp    depPath
+	}
+	testCases := []testCase{
+		{
+			"/foo/1.0.0",
+			depPath{
+				name:    "foo",
+				version: "1.0.0",
+			},
+		},
+		{
+			"/@foo/bar/1.0.0",
+			depPath{
+				name:    "@foo/bar",
+				version: "1.0.0",
+			},
+		},
+		{
+			"example.org/foo/1.0.0",
+			depPath{
+				host:    "example.org",
+				name:    "foo",
+				version: "1.0.0",
+			},
+		},
+		{
+			"/foo/1.0.0_bar@1.0.0",
+			depPath{
+				name:       "foo",
+				version:    "1.0.0",
+				peerSuffix: "bar@1.0.0",
+			},
+		},
+		{
+			"/foo/1.0.0(bar@1.0.0)",
+			depPath{
+				name:       "foo",
+				version:    "1.0.0",
+				peerSuffix: "(bar@1.0.0)",
+			},
+		},
+		{
+			"/foo/1.0.0_patchHash_peerHash",
+			depPath{
+				name:       "foo",
+				version:    "1.0.0",
+				peerSuffix: "patchHash_peerHash",
+			},
+		},
+		{
+			"/@babel/helper-string-parser/7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)",
+			depPath{
+				name:       "@babel/helper-string-parser",
+				version:    "7.19.4",
+				peerSuffix: "(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		assert.Equal(t, parseDepPath(tc.input), tc.dp, tc.input)
+	}
 }
