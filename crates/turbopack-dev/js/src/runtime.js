@@ -807,7 +807,7 @@ function applyChunkListUpdate(chunkListPath, update) {
     for (const [chunkPath, chunkUpdate] of Object.entries(update.chunks)) {
       switch (chunkUpdate.type) {
         case "added":
-          BACKEND.loadChunk(chunkPath);
+          BACKEND.loadChunk(chunkPath, { type: SourceTypeUpdate });
           break;
         case "total":
           BACKEND.reloadChunk?.(chunkPath);
