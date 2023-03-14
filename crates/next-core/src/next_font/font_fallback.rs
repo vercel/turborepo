@@ -9,7 +9,7 @@ use turbo_tasks::{
 pub(crate) struct DefaultFallbackFont {
     pub name: String,
     pub az_avg_width: f64,
-    pub units_per_em: u32,
+    pub units_per_em: f64,
 }
 
 // From https://github.com/vercel/next.js/blob/a3893bf69c83fb08e88c87bf8a21d987a0448c8e/packages/font/src/utils.ts#L4
@@ -17,14 +17,14 @@ pub(crate) static DEFAULT_SANS_SERIF_FONT: Lazy<DefaultFallbackFont> =
     Lazy::new(|| DefaultFallbackFont {
         name: "Arial".to_owned(),
         az_avg_width: 934.5116279069767,
-        units_per_em: 2048,
+        units_per_em: 2048.0,
     });
 
 pub(crate) static DEFAULT_SERIF_FONT: Lazy<DefaultFallbackFont> =
     Lazy::new(|| DefaultFallbackFont {
         name: "Times New Roman".to_owned(),
         az_avg_width: 854.3953488372093,
-        units_per_em: 2048,
+        units_per_em: 2048.0,
     });
 
 #[turbo_tasks::value(shared)]
@@ -34,6 +34,7 @@ pub(crate) struct AutomaticFontFallback {
     pub adjustment: Option<FontAdjustment>,
 }
 
+#[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub(crate) enum FontFallback {
     Automatic(AutomaticFontFallbackVc),
@@ -45,7 +46,7 @@ pub(crate) enum FontFallback {
 }
 
 #[turbo_tasks::value(transparent)]
-pub(crate) struct FontFallbacks(Vec<FontFallback>);
+pub(crate) struct FontFallbacks(Vec<FontFallbackVc>);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, TraceRawVcs)]
 pub(crate) struct FontAdjustment {

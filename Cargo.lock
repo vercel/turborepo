@@ -1991,6 +1991,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fontdue"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a62391ecb864cf12ed06b2af4eda2e609b97657950d6a8f06841b17726ab253"
+dependencies = [
+ "hashbrown 0.11.2",
+ "ttf-parser",
+]
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3616,6 +3626,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "auto-hash-map",
+ "fontdue",
  "indexmap",
  "indoc",
  "mime",

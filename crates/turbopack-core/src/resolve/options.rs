@@ -381,6 +381,7 @@ impl ResolvedMapVc {
             let root = root.await?;
             if let Some(path) = root.get_path_to(&resolved) {
                 if glob.await?.execute(path) {
+                    println!("resolvedmap lookup context {}", context.await?.path);
                     return Ok(import_mapping_to_result(*mapping, context, request)
                         .await?
                         .into());

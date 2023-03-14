@@ -4,13 +4,15 @@ use turbo_tasks::primitives::{StringVc, U32Vc};
 
 use super::options::{FontDescriptors, NextFontLocalOptionsVc};
 use crate::next_font::{
-    local::options::FontWeight,
+    font_fallback::FontFallbacksVc,
+    stylesheet::build_fallback_definition,
     util::{get_scoped_font_family, FontCssPropertiesVc, FontFamilyType},
 };
 
 #[turbo_tasks::function]
 pub(super) async fn build_stylesheet(
     options: NextFontLocalOptionsVc,
+    fallbacks: FontFallbacksVc,
     css_properties: FontCssPropertiesVc,
     request_hash: U32Vc,
 ) -> Result<StringVc> {
@@ -24,8 +26,12 @@ pub(super) async fn build_stylesheet(
         r#"
         {}
         {}
+        {}
     "#,
         *build_font_face_definitions(scoped_font_family, options).await?,
+        (*build_fallback_definition(fallbacks).await?)
+            .as_deref()
+            .unwrap_or(""),
         *build_font_class_rules(css_properties).await?
     )))
 }
@@ -90,7 +96,6 @@ pub(super) async fn build_font_class_rules(
     let css_properties = &*css_properties.await?;
     let font_family_string = &*css_properties.font_family.await?;
 
-    println!("font_family_string {}", font_family_string);
     let mut rules = formatdoc!(
         r#"
         .className {{

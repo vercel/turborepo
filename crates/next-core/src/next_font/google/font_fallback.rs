@@ -26,10 +26,10 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub(super) struct FontMetricsMapEntry {
     category: String,
-    ascent: i32,
-    descent: i32,
-    line_gap: u32,
-    units_per_em: u32,
+    ascent: f64,
+    descent: f64,
+    line_gap: f64,
+    units_per_em: f64,
     az_avg_width: f64,
 }
 
@@ -120,13 +120,13 @@ fn lookup_fallback(
     let metrics = if adjust {
         // Derived from
         // https://github.com/vercel/next.js/blob/a3893bf69c83fb08e88c87bf8a21d987a0448c8e/packages/next/src/server/font-utils.ts#L121
-        let main_font_avg_width = metrics.az_avg_width / metrics.units_per_em as f64;
-        let fallback_font_avg_width = fallback.az_avg_width / fallback.units_per_em as f64;
+        let main_font_avg_width = metrics.az_avg_width / metrics.units_per_em;
+        let fallback_font_avg_width = fallback.az_avg_width / fallback.units_per_em;
         let size_adjust = main_font_avg_width / fallback_font_avg_width;
 
-        let ascent = metrics.ascent as f64 / (metrics.units_per_em as f64 * size_adjust);
-        let descent = metrics.descent as f64 / (metrics.units_per_em as f64 * size_adjust);
-        let line_gap = metrics.line_gap as f64 / (metrics.units_per_em as f64 * size_adjust);
+        let ascent = metrics.ascent / (metrics.units_per_em * size_adjust);
+        let descent = metrics.descent / (metrics.units_per_em * size_adjust);
+        let line_gap = metrics.line_gap / (metrics.units_per_em * size_adjust);
 
         Some(FontAdjustment {
             ascent,
@@ -175,10 +175,10 @@ mod tests {
             Font {
                 font_family: "Arial".to_owned(),
                 adjustment: Some(FontAdjustment {
-                    ascent: 0.9000259575934895,
-                    descent: -0.2243466463209578,
+                    ascent: 0.90002596,
+                    descent: -0.22434665,
                     line_gap: 0.0,
-                    size_adjust: 1.0763578448229054
+                    size_adjust: 1.0763578
                 })
             }
         );
@@ -208,10 +208,10 @@ mod tests {
             Font {
                 font_family: "Times New Roman".to_owned(),
                 adjustment: Some(FontAdjustment {
-                    ascent: 0.8902691493151913,
-                    descent: -0.23024202137461844,
+                    ascent: 0.890_269_16,
+                    descent: -0.230_242_01,
                     line_gap: 0.0,
-                    size_adjust: 1.1770053621492147
+                    size_adjust: 1.177_005_4
                 })
             }
         );

@@ -24,7 +24,7 @@ pub(super) async fn build_font_family_string(
     )];
 
     for font_fallback in &*font_fallbacks.await? {
-        match font_fallback {
+        match *font_fallback.await? {
             FontFallback::Automatic(fallback) => {
                 font_families.push(format!("'{}'", *fallback.await?.scoped_font_family.await?));
             }
@@ -35,10 +35,5 @@ pub(super) async fn build_font_family_string(
         }
     }
 
-    println!(
-        "FONT FAMILIES {:?} {}",
-        &font_families,
-        font_families.join(", ")
-    );
     Ok(StringVc::cell(font_families.join(", ")))
 }

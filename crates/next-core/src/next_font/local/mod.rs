@@ -76,49 +76,49 @@ impl ImportMappingReplacement for NextFontLocalReplacer {
         let request_hash = get_request_hash(*query_vc);
         let options_vc = font_options_from_query_map(*query_vc);
         let options = &*options_vc.await?;
-        let font_fallbacks = get_font_fallbacks(options_vc, request_hash);
+        let font_fallbacks = get_font_fallbacks(context, options_vc, request_hash);
         let properties =
             &*get_font_css_properties(options_vc, font_fallbacks, request_hash).await?;
-        let js_asset = VirtualAssetVc::new(
-                context.join(&format!("{}.js", get_request_id(options.variable_name.clone(), request_hash).await?)),
-                FileContent::Content(
-                    formatdoc!(
-                        r#"
-                            import cssModule from "@vercel/turbopack-next/internal/font/local/cssmodule.module.css?{}";
-                            const fontData = {{
-                                className: cssModule.className,
-                                style: {{
-                                    fontFamily: "{}",
-                                    {}{}
-                                }},
-                            }};
+        let file_content = formatdoc!(
+            r#"
+                import cssModule from "@vercel/turbopack-next/internal/font/local/cssmodule.module.css?{}";
+                const fontData = {{
+                    className: cssModule.className,
+                    style: {{
+                        fontFamily: "{}",
+                        {}{}
+                    }},
+                }};
 
-                            if (cssModule.variable != null) {{
-                                fontData.variable = cssModule.variable;
-                            }}
+                if (cssModule.variable != null) {{
+                    fontData.variable = cssModule.variable;
+                }}
 
-                            export default fontData;
+                export default fontData;
                         "#,
-                        // Pass along whichever options we received to the css handler
-                        qstring::QString::new(query_vc.await?.as_ref().unwrap().iter().collect()),
-                        properties.font_family.await?,
-                        properties
-                            .weight
-                            .await?
-                            .as_ref()
-                            .map(|w| format!("fontWeight: {},\n", w))
-                            .unwrap_or_else(|| "".to_owned()),
-                        properties
-                            .style
-                            .await?
-                            .as_ref()
-                            .map(|s| format!("fontStyle: \"{}\",\n", s))
-                            .unwrap_or_else(|| "".to_owned()),
-                    )
-                    .into(),
-                )
-                .into(),
-            );
+            // Pass along whichever options we received to the css handler
+            qstring::QString::new(query_vc.await?.as_ref().unwrap().iter().collect()),
+            properties.font_family.await?,
+            properties
+                .weight
+                .await?
+                .as_ref()
+                .map(|w| format!("fontWeight: {},\n", w))
+                .unwrap_or_else(|| "".to_owned()),
+            properties
+                .style
+                .await?
+                .as_ref()
+                .map(|s| format!("fontStyle: \"{}\",\n", s))
+                .unwrap_or_else(|| "".to_owned()),
+        );
+        let js_asset = VirtualAssetVc::new(
+            context.join(&format!(
+                "{}.js",
+                get_request_id(options.variable_name.clone(), request_hash).await?
+            )),
+            FileContent::Content(file_content.into()).into(),
+        );
 
         Ok(ImportMapResult::Result(ResolveResult::asset(js_asset.into()).into()).into())
     }
@@ -165,19 +165,15 @@ impl ImportMappingReplacement for NextFontLocalCssModuleReplacer {
             "/{}.module.css",
             get_request_id(options.await?.variable_name.clone(), request_hash).await?
         ));
+        let fallback = get_font_fallbacks(context, options, request_hash);
 
         let stylesheet = build_stylesheet(
             font_options_from_query_map(*query_vc),
-            get_font_css_properties(
-                options,
-                get_font_fallbacks(options, request_hash),
-                request_hash,
-            ),
+            fallback,
+            get_font_css_properties(options, fallback, request_hash),
             get_request_hash(*query_vc),
         )
         .await?;
-
-        println!("STY {}", *stylesheet);
 
         let css_asset = VirtualAssetVc::new(
             css_virtual_path,
@@ -196,8 +192,6 @@ async fn get_font_css_properties(
 ) -> Result<FontCssPropertiesVc> {
     let options = &*options_vc.await?;
 
-    println!("fonts! {:?}", options.fonts);
-
     Ok(FontCssPropertiesVc::cell(FontCssProperties {
         font_family: build_font_family_string(options_vc, font_fallbacks, request_hash),
         weight: OptionStringVc::cell(match &options.fonts {
@@ -207,7 +201,7 @@ async fn get_font_css_properties(
                 .as_ref()
                 // Don't include values for variable fonts. These are included in font-face
                 // definitions only.
-                .filter(|w| matches!(w, FontWeight::Fixed(_)))
+                .filter(|w| !matches!(w, FontWeight::Variable(_, _)))
                 .map(|w| w.to_string()),
         }),
         style: OptionStringVc::cell(match &options.fonts {
