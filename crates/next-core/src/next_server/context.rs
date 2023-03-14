@@ -4,8 +4,8 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
     module_options::{
-        ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions,
-        WebpackLoadersOptions,
+        JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext, ModuleOptionsContextVc,
+        PostCssTransformOptions, WebpackLoadersOptions,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
@@ -238,7 +238,9 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
-                enable_jsx: true,
+                enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                    ..Default::default()
+                })),
                 enable_styled_jsx: true,
                 enable_postcss_transform,
                 enable_webpack_loaders,
@@ -257,7 +259,9 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
-                enable_jsx: true,
+                enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                    ..Default::default()
+                })),
                 enable_styled_jsx: true,
                 enable_postcss_transform,
                 enable_webpack_loaders,
@@ -279,7 +283,9 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
-                enable_jsx: true,
+                enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                    ..Default::default()
+                })),
                 enable_postcss_transform,
                 enable_webpack_loaders,
                 enable_typescript_transform: Some(tsconfig),
@@ -314,7 +320,9 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
-                enable_jsx: true,
+                enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                    ..Default::default()
+                })),
                 enable_styled_jsx: true,
                 enable_postcss_transform,
                 enable_webpack_loaders,
