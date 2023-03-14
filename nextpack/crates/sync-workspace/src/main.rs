@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use indoc::indoc;
-use toml::{Table, Value};
+use toml::{map::Entry, Table, Value};
 
 const NEXT_PATH: &str = "./next.js/packages/next-swc/";
 const TURBO_PATH: &str = "./turbo-crates/";
@@ -27,6 +27,35 @@ fn read_toml(file: &str) -> Table {
     cargo_toml.truncate(n);
 
     toml::from_str(&cargo_toml).expect(&format!("failed to parse {file}"))
+}
+
+fn remap_path_dependencies(toml: &mut Table, path_prefix: &str) {
+    for (_, value) in toml.iter_mut() {
+        if let Some(attrs) = value.as_table_mut() {
+            for (k, v) in attrs.iter_mut() {
+                if k == "path" {
+                    *v = Value::String(format!("{path_prefix}{}", v.as_str().unwrap()));
+                }
+            }
+        }
+    }
+}
+
+fn remap_git_dependencies(toml: &mut Table, git_repo: &str, path_prefix: &str) {
+    for (key, value) in toml.iter_mut() {
+        if let Some(attrs) = value.as_table_mut() {
+            if let Some(git) = attrs.get("git") {
+                if git.as_str().unwrap() == git_repo {
+                    attrs.remove("git");
+                    attrs.remove("rev");
+                    attrs.insert(
+                        "path".to_string(),
+                        Value::String(format!("{path_prefix}{}", key)),
+                    );
+                }
+            }
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -59,33 +88,40 @@ fn main() -> Result<()> {
             .map(|s| Value::String(format!("{NEXT_PATH}{}", s.as_str().unwrap()))),
     );
 
-    let mut dependencies: Table = turbo_toml["workspace"]["dependencies"]
+    let mut next_dependencies: Table = next_toml["workspace"]["dependencies"]
         .as_table()
         .unwrap()
-        .iter()
-        .map(|(key, value)| {
-            if let Some(attrs) = value.as_table() {
-                let remapped = Value::Table(
-                    attrs
-                        .iter()
-                        .map(|(k, v)| {
-                            if k == "path" {
-                                (
-                                    k.clone(),
-                                    Value::String(format!("{TURBO_PATH}{}", v.as_str().unwrap())),
-                                )
-                            } else {
-                                (k.clone(), v.clone())
-                            }
-                        })
-                        .collect(),
-                );
-                (key.clone(), remapped)
-            } else {
-                (key.clone(), value.clone())
+        .clone();
+    remap_path_dependencies(&mut next_dependencies, TURBO_PATH);
+    remap_git_dependencies(
+        &mut next_dependencies,
+        "https://github.com/vercel/turbo.git",
+        &format!("{TURBO_PATH}crates/"),
+    );
+    let mut turbo_dependencies: Table = turbo_toml["workspace"]["dependencies"]
+        .as_table()
+        .unwrap()
+        .clone();
+    remap_path_dependencies(&mut turbo_dependencies, TURBO_PATH);
+
+    // Merge dependencies from Next.js and Turbo.
+    let mut dependencies = next_dependencies;
+    for (key, turbo_value) in turbo_dependencies {
+        match dependencies.entry(&key) {
+            Entry::Occupied(mut e) => {
+                let next_value = e.get_mut();
+                if *next_value != turbo_value {
+                    println!(
+                        "conflicting dependency:\nnext:  {} = {}\nturbo: {} = {}",
+                        key, next_value, key, turbo_value
+                    );
+                }
             }
-        })
-        .collect();
+            Entry::Vacant(e) => {
+                e.insert(turbo_value);
+            }
+        }
+    }
 
     // Ensure workspace path deps to members at least.
     for member in members.iter() {
