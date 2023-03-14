@@ -322,6 +322,9 @@
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -540,6 +543,7 @@
                             import_assertions: <span class="bool-val">true</span>,
                             allow_super_outside_method: <span class="bool-val">true</span>,
                             allow_return_outside_function: <span class="bool-val">true</span>,
+                            auto_accessors: <span class="bool-val">true</span>,
                         }),
                         EcmascriptModuleAssetType::Typescript
                         | EcmascriptModuleAssetType::TypescriptWithTypes =&gt; {
@@ -548,6 +552,7 @@
                                 dts: <span class="bool-val">false</span>,
                                 no_early_errors: <span class="bool-val">true</span>,
                                 tsx: <span class="bool-val">true</span>,
+                                disallow_ambiguous_jsx_like: <span class="bool-val">false</span>,
                             })
                         }
                         EcmascriptModuleAssetType::TypescriptDeclaration =&gt; {
@@ -556,6 +561,7 @@
                                 dts: <span class="bool-val">true</span>,
                                 no_early_errors: <span class="bool-val">true</span>,
                                 tsx: <span class="bool-val">true</span>,
+                                disallow_ambiguous_jsx_like: <span class="bool-val">false</span>,
                             })
                         }
                     },

@@ -2148,7 +2148,7 @@
         <span class="kw">match </span>resolve_into_package {
             ResolveIntoPackage::Default(req) =&gt; {
                 <span class="kw">let </span>str = <span class="string">&quot;./&quot;</span>.to_string()
-                    + <span class="kw-2">&amp;</span>normalize_path(req).ok_or_else(|| {
+                    + <span class="kw-2">&amp;*</span>normalize_path(req).ok_or_else(|| {
                         <span class="macro">anyhow!</span>(
                             <span class="string">&quot;ResolveIntoPackage::Default can&#39;t be used with a request that \
                              escapes the current directory&quot;

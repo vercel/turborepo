@@ -72,6 +72,7 @@
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{io::stdin, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -109,6 +110,7 @@
         decorators: <span class="bool-val">false</span>,
         dts: <span class="bool-val">false</span>,
         no_early_errors: <span class="bool-val">true</span>,
+        disallow_ambiguous_jsx_like: <span class="bool-val">false</span>,
     });
 
     <span class="kw">let </span>compiler = Compiler::new(sm.clone());
