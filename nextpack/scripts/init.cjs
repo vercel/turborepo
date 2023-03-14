@@ -24,3 +24,8 @@ members = ["crates/*"]`
 );
 
 exec("cargo run --bin sync-workspace");
+
+// Updating lockfiles and printing potential swc_core conflicts
+exec("cargo tree -i -p swc_core --depth 0");
+exec("cd next.js/packages/next-swc && cargo tree -i -p swc_core --depth 0");
+exec("cd .. && cargo tree -i -p swc_core --depth 0");
