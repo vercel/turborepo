@@ -23,9 +23,9 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   my-app:error: npm ERR! Lifecycle script `error` failed with error: 
   my-app:error: npm ERR! Error: command failed 
   my-app:error: npm ERR!   in workspace: my-app 
-  my-app:error: npm ERR!   at location: .*/run\.t(-\d+)?/apps/my-app  (re)
-  my-app:error: ERROR: command finished with error: command \(.*/run\.t(-\d+)?/apps/my-app\) npm run error exited \(1\) (re)
-  command \(.*/run\.t(-\d+)?/apps/my-app\) npm run error exited \(1\) (re)
+  my-app:error: npm ERR!   at location: .*apps/my-app  (re)
+  my-app:error: ERROR: command finished with error: command \(.*apps/my-app\) npm run error exited \(1\) (re)
+  command \(.*apps/my-app\) npm run error exited \(1\) (re)
   
    Tasks:    1 successful, 2 total
   Cached:    0 cached, 2 total
@@ -54,9 +54,9 @@ Make sure error isn't cached
   my-app:error: npm ERR! Lifecycle script `error` failed with error: 
   my-app:error: npm ERR! Error: command failed 
   my-app:error: npm ERR!   in workspace: my-app 
-  my-app:error: npm ERR!   at location: .*/run\.t(-\d+)?/apps/my-app  (re)
-  my-app:error: ERROR: command finished with error: command \(.*/run\.t(-\d+)?/apps/my-app\) npm run error exited \(1\) (re)
-  command \(.*/run\.t(-\d+)?/apps/my-app\) npm run error exited \(1\) (re)
+  my-app:error: npm ERR!   at location: .*apps/my-app  (re)
+  my-app:error: ERROR: command finished with error: command \(.*apps/my-app\) npm run error exited \(1\) (re)
+  command \(.*apps/my-app\) npm run error exited \(1\) (re)
   
    Tasks:    1 successful, 2 total
   Cached:    1 cached, 2 total

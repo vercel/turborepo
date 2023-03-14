@@ -302,14 +302,21 @@ CRAM_ENV := .cram_env
 
 $(CRAM_ENV)/bin/pip:
 	python3 -m venv $(CRAM_ENV)
+	.cram_env/bin/python3 -m pip install --quiet --upgrade pip
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 	$(CRAM_ENV)/bin/pip install prysk
 
+$(CRAM_ENV)/bin/pytest: $(CRAM_ENV)/bin/pip
+	$(CRAM_ENV)/bin/pip3 install --quiet pytest "prysk[pytest-plugin]" pytest-xdist
+
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES) corepack
+integration-tests-serial: $(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES) corepack
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
+
+integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest $(INTEGRATION_TEST_FILES) corepack
+	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES) --prysk-shell=`which bash`
 
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk $(INTEGRATION_TEST_FILES) corepack
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
