@@ -18,7 +18,8 @@
         "package.json",
         "package-lock.json"
       ],
-      "outputs": ["turbo", "turbo.exe"]
+      "outputs": ["turbo", "turbo.exe"],
+      "env": ["GITHUB_CI_OS_NAME"]
     },
 
     // `test` is a pseudo-wrapper task
