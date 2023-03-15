@@ -32,4 +32,5 @@ type singlePackageTaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"`
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }

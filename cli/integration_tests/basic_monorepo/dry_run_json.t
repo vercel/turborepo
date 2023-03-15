@@ -88,7 +88,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 # Validate output of util#build task
@@ -134,7 +135,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

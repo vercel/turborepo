@@ -123,6 +123,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 				Configured: envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:   envVars.BySource.Matching.ToSecretHashable(),
 			},
+			ExternalDepsHash: pkg.ExternalDepsHash,
 		}
 
 		if ancestors, err := g.getTaskGraphAncestors(taskGraph, packageTask.TaskID); err == nil {
