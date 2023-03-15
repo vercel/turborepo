@@ -8,7 +8,7 @@ use std::{
 use command_group::AsyncCommandGroup;
 use log::{debug, error};
 use notify::{Config, Event, EventKind, Watcher};
-use sysinfo::{ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
+use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
@@ -20,25 +20,36 @@ use crate::daemon::DaemonError;
 pub enum DaemonConnectorError {
     /// There was a problem when forking to start the daemon.
     #[error("unable to fork")]
-    Fork,
+    Fork(ForkError),
     /// There was a problem reading the pid file.
-    #[error("could not read pid file")]
-    PidFile,
+    #[error("the process in the pid is not the daemon ({0}) and still running ({1})")]
+    WrongPidProcess(Pid, Pid),
     /// The daemon is not running and will not be started.
     #[error("daemon is not running")]
     NotRunning,
     /// There was an issue connecting to the socket.
-    #[error("unable to connect to socket")]
-    Socket,
+    #[error("unable to connect to socket: {0}")]
+    Socket(#[from] tonic::transport::Error),
     /// There was an issue performing the handshake.
-    #[error("unable to make handshake")]
-    Handshake,
+    #[error("unable to make handshake: {0}")]
+    Handshake(#[from] Box<DaemonError>),
     /// Waiting for the socket timed out.
     #[error("timeout while watchin directory: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     /// There was an issue in the file watcher.
     #[error("unable to watch directory: {0}")]
-    Watcher(#[from] notify::Error),
+    Watcher(#[from] FileWaitError),
+
+    #[error("unable to connect to daemon after {0} retries")]
+    ConnectRetriesExceeded(usize),
+}
+
+#[derive(Error, Debug)]
+pub enum ForkError {
+    #[error("daemon exited before we could connect")]
+    Exited,
+    #[error("unable to spawn daemon: {0}")]
+    Spawn(#[from] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -76,7 +87,7 @@ impl DaemonConnector {
             debug!("got daemon with pid: {}", pid);
 
             let conn = match self.get_connection(self.sock_file.clone()).await {
-                Err(DaemonConnectorError::Watcher(_) | DaemonConnectorError::Socket) => continue,
+                Err(DaemonConnectorError::Watcher(_) | DaemonConnectorError::Socket(_)) => continue,
                 rest => rest?,
             };
 
@@ -96,11 +107,13 @@ impl DaemonConnector {
                     self.kill_live_server(client, pid).await?
                 }
                 Err(DaemonError::Unavailable) => self.kill_dead_server(pid).await?,
-                Err(_) => return Err(DaemonConnectorError::Handshake),
+                Err(e) => return Err(DaemonConnectorError::Handshake(Box::new(e))),
             };
         }
 
-        Err(DaemonConnectorError::Socket)
+        Err(DaemonConnectorError::ConnectRetriesExceeded(
+            Self::CONNECT_RETRY_MAX,
+        ))
     }
 
     /// Gets the PID of the daemon process.
@@ -109,7 +122,7 @@ impl DaemonConnector {
     async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         debug!("looking for pid in lockfile: {:?}", self.pid_file);
 
-        let pidfile = self.pid_lock()?;
+        let pidfile = self.pid_lock();
 
         match pidfile.get_owner() {
             Some(pid) => {
@@ -126,7 +139,8 @@ impl DaemonConnector {
 
     /// Starts the daemon process, returning its PID.
     async fn start_daemon() -> Result<sysinfo::Pid, DaemonConnectorError> {
-        let binary_path = std::env::current_exe().map_err(|_| DaemonConnectorError::Fork)?;
+        let binary_path =
+            std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
 
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
@@ -137,13 +151,13 @@ impl DaemonConnector {
             .group()
             .kill_on_drop(false)
             .spawn()
-            .map_err(|_| DaemonConnectorError::Fork)?;
+            .map_err(|e| DaemonConnectorError::Fork(e.into()))?;
 
         group
             .inner()
             .id()
             .map(|id| sysinfo::Pid::from(id as usize))
-            .ok_or(DaemonConnectorError::Fork)
+            .ok_or(DaemonConnectorError::Fork(ForkError::Exited))
     }
 
     /// Gets a connection to given path
@@ -181,7 +195,7 @@ impl DaemonConnector {
             .connect_with_connector(tower::service_fn(closure))
             .await
             .map(TurbodClient::new)
-            .map_err(|_| DaemonConnectorError::Socket)
+            .map_err(DaemonConnectorError::Socket)
     }
 
     /// Kills a currently active server but shutting it down and waiting for it
@@ -208,7 +222,7 @@ impl DaemonConnector {
 
     /// Kills a server that is not responding.
     async fn kill_dead_server(&self, pid: sysinfo::Pid) -> Result<(), DaemonConnectorError> {
-        let lock = self.pid_lock()?;
+        let mut lock = self.pid_lock();
 
         let system = sysinfo::System::new_with_specifics(
             RefreshKind::new().with_processes(ProcessRefreshKind::new()),
@@ -219,16 +233,19 @@ impl DaemonConnector {
             .and_then(|p| system.process(sysinfo::Pid::from(p as usize)));
 
         // if the pidfile is owned by the same pid as the one we found, kill it
-        match (pid, owner) {
-            (pid, Some(owner)) if pid == owner.pid() => {
+        match owner {
+            Some(owner) if pid == owner.pid() => {
                 debug!("killing dead server with pid: {}", pid);
                 owner.kill();
+
                 Ok(())
             }
-            _ => {
-                debug!("pidfile is stale, ignoring");
-                Err(DaemonConnectorError::PidFile)
+            Some(owner) => {
+                debug!("pidfile is owned by another process, ignoring");
+                Err(DaemonConnectorError::WrongPidProcess(pid, owner.pid()))
             }
+            // pidfile has no owner and has been cleaned up so we're ok
+            None => Ok(()),
         }
     }
 
@@ -241,11 +258,8 @@ impl DaemonConnector {
         .map_err(Into::into)
     }
 
-    fn pid_lock(&self) -> Result<pidlock::Pidlock, DaemonConnectorError> {
-        self.pid_file
-            .to_str()
-            .ok_or(DaemonConnectorError::PidFile)
-            .map(pidlock::Pidlock::new)
+    fn pid_lock(&self) -> pidlock::Pidlock {
+        pidlock::Pidlock::new(self.pid_file.clone())
     }
 }
 
@@ -260,9 +274,11 @@ fn win(
 }
 
 #[derive(Debug, Error)]
-enum FileWaitError {
+pub enum FileWaitError {
     #[error("failed to register notifier {0}")]
-    Notify(notify::Error),
+    Notify(#[from] notify::Error),
+    #[error("failed to wait for event {0}")]
+    Io(#[from] std::io::Error),
     #[error("invalid path {0}")]
     InvalidPath(PathBuf),
 }
