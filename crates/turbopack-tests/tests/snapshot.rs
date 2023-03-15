@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use dunce::canonicalize;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
@@ -49,7 +50,8 @@ fn register() {
 
 static WORKSPACE_ROOT: Lazy<String> = Lazy::new(|| {
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    package_root
+    canonicalize(package_root)
+        .unwrap()
         .parent()
         .unwrap()
         .parent()
