@@ -389,8 +389,9 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 
 // ValidatePersistentDependencies checks if any task dependsOn persistent tasks and throws
 // an error if that task is actually implemented
-func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) error {
+func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, concurrency int) error {
 	var validationError error
+	persistentCount := 0
 
 	// Adding in a lock because otherwise walking the graph can introduce a data race
 	// (reproducible with `go test -race`)
@@ -409,6 +410,11 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		// up when running tests with the `-race` flag.
 		sema.Acquire()
 		defer sema.Release()
+
+		currentTaskDefinition, currentTaskExists := e.completeGraph.TaskDefinitions[vertexName]
+		if currentTaskExists && currentTaskDefinition.Persistent {
+			persistentCount++
+		}
 
 		currentPackageName, currentTaskName := util.GetPackageTaskFromId(vertexName)
 
@@ -458,8 +464,13 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		return fmt.Errorf("Validation failed: %v", err)
 	}
 
-	// May or may not be set (could be nil)
-	return validationError
+	if validationError != nil {
+		return validationError
+	} else if persistentCount >= concurrency {
+		return fmt.Errorf("You have %v persistent tasks but `turbo` is configured for concurrency of %v. Set --concurrency to at least %v", persistentCount, concurrency, persistentCount+1)
+	}
+
+	return nil
 }
 
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
