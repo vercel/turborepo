@@ -553,4 +553,13 @@ export const users: Array<TurboUser> = [
     infoLink: "https://chotot.com/",
     pinned: true,
   },
+  {
+    caption: "Bump.sh",
+    image: "/images/logos/bump.svg",
+    infoLink: "https://bump.sh/",
+    pinned: true,
+    style: {
+      width: 150,
+    },
+  },
 ];
