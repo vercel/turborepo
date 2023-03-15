@@ -430,7 +430,7 @@
         <span class="kw">let </span>app_transforms = EcmascriptInputTransformsVc::cell(transforms);
         <span class="kw">let </span>vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
-        <span class="kw">let </span>ts_app_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = ts_transform {
+        <span class="kw">let </span>ts_app_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = <span class="kw-2">&amp;</span>ts_transform {
             <span class="kw">let </span><span class="kw-2">mut </span>base_transforms = <span class="macro">vec!</span>[transform.clone()];
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
@@ -446,7 +446,7 @@
 
         <span class="kw">let </span>css_transforms = CssInputTransformsVc::cell(<span class="macro">vec!</span>[CssInputTransform::Nested]);
         <span class="kw">let </span>mdx_transforms = EcmascriptInputTransformsVc::cell(
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = ts_transform {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = <span class="kw-2">&amp;</span>ts_transform {
                 <span class="macro">vec!</span>[transform.clone()]
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[]

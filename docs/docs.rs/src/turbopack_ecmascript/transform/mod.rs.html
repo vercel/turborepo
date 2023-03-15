@@ -210,9 +210,34 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
-<span class="kw">use </span>std::{path::Path, sync::Arc};
+<span class="kw">use </span>std::{fmt::Debug, path::Path, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
@@ -235,11 +260,11 @@
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 </span><span class="kw">pub enum </span>EcmascriptInputTransform {
     ClientDirective(StringVc),
     CommonJs,
-    Custom,
+    Custom(CustomTransformVc),
     Emotion,
     PresetEnv(EnvironmentVc),
     React {
@@ -256,8 +281,32 @@
     },
 }
 
+<span class="doccomment">/// The CustomTransformer trait allows you to implement your own custom SWC
+/// transformer to run over all ECMAScript files imported in the graph.
+</span><span class="kw">pub trait </span>CustomTransformer: Debug {
+    <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Program&gt;;
+}
+
+<span class="doccomment">/// A wrapper around a CustomTransformer instance, allowing it to operate with
+/// the turbo_task caching requirements.
+</span><span class="attr">#[turbo_tasks::value(
+    transparent,
+    serialization = <span class="string">&quot;none&quot;</span>,
+    eq = <span class="string">&quot;manual&quot;</span>,
+    into = <span class="string">&quot;new&quot;</span>,
+    cell = <span class="string">&quot;new&quot;
+</span>)]
+#[derive(Debug)]
+</span><span class="kw">pub struct </span>CustomTransform(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Box&lt;<span class="kw">dyn </span>CustomTransformer + Send + Sync&gt;);
+
+<span class="kw">impl </span>CustomTransformer <span class="kw">for </span>CustomTransform {
+    <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Program&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.transform(program, ctx)
+    }
+}
+
 <span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 </span><span class="kw">pub struct </span>EcmascriptInputTransforms(Vec&lt;EcmascriptInputTransform&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -265,7 +314,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>extend(<span class="self">self</span>, other: EcmascriptInputTransformsVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>transforms = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-        transforms.extend(<span class="kw-2">&amp;*</span>other.<span class="kw">await</span><span class="question-mark">?</span>);
+        transforms.extend(other.<span class="kw">await</span><span class="question-mark">?</span>.clone_value());
         <span class="prelude-val">Ok</span>(EcmascriptInputTransformsVc::cell(transforms))
     }
 }
@@ -281,10 +330,8 @@
 }
 
 <span class="kw">impl </span>EcmascriptInputTransform {
-    <span class="kw">pub async fn </span>apply(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        program: <span class="kw-2">&amp;mut </span>Program,
-        <span class="kw-2">&amp;</span>TransformContext {
+    <span class="kw">pub async fn </span>apply(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">&amp;</span>TransformContext {
             comments,
             source_map,
             top_level_mark,
@@ -292,9 +339,8 @@
             file_name_str,
             file_name_hash,
             ..
-        }: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+        } = ctx;
+        <span class="kw">match </span><span class="self">self </span>{
             EcmascriptInputTransform::React { refresh } =&gt; {
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>react(
                     source_map.clone(),
@@ -302,7 +348,7 @@
                     swc_core::ecma::transforms::react::Options {
                         runtime: <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::Runtime::Automatic),
                         development: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
-                        refresh: <span class="kw">if </span>refresh {
+                        refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
                             <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
                                 ..Default::default()
                             })
@@ -379,7 +425,7 @@
             } =&gt; {
                 <span class="kw">use </span>swc_core::ecma::transforms::typescript::{strip_with_config, Config};
                 <span class="kw">let </span>config = Config {
-                    use_define_for_class_fields,
+                    use_define_for_class_fields: <span class="kw-2">*</span>use_define_for_class_fields,
                     ..Default::default()
                 };
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip_with_config(config, top_level_mark));
@@ -391,7 +437,11 @@
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
             }
-            EcmascriptInputTransform::Custom =&gt; <span class="macro">todo!</span>(),
+            EcmascriptInputTransform::Custom(transform) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = transform.<span class="kw">await</span><span class="question-mark">?</span>.transform(program, ctx) {
+                    <span class="kw-2">*</span>program = output;
+                }
+            }
         }
         <span class="prelude-val">Ok</span>(())
     }
