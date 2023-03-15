@@ -56,6 +56,7 @@ Check
           "remote": false
         },
         "command": "echo 'building' \u003e foo",
+        "commandArguments": [],
         "outputs": [
           "foo"
         ],
@@ -100,6 +101,7 @@ Check
           "remote": false
         },
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
+        "commandArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-test.log",

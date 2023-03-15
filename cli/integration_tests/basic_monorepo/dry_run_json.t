@@ -55,6 +55,7 @@ Setup
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": [
       "apple.json",
       "banana.txt"
@@ -103,6 +104,7 @@ Setup
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": null,
     "excludedOutputs": null,
     "logFile": "packages/util/.turbo/turbo-build.log",
