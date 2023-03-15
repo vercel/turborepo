@@ -355,6 +355,8 @@ mod tests {
         config.set_str("user.email", "test@example.com")?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
+        // Create additional nested directory to test that we return a system path
+        // and not a normalized unix path
         fs::create_dir(repo_root.path().join("subdir").join("src"))?;
 
         let file = repo_root.path().join("subdir").join("foo.js");
