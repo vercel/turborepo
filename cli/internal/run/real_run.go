@@ -99,8 +99,6 @@ func RealRun(
 		// don't hold the lock while we run ec.exec
 		mu.Unlock()
 
-		taskSummaries = append(taskSummaries, taskSummary)
-
 		// deps here are passed in to calculate the task hash
 		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
 		if err != nil {

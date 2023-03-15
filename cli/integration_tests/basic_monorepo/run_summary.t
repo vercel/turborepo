@@ -9,6 +9,9 @@ Setup
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | length'
+  2
+
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
   {
     "start": "[0-9-:\.TZ]+", (re)
