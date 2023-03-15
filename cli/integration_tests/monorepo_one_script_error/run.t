@@ -1,9 +1,9 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
-  
-  $ npm --version
-  8.whatever
+
+  $ FAILMELATER=$(npm --version)
+
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
   $ ${TURBO} error
@@ -66,3 +66,6 @@ Make sure error isn't cached
   
    ERROR  run failed: command  exited (1)
   [1]
+
+  $ echo $FAILMELATER
+  8.whatever
