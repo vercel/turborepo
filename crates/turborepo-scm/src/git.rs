@@ -5,7 +5,10 @@ use std::{
 
 use anyhow::anyhow;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath};
+use turborepo_paths::{
+    forward_relative_path::ForwardRelativePath, fs_util, project::ProjectRoot,
+    project_relative_path::ProjectRelativePath,
+};
 
 use crate::Error;
 
@@ -86,15 +89,10 @@ fn add_changed_files_from_unstaged_changes(
             // error if the base path is not a prefix of the original path.
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
-            let project_relative_file_path =
-                file_path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
+            let project_relative_file_path = ForwardRelativePath::new(file_path)?
+                .strip_prefix(monorepo_root.as_forward_relative_path())?;
 
-            files.insert(
-                project_relative_file_path
-                    .to_str()
-                    .ok_or_else(|| Error::NonUtf8Path(file_path.to_path_buf()))?
-                    .to_string(),
-            );
+            files.insert(project_relative_file_path.to_string());
         }
     }
 
