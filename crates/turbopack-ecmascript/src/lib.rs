@@ -40,7 +40,7 @@ use swc_core::{
     },
 };
 pub use transform::{
-    CustomTransformer, CustomTransformerWrapper, EcmascriptInputTransform,
+    CustomTransform, CustomTransformVc, CustomTransformer, EcmascriptInputTransform,
     EcmascriptInputTransformsVc, TransformContext,
 };
 use turbo_tasks::{

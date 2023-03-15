@@ -3,7 +3,6 @@ mod server_to_client_proxy;
 use std::{fmt::Debug, path::Path, sync::Arc};
 
 use anyhow::Result;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use swc_core::{
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
@@ -17,7 +16,7 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::{primitives::StringVc, TransientInstance};
+use turbo_tasks::primitives::StringVc;
 use turbo_tasks_fs::json::parse_json_with_source_context;
 use turbopack_core::environment::EnvironmentVc;
 
@@ -28,7 +27,7 @@ use self::server_to_client_proxy::{create_proxy_module, is_client_module};
 pub enum EcmascriptInputTransform {
     ClientDirective(StringVc),
     CommonJs,
-    Custom(#[turbo_tasks(trace_ignore)] CustomTransformerWrapper),
+    Custom(CustomTransformVc),
     Emotion,
     PresetEnv(EnvironmentVc),
     React {
@@ -53,32 +52,19 @@ pub trait CustomTransformer: Debug {
 
 /// A wrapper around a CustomTransformer instance, allowing it to operate with
 /// the turbo_task caching requirements.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CustomTransformerWrapper(TransientInstance<Box<dyn CustomTransformer + Send + Sync>>);
+#[turbo_tasks::value(
+    transparent,
+    serialization = "none",
+    eq = "manual",
+    into = "new",
+    cell = "new"
+)]
+#[derive(Debug)]
+pub struct CustomTransform(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
 
-impl CustomTransformerWrapper {
-    pub fn new<T: CustomTransformer + Send + Sync + 'static>(transformer: T) -> Self {
-        CustomTransformerWrapper(TransientInstance::new(Box::new(transformer)))
-    }
-}
-
-impl CustomTransformer for CustomTransformerWrapper {
+impl CustomTransformer for CustomTransform {
     fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program> {
         self.0.transform(program, ctx)
-    }
-}
-
-impl Serialize for CustomTransformerWrapper {
-    fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::Error;
-        Err(Error::custom("cannot serialize Custom Transformer"))
-    }
-}
-
-impl<'de> Deserialize<'de> for CustomTransformerWrapper {
-    fn deserialize<D: Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error;
-        Err(Error::custom("cannot deserialize Custom Transformer"))
     }
 }
 
@@ -214,8 +200,8 @@ impl EcmascriptInputTransform {
                     program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
                 }
             }
-            EcmascriptInputTransform::Custom(transformer) => {
-                if let Some(output) = transformer.transform(program, ctx) {
+            EcmascriptInputTransform::Custom(transform) => {
+                if let Some(output) = transform.await?.transform(program, ctx) {
                     *program = output;
                 }
             }
