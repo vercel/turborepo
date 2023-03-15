@@ -1,7 +1,9 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
-
+  
+  $ npm --version
+  8.whatever
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
   $ ${TURBO} error
