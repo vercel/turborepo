@@ -66,8 +66,9 @@ pub fn changed_files(
     Ok(files)
 }
 
-// Gets the system version of both paths by calling `fs_util::canonicalize`,
-// then strips the `monorepo_root` from the `file_path`.
+// Gets the system version of `monorepo_root` and `file_path` by calling
+// `fs_util::canonicalize`, then strips the `monorepo_root` from the
+// `file_path`.
 fn get_stripped_system_file_path(
     repo_root: &ProjectRoot,
     file_path: &Path,
