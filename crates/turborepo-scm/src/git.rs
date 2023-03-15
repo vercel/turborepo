@@ -355,12 +355,13 @@ mod tests {
         config.set_str("user.email", "test@example.com")?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
+        fs::create_dir(repo_root.path().join("subdir").join("src"))?;
 
         let file = repo_root.path().join("subdir").join("foo.js");
         fs::write(file, "let z = 0;")?;
         let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None)?;
 
-        let new_file = repo_root.path().join("subdir").join("bar.js");
+        let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
         let files = super::changed_files(
@@ -369,9 +370,9 @@ mod tests {
             None,
             true,
         )?;
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+        assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
 
-        commit_file(&repo, Path::new("subdir/bar.js"), Some(first_commit))?;
+        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit))?;
 
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
@@ -383,7 +384,7 @@ mod tests {
             false,
         )?;
 
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+        assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
 
         Ok(())
     }
