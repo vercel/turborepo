@@ -1,3 +1,5 @@
+#![feature(assert_matches)]
+
 mod cli;
 mod client;
 mod commands;

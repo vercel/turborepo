@@ -366,3 +366,183 @@ enum WaitAction {
     /// Wait for the file to be deleted.
     Deleted,
 }
+
+#[cfg(test)]
+mod test {
+    use std::{
+        assert_matches::assert_matches,
+        path::{Path, PathBuf},
+    };
+
+    use sysinfo::Pid;
+
+    use super::*;
+
+    #[cfg(not(target_os = "windows"))]
+    const NODE_EXE: &str = "node";
+    #[cfg(target_os = "windows")]
+    const NODE_EXE: &str = "node.exe";
+
+    fn pid_path(tmp_path: &Path) -> PathBuf {
+        tmp_path.join("turbod.pid")
+    }
+
+    fn sock_path(tmp_path: &Path) -> PathBuf {
+        tmp_path.join("turbod.sock")
+    }
+
+    #[tokio::test]
+    async fn handles_invalid_pid() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let pid = pid_path(&tmp_path);
+        std::fs::write(&pid, "not a pid").unwrap();
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock_path(&tmp_path),
+            can_kill_server: false,
+            can_start_server: false,
+        };
+
+        assert_matches!(
+            connector.get_or_start_daemon().await,
+            Err(DaemonConnectorError::NotRunning)
+        );
+    }
+
+    #[tokio::test]
+    async fn handles_missing_server_connect() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let pid = pid_path(&tmp_path);
+        let sock = sock_path(&tmp_path);
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock,
+            can_kill_server: false,
+            can_start_server: false,
+        };
+
+        assert_matches!(
+            connector.connect().await,
+            Err(DaemonConnectorError::NotRunning)
+        );
+    }
+
+    #[tokio::test]
+    async fn handles_kill_dead_server_missing_pid() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let pid = pid_path(&tmp_path);
+        let sock = sock_path(&tmp_path);
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock,
+            can_kill_server: false,
+            can_start_server: false,
+        };
+
+        assert_matches!(
+            connector.kill_dead_server(Pid::from(usize::MAX)).await,
+            Ok(())
+        );
+    }
+
+    #[tokio::test]
+    async fn handles_kill_dead_server_missing_process() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let pid = pid_path(&tmp_path);
+        std::fs::write(&pid, usize::MAX.to_string()).unwrap();
+        let sock = sock_path(&tmp_path);
+        std::fs::write(&sock, "").unwrap();
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock,
+            can_kill_server: false,
+            can_start_server: false,
+        };
+
+        assert_matches!(
+            connector.kill_dead_server(Pid::from(usize::MAX)).await,
+            Ok(())
+        );
+
+        assert!(!connector.pid_file.exists(), "pid file should be deleted");
+    }
+
+    #[tokio::test]
+    async fn handles_kill_dead_server_wrong_process() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let proc = tokio::process::Command::new(NODE_EXE)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .arg("-e")
+            .arg("setInterval(() => {}, 1000)")
+            .spawn()
+            .unwrap();
+
+        let pid = pid_path(&tmp_path);
+        std::fs::write(&pid, proc.id().unwrap().to_string()).unwrap();
+        let sock = sock_path(&tmp_path);
+        std::fs::write(&sock, "").unwrap();
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock,
+            can_kill_server: true,
+            can_start_server: false,
+        };
+
+        let kill_pid = Pid::from(usize::MAX);
+        let proc_id = Pid::from(proc.id().unwrap() as usize);
+
+        assert_matches!(
+            connector.kill_dead_server(kill_pid).await,
+            Err(DaemonConnectorError::WrongPidProcess(daemon, running)) if daemon == kill_pid && running == proc_id
+        );
+    }
+
+    #[tokio::test]
+    async fn handles_kill_dead_server() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+
+        let proc = tokio::process::Command::new(NODE_EXE)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .arg("-e")
+            .arg("setInterval(() => {}, 1000)")
+            .spawn()
+            .unwrap();
+
+        let pid = pid_path(&tmp_path);
+        std::fs::write(&pid, proc.id().unwrap().to_string()).unwrap();
+        let sock = sock_path(&tmp_path);
+        std::fs::write(&sock, "").unwrap();
+
+        let connector = DaemonConnector {
+            pid_file: pid,
+            sock_file: sock,
+            can_kill_server: true,
+            can_start_server: false,
+        };
+
+        assert_matches!(
+            connector
+                .kill_dead_server(Pid::from(proc.id().unwrap() as usize))
+                .await,
+            Ok(())
+        );
+    }
+}
