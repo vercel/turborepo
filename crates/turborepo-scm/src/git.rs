@@ -370,12 +370,13 @@ mod tests {
             None,
             true,
         )?;
-        #[cfg(not(target_os = "windows"))]
+
+        #[cfg(unix)]
         {
             assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
         }
 
-        #[cfg(target_os = "windows")]
+        #[cfg(windows)]
         {
             assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
         }
@@ -392,7 +393,15 @@ mod tests {
             false,
         )?;
 
-        assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        #[cfg(unix)]
+        {
+            assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
+        }
 
         Ok(())
     }
