@@ -51,13 +51,14 @@ if (!Array.isArray(globalThis.TURBOPACK)) {
 /** @type {RuntimeBackend} */
 const BACKEND = {
   loadChunk(chunkPath, source) {
-    // We don't need to load runtime chunks, as they're already
-    // present in the DOM.
-    if (source.type === SourceTypeRuntime) {
-      return;
-    }
-
     return new Promise((resolve, reject) => {
+      // We don't need to load runtime chunks, as they're already
+      // present in the DOM.
+      if (source.type === SourceTypeRuntime) {
+        resolve();
+        return;
+      }
+
       if (chunkPath.endsWith(".css")) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
@@ -957,7 +958,7 @@ function applyChunkListUpdate(chunkListPath, update) {
     for (const [chunkPath, chunkUpdate] of Object.entries(update.chunks)) {
       switch (chunkUpdate.type) {
         case "added":
-          BACKEND.loadChunk(chunkPath);
+          BACKEND.loadChunk(chunkPath, { type: SourceTypeUpdate });
           break;
         case "total":
           BACKEND.reloadChunk?.(chunkPath);
