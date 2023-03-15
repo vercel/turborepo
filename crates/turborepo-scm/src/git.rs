@@ -89,8 +89,8 @@ fn add_changed_files_from_unstaged_changes(
             // error if the base path is not a prefix of the original path.
             // However since we're passing a pathspec to `git2` we know that the
             // base path is a prefix of the original path.
-            let project_relative_file_path = ForwardRelativePath::new(file_path)?
-                .strip_prefix(monorepo_root.as_forward_relative_path())?;
+            let project_relative_file_path =
+                ForwardRelativePath::new(file_path)?.strip_prefix(monorepo_root)?;
 
             files.insert(project_relative_file_path.to_string());
         }
@@ -122,12 +122,8 @@ fn add_changed_files_from_commits(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(path) = file.path() {
-            let path = path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
-            files.insert(
-                path.to_str()
-                    .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
-                    .to_string(),
-            );
+            let path = ForwardRelativePath::new(path)?.strip_prefix(monorepo_root)?;
+            files.insert(path.to_string());
         }
     }
 
