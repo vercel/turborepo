@@ -1,6 +1,7 @@
 use std::{
     any::Provider,
     fmt::{Debug, Display},
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -96,5 +97,54 @@ impl Display for FormatBytes {
             return write!(f, "{:.2}KiB", (b as f32) / 1_024.0);
         }
         write!(f, "{}B", b)
+    }
+}
+
+pub enum StaticOrArc<T: ?Sized + 'static> {
+    Static(&'static T),
+    Shared(Arc<T>),
+}
+
+impl<T: ?Sized + 'static> AsRef<T> for StaticOrArc<T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            Self::Static(s) => s,
+            Self::Shared(b) => b,
+        }
+    }
+}
+
+impl<T: ?Sized + 'static> From<&'static T> for StaticOrArc<T> {
+    fn from(s: &'static T) -> Self {
+        Self::Static(s)
+    }
+}
+
+impl<T: ?Sized + 'static> From<Arc<T>> for StaticOrArc<T> {
+    fn from(b: Arc<T>) -> Self {
+        Self::Shared(b)
+    }
+}
+
+impl<T: 'static> From<T> for StaticOrArc<T> {
+    fn from(b: T) -> Self {
+        Self::Shared(Arc::new(b))
+    }
+}
+
+impl<T: ?Sized + 'static> Deref for StaticOrArc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+impl<T: ?Sized + 'static> Clone for StaticOrArc<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Static(s) => Self::Static(s),
+            Self::Shared(b) => Self::Shared(b.clone()),
+        }
     }
 }

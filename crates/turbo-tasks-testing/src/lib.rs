@@ -105,6 +105,14 @@ impl TurboTasksApi for VcStorage {
         unreachable!()
     }
 
+    fn invalidate_with_reason(
+        &self,
+        _task: TaskId,
+        _reason: turbo_tasks::util::StaticOrArc<dyn turbo_tasks::InvalidationReason>,
+    ) {
+        unreachable!()
+    }
+
     fn notify_scheduled_tasks(&self) {
         // ignore
     }

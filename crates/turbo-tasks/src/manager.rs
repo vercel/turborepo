@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     future::Future,
     hash::Hash,
-    mem::take,
+    mem::{size_of_val, take},
     panic::AssertUnwindSafe,
     pin::Pin,
     sync::{
@@ -18,6 +18,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use auto_hash_map::AutoSet;
 use futures::FutureExt;
+use indexmap::IndexSet;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
@@ -27,13 +28,14 @@ use crate::{
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
+    invalidation_reason_set::InvalidationReasonSet,
     primitives::RawVcSetVc,
     raw_vc::{CellId, RawVc},
     registry,
     task_input::{SharedReference, TaskInput},
     timed_future::{self, TimedFuture},
     trace::TraceRawVcs,
-    util::FormatDuration,
+    util::{FormatDuration, StaticOrArc},
     Completion, CompletionVc, TaskId, ValueTraitVc, ValueTypeId,
 };
 
@@ -59,6 +61,7 @@ pub trait TurboTasksCallApi: Sync + Send {
 
 pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
     fn invalidate(&self, task: TaskId);
+    fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>);
 
     /// Eagerly notifies all tasks that were scheduled for notifications via
     /// `schedule_notify_tasks_set()`
@@ -234,6 +237,14 @@ impl TaskIdProvider for &dyn TaskIdProvider {
     }
 }
 
+pub struct UpdateInfo {
+    pub duration: Duration,
+    pub tasks: usize,
+    pub reasons: InvalidationReasonSet,
+    #[allow(dead_code)]
+    placeholder_for_future_fields: (),
+}
+
 pub struct TurboTasks<B: Backend + 'static> {
     this: Weak<Self>,
     backend: B,
@@ -244,7 +255,7 @@ pub struct TurboTasks<B: Backend + 'static> {
     currently_scheduled_background_jobs: AtomicUsize,
     scheduled_tasks: AtomicUsize,
     start: Mutex<Option<Instant>>,
-    aggregated_update: Mutex<Option<(Duration, usize)>>,
+    aggregated_update: Mutex<(Option<(Duration, usize)>, InvalidationReasonSet)>,
     event: Event,
     event_start: Event,
     event_foreground: Event,
@@ -517,7 +528,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             let total = self.scheduled_tasks.load(Ordering::Acquire);
             self.scheduled_tasks.store(0, Ordering::Release);
             if let Some(start) = *self.start.lock().unwrap() {
-                let mut update = self.aggregated_update.lock().unwrap();
+                let (update, _) = &mut *self.aggregated_update.lock().unwrap();
                 if let Some(update) = update.as_mut() {
                     update.0 += start.elapsed();
                     update.1 += total;
@@ -569,23 +580,51 @@ impl<B: Backend + 'static> TurboTasks<B> {
         result.map(|_| ())
     }
 
+    #[deprecated(note = "Use get_or_wait_aggregated_update_info instead")]
     pub async fn get_or_wait_update_info(&self, aggregation: Duration) -> (Duration, usize) {
-        self.update_info(aggregation, Duration::MAX).await.unwrap()
+        let UpdateInfo {
+            duration, tasks, ..
+        } = self.get_or_wait_aggregated_update_info(aggregation).await;
+        (duration, tasks)
     }
 
+    #[deprecated(note = "Use aggregated_update_info instead")]
     pub async fn update_info(
         &self,
         aggregation: Duration,
         timeout: Duration,
     ) -> Option<(Duration, usize)> {
+        self.aggregated_update_info(aggregation, timeout).await.map(
+            |UpdateInfo {
+                 duration, tasks, ..
+             }| (duration, tasks),
+        )
+    }
+
+    pub async fn get_or_wait_aggregated_update_info(&self, aggregation: Duration) -> UpdateInfo {
+        self.aggregated_update_info(aggregation, Duration::MAX)
+            .await
+            .unwrap()
+    }
+
+    pub async fn aggregated_update_info(
+        &self,
+        aggregation: Duration,
+        timeout: Duration,
+    ) -> Option<UpdateInfo> {
         let listener = self
             .event
             .listen_with_note(|| "wait for update info".to_string());
         let wait_for_finish = {
-            let mut update = self.aggregated_update.lock().unwrap();
-            if update.is_some() {
+            let (update, reason_set) = &mut *self.aggregated_update.lock().unwrap();
+            if let Some((duration, tasks)) = update.take() {
                 if aggregation.is_zero() {
-                    return update.take();
+                    return Some(UpdateInfo {
+                        duration,
+                        tasks,
+                        reasons: take(reason_set),
+                        placeholder_for_future_fields: (),
+                    });
                 }
                 false
             } else {
@@ -626,7 +665,17 @@ impl<B: Backend + 'static> TurboTasks<B> {
                 }
             }
         }
-        return self.aggregated_update.lock().unwrap().take();
+        let (update, reason_set) = &mut *self.aggregated_update.lock().unwrap();
+        if let Some((duration, tasks)) = update.take() {
+            Some(UpdateInfo {
+                duration,
+                tasks,
+                reasons: take(reason_set),
+                placeholder_for_future_fields: (),
+            })
+        } else {
+            None
+        }
     }
 
     pub async fn wait_background_done(&self) {
@@ -777,6 +826,14 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn invalidate(&self, task: TaskId) {
         self.backend.invalidate_task(task, self);
+    }
+
+    fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>) {
+        {
+            let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
+            reason_set.insert(reason);
+        }
+        self.invalidate(task);
     }
 
     fn notify_scheduled_tasks(&self) {
@@ -1028,6 +1085,22 @@ fn current_task(from: &str) -> TaskId {
     }
 }
 
+pub trait InvalidationReason: Send + Sync + 'static {
+    fn description(&self) -> Cow<'static, str>;
+    fn merge_info(&self) -> Option<(&'static dyn InvalidationReasonType, Cow<'static, str>)> {
+        None
+    }
+}
+
+pub trait InvalidationReasonType: Send + Sync + 'static {
+    fn ptr(&self) -> usize {
+        // To have a valid pointer this must not be a ZST
+        debug_assert!(size_of_val(self) != 0);
+        self as *const _ as *const () as usize
+    }
+    fn description(&self, merge_data: &IndexSet<Cow<'static, str>>) -> Cow<'static, str>;
+}
+
 pub struct Invalidator {
     task: TaskId,
     turbo_tasks: Weak<dyn TurboTasksApi>,
@@ -1058,6 +1131,34 @@ impl Invalidator {
         let _ = handle.enter();
         if let Some(turbo_tasks) = turbo_tasks.upgrade() {
             turbo_tasks.invalidate(task);
+        }
+    }
+
+    pub fn invalidate_with_reason<T: InvalidationReason>(self, reason: T) {
+        let Invalidator {
+            task,
+            turbo_tasks,
+            handle,
+        } = self;
+        let _ = handle.enter();
+        if let Some(turbo_tasks) = turbo_tasks.upgrade() {
+            turbo_tasks.invalidate_with_reason(
+                task,
+                (Arc::new(reason) as Arc<dyn InvalidationReason>).into(),
+            );
+        }
+    }
+
+    pub fn invalidate_with_static_reason<T: InvalidationReason>(self, reason: &'static T) {
+        let Invalidator {
+            task,
+            turbo_tasks,
+            handle,
+        } = self;
+        let _ = handle.enter();
+        if let Some(turbo_tasks) = turbo_tasks.upgrade() {
+            turbo_tasks
+                .invalidate_with_reason(task, (reason as &'static dyn InvalidationReason).into());
         }
     }
 }
