@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/nested_workspaces_setup.sh $(pwd)
+  $ . ${TESTDIR}/nested_workspaces_setup.sh $(pwd)/nested-workspaces.t
 
   $ cd $TARGET_DIR/outer && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)

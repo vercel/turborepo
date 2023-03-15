@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/no_workspaces_setup.sh $(pwd) "no-workspaces"
+  $ . ${TESTDIR}/no_workspaces_setup.sh $(pwd)/no-workspaces.t
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
