@@ -1,11 +1,11 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/no_workspaces_setup.sh $(pwd)/no-workspaces.t
+  $ . ${TESTDIR}/no_workspaces_setup.sh $(pwd)/no_workspaces
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no-workspaces\.t (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
@@ -26,7 +26,7 @@ Setup
   $ cd $TARGET_DIR/parent && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no-workspaces\.t/parent (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces/parent (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
@@ -47,7 +47,7 @@ Setup
   $ cd $TARGET_DIR/parent/child && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no-workspaces\.t/parent/child (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces/parent/child (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
