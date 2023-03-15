@@ -450,8 +450,8 @@ func buildTaskGraphEngine(
 	}
 
 	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g); err != nil {
-		return nil, fmt.Errorf("Invalid persistent task dependency:\n%v", err)
+	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.concurrency); err != nil {
+		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
 	}
 
 	return engine, nil
