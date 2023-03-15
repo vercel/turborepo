@@ -370,7 +370,15 @@ mod tests {
             None,
             true,
         )?;
-        assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        #[cfg(not(windows))]
+        {
+            assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
+        }
 
         commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit))?;
 
