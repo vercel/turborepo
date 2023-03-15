@@ -466,7 +466,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, conc
 
 	if validationError != nil {
 		return validationError
-	} else if persistentCount > concurrency {
+	} else if persistentCount >= concurrency {
 		return fmt.Errorf("You have %v persistent tasks but `turbo` is configured for concurrency of %v. Set --concurrency to at least %v", persistentCount, concurrency, persistentCount+1)
 	}
 
