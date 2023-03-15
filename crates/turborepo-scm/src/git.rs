@@ -5,10 +5,7 @@ use std::{
 
 use anyhow::anyhow;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{
-    forward_relative_path::ForwardRelativePath, fs_util, project::ProjectRoot,
-    project_relative_path::ProjectRelativePath,
-};
+use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath};
 
 use crate::Error;
 
@@ -48,6 +45,7 @@ pub fn changed_files(
 
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(
+        &repo_root,
         &repo,
         monorepo_root.as_ref(),
         &mut files,
@@ -56,6 +54,7 @@ pub fn changed_files(
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
+            &repo_root,
             &repo,
             monorepo_root.as_ref(),
             &mut files,
@@ -67,7 +66,38 @@ pub fn changed_files(
     Ok(files)
 }
 
+// Gets the system version of both paths by calling `fs_util::canonicalize`,
+// then strips the `monorepo_root` from the `file_path`.
+fn get_stripped_system_file_path(
+    repo_root: &ProjectRoot,
+    file_path: &Path,
+    monorepo_root: &ProjectRelativePath,
+) -> Result<PathBuf, Error> {
+    // We know the path is relative to the repo root so we can convert it to a
+    // ProjectRelativePath
+    let project_relative_file_path = ProjectRelativePath::new(file_path)?;
+    // Which we then resolve to an absolute path
+    let absolute_file_path = repo_root.resolve(project_relative_file_path);
+    // Then we call canonicalize to get a system path instead of a Unix style path
+    let path = fs_util::canonicalize(absolute_file_path)?;
+
+    // We do the same with the monorepo root
+    let absolute_monorepo_root = repo_root.resolve(monorepo_root);
+    let monorepo_root_normalized = fs_util::canonicalize(absolute_monorepo_root)?;
+
+    // NOTE: In the original Go code, `Rel` works even if the base path is not a
+    // prefix of the original path. In Rust, `strip_prefix` returns an
+    // error if the base path is not a prefix of the original path.
+    // However since we're passing a pathspec to `git2` we know that the
+    // base path is a prefix of the original path.
+    Ok(path
+        .as_path()
+        .strip_prefix(monorepo_root_normalized)?
+        .to_path_buf())
+}
+
 fn add_changed_files_from_unstaged_changes(
+    repo_root: &ProjectRoot,
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
@@ -84,15 +114,15 @@ fn add_changed_files_from_unstaged_changes(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
-            // NOTE: In the original Go code, `Rel` works even if the base path is not a
-            // prefix of the original path. In Rust, `strip_prefix` returns an
-            // error if the base path is not a prefix of the original path.
-            // However since we're passing a pathspec to `git2` we know that the
-            // base path is a prefix of the original path.
-            let project_relative_file_path =
-                ForwardRelativePath::new(file_path)?.strip_prefix(monorepo_root)?;
+            let stripped_file_path =
+                get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
 
-            files.insert(project_relative_file_path.to_string());
+            files.insert(
+                stripped_file_path
+                    .to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(stripped_file_path.to_path_buf()))?
+                    .to_string(),
+            );
         }
     }
 
@@ -100,6 +130,7 @@ fn add_changed_files_from_unstaged_changes(
 }
 
 fn add_changed_files_from_commits(
+    repo_root: &ProjectRoot,
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
@@ -121,9 +152,15 @@ fn add_changed_files_from_commits(
 
     for delta in diff.deltas() {
         let file = delta.old_file();
-        if let Some(path) = file.path() {
-            let path = ForwardRelativePath::new(path)?.strip_prefix(monorepo_root)?;
-            files.insert(path.to_string());
+        if let Some(file_path) = file.path() {
+            let stripped_path = get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
+
+            files.insert(
+                stripped_path
+                    .to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(stripped_path.to_path_buf()))?
+                    .to_string(),
+            );
         }
     }
 
