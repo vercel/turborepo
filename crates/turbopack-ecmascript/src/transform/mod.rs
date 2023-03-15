@@ -45,16 +45,20 @@ pub enum EcmascriptInputTransform {
     },
 }
 
+/// The CustomTransformer trait allows you to implement your own custom SWC
+/// transformer to run over all ECMAScript files imported in the graph.
 pub trait CustomTransformer: Debug {
     fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program>;
 }
 
+/// A wrapper around a CustomTransformer instance, allowing it to operate with
+/// the turbo_task caching requirements.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CustomTransformerWrapper(TransientInstance<Box<dyn CustomTransformer + Send + Sync>>);
 
 impl CustomTransformerWrapper {
-    pub fn new(transformer: Box<dyn CustomTransformer + Send + Sync>) -> Self {
-        CustomTransformerWrapper(TransientInstance::new(transformer))
+    pub fn new<T: CustomTransformer + Send + Sync + 'static>(transformer: T) -> Self {
+        CustomTransformerWrapper(TransientInstance::new(Box::new(transformer)))
     }
 }
 
