@@ -19,3 +19,19 @@ Setup
    ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
   Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
   [1]
+
+# Bad command
+  $ ${TURBO} run something --dry
+  root task something (turbo run build) looks like it invokes turbo and might cause a loop
+   ERROR  run failed: errors occurred during dry-run graph traversal
+  Turbo error: errors occurred during dry-run graph traversal
+  [1]
+
+# Bad command
+  $ ${TURBO} run something
+  \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
+  \xe2\x80\xa2 Running something in 3 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  root task something (turbo run build) looks like it invokes turbo and might cause a loop
+   ERROR  run failed: command  exited (1)
+  [1]
