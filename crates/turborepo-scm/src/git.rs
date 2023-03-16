@@ -45,6 +45,7 @@ pub fn changed_files(
 
     let mut files = HashSet::new();
     add_changed_files_from_unstaged_changes(
+        &repo_root,
         &repo,
         monorepo_root.as_ref(),
         &mut files,
@@ -53,6 +54,7 @@ pub fn changed_files(
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
+            &repo_root,
             &repo,
             monorepo_root.as_ref(),
             &mut files,
@@ -64,7 +66,39 @@ pub fn changed_files(
     Ok(files)
 }
 
+// Gets the system version of `monorepo_root` and `file_path` by calling
+// `fs_util::canonicalize`, then strips the `monorepo_root` from the
+// `file_path`.
+fn get_stripped_system_file_path(
+    repo_root: &ProjectRoot,
+    file_path: &Path,
+    monorepo_root: &ProjectRelativePath,
+) -> Result<PathBuf, Error> {
+    // We know the path is relative to the repo root so we can convert it to a
+    // ProjectRelativePath
+    let project_relative_file_path = ProjectRelativePath::new(file_path)?;
+    // Which we then resolve to an absolute path
+    let absolute_file_path = repo_root.resolve(project_relative_file_path);
+    // Then we call canonicalize to get a system path instead of a Unix style path
+    let path = fs_util::canonicalize(absolute_file_path)?;
+
+    // We do the same with the monorepo root
+    let absolute_monorepo_root = repo_root.resolve(monorepo_root);
+    let monorepo_root_normalized = fs_util::canonicalize(absolute_monorepo_root)?;
+
+    // NOTE: In the original Go code, `Rel` works even if the base path is not a
+    // prefix of the original path. In Rust, `strip_prefix` returns an
+    // error if the base path is not a prefix of the original path.
+    // However since we're passing a pathspec to `git2` we know that the
+    // base path is a prefix of the original path.
+    Ok(path
+        .as_path()
+        .strip_prefix(monorepo_root_normalized)?
+        .to_path_buf())
+}
+
 fn add_changed_files_from_unstaged_changes(
+    repo_root: &ProjectRoot,
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
@@ -81,18 +115,13 @@ fn add_changed_files_from_unstaged_changes(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
-            // NOTE: In the original Go code, `Rel` works even if the base path is not a
-            // prefix of the original path. In Rust, `strip_prefix` returns an
-            // error if the base path is not a prefix of the original path.
-            // However since we're passing a pathspec to `git2` we know that the
-            // base path is a prefix of the original path.
-            let project_relative_file_path =
-                file_path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
+            let stripped_file_path =
+                get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
 
             files.insert(
-                project_relative_file_path
+                stripped_file_path
                     .to_str()
-                    .ok_or_else(|| Error::NonUtf8Path(file_path.to_path_buf()))?
+                    .ok_or_else(|| Error::NonUtf8Path(stripped_file_path.to_path_buf()))?
                     .to_string(),
             );
         }
@@ -102,6 +131,7 @@ fn add_changed_files_from_unstaged_changes(
 }
 
 fn add_changed_files_from_commits(
+    repo_root: &ProjectRoot,
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
@@ -123,11 +153,13 @@ fn add_changed_files_from_commits(
 
     for delta in diff.deltas() {
         let file = delta.old_file();
-        if let Some(path) = file.path() {
-            let path = path.strip_prefix(monorepo_root.as_forward_relative_path().as_path())?;
+        if let Some(file_path) = file.path() {
+            let stripped_path = get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
+
             files.insert(
-                path.to_str()
-                    .ok_or_else(|| Error::NonUtf8Path(path.to_path_buf()))?
+                stripped_path
+                    .to_str()
+                    .ok_or_else(|| Error::NonUtf8Path(stripped_path.to_path_buf()))?
                     .to_string(),
             );
         }
@@ -324,12 +356,15 @@ mod tests {
         config.set_str("user.email", "test@example.com")?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
+        // Create additional nested directory to test that we return a system path
+        // and not a normalized unix path
+        fs::create_dir(repo_root.path().join("subdir").join("src"))?;
 
         let file = repo_root.path().join("subdir").join("foo.js");
         fs::write(file, "let z = 0;")?;
         let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None)?;
 
-        let new_file = repo_root.path().join("subdir").join("bar.js");
+        let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
         let files = super::changed_files(
@@ -338,9 +373,18 @@ mod tests {
             None,
             true,
         )?;
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
-        commit_file(&repo, Path::new("subdir/bar.js"), Some(first_commit))?;
+        #[cfg(unix)]
+        {
+            assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
+        }
+
+        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit))?;
 
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
@@ -352,7 +396,15 @@ mod tests {
             false,
         )?;
 
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+        #[cfg(unix)]
+        {
+            assert_eq!(files, HashSet::from(["src/bar.js".to_string()]));
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
+        }
 
         Ok(())
     }
