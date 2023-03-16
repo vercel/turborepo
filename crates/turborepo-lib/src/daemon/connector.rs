@@ -174,14 +174,14 @@ impl DaemonConnector {
         let arc = Arc::new(path);
 
         #[cfg(not(target_os = "windows"))]
-        let closure = move |_| {
+        let make_service = move |_| {
             // we clone the reference counter here and move it into the async closure
             let arc = arc.clone();
             async move { tokio::net::UnixStream::connect::<&Path>(arc.as_path()).await }
         };
 
         #[cfg(target_os = "windows")]
-        let closure = move |_| {
+        let make_service = move |_| {
             let arc = arc.clone();
             async move { win(arc) }
         };
@@ -189,7 +189,7 @@ impl DaemonConnector {
         // note, this endpoint is just a dummy. the actual path is passed in
         Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
-            .connect_with_connector(tower::service_fn(closure))
+            .connect_with_connector(tower::service_fn(make_service))
             .await
             .map(TurbodClient::new)
             .map_err(DaemonConnectorError::Socket)
