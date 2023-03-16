@@ -8,13 +8,10 @@ use turbopack_core::{
     },
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    resolve::{ModulePart, ModulePartVc},
+    resolve::ModulePartVc,
 };
 
-use super::{
-    chunk_item::{EcmascriptModulePartChunkItem, EcmascriptModulePartChunkItemVc},
-    get_part_id, split_module, SplitResult,
-};
+use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, SplitResult};
 use crate::{
     chunk::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
