@@ -18,8 +18,8 @@
 #
 # The regex match is liberal, because the build task from either workspace can throw the error
   $ ${TURBO} run build
-   ERROR  run failed: error preparing engine: Invalid persistent task dependency:
+   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-a#dev" is a persistent task, .*-a#build" cannot depend on it (re)
-  Turbo error: error preparing engine: Invalid persistent task dependency:
+  Turbo error: error preparing engine: Invalid persistent task configuration:
   "pkg-a#dev" is a persistent task, .*-a#build" cannot depend on it (re)
   [1]

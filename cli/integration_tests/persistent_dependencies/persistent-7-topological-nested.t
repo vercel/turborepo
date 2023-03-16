@@ -21,8 +21,8 @@
 # error message should say. Leaving as-is so we don't have to implement special casing logic to handle
 # this case.
   $ ${TURBO} run dev
-   ERROR  run failed: error preparing engine: Invalid persistent task dependency:
+   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task dependency:
+  Turbo error: error preparing engine: Invalid persistent task configuration:
   "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
   [1]
