@@ -4,9 +4,9 @@ struct TestCase {
     secret_key: &'static str,
     artifact_body: Vec<u8>,
     artifact_hash: &'static str,
+    metadata: &'static str,
     hmac_tag: &'static str,
 }
-
 fn get_test_cases() -> Vec<TestCase> {
     vec![
         TestCase {
@@ -14,6 +14,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "v~=8FxNE,RxRouc`9Xa?B%Edz+Th$-fl<U_nQ}nxBClw~QfbN$nZJ@@KQ$z3NeAA|d/xRhD.\
                          ^#Gf@R",
             artifact_hash: "vC,AWX: d~p`SPxic%H",
+            metadata: r##"{"hash":"vC,AWX: d~p`SPxic%H","teamId":"p0S*g?-%{r?!#;VNfcfAaDzjOek|'?4M 1xKhKpq=nEOZ?=q$1q"}"##,
             artifact_body: vec![
                 117, 237, 24, 66, 73, 233, 188, 25, 103, 94, 77, 31, 118, 98, 19, 218, 113, 182,
                 66, 120, 254, 210, 202, 213, 241, 138, 36, 118, 25, 32, 94, 48, 38, 83, 169, 52,
@@ -62,6 +63,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "e>CasCYL#&?zqYU.UWi?%Y&H|Z_A7((Oh![t-Ro64Y*Qo2 \
                          |#mrnlnf;wm/)pHKxKq)txOP;=6?|",
             artifact_hash: "+9|Wx2Jr]gIgU~Ds",
+            metadata: r##"{"hash":"+9|Wx2Jr]gIgU~Ds","teamId":"UMkNmh6IK;\u00267\u0026y__q|H#N9IL's+;K%N^WWjCXoo#gT2l"}"##,
             artifact_body: vec![
                 108, 76, 41, 229, 41, 27, 143, 75, 30, 109, 111, 103, 85, 22, 228, 7, 74, 49, 153,
                 69, 89, 27, 148, 17, 99, 195, 210, 99, 53, 89, 146, 242, 3, 53, 225, 84, 125, 185,
@@ -85,6 +87,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "{s!Zs^Z<#2%&3A6Qoxm~Mq`t|}P<2){/rg,#c:$HZH/v:PFuSATUPRHOGRZqmxc-y'\
                          z<$}3T7q~Un!*vq<f#1",
             artifact_hash: "~^X]po|(pD$!n;}RnPY*Cvm",
+            metadata: r##"{"hash":"~^X]po|(pD$!n;}RnPY*Cvm","teamId":"__}(gWAM\u0026U38,OcO@#'1m_py_Y[[4C3kRmn2a!Cd\u003ctXta;y,7Fc7J\u003cSZap31yds@\u003cPJvD194g-~t_7ENu"}"##,
             artifact_body: vec![
                 166, 108, 197, 138, 80, 71, 197, 67, 42, 28, 203, 220, 156, 92, 57, 190, 123, 190,
                 81, 39, 224, 56, 136, 184, 2, 93, 46, 18, 23, 98, 239, 202, 238, 102, 96, 11, 33,
@@ -148,6 +151,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       2Q9)E`V?J,!Oi&DG0G$V>mJOsb2MNy@<Tl^I",
             secret_key: "D&`- ^l52~d`=IsY0!,R%EeA0maQ*Z=d<5|]]WhYs2k%HD]L=e*lN{eC=bR.P0%30Qr98GH",
             artifact_hash: "dL{$h{C-7GGH0R*|9hoFAS(~=5WEbp#;Q>C'#c(?GzlRW}72EDs,+Y7yN<23`z~'msM",
+            metadata: r##"{"hash":"dL{$h{C-7GGH0R*|9hoFAS(~=5WEbp#;Q\u003eC'#c(?GzlRW}72EDs,+Y7yN\u003c23`z~'msM","teamId":"=k\u003e^W9@5*Z``20yJ)0-HCxWDi@Q/SqXb|VVyoe\u003etI65a;D1L=zZn\u003cp 2Q9)E`V?J,!Oi\u0026DG0G$V\u003emJOsb2MNy@\u003cTl^I"}"##,
             artifact_body: vec![
                 90, 95, 45, 25, 235, 60, 8, 255, 120, 25, 45, 41, 188, 251, 236, 246, 218, 219, 60,
                 88, 171, 195, 233, 204, 73, 255, 219, 86, 89, 64, 160, 213, 5, 141, 252, 100, 171,
@@ -179,6 +183,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "SR3[}0y+KN4n^^V;%v%)YJh>c3^r72(0ep=zM*",
             secret_key: "%,#E$T}!~K]uP}daHQ[5Fe_x0d;!w556=aHY88_jnq^!|ay&h|)=m KT=B+'oTzVM,qE8",
             artifact_hash: ",M}e8;/0[g:1Z[PXwT",
+            metadata: r##"{"hash":",M}e8;/0[g:1Z[PXwT","teamId":"SR3[}0y+KN4n^^V;%v%)YJh\u003ec3^r72(0ep=zM*"}"##,
             artifact_body: vec![
                 26, 64, 228, 156, 69, 219, 136, 137, 117, 157, 75, 53, 212, 7, 83, 109, 54, 148,
                 158, 79, 74, 228, 198, 114, 119, 29, 251, 248, 100, 66, 178, 57, 194, 17, 143, 55,
@@ -240,6 +245,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "vx{9bskow_e#6S",
             secret_key: "yz<W</^pdtvr]%]IML5@hsgZT)CW~FwY#ty'Z~h0iQ]cj~u@GWl7'GVGA0AxSBX]R&eyKX_",
             artifact_hash: "W QI.~ou.{6.?:",
+            metadata: r##"{"hash":"W QI.~ou.{6.?:","teamId":"vx{9bskow_e#6S"}"##,
             artifact_body: vec![
                 13, 29, 66, 250, 245, 10, 190, 225, 199, 74, 223, 26, 173, 73, 172, 211, 123, 117,
                 51, 56, 17, 180, 63, 248, 93, 226, 87, 109, 197, 128, 10, 245, 155, 152, 31, 155,
@@ -288,6 +294,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "ny`|>4f}rR%}<}?o`L>$ld,<C",
             artifact_hash: "zbF/0.XFoj;TrrJD:nfG7{pS==v5v'$B2RN:jYd+zC^%{[[~ab@ZXX%2m_K]Ul-68_/)L \
                             Zm",
+            metadata: r##"{"hash":"zbF/0.XFoj;TrrJD:nfG7{pS==v5v'$B2RN:jYd+zC^%{[[~ab@ZXX%2m_K]Ul-68_/)L Zm","teamId":"~ KHj{$9zR6CE?0,(s3Y|UP+U164I\u003e_V"}"##,
             artifact_body: vec![
                 43, 85, 133, 146, 139, 138, 2, 172, 57, 9, 26, 205, 9, 49, 179, 255, 235, 93, 226,
                 71, 121, 63, 120, 150, 145, 83, 97, 61, 139, 48, 47, 221, 243, 4, 9, 113, 128, 113,
@@ -307,6 +314,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "!g3?O'3=@{3Y%5Z0$DN.`ouo#T@ ~Z",
             secret_key: ";= w#Xv+!d.y:HP]#JyFt,y) 'l",
             artifact_hash: "|wy A/&Nk~|^(NK+#`qA|U|3kG^L2it/,*HJ~}mmVb:E{l+WXAex`cWohzr8/;_/o",
+            metadata: r##"{"hash":"|wy A/\u0026Nk~|^(NK+#`qA|U|3kG^L2it/,*HJ~}mmVb:E{l+WXAex`cWohzr8/;_/o","teamId":"!g3?O'3=@{3Y%5Z0$DN.`ouo#T@ ~Z"}"##,
             artifact_body: vec![
                 172, 75, 107, 24, 84, 14, 60, 30, 8, 17, 150, 86, 143, 10, 108, 194, 99, 254, 126,
                 96, 40, 138, 63, 110, 82, 242, 208, 130, 218, 188, 11, 99, 101, 148, 229, 157, 82,
@@ -333,6 +341,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          7ccL$hSC7lQmPom{h%*Ef_= ;^9{i@~<AchQZ",
             artifact_hash: ".@ w.Q)[kPw(8L^thCmwz~E?>^E.PS \
                             |D@-V0BgZqz_?{y-y]$wQx%_0kOe)Ii'-&GSz}?F]T&USxKG&L^#$;",
+            metadata: r##"{"hash":".@ w.Q)[kPw(8L^thCmwz~E?\u003e^E.PS |D@-V0BgZqz_?{y-y]$wQx%_0kOe)Ii'-\u0026GSz}?F]T\u0026USxKG\u0026L^#$;","teamId":"g17D$xKq#ZCq|S8F#T]hA\u003ec3jVA-A1~)JB!G^*N=arpasvDkadiW%IJ ?B@*;bzK8JLjCCSE(5@y[SsEb'a)06"}"##,
             artifact_body: vec![
                 4, 90, 49, 22, 157, 29, 211, 181, 3, 208, 238, 43, 248, 81, 228, 210, 96, 232, 247,
                 88, 69, 247, 28, 63, 229, 38, 104, 53, 18, 209, 230, 166, 250, 155, 226, 136, 202,
@@ -370,6 +379,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "7 a>BV`k+.[aF*%l>ZiX~XO](7=t]Az!0qZ!Ii \
                          '#TCoT?P:?2*iDB(OyT4)j86~c-fus{XhPmfl*UI|onYQDndW{>wHuZK;d9M",
             artifact_hash: "8H=fHP^Wpa; HM9x+j<6Gt~w1-uUp",
+            metadata: r##"{"hash":"8H=fHP^Wpa; HM9x+j\u003c6Gt~w1-uUp","teamId":"0h[?Ad{._+6)xQui$ =Hf;R@M@`z"}"##,
             artifact_body: vec![
                 73, 124, 173, 154, 222, 5, 44, 100, 8, 203, 153, 221, 40, 255, 32, 126, 36, 217,
                 194, 195, 20, 106, 183, 180, 109, 7, 241, 41, 221, 102, 166, 193, 68, 11, 203, 190,
@@ -403,6 +413,7 @@ fn get_test_cases() -> Vec<TestCase> {
             artifact_hash: "dV>fg|_'eZB5wWdj3qB \
                             )[G-(N6~.~HxV)q&(,L=P]H9;PP7H_5ZeRW$KV>urcKOMN~X#+]M:Qw5@3-jT]Z(*<*\
                             Su<4%byF",
+            metadata: r##"{"hash":"dV\u003efg|_'eZB5wWdj3qB )[G-(N6~.~HxV)q\u0026(,L=P]H9;PP7H_5ZeRW$KV\u003eurcKOMN~X#+]M:Qw5@3-jT]Z(*\u003c*Su\u003c4%byF","teamId":"Hvevbn?Uvj,q3Y%3O\u0026n|L"}"##,
             artifact_body: vec![
                 76, 174, 141, 130, 225, 179, 123, 134, 92, 254, 52, 38, 6, 20, 133, 149, 153, 30,
                 129, 241, 50, 56, 98, 238, 176, 234, 2, 251, 228, 132, 14, 189, 172, 10, 8, 169,
@@ -435,6 +446,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "aGw;V/ohkXuhvj'fw<5SzRts#2] \
                          ?T5V_6+K6X%MmFV1D|[N'jK/]3UnNvXXm:={[pXuE}.347b5LTuUY,&7&r<RF@p2BY% Ye",
             artifact_hash: "jE_2'7z|]!pa]&Y#sjB'd2/th8d0FVt-]tPpHDVr`WJvaghCI#7pgxRs*HRwmel<N",
+            metadata: r##"{"hash":"jE_2'7z|]!pa]\u0026Y#sjB'd2/th8d0FVt-]tPpHDVr`WJvaghCI#7pgxRs*HRwmel\u003cN","teamId":"1K!zIt0bRq{'r?etDD#'.~m{fkPY,_C}b/;o0NYOFAcq^}*2EfcmCOwC=Z(-TO.i6Q!fN9sZVuqN)`!Ll"}"##,
             artifact_body: vec![
                 56, 114, 57, 163, 66, 115, 30, 223, 85, 161, 92, 120, 47, 180, 177, 234, 50, 17,
                 214, 53, 83, 75, 8, 50, 128, 80, 227, 164, 124, 27, 147, 118, 216, 208, 10, 139,
@@ -450,6 +462,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "/{VOW)&;0`f=kW~]7,FI`-.2#O=7xAqhOCMTc53ILmZN4oGCUJ+PX]o7Om`_*12xmR|]zwPy",
             secret_key: "eRZ0OuQ6K|$Nv#'H{wkCEW@CIor!/xfv@~pcdr.})KA9H;s)MDO}yq^uV}Jc}D5<P]Y~",
             artifact_hash: "=#~aTbV{Wz5Nl6fh*lmI]Do?Ps:o%p,bYC}iR~2)j'P$Ispv<jFpN@Xj`Fs",
+            metadata: r##"{"hash":"=#~aTbV{Wz5Nl6fh*lmI]Do?Ps:o%p,bYC}iR~2)j'P$Ispv\u003cjFpN@Xj`Fs","teamId":"/{VOW)\u0026;0`f=kW~]7,FI`-.2#O=7xAqhOCMTc53ILmZN4oGCUJ+PX]o7Om`_*12xmR|]zwPy"}"##,
             artifact_body: vec![
                 232, 102, 41, 60, 124, 51, 30, 89, 64, 47, 218, 101, 229, 47, 99, 206, 148, 144,
                 46, 47, 112, 102, 200, 243, 195, 79, 117, 126, 93, 232, 51, 7, 102, 111, 251, 167,
@@ -476,6 +489,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       UnNs2&:z^!POhN_@dP*ZUIAaK^tj+?_uc(@Yy}&eiXONP#9ikGqc)qZn<dx3keS8{|N|uG!{$KB",
             secret_key: "i'ynWXA;P#Amdx%8IWN&?TEh}5D[HI=s+Rz%S",
             artifact_hash: "M$nj(.vL[D~vO8,haELe#QefXQX=%bM>B#H>3TehYOg#'*Vi3P",
+            metadata: r##"{"hash":"M$nj(.vL[D~vO8,haELe#QefXQX=%bM\u003eB#H\u003e3TehYOg#'*Vi3P","teamId":"0BkfTSFsMl UnNs2\u0026:z^!POhN_@dP*ZUIAaK^tj+?_uc(@Yy}\u0026eiXONP#9ikGqc)qZn\u003cdx3keS8{|N|uG!{$KB"}"##,
             artifact_body: vec![
                 255, 84, 116, 184, 66, 27, 56, 22, 158, 129, 59, 207, 180, 135, 110, 236, 21, 39,
                 204, 118, 140, 119, 19, 127, 127, 108, 79, 96, 90, 94, 208, 218, 194, 51, 128, 12,
@@ -538,6 +552,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "mdHbb~2OWr5FDvEP<y1/</fKYjG)lipyl-b3<oWc4iugQ`YyaaS{S0{z3 c5W5",
             artifact_hash: ",Q6P8<ckm@Pic5=@N[$F~{<lf]Q4-]`?Xq9n4Y!b$ofnT(G<uArpx,\
                             jLPh72TB9D8Z7=<>D{#hE",
+            metadata: r##"{"hash":",Q6P8\u003cckm@Pic5=@N[$F~{\u003clf]Q4-]`?Xq9n4Y!b$ofnT(G\u003cuArpx,jLPh72TB9D8Z7=\u003c\u003eD{#hE","teamId":"Pvf+`e!-B?/ukn392$9?6mde6gvHW[`0\u003c#kyPBz^j=PI#2F1G9~-JHh[j%\u003e3-xH+;+L_B`QX+2E./\u003e$Yl"}"##,
             artifact_body: vec![
                 87, 60, 159, 231, 127, 57, 9, 79, 39, 24, 227, 223, 32, 31, 116, 9, 94, 28, 75,
                 100, 118, 131, 30, 206, 77, 21, 59, 104, 206, 60, 154, 55, 66, 27, 74, 49, 254,
@@ -581,6 +596,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "4W.lV=B XzgBg93Bd(fmRv<)U_l<[b,CXw2Vmcg*fJo@YC]8iyK3VZy1",
             secret_key: ".N&%AyuCLvsK`v<r%4%f%8_'Xj5_$B@ 8C[Auyx><Co9OH",
             artifact_hash: "oMQ4JE' U{",
+            metadata: r##"{"hash":"oMQ4JE' U{","teamId":"4W.lV=B XzgBg93Bd(fmRv\u003c)U_l\u003c[b,CXw2Vmcg*fJo@YC]8iyK3VZy1"}"##,
             artifact_body: vec![
                 186, 43, 82, 143, 82, 205, 67, 242, 247, 11, 213, 34, 77, 121, 222, 168, 88, 214,
                 216, 58, 196, 8, 72, 49, 183, 90, 87, 45, 130, 29, 71, 224, 18, 189, 35, 117, 67,
@@ -619,6 +635,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       aSjYfO[T^`$h;qWE=",
             secret_key: "cV_/i6^?kk/",
             artifact_hash: "]LqMw3or;!Jiwj`SFeq[V%;0V/cH|/JMgcRxqm6F#}XYlx%",
+            metadata: r##"{"hash":"]LqMw3or;!Jiwj`SFeq[V%;0V/cH|/JMgcRxqm6F#}XYlx%","teamId":"@b?tzm+j+[[g/~'3xfDn)pgf]#K_AS[yYj/=b3:rFp=3zU-tl*96L94B99riCPt,aSjYfO[T^`$h;qWE="}"##,
             artifact_body: vec![
                 214, 9, 119, 167, 32, 23, 4, 124, 231, 73, 254, 160, 238, 253, 46, 46, 205, 215,
                 237, 138, 234, 69, 94, 101, 92, 143, 210, 39, 109, 168, 218, 71, 24, 37, 190, 150,
@@ -666,6 +683,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: ":qLp&=B4Mx@L>Tf<h]j~Cb%E=^V4*esEpNuBLjuw(+m!U.Iw[j!IZb",
             artifact_hash: ").&}3MU(GRpDhihfPO9i]Fky}mf3|sZL`6r,9R`JepUtMdqozOHoYY00#2$AS86,\
                             0TpLHwfyr3_NC",
+            metadata: r##"{"hash":").\u0026}3MU(GRpDhihfPO9i]Fky}mf3|sZL`6r,9R`JepUtMdqozOHoYY00#2$AS86,0TpLHwfyr3_NC","teamId":"gbb+owj-jG.XM2E\u003e{n0\u003cMe?j\u003erR\u0026 )$s\u0026W3lb"}"##,
             artifact_body: vec![
                 95, 35, 175, 180, 196, 149, 224, 205, 240, 66, 128, 171, 141, 137, 221, 21, 171,
                 207, 178, 118, 159, 14, 210, 17, 6, 84, 186, 144, 13, 51, 112, 125, 219, 29, 173,
@@ -683,6 +701,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "tV)E^gSh=ITWMf^iX.vE)9AF[e.r_P#UG)b+R5%<JatUHL]A:Mx*>>V8q)4$ZzIWJW",
             secret_key: "Vp@)DW5@>{?Ug|w2M.L6",
             artifact_hash: "FOlt[~]iw-B`Qmr-oDY=l,.{AKq)PRK,z`(6=V3",
+            metadata: r##"{"hash":"FOlt[~]iw-B`Qmr-oDY=l,.{AKq)PRK,z`(6=V3","teamId":"tV)E^gSh=ITWMf^iX.vE)9AF[e.r_P#UG)b+R5%\u003cJatUHL]A:Mx*\u003e\u003eV8q)4$ZzIWJW"}"##,
             artifact_body: vec![
                 160, 120, 72, 49, 51, 95, 181, 45, 180, 239, 211, 100, 46, 110, 111, 139, 51, 76,
                 158, 226, 105, 17, 63, 63, 227, 208, 130, 34, 165, 118, 124, 66, 204, 129, 221, 25,
@@ -728,6 +747,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: ")=LoGS7T[J/]9%'@)RIu5R(i9l>Sy'k(jyf&XUUQDK`[^&",
             secret_key: "|hB@hIcrF!1Bc$__UbNdf7,PB%Kc4 n,|wX5Sc=v).%9RtN1o",
             artifact_hash: "wIDp$JUMYPs]Up:~ZF34",
+            metadata: r##"{"hash":"wIDp$JUMYPs]Up:~ZF34","teamId":")=LoGS7T[J/]9%'@)RIu5R(i9l\u003eSy'k(jyf\u0026XUUQDK`[^\u0026"}"##,
             artifact_body: vec![
                 192, 216, 234, 25, 41, 55, 66, 157, 226, 151, 161, 59, 108, 68, 112, 247, 106, 94,
                 162, 98, 232, 169, 230, 28, 115, 115, 247, 247, 165, 126, 7, 20, 102, 101, 9, 76,
@@ -767,6 +787,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "-{O<U$<z(h8XEEy@M'J?]=<52+5yBVIdGk)1nbF-;.C//(7T}$,giNb&PpZ2nXj7xZh",
             secret_key: ",@EKh#R;2[K8p6)LrKVg ",
             artifact_hash: "hb5PZK?Tx*(I8'Y/a&mm6_KgOm",
+            metadata: r##"{"hash":"hb5PZK?Tx*(I8'Y/a\u0026mm6_KgOm","teamId":"-{O\u003cU$\u003cz(h8XEEy@M'J?]=\u003c52+5yBVIdGk)1nbF-;.C//(7T}$,giNb\u0026PpZ2nXj7xZh"}"##,
             artifact_body: vec![
                 158, 49, 25, 139, 244, 69, 199, 107, 15, 93, 132, 112, 146, 208, 0, 37, 99, 52,
                 114, 36, 186, 109, 71, 167, 242, 238, 196, 252, 162, 108, 17, 197, 174, 74, 164,
@@ -796,6 +817,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "le{oMZH:j%e'>@%{+b'UV4OdDlxp(^}Q!NZp44IhlE(o$ETq^M.!1H#ovbdQX)?u",
             artifact_hash: "e^M<0YpRtXukoZ =AMb=RXX80/`:RtWRA/a:J;)3/6{9xj1p \
                             ./Zg-P=|W3J,.o93fmQ)I]@,^$RD0//M72E+nb35etF?y9U",
+            metadata: r##"{"hash":"e^M\u003c0YpRtXukoZ =AMb=RXX80/`:RtWRA/a:J;)3/6{9xj1p ./Zg-P=|W3J,.o93fmQ)I]@,^$RD0//M72E+nb35etF?y9U","teamId":"~#H\u003c|zodrqf+ C8$hD/K0-Vl;a!(L:#oPI6TW95[KSx00W1=TzQt*^gqUSi/7uPrxdsZn"}"##,
             artifact_body: vec![
                 209, 161, 129, 121, 71, 48, 2, 127, 204, 94, 251, 139, 153, 115, 165, 216, 30, 89,
                 139, 92, 133, 122, 31, 69, 244, 128, 151, 197, 104, 180, 237, 8, 79, 83, 55, 245,
@@ -826,6 +848,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "H^I, *uiJV 'h)Oz.qc!9+@7..?kufG.]5]G<QEGew:AQP@wsKd<^Oo6 \
                          ;`};Lzs@>_lX):r<Ry+h",
             artifact_hash: "n]KU!1rzJWJd9@Yp",
+            metadata: r##"{"hash":"n]KU!1rzJWJd9@Yp","teamId":"`:;]+Uc{F\u003cLrgm;u8GPp\u0026N33 `/+a!Nlr"}"##,
             artifact_body: vec![
                 81, 58, 251, 15, 213, 176, 39, 13, 107, 242, 192, 184, 95, 128, 242, 25, 131, 196,
                 100, 7, 250, 151, 167, 160, 48, 234, 100, 108, 211, 96, 181, 169, 6, 100, 97, 255,
@@ -870,6 +893,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "TZT,[;.pD03(@'o'-}P;&-Ks!6VIqH6l>+n)=iuUSGS6UJ%%FjlI0anLz#BpN$y&wj+/g=I&\
                          bvyRis9nT9-ER~,0vOu^/",
             artifact_hash: "BOt*&$lcp1>U%rrdq!??c5meGhe>;] JzxdAO8i`/9'u`T3B+n4k7Gt",
+            metadata: r##"{"hash":"BOt*\u0026$lcp1\u003eU%rrdq!??c5meGhe\u003e;] JzxdAO8i`/9'u`T3B+n4k7Gt","teamId":"%y'4m1 YE)#703UR2-p(!1wQ*P..OYdKqV:m8(GRsc-IwZ[2aumG!j:8)_\u003cF=vC2h%U;%-2$2edK^-N^\u003eUO*%[`.e}VYq(Cf"}"##,
             artifact_body: vec![
                 37, 90, 210, 72, 208, 22, 86, 148, 25, 91, 221, 109, 173, 126, 125, 135, 230, 14,
                 110, 31, 64, 149, 217, 60, 251, 75, 64, 104, 120, 249, 243, 157, 99, 23, 159, 135,
@@ -915,6 +939,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "#!z~|51:DX0^kG@ODVja0_5,8%bndBw)Mh;E3)gzO>p8xf=59y`fDfOT-eL&\
                          }Ff-~7W-YEx~P-<pY&+7,Dbk(8{Z{X8{p)ZT",
             artifact_hash: "qK:iK-7|(Vg]4-yh+QO![1wQ7UpcG4$7A+NP3)E,qsE?L)uDBMRuAV8'&u}QT0@pS_s'",
+            metadata: r##"{"hash":"qK:iK-7|(Vg]4-yh+QO![1wQ7UpcG4$7A+NP3)E,qsE?L)uDBMRuAV8'\u0026u}QT0@pS_s'","teamId":"FL'chc\u003c6K[aD^pj|H6$1IzZ$t};juTWSepKutubuqx(eh+qOrNTmP|)"}"##,
             artifact_body: vec![
                 168, 225, 44, 242, 78, 232, 86, 41, 29, 175, 157, 63, 207, 216, 172, 169, 61, 149,
                 135, 231, 240, 120, 165, 238, 36, 225, 17, 87, 90, 243, 3, 161, 102, 144, 86, 108,
@@ -953,6 +978,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: ".;C#Yq,A@]d=",
             secret_key: " wEfg~4|:c5}LEv=rL,E8^P3#",
             artifact_hash: "w)38`D9oB^DTci",
+            metadata: r##"{"hash":"w)38`D9oB^DTci","teamId":".;C#Yq,A@]d="}"##,
             artifact_body: vec![
                 83, 34, 14, 49, 23, 56, 229, 227, 161, 78, 181, 79, 103, 13, 25, 210, 204, 150,
                 131, 81, 84, 217, 17, 232, 104, 21, 183, 116, 197, 181, 208, 240, 7, 126, 17, 30,
@@ -970,6 +996,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "?Wj9#JbaZC[~!lunFC#C2`c1P[v'K&F<ji$+KTe0o?Anj:*RQR/hn}Y:<&1--I}T@0Y_F~;\
                          Ce1 `?zSbaNbRczmV&%'a@hnv",
             artifact_hash: "+FzvH3.%iz'%{L+n$yWyYgA2hHq<P,L:L]Iht![p1n!Z~be1_f.rQci'X/WH#",
+            metadata: r##"{"hash":"+FzvH3.%iz'%{L+n$yWyYgA2hHq\u003cP,L:L]Iht![p1n!Z~be1_f.rQci'X/WH#","teamId":"p=s*xGz%+C 0A$#N_?:n4'2dKpz?kGENAGq0erK^HU4t\u003eM"}"##,
             artifact_body: vec![
                 72, 99, 103, 102, 233, 152, 219, 1, 228, 181, 54, 35, 26, 74, 214, 227, 176, 118,
                 5, 175, 20, 199, 73, 22, 28, 137, 118, 176, 235, 239, 38, 186, 221, 53, 110, 93,
@@ -1004,6 +1031,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       D8McMN",
             secret_key: "C@S=s!ybT1-&y R6?!#K)E<}S|2S>gw-2Q~?&,CpB$Sf3/aB`e%ss6,gs",
             artifact_hash: "It7eip^>_Wi?CJA<g",
+            metadata: r##"{"hash":"It7eip^\u003e_Wi?CJA\u003cg","teamId":"mX.5g}OeI[#:*w+K!^]X^7ai{9pPD_Ei9)y@F6|I\u003eqT?'Ns8\u003c_q3ck*vG12QR{[KX%KJ@e\u0026o4h[ D8McMN"}"##,
             artifact_body: vec![
                 181, 241, 66, 149, 164, 151, 164, 214, 96, 55, 63, 97, 54, 217, 45, 217, 64, 60,
                 55, 9, 192, 124, 142, 247, 69, 139, 55, 90, 140, 202, 22, 81, 148, 201, 7, 180,
@@ -1032,6 +1060,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          tC1Kwhh>@FD}mPEn?Ow/~&Z",
             artifact_hash: "E|c*X5`K%Jz%_eu:B.2nl}5'dqcaK,:qY9Wi8F~cOOS?%GBn7A-J52#5+`$u2IB7'_a/v!\
                             -2tQ^EUy$exRUE",
+            metadata: r##"{"hash":"E|c*X5`K%Jz%_eu:B.2nl}5'dqcaK,:qY9Wi8F~cOOS?%GBn7A-J52#5+`$u2IB7'_a/v!-2tQ^EUy$exRUE","teamId":"1iwu6Vj l'm;`7(;(Tyu{SL~GrnG^%?b{J]0sT}U#abNX0$L3|,48'6HQ'RGM;jg@5wR{67PN\u003cQgQ6h"}"##,
             artifact_body: vec![
                 86, 178, 57, 31, 190, 166, 129, 161, 143, 100, 248, 164, 113, 230, 17, 234, 177,
                 29, 131, 114, 146, 230, 48, 129, 123, 146, 188, 56, 201, 85, 101, 126, 40, 178, 69,
@@ -1089,6 +1118,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "WM^n42k-LP+^IIY3%c8xddF7u~_Y${1eM.5Wyif*U1Q8N#QrE~ C C<|~[]'C,3>!",
             artifact_hash: "QG'@h.m/oNHjYTiUDFR!/l)?^R@1FK'/kvR4{Eo[K0VDo,XdK=bHW(}&{q-eHn,\
                             [0Fafc~Nvbm[R7",
+            metadata: r##"{"hash":"QG'@h.m/oNHjYTiUDFR!/l)?^R@1FK'/kvR4{Eo[K0VDo,XdK=bHW(}\u0026{q-eHn,[0Fafc~Nvbm[R7","teamId":"?;*:c=N`Sr|AK(Wjz,y.=5E\u003c%DYxtTv`\u0026) YnRkA_**{7\u003eyk\u003ek7Rw$`8"}"##,
             artifact_body: vec![
                 146, 194, 120, 13, 36, 175, 51, 212, 174, 58, 189, 240, 24, 45, 169, 72, 238, 183,
                 5, 212, 75, 24, 116, 188, 25, 73, 156, 119, 83, 243, 73, 20, 78, 180, 250, 169, 63,
@@ -1136,6 +1166,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "iWv<e~]$~wY)ScO_5b*sA-X>WjC[^QU=P(,ZI^uj$+ZDnFQ@=C344R CK",
             secret_key: "[j_o_/Y;g#Z3'(>}ln0h,QAK5*$-NHX*JgF92rZ!-xW",
             artifact_hash: "1=U+lAy<avlZ8r^4br[d0/x_}4=ooP+Z)G!Ux,DbahrU9oK/p7`&)SB",
+            metadata: r##"{"hash":"1=U+lAy\u003cavlZ8r^4br[d0/x_}4=ooP+Z)G!Ux,DbahrU9oK/p7`\u0026)SB","teamId":"iWv\u003ce~]$~wY)ScO_5b*sA-X\u003eWjC[^QU=P(,ZI^uj$+ZDnFQ@=C344R CK"}"##,
             artifact_body: vec![
                 32, 67, 104, 229, 169, 234, 25, 236, 75, 115, 17, 71, 192, 171, 74, 129, 51, 9, 57,
                 164, 197, 99, 215, 222, 60, 155, 228, 25, 59, 121, 20, 47, 187, 61, 74, 70, 174,
@@ -1153,6 +1184,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "7#M&?=sU:cJ&9zNU[/u^(Q11nu/Bzh(f!1N_qj.N<{Zt<r~GJ8h{_(V@jwVUWAfaTFG15e \
                          F_YyYq3uSSi ",
             artifact_hash: "0O`Sp^5:QVmo #=L/1Iu)EcH#e++uGNUcNPovqxh9@eA~1zH`UbM3amk!tb~",
+            metadata: r##"{"hash":"0O`Sp^5:QVmo #=L/1Iu)EcH#e++uGNUcNPovqxh9@eA~1zH`UbM3amk!tb~","teamId":"9+8HHh{Hn-kH@Fh`\u0026f-d'=oD+h4F%GoGgS M6;5sc,:+|24|'C4rOZFF/x^n5a?9l8_RH;FY0(*:G.b1AaaN[e7-}F"}"##,
             artifact_body: vec![
                 174, 220, 4, 210, 79, 14, 9, 247, 179, 29, 164, 199, 126, 114, 168, 231, 197, 149,
                 84, 166, 254, 25, 214, 253, 224, 132, 202, 233, 112, 11, 247, 249, 237, 119, 78,
@@ -1183,6 +1215,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "'7JikD}u4qG#bZS:s7{B_TzcWzkHCOqW/}%akfG'_,(KfPJ/vhvL,2BfVd7>/cX^?\
                          ge{(P4UT0xx",
             artifact_hash: "7=So6<s~2^0nxSEzh&hF",
+            metadata: r##"{"hash":"7=So6\u003cs~2^0nxSEzh\u0026hF","teamId":"r\u003e  ;PFo[l"}"##,
             artifact_body: vec![
                 20, 240, 19, 43, 176, 59, 70, 52, 112, 20, 92, 184, 105, 28, 157, 30, 250, 11, 50,
                 26, 31, 201, 139, 110, 94, 73, 49, 248, 27, 251, 17, 40, 225, 252, 61, 4, 5, 91,
@@ -1241,6 +1274,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "_--/K>CHVcm1LbOI}`HLtT^9'A'FnktFuAC=",
             secret_key: "-+A&r4+D?<#~?P_:.Evo7zJ~ m`2NBsF",
             artifact_hash: "CQ7l3=BEle3-ZrnoeOzknSzj&A,'{YNGZUKs%|T{QF",
+            metadata: r##"{"hash":"CQ7l3=BEle3-ZrnoeOzknSzj\u0026A,'{YNGZUKs%|T{QF","teamId":"_--/K\u003eCHVcm1LbOI}`HLtT^9'A'FnktFuAC="}"##,
             artifact_body: vec![
                 76, 119, 15, 240, 10, 195, 16, 97, 247, 16, 131, 88, 179, 92, 232, 146, 105, 133,
                 65, 254, 224, 202, 44, 160, 230, 2, 240, 76, 75, 134, 177, 106, 249, 171, 249, 58,
@@ -1272,6 +1306,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "=}.2PG28hm6FQ$J4bIR'wf5`t&J0|b<Riv^_!<Ddbqf}Ts/SlC;x)+$Q$JBF[_#&9Fpi<",
             secret_key: "c7J=38pd~!M3jE6)-yvHA9zcY6/_:,UF`)]G{[s;*%NSEA",
             artifact_hash: "TbJ)1q(CO/R*_mKgpUhc'YC~7MpW$k35N}orJu!yIi0B+sF(t",
+            metadata: r##"{"hash":"TbJ)1q(CO/R*_mKgpUhc'YC~7MpW$k35N}orJu!yIi0B+sF(t","teamId":"=}.2PG28hm6FQ$J4bIR'wf5`t\u0026J0|b\u003cRiv^_!\u003cDdbqf}Ts/SlC;x)+$Q$JBF[_#\u00269Fpi\u003c"}"##,
             artifact_body: vec![
                 105, 215, 75, 190, 143, 107, 111, 182, 166, 7, 124, 148, 17, 8, 46, 49, 95, 154,
                 205, 126, 254, 68, 159, 219, 137, 110, 119, 170, 57, 232, 162, 36, 241, 232, 141,
@@ -1298,6 +1333,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "<3cl4t7xb7h;=g^ArKq3H]e+x4%tvpL",
             artifact_hash: "kIjdhw,es6;f!v@jvzZ7rZ`Vax/|_(bT \
                             ?&PrA={A%FX::vT4f:$e!sEe.TluLNm<D^JM}Aq;Xpq,L1_Fsp",
+            metadata: r##"{"hash":"kIjdhw,es6;f!v@jvzZ7rZ`Vax/|_(bT ?\u0026PrA={A%FX::vT4f:$e!sEe.TluLNm\u003cD^JM}Aq;Xpq,L1_Fsp","teamId":"rP\u003eR52g;b\u0026R@Ti\u003c~"}"##,
             artifact_body: vec![
                 31, 221, 228, 36, 130, 19, 50, 155, 181, 72, 223, 211, 252, 162, 90, 175, 237, 233,
                 111, 32, 7, 243, 73, 45, 222, 130, 197, 164, 19, 119, 247, 19, 167, 87, 239, 176,
@@ -1337,6 +1373,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "0{EA&(=bFnCM$)[^_Z:~",
             secret_key: "G|Z#2mdL=<{{Oo-Y<cE(HG!9A<TZ^*y5<$04C%7#-d[OF=}Fn=F5j+;?B",
             artifact_hash: "eQ]s,XyP,f?088433!pUlqv.m $_CZ,",
+            metadata: r##"{"hash":"eQ]s,XyP,f?088433!pUlqv.m $_CZ,","teamId":"0{EA\u0026(=bFnCM$)[^_Z:~"}"##,
             artifact_body: vec![
                 59, 172, 152, 233, 117, 159, 146, 146, 2, 124, 245, 199, 11, 60, 253, 59, 91, 118,
                 55, 179, 221, 165, 58, 38, 19, 138, 199, 128, 230, 161, 223, 52, 34, 6, 120, 72,
@@ -1370,6 +1407,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "0Ud]$=p3s?,C&",
             artifact_hash: "A C/]D+OZ?3t:{=(LS2WNZ%d&1nRPuojNq~7;ypnc|X9^y8{c~[F>jTsvt<Bdn`/+ \
                             ^e.g/_5UBx|b]YX#BeVF",
+            metadata: r##"{"hash":"A C/]D+OZ?3t:{=(LS2WNZ%d\u00261nRPuojNq~7;ypnc|X9^y8{c~[F\u003ejTsvt\u003cBdn`/+ ^e.g/_5UBx|b]YX#BeVF","teamId":"vCu~:-fpXozVry]|dUJ"}"##,
             artifact_body: vec![
                 150, 100, 5, 8, 171, 3, 55, 180, 8, 252, 139, 207, 110, 49, 250, 72, 110, 230, 31,
                 84, 83, 72, 146, 200, 66, 166, 170, 51, 40, 22, 124, 62, 195, 3, 44, 71, 98, 241,
@@ -1408,6 +1446,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "2*[^TA>rulB@`35",
             artifact_hash: "M5JP=@c=(ak23Kk~:NVg@7nbVp,dE4K'mdyj}~).=$CkNp{aIYV0I3T,u>>_^J`eXz*!#\
                             cj,E;u!{rtfSjHBtbf",
+            metadata: r##"{"hash":"M5JP=@c=(ak23Kk~:NVg@7nbVp,dE4K'mdyj}~).=$CkNp{aIYV0I3T,u\u003e\u003e_^J`eXz*!#cj,E;u!{rtfSjHBtbf","teamId":"bsQv:5-6|qorQ|KSfp\u003epa)_^6UB-/v[oxA@[J*q)-dQUUsa/6lLjSU\u003es4g@CLCZD5z%0oL=\u003cL4VrlM?]y?"}"##,
             artifact_body: vec![
                 26, 248, 22, 139, 62, 181, 109, 160, 63, 72, 16, 127, 91, 205, 238, 70, 95, 48, 48,
                 253, 55, 112, 136, 176, 214, 161, 44, 201, 196, 110, 71, 41, 236, 154, 113, 154,
@@ -1469,6 +1508,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       f/@y(r'8Uz",
             secret_key: "&|<l]l95Ue56jDt8x6cN! M{e2p|0o/DOlvdSl",
             artifact_hash: "yKR<I4pmeeg;-Pe=fFBUQ/T995_Of|DsD}b+U!9",
+            metadata: r##"{"hash":"yKR\u003cI4pmeeg;-Pe=fFBUQ/T995_Of|DsD}b+U!9","teamId":"g/^TZUL{V/)Sd7WpAo}YmOHJqHk*6)X+4T9/.j4]5qU.`YJJB?OlT}F[xGp;^era1|={OnI2{AX\u0026f/@y(r'8Uz"}"##,
             artifact_body: vec![
                 197, 94, 35, 136, 137, 25, 101, 192, 220, 79, 8, 182, 141, 51, 17, 165, 7, 11, 117,
                 232, 196, 186, 47, 241, 12, 49, 156, 109, 70, 50, 67, 238, 110, 109, 98, 149, 39,
@@ -1503,6 +1543,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "x$.1)!b};Sx+O,)yxvmiL'V2|UVhG1PbV8|8bP_!NO-w!%{XfHAF[nWy(",
             secret_key: "F_{PcgC+fml:8^# KlZMJ72?qHny<eL.G>l#e(:^McK!gJ!DZ&Q}eA>kQmIGT9#=@m",
             artifact_hash: "l0e:G.csnas<KgCtS-L&u);j#",
+            metadata: r##"{"hash":"l0e:G.csnas\u003cKgCtS-L\u0026u);j#","teamId":"x$.1)!b};Sx+O,)yxvmiL'V2|UVhG1PbV8|8bP_!NO-w!%{XfHAF[nWy("}"##,
             artifact_body: vec![
                 136, 244, 95, 221, 38, 254, 220, 135, 2, 36, 238, 247, 122, 67, 187, 71, 22, 81,
                 86, 207, 108, 161, 244, 147, 181, 214, 3, 135, 173, 154, 87, 70, 228, 45, 27, 6,
@@ -1544,6 +1585,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          Ri{gire^?qc+HE@Ov=0D@&HcG$/dT10J>b#sV/eM,",
             artifact_hash: "ygj*P'6?$J$qMg@xTHIPHL_RX_*:M:$5S[UcScrT8(tvJKB}-Hp|:]CApk,\
                             gc(huFH=Xfi-FNv7",
+            metadata: r##"{"hash":"ygj*P'6?$J$qMg@xTHIPHL_RX_*:M:$5S[UcScrT8(tvJKB}-Hp|:]CApk,gc(huFH=Xfi-FNv7","teamId":"$H_ACYcZi4p:fUiV:WpQ{(m=WtcT$8RoVfXNk,W"}"##,
             artifact_body: vec![
                 205, 188, 215, 116, 109, 80, 128, 18, 105, 76, 124, 242, 77, 121, 66, 30, 152, 87,
                 241, 225, 52, 122, 210, 248, 38, 14, 218, 151, 208, 83, 29, 25, 216, 159, 4, 171,
@@ -1589,6 +1631,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "xU[mbOoE1=HI1IgKiB/xmq;AU}F?w^St+[p0",
             secret_key: "Q&4b@;SmzJ+{1}ou3te946B6]+s@bga*IR8T",
             artifact_hash: "2HNoPz-3A|CCXQ[@G%f!MVdH6%~8C",
+            metadata: r##"{"hash":"2HNoPz-3A|CCXQ[@G%f!MVdH6%~8C","teamId":"xU[mbOoE1=HI1IgKiB/xmq;AU}F?w^St+[p0"}"##,
             artifact_body: vec![
                 190, 171, 169, 207, 197, 221, 49, 239, 27, 219, 156, 227, 29, 235, 248, 220, 182,
                 3, 85, 82, 184, 215, 2, 183, 250, 204, 41, 236, 155, 105, 202, 160, 198, 46, 81,
@@ -1633,6 +1676,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "SD<M!!eZZA|E(q6VdP$0pr!kT~vc@9Cz=4x3UB9M?zxc80K&Wrpv*U6!X2drm",
             secret_key: "M8*K6aD,GL{m}=y.mQvKojg0N%lw!#4MQB",
             artifact_hash: "_/=vZ_Ee3]BGD)5?yCst=JRm$aCfo}EJ >b'2!M[kBP++2@=-J2,'^l%<d/A|cW2zs+",
+            metadata: r##"{"hash":"_/=vZ_Ee3]BGD)5?yCst=JRm$aCfo}EJ \u003eb'2!M[kBP++2@=-J2,'^l%\u003cd/A|cW2zs+","teamId":"SD\u003cM!!eZZA|E(q6VdP$0pr!kT~vc@9Cz=4x3UB9M?zxc80K\u0026Wrpv*U6!X2drm"}"##,
             artifact_body: vec![
                 87, 48, 129, 140, 124, 128, 126, 67, 75, 65, 118, 21, 202, 220, 197, 169, 73, 92,
                 187, 35, 95, 62, 205, 208, 120, 196, 70, 62, 233, 201, 117, 200, 241, 182, 144,
@@ -1669,6 +1713,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "VNqkp=wf>Y1@[ZV'1*JTTS)GF?e?vHRv@H=Yw3Y|FhbF]mxrL#8TpPcI+0 -s>Cw'>tP",
             artifact_hash: "xGN~49p(.@ ]EQ[::.&xUHuSc0 \
                             7Ahx~q*`C%/JLO{<3(GNYIas*3+7ak$JpgJ4Kxws)X$Ob*(J2p^iQ{",
+            metadata: r##"{"hash":"xGN~49p(.@ ]EQ[::.\u0026xUHuSc0 7Ahx~q*`C%/JLO{\u003c3(GNYIas*3+7ak$JpgJ4Kxws)X$Ob*(J2p^iQ{","teamId":"Jn`35IlU[xx)w_wPLlVBTge ;*Jw2Nj;j=Shvh.i|Z#^-v-c.u!RR05H+$cR5u~!hZc+M%l\u003eWHWV|nF$6)=%idQ-et+G%rH\u003cr8H"}"##,
             artifact_body: vec![
                 4, 95, 193, 62, 101, 51, 173, 27, 186, 12, 147, 141, 25, 127, 88, 46, 26, 114, 32,
                 212, 46, 222, 207, 136, 30, 80, 218, 31, 132, 166, 192, 231, 132, 128, 124, 120,
@@ -1693,6 +1738,7 @@ fn get_test_cases() -> Vec<TestCase> {
             artifact_hash: "F!G]XCXV$Mg0 \
                             K129P?<x9EH^C9wd0QWk].5YAOJx:aw50>C86srHf-{Y?/\
                             ^Ls~H6agqaTrnd_[jo=9~OKK&_wz",
+            metadata: r##"{"hash":"F!G]XCXV$Mg0 K129P?\u003cx9EH^C9wd0QWk].5YAOJx:aw50\u003eC86srHf-{Y?/^Ls~H6agqaTrnd_[jo=9~OKK\u0026_wz","teamId":"#p'cT}xHl}"}"##,
             artifact_body: vec![
                 101, 10, 131, 49, 31, 204, 29, 168, 56, 244, 3, 250, 219, 143, 165, 39, 242, 208,
                 118, 64, 127, 186, 250, 162, 219, 204, 21, 84, 64, 133, 225, 30, 188, 18, 171, 146,
@@ -1712,6 +1758,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: ":[:,b?&xloeyt5DPw^.ip4d'BsknvPL#PnTWi/$hdN6_,{P$`{",
             artifact_hash: "O$0a[+[rExb(o1v.=q0'Btyoq<J`h^QSe$?(2I0zjeIZddd2glPcDr5NBSw8NEZmB<a6@\
                             L:O,',#AFq*j(,`/)0e<)",
+            metadata: r##"{"hash":"O$0a[+[rExb(o1v.=q0'Btyoq\u003cJ`h^QSe$?(2I0zjeIZddd2glPcDr5NBSw8NEZmB\u003ca6@L:O,',#AFq*j(,`/)0e\u003c)","teamId":"omHU3^f$l?/dOGwOA%??2s]U R\u003c6_"}"##,
             artifact_body: vec![
                 10, 251, 50, 255, 235, 105, 126, 169, 39, 113, 141, 39, 176, 111, 239, 206, 106,
                 155, 200, 147, 161, 75, 62, 100, 233, 191, 85, 253, 222, 146, 200, 191, 198, 47,
@@ -1744,6 +1791,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "Up~qI9!id1 a{:-)^5[2)NVw8YR|]",
             artifact_hash: "LV?tUjH< Rz7J~}#0NkuK:93+<e9WG}9sW7UA]'^L+Z_`)|,POe`r,!X_-&3/~1}MUcuL?\
                             }D-*RWoT!sQ",
+            metadata: r##"{"hash":"LV?tUjH\u003c Rz7J~}#0NkuK:93+\u003ce9WG}9sW7UA]'^L+Z_`)|,POe`r,!X_-\u00263/~1}MUcuL?}D-*RWoT!sQ","teamId":"4SXr0E-WbDK%)?.*Q^[7wIhr~v~N*=AA#B1O/8ro`g]L!|,wrxVUVCI9H)XN;F\u003eO@RUJ@Ra"}"##,
             artifact_body: vec![
                 5, 141, 188, 103, 16, 200, 227, 118, 126, 221, 89, 96, 230, 187, 101, 84, 32, 123,
                 55, 125, 214, 123, 154, 130, 78, 222, 248, 193, 195, 58, 199, 222, 184, 252, 28,
@@ -1784,6 +1832,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "~~lAOX{Z:Mp 1t(:crpl:O=];&&)x90IC~7yhm?LfzkW&.66tyo&#|t1#2Y7R@`2{ \
                          ,860tSq=",
             artifact_hash: "Jw>`}6)#^C?=2+k:SHh",
+            metadata: r##"{"hash":"Jw\u003e`}6)#^C?=2+k:SHh","teamId":"|^@H.C]}27I#Fr+_r#DOm0:Xff\u003c|iCh.$/T1N^i7zi f6"}"##,
             artifact_body: vec![
                 61, 79, 226, 177, 186, 239, 93, 79, 35, 165, 254, 92, 206, 115, 254, 121, 188, 77,
                 156, 101, 136, 167, 17, 186, 115, 159, 1, 60, 166, 57, 10, 198, 200, 197, 47, 30,
@@ -1816,6 +1865,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "rso<((;86]^EfQ5G7F8=G|GE)8$sGLT@9{Q303yUtLPk46}x]UcUb{z",
             secret_key: "'6Wuhm/=oym~",
             artifact_hash: "px&2K4,rp]sD;$L3Q'%UAG7l)fyP>!=>J4eu)c72svRJW#3Kpw`5uLx1$!} ($9/i`",
+            metadata: r##"{"hash":"px\u00262K4,rp]sD;$L3Q'%UAG7l)fyP\u003e!=\u003eJ4eu)c72svRJW#3Kpw`5uLx1$!} ($9/i`","teamId":"rso\u003c((;86]^EfQ5G7F8=G|GE)8$sGLT@9{Q303yUtLPk46}x]UcUb{z"}"##,
             artifact_body: vec![
                 9, 169, 174, 4, 136, 122, 181, 28, 18, 115, 178, 43, 52, 169, 1, 127, 189, 196, 46,
                 19, 56, 221, 145, 237, 178, 238, 19, 196, 158, 128, 161, 79, 115, 251, 236, 184,
@@ -1880,6 +1930,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "VUF~g4BKSO%R@TfO_T(cWqSo_i(.1h!eNl+YUiL3rx^l3Y5i<vyB9O+Pem1EBUkcQ;* ",
             artifact_hash: "FH=vXK*ZXP0v`e;C~41Af`vUrDG^Txvc|tx-N,ne~`@d=fWs&TP=2MAW}#\
                             In4{AOrH{zi-dKDDF",
+            metadata: r##"{"hash":"FH=vXK*ZXP0v`e;C~41Af`vUrDG^Txvc|tx-N,ne~`@d=fWs\u0026TP=2MAW}#In4{AOrH{zi-dKDDF","teamId":"?zU8'Y+GulryQoG$8$5a:lERy{f6ZQ_pkUy$1LWUTybM\u003c7\u003cO4NN;gi|G27C@doLv{dWItFG{'#ox"}"##,
             artifact_body: vec![
                 107, 7, 106, 192, 241, 246, 106, 17, 86, 22, 24, 59, 65, 118, 19, 110, 84, 210,
                 167, 126, 39, 58, 33, 99, 177, 159, 154, 174, 90, 14, 29, 87, 174, 208, 72, 44,
@@ -1911,6 +1962,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "Wu1q~v?Ct1_W=IBa+,SCE$",
             artifact_hash: "Jzt:S]B3Friv)*6%5tV @0 OIj/4,IOc; x'J.>JwQP>)F^  \
                             IMr&Iuv3}?}I|z-;ypC69}LNsG5G '{bHf=b*]X [hd~",
+            metadata: r##"{"hash":"Jzt:S]B3Friv)*6%5tV @0 OIj/4,IOc; x'J.\u003eJwQP\u003e)F^  IMr\u0026Iuv3}?}I|z-;ypC69}LNsG5G '{bHf=b*]X [hd~","teamId":")~f-]R}QU}E%2NTWA4B@CZ/f'tPiyo\u003cVJ M\u0026!X%P!To7hj+!%v^cR!@lB9wF{xcR"}"##,
             artifact_body: vec![
                 6, 161, 243, 91, 230, 53, 143, 162, 235, 239, 96, 100, 101, 228, 228, 250, 20, 193,
                 29, 119, 126, 192, 14, 155, 197, 40, 191, 100, 45, 200, 44, 148, 33, 48, 162, 228,
@@ -1964,6 +2016,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "ZZ.$O$Vf43g24",
             artifact_hash: "#51h;Zp-h5Glio+A3X^5?IN-ui211sf%=Y8l4t0T6 \
                             l8HA8(wIlsB'$L#tlfiMkuUU:hk>D IGzc(GzdJxgjOe,HgOb+%:0+gP",
+            metadata: r##"{"hash":"#51h;Zp-h5Glio+A3X^5?IN-ui211sf%=Y8l4t0T6 l8HA8(wIlsB'$L#tlfiMkuUU:hk\u003eD IGzc(GzdJxgjOe,HgOb+%:0+gP","teamId":"]L]*$(R(DAc"}"##,
             artifact_body: vec![
                 8, 124, 44, 24, 227, 143, 167, 66, 223, 197, 142, 166, 208, 178, 251, 215, 106, 63,
                 150, 9, 252, 31, 30, 46, 221, 118, 98, 85, 254, 74, 170, 182, 87, 215, 149, 80, 53,
@@ -1991,6 +2044,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "efyd5zYtg4?,&~QiI,)>x;nDf \
                          cXZd3X['S~T!dwVg0,`:7RW6K~sBs6nMs2J>l_Iu0Uy^ak%9@hu?'?((a7:I#56g3a?",
             artifact_hash: "ziLmC9/R?=u",
+            metadata: r##"{"hash":"ziLmC9/R?=u","teamId":"]*-c`5hRQ`E}J^/Gx3xoYz-/S=Lvu}+u\u0026v1Xw*%0/b_eW]N=uLN)cF%\u003e(|RA-*|eR]e2Fl(\u00264Q$%xTpE\u0026)*OE.`M0\u0026}hZ"}"##,
             artifact_body: vec![
                 112, 165, 143, 37, 64, 124, 9, 252, 70, 7, 73, 191, 19, 51, 215, 76, 195, 117, 59,
                 93, 98, 132, 81, 10, 57, 115, 60, 64, 243, 57, 202, 170, 118, 47, 159, 64, 105,
@@ -2049,6 +2103,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "K)-q{I7DtanqYw \
                          S}Gx<jQaD3BAubL7%@ZzHqaq].?SuAgqH8p*E`;SlvTA@Dp=.-AG(dj}~wlyR#[IP&;vY|",
             artifact_hash: "rG7|&2Rh&*{TS89#RWfoh{",
+            metadata: r##"{"hash":"rG7|\u00262Rh\u0026*{TS89#RWfoh{","teamId":"{zvdu_3,6[O%z%kJT!GU?y_6vKuF7R"}"##,
             artifact_body: vec![
                 174, 232, 249, 117, 80, 29, 28, 183, 161, 7, 44, 61, 210, 110, 0, 107, 250, 96,
                 122, 78, 202, 230, 129, 55, 249, 231, 76, 93, 116, 133, 254, 130, 112, 118, 194,
@@ -2075,6 +2130,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "P#o_*1V|F>X--w kdCC3r#J3.#!c_]tE1/hH]$=^x(W \
                          AYhx|%;|]RsF59e+$`V#}@HA$St^GZ[NW",
             artifact_hash: "03|ixTbIs[buXU",
+            metadata: r##"{"hash":"03|ixTbIs[buXU","teamId":"s%{Lo=Jz:7 7=Z@!WhPq=/E1)1\u003e$+!cd%}}c_,y]x%Ww,{"}"##,
             artifact_body: vec![
                 125, 11, 19, 220, 159, 183, 17, 171, 56, 113, 152, 169, 5, 67, 99, 144, 37, 185,
                 88, 117, 53, 44, 191, 176, 82, 218, 100, 170, 113, 216, 175, 86, 219, 114, 159, 38,
@@ -2095,6 +2151,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "kmJ-m%#1!Rp1 :&4YfL(79AU%pSBo~^g F#=[Lr%k~.m62n7]#JG'nZA,33)k@=A;d3",
             secret_key: " ZH(21M8BBS5k_c_DsQd,pZ:fE/(@Y;?V]G)r[w/O7V<?,9MkZu",
             artifact_hash: "mJ-$LNU_143p]EZEQ(ZE2w#DuQvs@#:GRc",
+            metadata: r##"{"hash":"mJ-$LNU_143p]EZEQ(ZE2w#DuQvs@#:GRc","teamId":"kmJ-m%#1!Rp1 :\u00264YfL(79AU%pSBo~^g F#=[Lr%k~.m62n7]#JG'nZA,33)k@=A;d3"}"##,
             artifact_body: vec![
                 17, 141, 125, 27, 196, 188, 210, 130, 38, 106, 74, 163, 57, 163, 106, 73, 158, 236,
                 0, 246, 254, 247, 52, 79, 179, 73, 24, 118, 148, 241, 191, 180, 1, 8, 228, 112, 35,
@@ -2109,6 +2166,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "E.IulG*4!}SeKX#PRh:-.;7IH5[WF&Aua]wB8$knN)XN ?g@Hl]A]:'Pb Fw",
             secret_key: "'osZcDHcp0`",
             artifact_hash: "hecf4D^W#C<qAV<*l*c_dtECgr(WH/,M5?c1pt1`Yrl^j6wN$X~s}!bz8g",
+            metadata: r##"{"hash":"hecf4D^W#C\u003cqAV\u003c*l*c_dtECgr(WH/,M5?c1pt1`Yrl^j6wN$X~s}!bz8g","teamId":"E.IulG*4!}SeKX#PRh:-.;7IH5[WF\u0026Aua]wB8$knN)XN ?g@Hl]A]:'Pb Fw"}"##,
             artifact_body: vec![
                 250, 59, 50, 3, 242, 121, 172, 25, 106, 224, 138, 3, 23, 143, 126, 199, 149, 195,
                 206, 133, 117, 190, 163, 215, 149, 81, 67, 174, 66, 193, 132, 250, 137, 116, 244,
@@ -2136,6 +2194,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          N`Ao2De$e9>mCkG./}Y/U$",
             artifact_hash: " jcqM[r;)zLrcUFBI:7la|Jez07{mM \
                             i}.Of%q^Z3S#^hd68?n-kGZK<C0MX|gU@)Tfas_h*'|53r,`4091N",
+            metadata: r##"{"hash":" jcqM[r;)zLrcUFBI:7la|Jez07{mM i}.Of%q^Z3S#^hd68?n-kGZK\u003cC0MX|gU@)Tfas_h*'|53r,`4091N","teamId":"*73w|$\u003c%N@1/p.I_@M+_VJ3Bl@_VQY,=E$IcWK4Eq!VY=sB?r^_c}atpJ#G#,o?TJ6wT4LOdW$*d;c*!QU]5?hfS{V /J{}L\u003ek"}"##,
             artifact_body: vec![
                 122, 189, 210, 37, 183, 227, 11, 233, 14, 82, 21, 75, 15, 91, 175, 209, 101, 238,
                 253, 251, 118, 187, 69, 107, 109, 68, 149, 140, 223, 104, 185, 117, 150, 203, 13,
@@ -2165,6 +2224,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "I+1;r;#+l7}ZD:ao&x$d(4FD",
             secret_key: "giDMFc~Z^G>$Dm#AI0#e=?(f1yi(W59]0.cd",
             artifact_hash: "N/Zki,$3rCf}Q?b<&?(T!^",
+            metadata: r##"{"hash":"N/Zki,$3rCf}Q?b\u003c\u0026?(T!^","teamId":"I+1;r;#+l7}ZD:ao\u0026x$d(4FD"}"##,
             artifact_body: vec![
                 196, 14, 110, 218, 99, 179, 39, 7, 181, 177, 238, 16, 234, 148, 248, 64, 181, 167,
                 44, 63, 76, 56, 203, 62, 103, 218, 99, 253, 253, 197, 87, 237, 54, 100, 141, 125,
@@ -2192,6 +2252,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       a$EI?Kz~`Y9@%nnJ^X^",
             secret_key: "#yMq`tCo$]5E[R]ULEN(:V98ytL",
             artifact_hash: "I9)W)HHq>+b_U9`joXTB<7x m-iL_jO'O`O.^(/~5=a^c'4AMD Q#tX,Z18UP",
+            metadata: r##"{"hash":"I9)W)HHq\u003e+b_U9`joXTB\u003c7x m-iL_jO'O`O.^(/~5=a^c'4AMD Q#tX,Z18UP","teamId":"Gg??$r_M%B1lrny3 c:YK/,ooAZT[Ds5nP!t(rZS3k6c_J+#0P$lAszFU: a$EI?Kz~`Y9@%nnJ^X^"}"##,
             artifact_body: vec![
                 8, 253, 5, 54, 44, 0, 214, 170, 133, 59, 22, 85, 104, 178, 130, 228, 81, 11, 206,
                 159, 171, 40, 94, 152, 170, 25, 65, 180, 179, 25, 244, 69, 244, 21, 120, 80, 10,
@@ -2234,6 +2295,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "qxEK]f0lGBr4} X&&${x}RX~r(PE$d,=",
             secret_key: "W1H.Txw2/Vi9@Ous",
             artifact_hash: "|Z k5I`#1IIGii^`.;p]3[@kL'JyaR=4ZiGlQZ83&==@/!o~ t|J`",
+            metadata: r##"{"hash":"|Z k5I`#1IIGii^`.;p]3[@kL'JyaR=4ZiGlQZ83\u0026==@/!o~ t|J`","teamId":"qxEK]f0lGBr4} X\u0026\u0026${x}RX~r(PE$d,="}"##,
             artifact_body: vec![
                 49, 249, 159, 247, 249, 202, 148, 201, 207, 210, 145, 120, 120, 57, 112, 158, 179,
                 168, 187, 188, 32, 219, 127, 138, 74, 48, 18, 1, 79, 57, 23, 156, 43, 68, 55, 255,
@@ -2265,6 +2327,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "rl6uPw~|UNLI3zoZD@RJ^b5iwBlD4ZfGpdX|.- n|a@+tTc1A",
             artifact_hash: "m WCC%l(@^p13YU=!pe@N4]u8Pf:bI3%+vsh[C%.eX~c^E5_Xrv+= \
                             No$iU/B:E|n6&Y62;HXWzz@9EMP|Nh15",
+            metadata: r##"{"hash":"m WCC%l(@^p13YU=!pe@N4]u8Pf:bI3%+vsh[C%.eX~c^E5_Xrv+= No$iU/B:E|n6\u0026Y62;HXWzz@9EMP|Nh15","teamId":"F2.AVzr1BeeR"}"##,
             artifact_body: vec![
                 19, 83, 233, 234, 142, 234, 3, 121, 42, 15, 188, 140, 98, 40, 109, 250, 91, 71, 50,
                 249, 107, 189, 204, 217, 148, 94, 76, 108, 97, 11, 58, 131, 67, 122, 131, 91, 128,
@@ -2299,6 +2362,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "vGv2OyioM#;)goed7pHy)cf<Et{2*z0qQG<z7;E1aEfC(dOS n!ac:-d)T&>,#",
             secret_key: "#-UM. >Z%} * (X+-cwscGfE<VQ|0%U=6G67",
             artifact_hash: "C.W%nP2jYg,%gn{eo:)ss<v6V3Hv`JD:cc[;K7e01c",
+            metadata: r##"{"hash":"C.W%nP2jYg,%gn{eo:)ss\u003cv6V3Hv`JD:cc[;K7e01c","teamId":"vGv2OyioM#;)goed7pHy)cf\u003cEt{2*z0qQG\u003cz7;E1aEfC(dOS n!ac:-d)T\u0026\u003e,#"}"##,
             artifact_body: vec![
                 163, 154, 167, 1, 2, 185, 171, 124, 214, 210, 123, 239, 164, 58, 144, 27, 215, 133,
                 185, 211, 223, 237, 28, 29, 98, 229, 26, 37, 1, 90, 40, 156, 220, 196, 0, 235, 17,
@@ -2341,6 +2405,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "F=[EqX#Yd}<QD>n^h/oFio@mNwqTY0f}4v93N(axKj:0mteqC+/2J2t|+0;vQ+=}A#QP \
                          D|rOW}xPqJ",
             artifact_hash: "7S3}x5c1!l:Tn+g3KjPOu#kY%B|gEiT1=f!h?9[~<R9jlbzzz|R/m",
+            metadata: r##"{"hash":"7S3}x5c1!l:Tn+g3KjPOu#kY%B|gEiT1=f!h?9[~\u003cR9jlbzzz|R/m","teamId":"4yeo`V^t`IChi$+j55(dv2z,.Qn"}"##,
             artifact_body: vec![
                 103, 214, 101, 226, 160, 100, 62, 241, 136, 225, 112, 137, 244, 40, 203, 115, 3,
                 88, 100, 254, 212, 101, 89, 19, 93, 22, 31, 48, 157, 177, 12, 213, 195, 20, 11,
@@ -2390,6 +2455,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "z@Ar^y&{O7BOI>2}GZ377*Ge0y)_1X59UhEX|oaGa46Xyi/w/)oAFGSS:T",
             artifact_hash: "~Z(>T.9K*,+v'k;e.ys_Kgjan<=n46%}m~{n(LES+0v'f18&h # \
                             _-.3$EK>Kfw1kF<%o~CS9+",
+            metadata: r##"{"hash":"~Z(\u003eT.9K*,+v'k;e.ys_Kgjan\u003c=n46%}m~{n(LES+0v'f18\u0026h # _-.3$EK\u003eKfw1kF\u003c%o~CS9+","teamId":"=%m;2Lt9?~E~;|,hDxNh*x+\u003eJs* )2WajS`Fbd=2.xXusKy?1vIHl5.n78=d\u003c\u0026)8T9F_;HRK/\u00268I"}"##,
             artifact_body: vec![
                 9, 198, 93, 206, 248, 229, 241, 169, 79, 34, 33, 216, 85, 208, 225, 90, 33, 225,
                 137, 152, 64, 43, 114, 156, 7, 53, 13, 167, 211, 179, 255, 207, 156, 186, 139, 47,
@@ -2406,6 +2472,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "Z/e!Z]|z/Ua +@J>Q.L0o0<NbK~_U%G`oPVacx:cd!FjPrq-8GipE",
             secret_key: "Lmf_vL2  lCG%UX>YE?P_N}9+ L-Z@K<)R}q,~$",
             artifact_hash: "~v&8=K=/:Lbfp3_FaHJ7_7fRoL1)PI#lQQs'.xMHYb2%,V9lC]aI0U(4z?@FI^~hYdS/D",
+            metadata: r##"{"hash":"~v\u00268=K=/:Lbfp3_FaHJ7_7fRoL1)PI#lQQs'.xMHYb2%,V9lC]aI0U(4z?@FI^~hYdS/D","teamId":"Z/e!Z]|z/Ua +@J\u003eQ.L0o0\u003cNbK~_U%G`oPVacx:cd!FjPrq-8GipE"}"##,
             artifact_body: vec![
                 11, 32, 34, 116, 198, 78, 221, 210, 238, 183, 165, 0, 123, 18, 146, 124, 186, 190,
                 216, 83, 142, 120, 69, 111, 183, 31, 12, 244, 93, 64, 147, 57, 59, 184, 94, 62, 86,
@@ -2423,6 +2490,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "^9')sCcuIJ+h8l[(w.1`A/HSc))?-. yl4buK>bu#=8=",
             secret_key: "Wf9_tZPRRvc{`VIrkBWqwhA^0 Mv4*1uJhGhj]`,QPd",
             artifact_hash: "^2`{Q$(ub_tcEX?;yNiL",
+            metadata: r##"{"hash":"^2`{Q$(ub_tcEX?;yNiL","teamId":"^9')sCcuIJ+h8l[(w.1`A/HSc))?-. yl4buK\u003ebu#=8="}"##,
             artifact_body: vec![
                 240, 116, 17, 217, 195, 211, 118, 109, 72, 20, 5, 32, 152, 61, 13, 98, 125, 180, 6,
                 207, 144, 48, 193, 57, 101, 200, 51, 17, 180, 108, 119, 130, 166, 175, 203, 38,
@@ -2473,6 +2541,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "e<aFU!(X#s]O'WOm)",
             secret_key: "f6XhNJ<d-t{a*~9R]~{>wlyoJj:2,]`x*G1R+/bqdswCYW5vMC?u`et[1B+R",
             artifact_hash: "H%M8,%T,XO?p*4y;*+p#v!?aWHKT+k0,Np_~V'FeB Y#s",
+            metadata: r##"{"hash":"H%M8,%T,XO?p*4y;*+p#v!?aWHKT+k0,Np_~V'FeB Y#s","teamId":"e\u003caFU!(X#s]O'WOm)"}"##,
             artifact_body: vec![
                 89, 215, 24, 5, 22, 43, 245, 52, 41, 145, 118, 97, 192, 109, 148, 223, 70, 55, 245,
                 237, 0, 46, 109, 199, 227, 94, 107, 8, 58, 62, 100, 84, 85, 230, 107, 223, 150,
@@ -2499,6 +2568,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "}4Js+i*wG!/Q}-;GsR,){Ffwk,TeicfKfIc(7,UC^^cv:`F5HzLe$+pc1Gq.QTa5{AdRo.\
                          qUmqaN2[KoT.",
             artifact_hash: "'Y;bD-qfx[&V$c''KSx[RPjQr6+W.Oy;%iUG~1aATpUxY~+:$'VS!`L_yAj",
+            metadata: r##"{"hash":"'Y;bD-qfx[\u0026V$c''KSx[RPjQr6+W.Oy;%iUG~1aATpUxY~+:$'VS!`L_yAj","teamId":"dJ]E9esB475e\u003cevEU46Z-{oKX2-S.T\u003ed%"}"##,
             artifact_body: vec![
                 227, 184, 172, 44, 15, 155, 196, 193, 49, 7, 218, 57, 37, 135, 111, 148, 65, 164,
                 197, 20, 137, 31, 204, 239, 73, 43, 228, 56, 220, 51, 180, 6, 7, 10, 163, 41, 62,
@@ -2541,6 +2611,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       LrH+c}I$82h<a5hv'pToD.<~|%",
             secret_key: "jLR^o}YW=ui|JeI39UZG8f*4 :V0W3D&~C`41Fpw|7I~eGz<78n:j'P^6!FHcAwaT0_xBUz4i",
             artifact_hash: "#s`ej8x'OH!#%n|v gUi",
+            metadata: r##"{"hash":"#s`ej8x'OH!#%n|v gUi","teamId":"yDwv5B$[@34d(SPmiHi\u0026TsB._8I~.{C0n+D4ciKAyLT!XKQaYga`/Tl('SvxGy'}ko2IK5 LrH+c}I$82h\u003ca5hv'pToD.\u003c~|%"}"##,
             artifact_body: vec![
                 238, 78, 177, 105, 37, 148, 13, 128, 58, 100, 128, 252, 132, 57, 27, 107, 228, 159,
                 6, 248, 219, 25, 243, 191, 125, 189, 236, 98, 183, 200, 7, 120, 183, 24, 195, 237,
@@ -2569,6 +2640,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "c(P?K%^BTTQN4qwS8AcY QT%/or9'Uj1)u#l%OV",
             artifact_hash: "(ATtF?IY_td)rf6g(SFVCR|!'SWb \
                             %s~9]S5~zKW&48yaGFInu5M))gT97On.Wfs|3K$|r)ZP=rNhcqV7",
+            metadata: r##"{"hash":"(ATtF?IY_td)rf6g(SFVCR|!'SWb %s~9]S5~zKW\u002648yaGFInu5M))gT97On.Wfs|3K$|r)ZP=rNhcqV7","teamId":"9%+ZI~G8U,0S3er[FpGuRMV#^ +Ff\u003emK7p-,%+%i11FSij?UIVKb)Zqz?Q|caJ"}"##,
             artifact_body: vec![
                 147, 68, 119, 59, 42, 31, 181, 108, 196, 140, 173, 4, 144, 62, 23, 2, 250, 68, 154,
                 19, 175, 165, 68, 255, 184, 160, 14, 38, 4, 194, 44, 109, 193, 143, 107, 154, 157,
@@ -2595,6 +2667,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       tS1XciSNsTB?BsB cn[f",
             secret_key: "@>tMr>Nnv1&<1@|`trgpGy{vK4eS",
             artifact_hash: "(KdCo,#KmWPm4",
+            metadata: r##"{"hash":"(KdCo,#KmWPm4","teamId":"iUTn*08(D}H4BqCu@*N4vw.Z6HeZ7b19-E8.qA+\u0026]]?_OlsC_2^1Y*~Zm6od!M_Hw(*uw#tS1XciSNsTB?BsB cn[f"}"##,
             artifact_body: vec![
                 127, 59, 55, 12, 237, 135, 46, 203, 135, 5, 91, 246, 229, 50, 167, 239, 188, 178,
                 29, 203, 152, 184, 226, 73, 248, 191, 68, 101, 186, 240, 133, 88, 164, 94, 112, 18,
@@ -2611,6 +2684,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: " I3=`9A(@e#LtxVCW89DN'L3Ztfn#JJ!&NQ5W !/~[KaCb5D-",
             secret_key: "j0q&C1;<W4-_&$lw+GFAQyy=F*xAl9bU:Xqhd7XUau^{4jMszvXM@Q]EV|?{FG40u",
             artifact_hash: "R-TEIcZrWKLbyBwX26ZU/8}bO/?upfzW9+)Gl~e@H<yT0c8s",
+            metadata: r##"{"hash":"R-TEIcZrWKLbyBwX26ZU/8}bO/?upfzW9+)Gl~e@H\u003cyT0c8s","teamId":" I3=`9A(@e#LtxVCW89DN'L3Ztfn#JJ!\u0026NQ5W !/~[KaCb5D-"}"##,
             artifact_body: vec![
                 28, 95, 134, 224, 19, 162, 147, 180, 48, 122, 174, 163, 201, 129, 167, 89, 163,
                 120, 120, 173, 113, 107, 89, 190, 244, 208, 227, 192, 24, 125, 95, 117, 0, 129,
@@ -2650,6 +2724,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "<J+H3@ylC?9SO*<a6K}S<w{TqORZmPt&p#`.hXj!)6dr#*zPkPFFD#Z:T2{kpZO}}vQ,e%\
                          1Nf?1F(v?E]^|.ix%Aa2*k^9",
             artifact_hash: "Q athQtb;sLK9?A)3J[%Y_nEPUuissfr@!xPHTa.kDu&W ;_`As#>`o<cm$7'p7`IZ{eiI",
+            metadata: r##"{"hash":"Q athQtb;sLK9?A)3J[%Y_nEPUuissfr@!xPHTa.kDu\u0026W ;_`As#\u003e`o\u003ccm$7'p7`IZ{eiI","teamId":"\u0026bFqZn]b6z@64VnH}Mm:\u0026#LCu+%}u)K.f4Ub'*(Qv\u0026\u0026[IQjT:kGf8SrMJ+Lq:6Nj:Jlr@OJddp!Z+kU'es|?{JlYgQ3a"}"##,
             artifact_body: vec![
                 40, 181, 242, 55, 84, 32, 124, 201, 106, 201, 164, 76, 28, 33, 78, 65, 83, 113, 94,
                 60, 182, 171, 154, 132, 26, 115, 248, 144, 171, 63, 124, 118, 145, 240, 56, 184,
@@ -2708,6 +2783,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "R18D:-(:31l;{?U9>?:0vAi,8ES{9yKBlW",
             secret_key: "Gy~cD+l1z3n1gT}^LH;$0vQ(O~2xPb){#;00sV2Z(lGe#$C:~J)]Yn",
             artifact_hash: "|L'U|wGA9SS~ S",
+            metadata: r##"{"hash":"|L'U|wGA9SS~ S","teamId":"R18D:-(:31l;{?U9\u003e?:0vAi,8ES{9yKBlW"}"##,
             artifact_body: vec![
                 254, 160, 81, 167, 158, 115, 187, 21, 214, 180, 138, 191, 72, 41, 152, 123, 169, 5,
                 219, 37, 129, 73, 74, 147, 171, 167, 138, 107, 245, 158, 184, 15, 243, 237, 221,
@@ -2772,6 +2848,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "VFIWcU$T _q{Q awkz*kw!sSkKK6m)@Ee8 \
                          (U1pZNX?Z'[;}!.D3~,v}f{_H`YmHqD^w[G1gBj-Qz<-0LPo03}''us",
             artifact_hash: "KG&1LR`  dO^|D@]Lb@9`GkOo.kwOlQKbtf__?Ph|;l~v",
+            metadata: r##"{"hash":"KG\u00261LR`  dO^|D@]Lb@9`GkOo.kwOlQKbtf__?Ph|;l~v","teamId":"iM`[Dd;to~)~ZWA^v52o99OW0Ruu2w#4f$Z}BoKi)3GUkL]Vf%JDf"}"##,
             artifact_body: vec![
                 24, 203, 206, 141, 149, 52, 17, 144, 214, 221, 7, 234, 210, 167, 57, 168, 186, 130,
                 114, 186, 215, 0, 203, 2, 79, 138, 87, 25, 15, 60, 37, 42, 214, 135, 97, 202, 39,
@@ -2836,6 +2913,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: ">:?c?VfNi-zz<GV_4spS Q \
                          c<4FV!T}Mc#~)*tVW74Cy57VLlffd)1XpYq&iz}!{wXS}H8oGyh~p~lMM+q6",
             artifact_hash: "l*ft5pXonrH]x2W!I[EM:/Jpo+iu!C);lH<K#di_?e$3,[",
+            metadata: r##"{"hash":"l*ft5pXonrH]x2W!I[EM:/Jpo+iu!C);lH\u003cK#di_?e$3,[","teamId":"#6_AU!oOx~pV2TKq_R+TBGSTzo|d;NWpGA$L{DJ/S#.$yOSPGBPr'5}[)K;{XW\u0026!ilcxx0Ef"}"##,
             artifact_body: vec![
                 3, 205, 222, 81, 11, 4, 231, 212, 167, 178, 73, 114, 219, 204, 44, 164, 209, 47,
                 204, 76, 179, 93, 232, 215, 209, 33, 20, 99, 64, 199, 39, 6, 142, 18, 55, 161, 193,
@@ -2892,6 +2970,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: ");qJvxp^rOy_P.UjegszMY](dr]F:y:a]1UA`!bXF8qu:KKWGy;. \
                          gu,PlQF(<bEfCr`|s[!Ae*<;A>o$u ayd",
             artifact_hash: "5bGAZ(OG=wRs5iw D+.?GeF/Zt)-9&===>;FnoT+UhiwS-&,A5.L%iuK=q=~wrYJ|se",
+            metadata: r##"{"hash":"5bGAZ(OG=wRs5iw D+.?GeF/Zt)-9\u0026===\u003e;FnoT+UhiwS-\u0026,A5.L%iuK=q=~wrYJ|se","teamId":"DT:.~t.!{@q_/wMM@0"}"##,
             artifact_body: vec![
                 50, 168, 224, 223, 2, 186, 30, 54, 56, 227, 90, 52, 102, 137, 158, 20, 228, 176,
                 24, 33, 187, 244, 0, 110, 250, 99, 213, 204, 166, 25, 181, 120, 223, 152, 183, 238,
@@ -2953,6 +3032,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "7![5Ts2u+z%bI9Z/AR$K-ad=j~^-RF_!nQM={klxZG-yTg_OyOWg9-)ENz3nhERl<0N:$ \
                          EO~uzd3kM]C#M2D0}m{~%_>~,4",
             artifact_hash: "(F7B^K5t^lR`SGuM;*>_o~-8^{l8Xq~p7Ia5?F:<-p-Xe]Db*CH~Y)`0",
+            metadata: r##"{"hash":"(F7B^K5t^lR`SGuM;*\u003e_o~-8^{l8Xq~p7Ia5?F:\u003c-p-Xe]Db*CH~Y)`0","teamId":"G)l\u003cX^1Aj4ZoNcI!rY\u0026g@WO=,'|yFyI1\u0026}rYL`sjIN-\u003cPa_uH+LOBy/}l$BY"}"##,
             artifact_body: vec![
                 101, 115, 26, 63, 255, 96, 246, 88, 242, 42, 63, 90, 207, 193, 201, 238, 88, 36,
                 122, 171, 164, 70, 205, 99, 235, 202, 227, 144, 214, 54, 166, 136, 61, 114, 175,
@@ -2980,6 +3060,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "EP&Tz_4{v^bU/ir-e$5U3kT8^G(?+tj;H7W[F2:l oOI?CD-'Y@$!.'AQ",
             secret_key: "n_q7p%4%<z UJeD{W`mG#[r2Ek:V ?FymCx[]sGpwMAt>Bt",
             artifact_hash: "eR|._#h$GqWG",
+            metadata: r##"{"hash":"eR|._#h$GqWG","teamId":"EP\u0026Tz_4{v^bU/ir-e$5U3kT8^G(?+tj;H7W[F2:l oOI?CD-'Y@$!.'AQ"}"##,
             artifact_body: vec![
                 185, 143, 209, 145, 235, 243, 36, 216, 20, 199, 54, 57, 182, 252, 75, 10, 66, 13,
                 210, 82, 2, 35, 63, 255, 144, 25, 142, 203, 211, 228, 210, 4, 92, 83, 127, 206,
@@ -3011,6 +3092,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "QD6x4wH=NLwQ9E+2(I",
             secret_key: "WWRO@~r0M^5?]7CTy+w-~6uEx9h8i^'4jc1h",
             artifact_hash: "x,%?-1qce}F.9aw/HZMt!Wa< F@]+fcel>TTI(Rfq(y8xUato;bxeYeC",
+            metadata: r##"{"hash":"x,%?-1qce}F.9aw/HZMt!Wa\u003c F@]+fcel\u003eTTI(Rfq(y8xUato;bxeYeC","teamId":"QD6x4wH=NLwQ9E+2(I"}"##,
             artifact_body: vec![
                 34, 209, 62, 194, 105, 8, 18, 0, 230, 138, 84, 160, 147, 157, 162, 27, 249, 120,
                 143, 188, 73, 246, 176, 124, 132, 241, 254, 38, 236, 38, 13, 172, 234, 150, 31,
@@ -3061,6 +3143,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "GB/i#Ns3Ju0V[gH<e s=|3RPEJ{h(e_??4:e",
             artifact_hash: "KJp__u8r)apFlv,fK*ZhCe+s'UNyxa!BP.z{W5>B4LsZ/Yob=S-8T`OJAR@DZF{;D:VXQ#\
                             ,Z>Rt,izEN`4K{:4",
+            metadata: r##"{"hash":"KJp__u8r)apFlv,fK*ZhCe+s'UNyxa!BP.z{W5\u003eB4LsZ/Yob=S-8T`OJAR@DZF{;D:VXQ#,Z\u003eRt,izEN`4K{:4","teamId":"y'h@0!vp28|PWv;RyH@fJ|G KAUGR,z*]2y3A;o8DrYIkxP;\u003eAy|S=.xe@@\u003e.0av0Vq;D[Wy.+3[|\u003eCLMC7:4M+b\u0026:ipVZB\u003c"}"##,
             artifact_body: vec![
                 133, 118, 35, 210, 234, 62, 187, 212, 206, 201, 37, 100, 150, 52, 197, 2, 34, 205,
                 184, 183, 20, 137, 122, 59, 148, 231, 230, 118, 41, 100, 186, 40, 115, 227, 155,
@@ -3085,6 +3168,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "`y%8/msSKsa>'{lF4||8h=)G8[1~JEKOC!kq+)=|1DcMOB6+Rl%L^o^o|Kcf+z \
                          fuSmAd.AYf/Q:.utKl",
             artifact_hash: "%vt1OgSlGkLJ%#",
+            metadata: r##"{"hash":"%vt1OgSlGkLJ%#","teamId":"'=6N9cQhW+x*_5mJ)AX@=BYWCoL/i-"}"##,
             artifact_body: vec![
                 38, 88, 95, 24, 188, 137, 211, 218, 172, 180, 96, 219, 188, 76, 8, 217, 223, 200,
                 63, 173, 186, 5, 35, 17, 236, 180, 41, 104, 132, 209, 98, 130, 84, 124, 234, 234,
@@ -3106,6 +3190,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "FqV^IvO7!CPXt*HvqzuDoptC;BQT21Y6xPaR=Nk/9I'f/v,}}<p!fs,EBq(YEDWj?X/q4*0",
             secret_key: "VXWM,MS~# `<cDQ ",
             artifact_hash: "VldwJ:2GJd9x7q{naje.fjh.Pl}W[fsr4n5K(",
+            metadata: r##"{"hash":"VldwJ:2GJd9x7q{naje.fjh.Pl}W[fsr4n5K(","teamId":"FqV^IvO7!CPXt*HvqzuDoptC;BQT21Y6xPaR=Nk/9I'f/v,}}\u003cp!fs,EBq(YEDWj?X/q4*0"}"##,
             artifact_body: vec![
                 43, 69, 56, 150, 166, 103, 86, 127, 43, 166, 93, 224, 102, 7, 13, 145, 111, 255,
                 178, 83, 237, 210, 168, 1, 208, 57, 169, 134, 238, 29, 25, 183, 63, 197, 146, 203,
@@ -3131,6 +3216,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "+%re3B+;&'/2??",
             artifact_hash: "VM*lZ>s;`S0Fic2Y107YTF`my$EraDe%x;tYA8xl)H0K^Gu'U-D7RR<Yf9xqusJH~2kg&\
                             gm@___&|+9~-/RC=BE$-C",
+            metadata: r##"{"hash":"VM*lZ\u003es;`S0Fic2Y107YTF`my$EraDe%x;tYA8xl)H0K^Gu'U-D7RR\u003cYf9xqusJH~2kg\u0026gm@___\u0026|+9~-/RC=BE$-C","teamId":"cdcV\u00262CbEf(A "}"##,
             artifact_body: vec![
                 197, 61, 156, 101, 30, 207, 4, 187, 49, 177, 21, 60, 229, 100, 76, 222, 47, 197,
                 237, 80, 12, 35, 185, 62, 43, 107, 144, 125, 163, 43, 180, 164, 50, 72, 113, 146,
@@ -3154,6 +3240,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "m@IKC)kuCoDda~8m{~jgH&>s>~Wx4?S$V;wQ,1y6Zy?nr=U-Et}1L(Xz{W/hEbefp!",
             artifact_hash: "z]Or;76 o?f6|V.(fCb(j~6{aqROX%+'4IHaRd] \
                             ^uoCi5h,(&rBr'pP'}+TzE+'q(2*Nrq0;uJ^1",
+            metadata: r##"{"hash":"z]Or;76 o?f6|V.(fCb(j~6{aqROX%+'4IHaRd] ^uoCi5h,(\u0026rBr'pP'}+TzE+'q(2*Nrq0;uJ^1","teamId":"'~?A\u0026mt\u0026gH$%:2t^x~L\u0026NC]m#8["}"##,
             artifact_body: vec![
                 83, 236, 63, 134, 194, 74, 228, 218, 222, 137, 158, 161, 55, 155, 252, 64, 222,
                 130, 112, 167, 30, 59, 215, 243, 205, 123, 34, 189, 225, 228, 227, 12, 139, 217,
@@ -3201,6 +3288,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          C&X%6|PB2}O[Ol_,)W=Qx",
             artifact_hash: "8?a$hL0'=y,dE?rgE_KI2}=Nl/9a%rXofm2~>7,*\
                             UDuIt[O=|~Cy[xqtz5jv^XL_FHENdK)%dk_~l#Jf9p",
+            metadata: r##"{"hash":"8?a$hL0'=y,dE?rgE_KI2}=Nl/9a%rXofm2~\u003e7,*UDuIt[O=|~Cy[xqtz5jv^XL_FHENdK)%dk_~l#Jf9p","teamId":"7bJ4C.~8eo@D`+2|+i$S,K^jN$[1cF7r?.4I_vk\u0026.A\u003esdYu{|6v'owSA^[W|0Xsr3l][^drRmSmqq"}"##,
             artifact_body: vec![
                 93, 115, 185, 193, 111, 223, 251, 149, 98, 227, 91, 12, 225, 117, 92, 249, 65, 211,
                 1, 205, 246, 239, 109, 221, 180, 104, 242, 235, 96, 243, 128, 119, 114, 232, 161,
@@ -3255,6 +3343,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       Bn+3`w+/",
             secret_key: "9rA[yOziA#j22& qPfcfuxLk 9h1>R>C&{!PEa3[g!me8wDw=b%3K=K5a0 JtvL'>jX~j'",
             artifact_hash: "U|60-a7joh@J#|hs}Ev2;z!'PcCgSBr$INMp6PSEovC$@{2fk79+?y<So5hr-H",
+            metadata: r##"{"hash":"U|60-a7joh@J#|hs}Ev2;z!'PcCgSBr$INMp6PSEovC$@{2fk79+?y\u003cSo5hr-H","teamId":"([y[jgH.!pdx]gui~M9=sG`Fjnz9t24[;fE9Jd5wo*r`|i'#e-ggT?r\u003e:jTmSoRo~]4@EsC*/Bn+3`w+/"}"##,
             artifact_body: vec![
                 138, 77, 146, 246, 56, 148, 0, 21, 129, 209, 136, 35, 185, 223, 189, 54, 187, 135,
                 24, 62, 152, 56, 64, 196, 181, 187, 79, 48, 18, 136, 195, 29, 101, 143, 190, 103,
@@ -3284,6 +3373,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       Td]]7K&ZhUkJS[lhoaA<.^g3",
             secret_key: "QkF}>TS#iO18qa~mC0uq$z`SXoc5e;'5G4s,]/!)3m",
             artifact_hash: "/93$?nBJ@f^| v/}J3af*{N+jJF:BFU(",
+            metadata: r##"{"hash":"/93$?nBJ@f^| v/}J3af*{N+jJF:BFU(","teamId":"_Ye/@5qo8,|V-m,An=$}NFZKVY#`lBKgo+xT|c6JQ_1B!**t!c[j]\u003cW*Z\u0026$V%,`u/e/Oq6,Td]]7K\u0026ZhUkJS[lhoaA\u003c.^g3"}"##,
             artifact_body: vec![
                 81, 79, 254, 235, 232, 87, 247, 212, 228, 201, 18, 199, 9, 63, 79, 81, 41, 206, 49,
                 129, 133, 38, 73, 148, 203, 211, 115, 224, 225, 165, 49, 138, 222, 218, 62, 37, 10,
@@ -3330,6 +3420,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: "]R sERcS#<Gk:D+Z-z|7T#a!j#]9uf!Zx6:p77-zV-A[`QwRr^I]z6@e*BYde<S=IGD**m/ ",
             secret_key: "!7Z0 .20]3ju$,alW*X,g>zN$jRS.O ofv*>Z<^22k@xvE(a9r!nGLO7jNMQ!,3GSmew",
             artifact_hash: "p |kAm@{L]]Cm4jlc_t=I}`eSooDO'6/e*LapqB",
+            metadata: r##"{"hash":"p |kAm@{L]]Cm4jlc_t=I}`eSooDO'6/e*LapqB","teamId":"]R sERcS#\u003cGk:D+Z-z|7T#a!j#]9uf!Zx6:p77-zV-A[`QwRr^I]z6@e*BYde\u003cS=IGD**m/ "}"##,
             artifact_body: vec![
                 50, 146, 167, 88, 121, 213, 245, 200, 244, 236, 34, 157, 233, 159, 43, 168, 160,
                 216, 240, 1, 140, 64, 141, 110, 193, 169, 157, 19, 230, 235, 233, 144, 35, 136,
@@ -3359,6 +3450,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          spPatLXGR<<)Q(NIeyG2> '3@[I! =`}>[iovEDK;f",
             artifact_hash: "!!^0UDNMdEI`Ozi;Dx@GeU3h*}#-]'z'2h4$N^-/Mc&i*ClUYTF6(R<Ttl3wVtx8[d&\
                             vXwYgeg0 6V[f+fwPqYp{g-_itn&7",
+            metadata: r##"{"hash":"!!^0UDNMdEI`Ozi;Dx@GeU3h*}#-]'z'2h4$N^-/Mc\u0026i*ClUYTF6(R\u003cTtl3wVtx8[d\u0026vXwYgeg0 6V[f+fwPqYp{g-_itn\u00267","teamId":"O`78u`vQ;wX2K%IOT+]}nwRyEki;r|\u003cOAyr.n#SKzv"}"##,
             artifact_body: vec![
                 148, 229, 59, 28, 244, 253, 180, 159, 217, 56, 127, 141, 133, 3, 201, 99, 209, 143,
                 95, 117, 11, 104, 14, 5, 155, 50, 84, 172, 204, 46, 125, 16, 230, 214, 7, 89, 62,
@@ -3423,6 +3515,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "aY*mo1}#Y+bI.#FtOMYLclap>2NmH25%B[]@]:E*Ee",
             artifact_hash: "g7.&#8opFlP,#(m|zw;Q)_qwl9oLM>m+q]:gbt)[<%H;{9R@Yav)P*)h.\
                             z^=CRJUp=V{{R$X`%-y^T8]",
+            metadata: r##"{"hash":"g7.\u0026#8opFlP,#(m|zw;Q)_qwl9oLM\u003em+q]:gbt)[\u003c%H;{9R@Yav)P*)h.z^=CRJUp=V{{R$X`%-y^T8]","teamId":"\u0026a1-h^LusgDzq_Iw\u003c7lZ]\u003efE:E5=eRF6!@d.vBF+\u0026H*BB%!\u003cpxPyxdP-Vk/eB1:2?"}"##,
             artifact_body: vec![
                 49, 106, 32, 10, 162, 220, 254, 39, 89, 112, 220, 136, 178, 223, 225, 232, 73, 254,
                 204, 136, 206, 209, 54, 104, 252, 113, 181, 239, 208, 168, 131, 244, 246, 28, 176,
@@ -3485,6 +3578,7 @@ fn get_test_cases() -> Vec<TestCase> {
                          RAAQ!EZ2.Jn:u!X7pQ0(,x:Yl]G`;/;rcq=3:=@1F`@wd9,39DT/O",
             artifact_hash: "U2`v67&-,uq*7l30y]16el5LFp6oL2oA,<sVtznW~ag5{M2W \
                             L[Z>H`5bt(#6X~'FS:6,ijk",
+            metadata: r##"{"hash":"U2`v67\u0026-,uq*7l30y]16el5LFp6oL2oA,\u003csVtznW~ag5{M2W L[Z\u003eH`5bt(#6X~'FS:6,ijk","teamId":"|.WPw+xoL)RfF7bEJHaLBa-B*c\u0026o)rRHw^!$[4Tf)@RKk=|0MA\u003er|'Jg_6\u003ebFxUK%D\u003eLd"}"##,
             artifact_body: vec![
                 240, 53, 184, 158, 159, 159, 1, 5, 101, 69, 231, 107, 17, 218, 104, 161, 199, 70,
                 227, 148, 137, 38, 201, 239, 142, 238, 136, 35, 59, 70, 81, 96, 13, 127, 15, 172,
@@ -3546,6 +3640,7 @@ fn get_test_cases() -> Vec<TestCase> {
                       Z=]XPGe]BUWxsTv&7Lu7y(>Hl77pr0%TBzM i",
             secret_key: "@>AND9nY/9;^GNL)L+&",
             artifact_hash: "~9T<d.~/&OOR'sZx;s#dB^ ][B]SGxo_M",
+            metadata: r##"{"hash":"~9T\u003cd.~/\u0026OOR'sZx;s#dB^ ][B]SGxo_M","teamId":"kaW|C|ZZN9U?6XIKQMK;dgL/,I,:%YjZg(1hDx@I`e7w6I1VOo:PccJ;6^`_8*Z=]XPGe]BUWxsTv\u00267Lu7y(\u003eHl77pr0%TBzM i"}"##,
             artifact_body: vec![
                 156, 84, 215, 225, 146, 162, 101, 149, 65, 246, 197, 190, 71, 189, 149, 53, 84, 53,
                 44, 98, 7, 52, 177, 82, 139, 35, 250, 217, 43, 145, 150, 255, 146, 162, 138, 56,
@@ -3598,6 +3693,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "e`0Cm2#Zw1x@C!UbR$;2S[l]AXm?NY.er*cjr6hV{#Q0Mw@odJw8?5:o89edhB@PSJM.0A-'\
                          }J,|rj5KE",
             artifact_hash: "*k,P^dWTIrpfu2?hiGvG|,Urg4#v.|LN#w[dDQ:u$,}>0~VX 3he9",
+            metadata: r##"{"hash":"*k,P^dWTIrpfu2?hiGvG|,Urg4#v.|LN#w[dDQ:u$,}\u003e0~VX 3he9","teamId":"(nS}XL?462EpqZ]kTHI-][\u003ejTVO(omzSbnQnZbS,U.zZ G\u0026'sC`u(fg+^K!2JAab;)hhCGU.y*b)]J7j9hF3r%s6mcuGb;/R1i"}"##,
             artifact_body: vec![
                 182, 113, 224, 193, 240, 23, 225, 63, 125, 44, 67, 228, 246, 245, 106, 142, 56,
                 172, 179, 168, 126, 104, 247, 88, 3, 4, 63, 62, 226, 6, 202, 18, 186, 12, 98, 216,
@@ -3653,6 +3749,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "4r_9{=c%T.}S{uF>J/~nNwEq'#4sre^h{kkkxHkb)ItF`C]p.<NW-;#_@^jb,#yZy;t}je#\
                          aZ%Yn",
             artifact_hash: "pm!N8xQ=@e8r@L#rKcfg4a(SGY1w^D:p`",
+            metadata: r##"{"hash":"pm!N8xQ=@e8r@L#rKcfg4a(SGY1w^D:p`","teamId":"lg\u003cT +:![_!v"}"##,
             artifact_body: vec![
                 44, 21, 15, 163, 233, 120, 156, 99, 136, 210, 140, 24, 97, 25, 146, 181, 231, 230,
                 30, 103, 118, 41, 146, 116, 196, 206, 151, 94, 236, 184, 205, 99, 143, 228, 89, 80,
@@ -3692,6 +3789,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "|VD^O7tgC A]P>p@b1$}SPc/+aCXW~-v/&B",
             artifact_hash: "OP4;Cs(rrM 4|FC<MQmK/amC&fC>$[5cgaw>kTF``(1m`}o{)`/k_kFx*Y \
                             D)1|SQxG_<5n{+h~vR1?fu$k6h8(j63u",
+            metadata: r##"{"hash":"OP4;Cs(rrM 4|FC\u003cMQmK/amC\u0026fC\u003e$[5cgaw\u003ekTF``(1m`}o{)`/k_kFx*Y D)1|SQxG_\u003c5n{+h~vR1?fu$k6h8(j63u","teamId":")'bCkch/q\u003e+F.1c3KNW9,Tb9G7b(!B%v7{#q3nVxHd2uaXNPKm-s21h"}"##,
             artifact_body: vec![
                 6, 186, 103, 37, 81, 78, 153, 51, 69, 58, 142, 157, 197, 206, 241, 97, 105, 178,
                 178, 236, 182, 51, 8, 187, 90, 164, 91, 33, 23, 107, 39, 94, 43, 71, 87, 218, 209,
@@ -3725,6 +3823,7 @@ fn get_test_cases() -> Vec<TestCase> {
             team_id: ">5mt6q3?Fyn0a~WaDU($U9I3",
             secret_key: "WfY0x:/f$sc!DUrA<T|3x8Pj~a^'R+xZs6a<Zsio",
             artifact_hash: "I'i,L$^64Xp7<(92I%_VO:K=",
+            metadata: r##"{"hash":"I'i,L$^64Xp7\u003c(92I%_VO:K=","teamId":"\u003e5mt6q3?Fyn0a~WaDU($U9I3"}"##,
             artifact_body: vec![
                 252, 35, 216, 63, 147, 122, 181, 46, 137, 150, 40, 17, 232, 170, 74, 141, 177, 42,
                 92, 100, 14, 248, 225, 6, 70, 112, 172, 190, 120, 174, 156, 92, 129, 175, 126, 148,
@@ -3790,6 +3889,7 @@ fn get_test_cases() -> Vec<TestCase> {
             secret_key: "fHci}t[3>{zdQAR*EPjxxx|pOsYnE;0>8b+_i3#9uSO(xH2s=a`3lJxK32As#[ \
                          N[]'z(GH>oK",
             artifact_hash: "S/cP8b;JMH6TXbAiWoq]wSLT].F[KbPaN|Rn@>16oHsNVC,|3j^C(]T",
+            metadata: r##"{"hash":"S/cP8b;JMH6TXbAiWoq]wSLT].F[KbPaN|Rn@\u003e16oHsNVC,|3j^C(]T","teamId":"[dtNEr|6=v.b,K-X-@B%[Lh@Y?f_]'.q5ekFOGj%.4lR?^ua~[n5r(SlhD)LYN+2HfKxnYh9#d@3ixQ%=E4km"}"##,
             artifact_body: vec![
                 200, 154, 28, 105, 246, 126, 124, 91, 95, 219, 153, 110, 37, 214, 132, 111, 212,
                 84, 255, 182, 53, 210, 247, 246, 211, 203, 3, 217, 90, 4, 235, 98, 108, 128, 117,

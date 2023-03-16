@@ -51,10 +51,11 @@ func generateTestCase(t *testing.T, r *rand.Rand) string {
 		artifactBodyString[i] = fmt.Sprintf("%d", artifactBody[i])
 	}
 	t.Setenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY", secretKey)
-	hmacTag := testUtilGetHMACTag(hash, teamId, artifactBody, secretKey)
+	metadata, hmacTag := testUtilGetHMACTagAndMetadata(hash, teamId, artifactBody, secretKey)
 
 	return fmt.Sprintf("TestCase {") +
 		fmt.Sprintf("team_id: \"%v\", secret_key: \"%v\", artifact_hash: \"%v\", ", teamId, secretKey, hash) +
+		fmt.Sprintf("metadata: r##\"%v\"##, ", metadata) +
 		fmt.Sprintf("artifact_body: vec![%v], hmac_tag: \"%v\" },", strings.Join(artifactBodyString, ", "), hmacTag)
 }
 
@@ -65,7 +66,7 @@ func Test_GenerateTestCases(t *testing.T) {
 	for i := range testCases {
 		testCases[i] = generateTestCase(t, r)
 	}
-	output := "struct TestCase {\n    team_id: &'static str,\n    secret_key: &'static str,\n    artifact_body: Vec<u8>, artifact_hash: &'static str, \n    hmac_tag: &'static str,\n}\n" +
+	output := "#[derive(Debug)]\nstruct TestCase {\n    team_id: &'static str,\n    secret_key: &'static str,\n    artifact_body: Vec<u8>, artifact_hash: &'static str, \n  metadata: &'static str,\n  hmac_tag: &'static str,\n}\n" +
 		fmt.Sprintf("fn get_test_cases() -> Vec<TestCase> { vec![%v] }", strings.Join(testCases, "\n"))
 
 	os.WriteFile("signature_authentication_test_cases.rs", []byte(output), 0644)
@@ -227,6 +228,11 @@ func Test_GenerateTagAndValidate(t *testing.T) {
 
 // Return the Base64 encoded HMAC given the artifact metadata and artifact body
 func testUtilGetHMACTag(hash string, teamId string, artifactBody []byte, secret string) string {
+	_, tag := testUtilGetHMACTagAndMetadata(hash, teamId, artifactBody, secret)
+	return tag
+}
+
+func testUtilGetHMACTagAndMetadata(hash string, teamId string, artifactBody []byte, secret string) (string, string) {
 	artifactMetadata := &struct {
 		Hash   string `json:"hash"`
 		TeamId string `json:"teamId"`
@@ -238,7 +244,7 @@ func testUtilGetHMACTag(hash string, teamId string, artifactBody []byte, secret 
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write(metadata)
 	h.Write(artifactBody)
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+	return string(metadata), base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func Test_Utils(t *testing.T) {

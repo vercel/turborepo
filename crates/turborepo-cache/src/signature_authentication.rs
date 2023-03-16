@@ -1,6 +1,9 @@
 use std::{env, ffi::OsString};
 
-use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
+use base64::{
+    prelude::{BASE64_STANDARD, BASE64_STANDARD_NO_PAD},
+    Engine,
+};
 use os_str_bytes::OsStringBytes;
 use ring::{hmac, hmac::HMAC_SHA256, rand};
 use serde::Serialize;
@@ -50,6 +53,7 @@ impl ArtifactSignatureAuthentication {
     fn get_tag_generator(&self, hash: &str) -> Result<hmac::Context, SignatureError> {
         let secret_key = hmac::Key::new(HMAC_SHA256, &self.secret_key()?);
         let metadata = self.construct_metadata(hash)?;
+        println!("METADATA: {}", metadata);
 
         let mut hmac_ctx = hmac::Context::with_key(&secret_key);
         hmac_ctx.update(metadata.as_bytes());
@@ -62,7 +66,7 @@ impl ArtifactSignatureAuthentication {
 
         hmac_ctx.update(artifact_body);
         let hmac_output = hmac_ctx.sign();
-        Ok(BASE64_STANDARD_NO_PAD.encode(hmac_output))
+        Ok(BASE64_STANDARD.encode(hmac_output))
     }
 
     pub fn validate(
@@ -74,7 +78,7 @@ impl ArtifactSignatureAuthentication {
         let secret_key = hmac::Key::new(HMAC_SHA256, &self.secret_key()?);
         let mut message = self.construct_metadata(hash)?.into_bytes();
         message.extend(artifact_body);
-        let expected_bytes = BASE64_STANDARD_NO_PAD.decode(expected_tag)?;
+        let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
         Ok(hmac::verify(&secret_key, &message, &expected_bytes).is_ok())
     }
 }
@@ -104,17 +108,18 @@ mod tests {
             team_id: test_case.team_id.to_string(),
         };
 
-        let hash = test_case.hash;
+        let hash = test_case.artifact_hash;
         let artifact_body = &test_case.artifact_body;
         let tag = signature.generate_tag(hash, artifact_body)?;
 
         assert!(signature.validate(hash, artifact_body, &tag)?);
-
-        let test_case_tag = BASE64_STANDARD_NO_PAD.decode(&test_case.tag);
-        assert!(signature.validate(hash, artifact_body, &test_case_tag)?);
+        println!("test case: {:?}", test_case);
+        println!("tag: {}", tag);
+        println!();
+        assert!(signature.validate(hash, artifact_body, &test_case.hmac_tag)?);
 
         // Generate some bad tag that is not correct
-        let bad_tag = BASE64_STANDARD_NO_PAD.encode(b"bad tag");
+        let bad_tag = BASE64_STANDARD.encode(b"bad tag");
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
         // Change the key (to something that is not a valid unicode string)
