@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
-use swc_core::ecma::ast::{Id, Module, Program};
+use swc_core::{
+    base::SwcComments,
+    ecma::ast::{Id, Module, Program},
+};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc};
 
@@ -291,6 +294,10 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
+
+        /// This field is required to implement part_of_module, which produces
+        /// [ParseResultVc]
+        parsed: ParseResultVc,
     },
     Unparseable,
     NotFound,
@@ -352,27 +359,32 @@ pub(super) async fn part_of_module(
         None => bail!("part {:?} is not found in the module", part),
     };
 
-    let parsed = split_data.parsed.await?;
-
-    match &*parsed {
-        ParseResult::Ok {
-            globals,
-            comments,
-            source_map,
-            eval_context,
-            ..
-        } => {
-            let program = Program::Module(split_data.modules[part_id as usize].clone());
-            let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
-
-            Ok(ParseResultVc::cell(ParseResult::Ok {
-                program,
-                globals: globals.clone(),
-                comments: comments.clone(),
-                source_map: source_map.clone(),
+    match &*split_data {
+        SplitResult::Ok {
+            modules, parsed, ..
+        } => match &*parsed.await? {
+            ParseResult::Ok {
+                comments,
                 eval_context,
-            }))
-        }
-        ParseResult::Unparseable | ParseResult::NotFound => Ok(split_data.parsed),
+                source_map,
+                globals,
+                ..
+            } => {
+                let program = Program::Module(modules[part_id as usize].clone());
+                let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
+
+                Ok(ParseResultVc::cell(ParseResult::Ok {
+                    program,
+                    globals: globals.clone(),
+                    comments: comments.clone(),
+                    source_map: source_map.clone(),
+                    eval_context,
+                }))
+            }
+            ParseResult::Unparseable => bail!("module is unparseable"),
+            ParseResult::NotFound => bail!("module is not found"),
+        },
+        SplitResult::Unparseable => Ok(ParseResult::Unparseable),
+        SplitResult::NotFound => Ok(ParseResult::NotFound),
     }
 }
