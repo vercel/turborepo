@@ -1,64 +1,91 @@
-use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 
 use indexmap::IndexSet;
-use turbo_tasks::{InvalidationReason, InvalidationReasonType};
+use turbo_tasks::{util::StaticOrArc, InvalidationReason, InvalidationReasonKind};
 
+/// Invalidation was caused by a file change detected by the file watcher
+#[derive(PartialEq, Eq, Hash)]
 pub struct WatchChange {
     pub path: String,
 }
 
 impl InvalidationReason for WatchChange {
-    fn description(&self) -> Cow<'static, str> {
-        format!("{} changed", self.path).into()
-    }
-    fn merge_info(&self) -> Option<(&'static dyn InvalidationReasonType, Cow<'static, str>)> {
-        Some((&WATCH_CHANGE_TYPE, self.path.clone().into()))
+    fn kind(&self) -> Option<StaticOrArc<dyn InvalidationReasonKind>> {
+        Some(StaticOrArc::Static(&WATCH_CHANGE_KIND))
     }
 }
 
-struct WatchChangeType {
-    _non_zero_sized: u8,
+impl Display for WatchChange {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} changed", self.path)
+    }
 }
 
-static WATCH_CHANGE_TYPE: WatchChangeType = WatchChangeType { _non_zero_sized: 0 };
+/// Invalidation kind for [WatchChange]
+#[derive(PartialEq, Eq, Hash)]
+struct WatchChangeKind;
 
-impl InvalidationReasonType for WatchChangeType {
-    fn description(&self, merge_data: &IndexSet<Cow<'static, str>>) -> Cow<'static, str> {
-        format!(
+static WATCH_CHANGE_KIND: WatchChangeKind = WatchChangeKind;
+
+impl InvalidationReasonKind for WatchChangeKind {
+    fn fmt(
+        &self,
+        reasons: &IndexSet<StaticOrArc<dyn InvalidationReason>>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(
+            f,
             "{} files changed (e. g. {})",
-            merge_data.len(),
-            merge_data[0]
+            reasons.len(),
+            reasons[0]
+                .as_any()
+                .downcast_ref::<WatchChange>()
+                .unwrap()
+                .path
         )
-        .into()
     }
 }
 
+/// Invalidation was caused by a directory starting to watch from which was read
+/// before.
+#[derive(PartialEq, Eq, Hash)]
 pub struct WatchStart {
     pub name: String,
 }
 
 impl InvalidationReason for WatchStart {
-    fn description(&self) -> Cow<'static, str> {
-        format!("{} started watching", self.name).into()
-    }
-    fn merge_info(&self) -> Option<(&'static dyn InvalidationReasonType, Cow<'static, str>)> {
-        Some((&WATCH_START_TYPE, self.name.clone().into()))
+    fn kind(&self) -> Option<StaticOrArc<dyn InvalidationReasonKind>> {
+        Some(StaticOrArc::Static(&WATCH_START_KIND))
     }
 }
 
-struct WatchStartType {
-    _non_zero_sized: u8,
+impl Display for WatchStart {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} started watching", self.name)
+    }
 }
 
-static WATCH_START_TYPE: WatchStartType = WatchStartType { _non_zero_sized: 0 };
+/// Invalidation kind for [WatchStart]
+#[derive(PartialEq, Eq, Hash)]
+struct WatchStartKind;
 
-impl InvalidationReasonType for WatchStartType {
-    fn description(&self, merge_data: &IndexSet<Cow<'static, str>>) -> Cow<'static, str> {
-        format!(
+static WATCH_START_KIND: WatchStartKind = WatchStartKind;
+
+impl InvalidationReasonKind for WatchStartKind {
+    fn fmt(
+        &self,
+        reasons: &IndexSet<StaticOrArc<dyn InvalidationReason>>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(
+            f,
             "{} directories started watching (e. g. {})",
-            merge_data.len(),
-            merge_data[0]
+            reasons.len(),
+            reasons[0]
+                .as_any()
+                .downcast_ref::<WatchStart>()
+                .unwrap()
+                .name
         )
-        .into()
     }
 }

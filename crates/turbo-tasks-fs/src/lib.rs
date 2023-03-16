@@ -249,7 +249,7 @@ impl DiskFileSystem {
         // Best is to start_watching before starting to read
         for (_, invalidators) in take(&mut *invalidator_map.lock().unwrap()).into_iter() {
             invalidators.into_iter().for_each(|i| {
-                if report_invalidation_reason {
+                if report_invalidation_reason.is_some() {
                     i.invalidate_with_reason(WatchStart {
                         name: self.name.clone(),
                     })
@@ -260,7 +260,7 @@ impl DiskFileSystem {
         }
         for (_, invalidators) in take(&mut *dir_invalidator_map.lock().unwrap()).into_iter() {
             invalidators.into_iter().for_each(|i| {
-                if report_invalidation_reason {
+                if report_invalidation_reason.is_some() {
                     i.invalidate_with_reason(WatchStart {
                         name: self.name.clone(),
                     })

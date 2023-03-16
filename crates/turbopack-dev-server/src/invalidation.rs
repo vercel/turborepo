@@ -1,35 +1,55 @@
-use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 
 use hyper::{Method, Uri};
 use indexmap::IndexSet;
-use turbo_tasks::{InvalidationReason, InvalidationReasonType};
+use turbo_tasks::{util::StaticOrArc, InvalidationReason, InvalidationReasonKind};
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct ServerRequest {
     pub method: Method,
     pub uri: Uri,
 }
 
 impl InvalidationReason for ServerRequest {
-    fn description(&self) -> Cow<'static, str> {
-        format!("{} {}", self.method, self.uri.path()).into()
-    }
-    fn merge_info(&self) -> Option<(&'static dyn InvalidationReasonType, Cow<'static, str>)> {
-        Some((&SERVER_REQUEST_TYPE, self.description()))
+    fn kind(&self) -> Option<StaticOrArc<dyn InvalidationReasonKind>> {
+        Some(StaticOrArc::Static(&SERVER_REQUEST_TYPE))
     }
 }
 
-struct ServerRequestType {
-    _non_zero_sized: u8,
+impl Display for ServerRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.method, self.uri.path())
+    }
 }
 
-static SERVER_REQUEST_TYPE: ServerRequestType = ServerRequestType { _non_zero_sized: 0 };
+#[derive(PartialEq, Eq, Hash)]
+struct ServerRequestType;
 
-impl InvalidationReasonType for ServerRequestType {
-    fn description(&self, merge_data: &IndexSet<Cow<'static, str>>) -> Cow<'static, str> {
-        let example = merge_data
+static SERVER_REQUEST_TYPE: ServerRequestType = ServerRequestType;
+
+impl InvalidationReasonKind for ServerRequestType {
+    fn fmt(
+        &self,
+        reasons: &IndexSet<StaticOrArc<dyn InvalidationReason>>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        let example = reasons
             .into_iter()
-            .reduce(|a, b| if b.len() < a.len() { b } else { a })
+            .map(|reason| reason.as_any().downcast_ref::<ServerRequest>().unwrap())
+            .reduce(|a, b| {
+                if b.uri.path().len() < a.uri.path().len() {
+                    b
+                } else {
+                    a
+                }
+            })
             .unwrap();
-        format!("{} requests (e. g. {})", merge_data.len(), example).into()
+        write!(
+            f,
+            "{} requests (e. g. {} {})",
+            reasons.len(),
+            example.method,
+            example.uri.path()
+        )
     }
 }

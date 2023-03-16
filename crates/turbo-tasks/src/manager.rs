@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     future::Future,
     hash::Hash,
-    mem::{size_of_val, take},
+    mem::take,
     panic::AssertUnwindSafe,
     pin::Pin,
     sync::{
@@ -18,7 +18,6 @@ use std::{
 use anyhow::{anyhow, Result};
 use auto_hash_map::AutoSet;
 use futures::FutureExt;
-use indexmap::IndexSet;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
@@ -28,7 +27,7 @@ use crate::{
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
-    invalidation_reason_set::InvalidationReasonSet,
+    invalidation::InvalidationReasonSet,
     primitives::RawVcSetVc,
     raw_vc::{CellId, RawVc},
     registry,
@@ -36,7 +35,7 @@ use crate::{
     timed_future::{self, TimedFuture},
     trace::TraceRawVcs,
     util::{FormatDuration, StaticOrArc},
-    Completion, CompletionVc, TaskId, ValueTraitVc, ValueTypeId,
+    Completion, CompletionVc, InvalidationReason, TaskId, ValueTraitVc, ValueTypeId,
 };
 
 pub trait TurboTasksCallApi: Sync + Send {
@@ -1104,22 +1103,6 @@ fn current_task(from: &str) -> TaskId {
             from
         ),
     }
-}
-
-pub trait InvalidationReason: Send + Sync + 'static {
-    fn description(&self) -> Cow<'static, str>;
-    fn merge_info(&self) -> Option<(&'static dyn InvalidationReasonType, Cow<'static, str>)> {
-        None
-    }
-}
-
-pub trait InvalidationReasonType: Send + Sync + 'static {
-    fn ptr(&self) -> usize {
-        // To have a valid pointer this must not be a ZST
-        debug_assert!(size_of_val(self) != 0);
-        self as *const _ as *const () as usize
-    }
-    fn description(&self, merge_data: &IndexSet<Cow<'static, str>>) -> Cow<'static, str>;
 }
 
 pub struct Invalidator {

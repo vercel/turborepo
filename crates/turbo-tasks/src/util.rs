@@ -1,6 +1,7 @@
 use std::{
     any::Provider,
     fmt::{Debug, Display},
+    hash::{Hash, Hasher},
     ops::Deref,
     sync::Arc,
     time::Duration,
@@ -146,5 +147,31 @@ impl<T: ?Sized + 'static> Clone for StaticOrArc<T> {
             Self::Static(s) => Self::Static(s),
             Self::Shared(b) => Self::Shared(b.clone()),
         }
+    }
+}
+
+impl<T: ?Sized + PartialEq + 'static> PartialEq for StaticOrArc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl<T: ?Sized + PartialEq + Eq + 'static> Eq for StaticOrArc<T> {}
+
+impl<T: ?Sized + Hash + 'static> Hash for StaticOrArc<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
+    }
+}
+
+impl<T: ?Sized + Display + 'static> Display for StaticOrArc<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (**self).fmt(f)
+    }
+}
+
+impl<T: ?Sized + Debug + 'static> Debug for StaticOrArc<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (**self).fmt(f)
     }
 }
