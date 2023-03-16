@@ -80,16 +80,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, taskSummary.Command)
 		}
 
-		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-
-		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-
 		// Assign some fallbacks if they were missing
 		if taskSummary.Command == "" {
 			taskSummary.Command = runsummary.MissingTaskLabel
@@ -98,9 +88,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		if taskSummary.Framework == "" {
 			taskSummary.Framework = runsummary.MissingFrameworkLabel
 		}
-
-		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
-		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
 
 		taskIDs = append(taskIDs, taskSummary)
 

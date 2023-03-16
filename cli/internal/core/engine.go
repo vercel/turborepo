@@ -389,8 +389,9 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 
 // ValidatePersistentDependencies checks if any task dependsOn persistent tasks and throws
 // an error if that task is actually implemented
-func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) error {
+func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, concurrency int) error {
 	var validationError error
+	persistentCount := 0
 
 	// Adding in a lock because otherwise walking the graph can introduce a data race
 	// (reproducible with `go test -race`)
@@ -409,6 +410,11 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		// up when running tests with the `-race` flag.
 		sema.Acquire()
 		defer sema.Release()
+
+		currentTaskDefinition, currentTaskExists := e.completeGraph.TaskDefinitions[vertexName]
+		if currentTaskExists && currentTaskDefinition.Persistent {
+			persistentCount++
+		}
 
 		currentPackageName, currentTaskName := util.GetPackageTaskFromId(vertexName)
 
@@ -458,8 +464,13 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		return fmt.Errorf("Validation failed: %v", err)
 	}
 
-	// May or may not be set (could be nil)
-	return validationError
+	if validationError != nil {
+		return validationError
+	} else if persistentCount >= concurrency {
+		return fmt.Errorf("You have %v persistent tasks but `turbo` is configured for concurrency of %v. Set --concurrency to at least %v", persistentCount, concurrency, persistentCount+1)
+	}
+
+	return nil
 }
 
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
@@ -562,42 +573,4 @@ func validateExtends(turboJSON *fs.TurboJSON) []error {
 	}
 
 	return extendErrors
-}
-
-// GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
-// "Ancestors" are all tasks that the given task depends on.
-// This is only used by DryRun output right now.
-func (e *Engine) GetTaskGraphAncestors(taskID string) ([]string, error) {
-	ancestors, err := e.TaskGraph.Ancestors(taskID)
-	if err != nil {
-		return nil, err
-	}
-	stringAncestors := []string{}
-	for _, dep := range ancestors {
-		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
-			stringAncestors = append(stringAncestors, dep.(string))
-		}
-	}
-	// TODO(mehulkar): Why are ancestors not sorted, but GetTaskGraphDescendants sorts?
-	return stringAncestors, nil
-}
-
-// GetTaskGraphDescendants gets all the descendants for a given task in the graph.
-// "Descendants" are all tasks that depend on the given taskID.
-// This is only used by DryRun output right now.
-func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
-	descendents, err := e.TaskGraph.Descendents(taskID)
-	if err != nil {
-		return nil, err
-	}
-	stringDescendents := []string{}
-	for _, dep := range descendents {
-		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
-			stringDescendents = append(stringDescendents, dep.(string))
-		}
-	}
-	sort.Strings(stringDescendents)
-	return stringDescendents, nil
 }

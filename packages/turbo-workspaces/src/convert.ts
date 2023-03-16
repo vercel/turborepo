@@ -16,7 +16,7 @@ import { ConvertError } from "./errors";
   4. managerFrom.clean
 
 */
-async function convert({
+export async function convertProject({
   project,
   to,
   logger,
@@ -32,7 +32,9 @@ async function convert({
   );
 
   if (project.packageManager == to.name) {
-    throw new ConvertError("You are already using this package manager");
+    throw new ConvertError("You are already using this package manager", {
+      type: "package_manager-already_in_use",
+    });
   }
 
   // remove old workspace data
@@ -57,5 +59,3 @@ async function convert({
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
   await managers[project.packageManager].clean({ project, logger });
 }
-
-export default convert;

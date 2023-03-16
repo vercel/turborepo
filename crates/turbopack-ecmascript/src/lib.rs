@@ -40,7 +40,8 @@ use swc_core::{
     },
 };
 pub use transform::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
+    CustomTransform, CustomTransformVc, CustomTransformer, EcmascriptInputTransform,
+    EcmascriptInputTransformsVc, TransformContext,
 };
 use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
