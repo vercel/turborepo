@@ -60,7 +60,7 @@ impl Asset for EcmascriptModulePartAsset {
         let split_data = split_module(self.full_module).await?;
         let part_id = match get_part_id(&split_data, self.part).await {
             Ok(v) => v,
-            Err(_) => bail!("Part {:?} is not found in the module", self.part),
+            Err(_) => bail!("part {:?} is not found in the module", self.part),
         };
 
         let deps = match &*split_data {
@@ -72,7 +72,7 @@ impl Asset for EcmascriptModulePartAsset {
 
         let deps = match deps.get(&part_id) {
             Some(v) => v,
-            None => bail!("Part {:?} is not found in the module", part_id),
+            None => bail!("part {:?} is not found in the module", part_id),
         };
 
         let mut assets = deps

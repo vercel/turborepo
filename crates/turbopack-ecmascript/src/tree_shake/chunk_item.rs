@@ -4,13 +4,13 @@ use turbopack_core::{
     chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc, ModuleId, ModuleIdVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc},
+    resolve::{origin::ResolveOrigin, ModulePart},
 };
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, split_module};
 use crate::{
     chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc},
-    gen_content, EcmascriptModuleAssetVc,
+    gen_content,
 };
 
 /// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].

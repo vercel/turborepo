@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
 use swc_core::ecma::ast::{Id, Module, Program};
@@ -349,7 +349,7 @@ pub(super) async fn part_of_module(
 
     let part_id = match part {
         Some(part) => get_part_id(&split_data, part).await?,
-        None => return Ok(split_data.parsed),
+        None => bail!("part {:?} is not found in the module", part),
     };
 
     let parsed = split_data.parsed.await?;
