@@ -991,9 +991,9 @@ version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d897f47bf7270cf70d370f8f98c1abb6d2d4cf60a6845d30e05bfb90c6568650"
 dependencies = [
- "proc-macro2 1.0.51",
- "quote 1.0.23",
- "unicode-xid 0.2.4",
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -6413,6 +6413,7 @@ dependencies = [
  "futures",
  "futures-retry",
  "include_dir",
+ "indexmap",
  "jsonc-parser",
  "mime",
  "notify",
