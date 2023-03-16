@@ -18,12 +18,8 @@ use crate::{
 /// This is a pointer to a part of an ES module.
 #[turbo_tasks::value(shared)]
 pub struct EcmascriptModulePartChunkItem {
-    pub(super) full_module: EcmascriptModuleAssetVc,
-
     pub(super) module: EcmascriptModulePartAssetVc,
     pub(super) context: ChunkingContextVc,
-
-    pub(super) part: ModulePartVc,
 }
 
 #[turbo_tasks::value_impl]
