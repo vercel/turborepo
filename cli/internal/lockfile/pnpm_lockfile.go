@@ -16,11 +16,6 @@ import (
 // Reference https://github.com/pnpm/pnpm/blob/main/packages/lockfile-types/src/index.ts
 type PnpmLockfile struct {
 	isV6 bool
-	// Formatter of the lockfile key given a package name and version
-	formatKey func(string, string) string
-	// Extracts version from lockfile key
-	extractVersion func(string) string
-
 	// Before 6.0 version was stored as a float, but as of 6.0+ it's a string
 	Version                   interface{}                `yaml:"lockfileVersion"`
 	NeverBuiltDependencies    []string                   `yaml:"neverBuiltDependencies,omitempty"`
@@ -205,15 +200,6 @@ func DecodePnpmLockfile(contents []byte) (*PnpmLockfile, error) {
 	default:
 		return nil, fmt.Errorf("Unexpected type of lockfileVersion: '%T', expected float64 or string", lockfile.Version)
 	}
-
-	if lockfile.isV6 {
-		lockfile.formatKey = formatPnpmKeyV6
-		lockfile.extractVersion = getVersionFromKeyV6
-	} else {
-		lockfile.formatKey = formatPnpmKey
-		lockfile.extractVersion = getVersionFromKey
-	}
-
 	return &lockfile, nil
 }
 
@@ -461,27 +447,26 @@ func (p *PnpmLockfile) applyOverrides(name string, specifier string) string {
 	return specifier
 }
 
-func formatPnpmKey(name string, version string) string {
+// Formatter of the lockfile key given a package name and version
+func (p *PnpmLockfile) formatKey(name string, version string) string {
+	if p.isV6 {
+		return fmt.Sprintf("/%s@%s", name, version)
+	}
 	return fmt.Sprintf("/%s/%s", name, version)
 }
 
-func formatPnpmKeyV6(name string, version string) string {
-	return fmt.Sprintf("/%s@%s", name, version)
-}
-
-func getVersionFromKey(key string) string {
+// Extracts version from lockfile key
+func (p *PnpmLockfile) extractVersion(key string) string {
+	if p.isV6 {
+		key = convertNewToOldDepPath(key)
+	}
 	dp := parseDepPath(key)
 	if dp.peerSuffix != "" {
-		return fmt.Sprintf("%s_%s", dp.version, dp.peerSuffix)
-	}
-	return dp.version
-}
-
-func getVersionFromKeyV6(key string) string {
-	oldKey := convertNewToOldDepPath(key)
-	dp := parseDepPath(oldKey)
-	if dp.peerSuffix != "" {
-		return dp.version + dp.peerSuffix
+		sep := ""
+		if !p.isV6 {
+			sep = "_"
+		}
+		return fmt.Sprintf("%s%s%s", dp.version, sep, dp.peerSuffix)
 	}
 	return dp.version
 }
@@ -577,8 +562,9 @@ func (d depPath) patchHash() string {
 	return d.peerSuffix
 }
 
+// Used to convert v6's dep path of /name@version to v5's /name/version
+// See https://github.com/pnpm/pnpm/blob/185ab01adfc927ea23d2db08a14723bf51d0025f/lockfile/lockfile-file/src/experiments/inlineSpecifiersLockfileConverters.ts#L162
 func convertNewToOldDepPath(newPath string) string {
-	// Used to convert v6's dep path of /name@version to v5's /name/version
 	if len(newPath) > 2 && !strings.Contains(newPath[2:], "@") {
 		return newPath
 	}
