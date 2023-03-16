@@ -78,7 +78,8 @@ impl Analyzer<'_> {
                 eventual_ids.extend(item.eventual_write_vars.iter().cloned());
 
                 if item.is_hoisted && item.side_effects {
-                    self.g.add_strong_deps(item_id, self.last_side_effects.drain())
+                    self.g
+                        .add_strong_deps(item_id, self.last_side_effects.drain());
 
                     self.last_side_effects.push(item_id.clone());
                 }
@@ -144,7 +145,8 @@ impl Analyzer<'_> {
                 if item.side_effects {
                     // Create a strong dependency to LAST_SIDE_EFFECT.
 
-                    self.g.add_strong_deps(item_id, self.last_side_effects.drain())
+                    self.g
+                        .add_strong_deps(item_id, self.last_side_effects.drain());
 
                     // Create weak dependencies to all LAST_WRITES and
                     // LAST_READS.
