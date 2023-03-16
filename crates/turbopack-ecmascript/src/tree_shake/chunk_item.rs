@@ -26,14 +26,15 @@ pub struct EcmascriptModulePartChunkItem {
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
-        let split_data = split_module(self.full_module);
-        let parsed = part_of_module(split_data, Some(self.part));
+        let module = self.module.await?;
+        let split_data = split_module(module.full_module);
+        let parsed = part_of_module(split_data, Some(module.part));
 
         Ok(gen_content(
             self.context,
             self.module.analyze(),
             parsed,
-            self.full_module.ident(),
+            module.full_module.ident(),
         ))
     }
 
@@ -44,8 +45,10 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 
     #[turbo_tasks::function]
     async fn id(&self) -> Result<ModuleIdVc> {
-        let module = self.full_module.origin_path().await?;
-        let part = self.part.await?;
+        let module = self.module.await?;
+
+        let part = module.part.await?;
+        let module = module.full_module.origin_path().await?;
 
         match &*part {
             ModulePart::ModuleEvaluation => {

@@ -25,7 +25,6 @@ pub struct Analyzer<'a> {
     item_ids: &'a Vec<ItemId>,
     items: &'a mut FxHashMap<ItemId, ItemData>,
 
-    last_side_effect: Option<ItemId>,
     last_side_effects: Vec<ItemId>,
 
     vars: FxHashMap<Id, VarState>,
@@ -79,7 +78,7 @@ impl Analyzer<'_> {
 
                 if item.is_hoisted && item.side_effects {
                     self.g
-                        .add_strong_deps(item_id, self.last_side_effects.drain());
+                        .add_strong_deps(item_id, self.last_side_effects.iter());
 
                     self.last_side_effects.push(item_id.clone());
                 }
@@ -146,7 +145,7 @@ impl Analyzer<'_> {
                     // Create a strong dependency to LAST_SIDE_EFFECT.
 
                     self.g
-                        .add_strong_deps(item_id, self.last_side_effects.drain());
+                        .add_strong_deps(item_id, self.last_side_effects.iter());
 
                     // Create weak dependencies to all LAST_WRITES and
                     // LAST_READS.
@@ -189,7 +188,6 @@ impl Analyzer<'_> {
                 }
 
                 if item.side_effects {
-                    self.last_side_effect = Some(item_id.clone());
                     self.last_side_effects.push(item_id.clone());
                 }
             }

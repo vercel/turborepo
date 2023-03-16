@@ -29,8 +29,8 @@ use crate::{
 /// This type is used for an advanced tree shkaing.
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
-    full_module: EcmascriptModuleAssetVc,
-    part: ModulePartVc,
+    pub(crate) full_module: EcmascriptModuleAssetVc,
+    pub(crate) part: ModulePartVc,
 }
 
 impl EcmascriptModulePartAssetVc {
@@ -110,8 +110,6 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
         Ok(EcmascriptModulePartChunkItem {
             module: self_vc,
             context,
-            full_module: s.full_module,
-            part: s.part,
         }
         .cell()
         .into())
