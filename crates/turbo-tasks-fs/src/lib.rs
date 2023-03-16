@@ -227,6 +227,10 @@ impl DiskFileSystem {
         let dir_invalidator_map = self.dir_invalidator_map.clone();
         let root = self.root.clone();
         let root_path = self.root_path().to_path_buf();
+
+        let report_invalidation_reason =
+            report_invalidation_reason.then(|| (self.name.clone(), root_path.clone()));
+
         // Create a channel to receive the events.
         let (tx, rx) = channel();
         // Create a watcher object, delivering debounced events.
@@ -271,9 +275,6 @@ impl DiskFileSystem {
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         let disk_watcher = self.watcher.clone();
-
-        let report_invalidation_reason =
-            report_invalidation_reason.then(|| (self.name.clone(), root_path));
 
         spawn_thread(move || {
             let mut batched_invalidate_path = HashSet::new();

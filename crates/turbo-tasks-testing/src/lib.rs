@@ -21,7 +21,8 @@ use turbo_tasks::{
     primitives::RawVcSetVc,
     registry,
     test_helpers::{current_task_for_testing, with_turbo_tasks_for_testing},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
+    util::StaticOrArc,
+    CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
 
 enum Task {
@@ -87,6 +88,14 @@ impl TurboTasksCallApi for VcStorage {
 
     fn run_once(
         &self,
+        _future: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> TaskId {
+        unreachable!()
+    }
+
+    fn run_once_with_reason(
+        &self,
+        _reason: StaticOrArc<dyn InvalidationReason>,
         _future: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId {
         unreachable!()
