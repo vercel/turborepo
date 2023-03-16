@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building' \u003e foo",
+        "commandArguments": [],
         "outputs": [
           "foo"
         ],

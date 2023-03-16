@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null
 # no output, just check for 0 status code
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
@@ -16,6 +16,10 @@ Setup
     "status": "built",
     "error": null
   }
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].commandArguments'
+  [
+    "someargs"
+  ]
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "util#build")) | .[0].execution'
   {

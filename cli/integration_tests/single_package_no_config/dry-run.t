@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building'",
+        "commandArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
