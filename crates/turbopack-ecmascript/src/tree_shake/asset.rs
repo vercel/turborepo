@@ -13,7 +13,7 @@ use turbopack_core::{
 
 use super::{
     chunk_item::{EcmascriptModulePartChunkItem, EcmascriptModulePartChunkItemVc},
-    get_part_id, split_module,
+    get_part_id, split_module, SplitResult,
 };
 use crate::{
     chunk::{
@@ -63,7 +63,14 @@ impl Asset for EcmascriptModulePartAsset {
             Err(_) => bail!("Part {:?} is not found in the module", self.part),
         };
 
-        let deps = match split_data.deps.get(&part_id) {
+        let deps = match &*split_data {
+            SplitResult::Ok { deps, .. } => deps,
+            _ => {
+                bail!("failed to split module")
+            }
+        };
+
+        let deps = match deps.get(&part_id) {
             Some(v) => v,
             None => bail!("Part {:?} is not found in the module", part_id),
         };
