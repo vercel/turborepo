@@ -2,6 +2,7 @@ pub mod asset_graph;
 pub mod combined;
 pub mod conditional;
 pub mod headers;
+pub mod issue_context;
 pub mod lazy_instantiated;
 pub mod query;
 pub mod request;
@@ -17,10 +18,13 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::rope::Rope;
+use turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
 use turbopack_core::version::VersionedContentVc;
 
-use self::{headers::Headers, query::Query, specificity::SpecificityVc};
+use self::{
+    headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
+    specificity::SpecificityVc,
+};
 
 /// The result of proxying a request to another HTTP server.
 #[turbo_tasks::value(shared)]
@@ -198,19 +202,13 @@ pub struct NeededData {
     pub vary: ContentSourceDataVary,
 }
 
-impl From<VersionedContentVc> for ContentSourceContentVc {
-    fn from(content: VersionedContentVc) -> Self {
-        ContentSourceContentVc::static_content(content)
-    }
-}
-
 /// Additional info passed to the ContentSource. It was extracted from the http
 /// request.
 ///
 /// Note that you might not receive information that has not been requested via
 /// `ContentSource::vary()`. So make sure to request all information that's
 /// needed.
-#[turbo_tasks::value(serialization = "auto_for_input")]
+#[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash, Default)]
 pub struct ContentSourceData {
     /// HTTP method, if requested.
@@ -457,6 +455,14 @@ pub trait ContentSource {
     /// Gets any content sources wrapped in this content source.
     fn get_children(&self) -> ContentSourcesVc {
         ContentSourcesVc::empty()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSourceVc {
+    #[turbo_tasks::function]
+    pub fn issue_context(self, context: FileSystemPathVc, description: &str) -> ContentSourceVc {
+        IssueContextContentSourceVc::new_context(context, description, self).into()
     }
 }
 

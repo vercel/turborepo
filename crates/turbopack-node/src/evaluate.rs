@@ -69,7 +69,9 @@ pub async fn get_evaluate_pool(
         SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: false,
+        }]),
         context.compile_time_info(),
     )
     .as_asset();
@@ -96,7 +98,9 @@ pub async fn get_evaluate_pool(
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: false,
+        }]),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
@@ -113,7 +117,9 @@ pub async fn get_evaluate_pool(
             SourceAssetVc::new(embed_file_path("globals.ts")).into(),
             context,
             Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields: false,
+            }]),
             context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();
@@ -390,7 +396,7 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
         // Reading all files to add itself as dependency
         match *item {
             DirectoryEntry::File(file) => {
-                file.read().await?;
+                file.track().await?;
             }
             DirectoryEntry::Directory(dir) => {
                 dir_dependency(dir.read_glob(GlobVc::new("**"), false)).await?;

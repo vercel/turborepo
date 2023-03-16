@@ -3,15 +3,14 @@ use std::io::Write as _;
 use anyhow::{anyhow, bail, Result};
 use indoc::writedoc;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::Asset,
-    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkableAsset, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 
-use super::chunk_asset::{ManifestChunkAssetReference, ManifestChunkAssetVc};
+use super::chunk_asset::ManifestChunkAssetVc;
 use crate::{
     chunk::{
         item::{
@@ -28,11 +27,6 @@ fn modifier() -> StringVc {
     StringVc::cell("loader".to_string())
 }
 
-#[turbo_tasks::function]
-fn chunk_list_modifier() -> StringVc {
-    StringVc::cell("chunks list".to_string())
-}
-
 /// The manifest loader item is shipped in the same chunk that uses the dynamic
 /// `import()` expression. Its responsibility is to load the manifest chunk from
 /// the server. The dynamic import has been rewritten to import this manifest
@@ -47,24 +41,14 @@ fn chunk_list_modifier() -> StringVc {
 /// import appears in.
 #[turbo_tasks::value]
 pub struct ManifestLoaderItem {
-    context: ChunkingContextVc,
     manifest: ManifestChunkAssetVc,
 }
 
 #[turbo_tasks::value_impl]
 impl ManifestLoaderItemVc {
     #[turbo_tasks::function]
-    pub fn new(context: ChunkingContextVc, manifest: ManifestChunkAssetVc) -> Self {
-        Self::cell(ManifestLoaderItem { context, manifest })
-    }
-
-    #[turbo_tasks::function]
-    async fn chunks_list_path(self) -> Result<FileSystemPathVc> {
-        let this = &*self.await?;
-        Ok(this.context.chunk_path(
-            this.manifest.ident().with_modifier(chunk_list_modifier()),
-            ".json",
-        ))
+    pub fn new(manifest: ManifestChunkAssetVc) -> Self {
+        Self::cell(ManifestLoaderItem { manifest })
     }
 }
 
@@ -76,12 +60,10 @@ impl ChunkItem for ManifestLoaderItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: ManifestLoaderItemVc) -> Result<AssetReferencesVc> {
-        let this = &*self_vc.await?;
-        Ok(AssetReferencesVc::cell(vec![ManifestChunkAssetReference {
-            manifest: this.manifest,
-        }
-        .cell()
+    async fn references(&self) -> Result<AssetReferencesVc> {
+        Ok(AssetReferencesVc::cell(vec![ChunkReferenceVc::new(
+            self.manifest.manifest_chunk(),
+        )
         .into()]))
     }
 }
@@ -89,8 +71,8 @@ impl ChunkItem for ManifestLoaderItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestLoaderItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
-        self.context
+    async fn chunking_context(&self) -> Result<ChunkingContextVc> {
+        Ok(self.manifest.await?.chunking_context)
     }
 
     #[turbo_tasks::function]
@@ -100,10 +82,10 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
 
         let manifest = this.manifest.await?;
         let asset = manifest.asset.as_asset();
-        let chunk = this.manifest.as_chunk(this.context);
+        let chunk = this.manifest.manifest_chunk();
         let chunk_path = &*chunk.path().await?;
 
-        let output_root = this.context.output_root().await?;
+        let output_root = manifest.chunking_context.output_root().await?;
 
         // We need several items in order for a dynamic import to fully load. First, we
         // need the chunk path of the manifest chunk, relative from the output root. The
@@ -115,20 +97,27 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
             bail!(
                 "chunk path {} is not in output root {}",
                 chunk.path().to_string().await?,
-                this.context.output_root().to_string().await?
+                manifest.chunking_context.output_root().to_string().await?
             );
         };
 
         // We also need the manifest chunk item's id, which points to a CJS module that
         // exports a promise for all of the necessary chunk loads.
-        let item_id = &*this.manifest.as_chunk_item(this.context).id().await?;
+        let item_id = &*this
+            .manifest
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .await?;
 
         // Finally, we need the id of the module that we're actually trying to
         // dynamically import.
         let placeable = EcmascriptChunkPlaceableVc::resolve_from(asset)
             .await?
             .ok_or_else(|| anyhow!("asset is not placeable in ecmascript chunk"))?;
-        let dynamic_id = &*placeable.as_chunk_item(this.context).id().await?;
+        let dynamic_id = &*placeable
+            .as_chunk_item(manifest.chunking_context)
+            .id()
+            .await?;
 
         // This is the code that will be executed when the dynamic import is reached.
         // It will load the manifest chunk, which will load all the chunks needed by
@@ -142,8 +131,9 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
                 __turbopack_export_value__((__turbopack_import__) => {{
                     return __turbopack_load__({chunk_server_path}).then(() => {{
                         return __turbopack_require__({item_id});
-                    }}).then((chunks_paths) => {{
-                        return Promise.all(chunks_paths.map((chunk_path) => __turbopack_load__(chunk_path)));
+                    }}).then(({{ chunks, list }}) => {{
+                        __turbopack_register_chunk_list__(list, chunks);
+                        return Promise.all(chunks.map((chunk_path) => __turbopack_load__(chunk_path)));
                     }}).then(() => {{
                         return __turbopack_import__({dynamic_id});
                     }});
@@ -151,7 +141,7 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
             "#,
             chunk_server_path = stringify_js(chunk_server_path),
             item_id = stringify_js(item_id),
-            dynamic_id = stringify_js(dynamic_id)
+            dynamic_id = stringify_js(dynamic_id),
         )?;
 
         Ok(EcmascriptChunkItemContent {

@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use turbo_tasks::{CollectiblesSource, State, TransientInstance};
+use turbo_tasks::{CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance};
 use turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
     version::{
@@ -41,16 +41,25 @@ async fn get_update_stream_item(
     let content = get_content();
 
     match &*content.await? {
-        ResolveSourceRequestResult::Static(static_content, _) => {
-            let resolved_content = static_content.await?.content;
+        ResolveSourceRequestResult::Static(static_content_vc, _) => {
+            let static_content = static_content_vc.await?;
+
+            // This can happen when a chunk is removed from the asset graph.
+            if static_content.status_code == 404 {
+                return Ok(UpdateStreamItem::NotFound.cell());
+            }
+
+            let resolved_content = static_content.content;
             let from = from.get();
             let update = resolved_content.update(from);
 
             let mut plain_issues = peek_issues(update).await?;
             extend_issues(&mut plain_issues, peek_issues(content).await?);
 
-            Ok(UpdateStreamItem {
-                update: update.await?,
+            let update = update.await?;
+
+            Ok(UpdateStreamItem::Found {
+                update,
                 issues: plain_issues,
             }
             .cell())
@@ -71,7 +80,7 @@ async fn get_update_stream_item(
                 Update::None.cell()
             };
 
-            Ok(UpdateStreamItem {
+            Ok(UpdateStreamItem::Found {
                 update: update.await?,
                 issues: plain_issues,
             }
@@ -99,7 +108,8 @@ async fn compute_update_stream(
 
 #[turbo_tasks::value]
 struct VersionState {
-    inner: State<VersionVc>,
+    #[turbo_tasks(trace_ignore)]
+    version: State<TraitRef<VersionVc>>,
 }
 
 #[turbo_tasks::value_impl]
@@ -107,23 +117,21 @@ impl VersionStateVc {
     #[turbo_tasks::function]
     async fn get(self) -> Result<VersionVc> {
         let this = self.await?;
-        let version = *this.inner.get();
+        let version = TraitRef::cell(this.version.get().clone());
         Ok(version)
     }
 }
 
 impl VersionStateVc {
-    async fn new(inner: VersionVc) -> Result<Self> {
-        let inner = inner.cell_local().await?;
+    async fn new(version: VersionVc) -> Result<Self> {
         Ok(Self::cell(VersionState {
-            inner: State::new(inner),
+            version: State::new(version.into_trait_ref().await?),
         }))
     }
 
-    async fn set(&self, new_inner: VersionVc) -> Result<()> {
+    async fn set(&self, new_version: VersionVc) -> Result<()> {
         let this = self.await?;
-        let new_inner = new_inner.cell_local().await?;
-        this.inner.set(new_inner);
+        this.version.set(new_version.into_trait_ref().await?);
         Ok(())
     }
 }
@@ -149,28 +157,42 @@ impl UpdateStream {
 
         let mut last_had_issues = false;
 
-        let stream = ReceiverStream::new(rx).filter_map(move |update| {
-            let has_issues = !update.issues.is_empty();
-            let issues_changed = has_issues != last_had_issues;
-            last_had_issues = has_issues;
+        let stream = ReceiverStream::new(rx).filter_map(move |item| {
+            let (has_issues, issues_changed) =
+                if let UpdateStreamItem::Found { issues, .. } = &*item {
+                    let has_issues = !issues.is_empty();
+                    let issues_changed = has_issues != last_had_issues;
+                    last_had_issues = has_issues;
+                    (has_issues, issues_changed)
+                } else {
+                    (false, false)
+                };
 
             async move {
-                match &*update.update {
-                    Update::Partial(PartialUpdate { to, .. })
-                    | Update::Total(TotalUpdate { to }) => {
-                        version_state
-                            .set(*to)
-                            .await
-                            .expect("failed to update version");
-
-                        Some(update)
+                match &*item {
+                    UpdateStreamItem::NotFound => {
+                        // Propagate not found updates so we can drop this update stream.
+                        Some(item)
                     }
-                    // Do not propagate empty updates.
-                    Update::None => {
-                        if has_issues || issues_changed {
-                            Some(update)
-                        } else {
-                            None
+                    UpdateStreamItem::Found { update, .. } => {
+                        match &**update {
+                            Update::Partial(PartialUpdate { to, .. })
+                            | Update::Total(TotalUpdate { to }) => {
+                                version_state
+                                    .set(*to)
+                                    .await
+                                    .expect("failed to update version");
+
+                                Some(item)
+                            }
+                            // Do not propagate empty updates.
+                            Update::None => {
+                                if has_issues || issues_changed {
+                                    Some(item)
+                                } else {
+                                    None
+                                }
+                            }
                         }
                     }
                 }
@@ -193,7 +215,11 @@ impl Stream for UpdateStream {
 }
 
 #[turbo_tasks::value(serialization = "none")]
-pub struct UpdateStreamItem {
-    pub update: UpdateReadRef,
-    pub issues: Vec<PlainIssueReadRef>,
+#[derive(Debug)]
+pub enum UpdateStreamItem {
+    NotFound,
+    Found {
+        update: UpdateReadRef,
+        issues: Vec<PlainIssueReadRef>,
+    },
 }

@@ -63,10 +63,15 @@ impl EcmascriptChunkEvaluateVc {
             .iter()
             .map(|entry| entry.as_chunk_item(context).id())
             .collect();
+        let chunk_list_path = chunk_group.chunk_list_path().await?;
+        let chunk_list_path = output_root
+            .get_path_to(&chunk_list_path)
+            .map(|path| path.to_string());
         Ok(EcmascriptChunkContentEvaluate {
             ecma_chunks_server_paths,
             other_chunks_server_paths,
             entry_modules_ids,
+            chunk_list_path,
         }
         .cell())
     }
@@ -77,4 +82,5 @@ pub(super) struct EcmascriptChunkContentEvaluate {
     pub ecma_chunks_server_paths: Vec<String>,
     pub other_chunks_server_paths: Vec<String>,
     pub entry_modules_ids: Vec<ModuleIdVc>,
+    pub chunk_list_path: Option<String>,
 }

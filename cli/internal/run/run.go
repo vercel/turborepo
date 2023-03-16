@@ -18,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
@@ -44,6 +45,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
+	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
@@ -141,6 +143,10 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 		opts.cacheOpts.SkipFilesystem = true
 	}
 
+	if os.Getenv("TURBO_RUN_SUMMARY") == "true" {
+		opts.runOpts.summarize = true
+	}
+
 	processes := process.NewManager(base.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
@@ -220,7 +226,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
 		if errors.Is(err, scm.ErrFallback) {
-			r.base.LogWarning("", err)
+			r.base.Logger.Debug("", err)
 		} else {
 			return errors.Wrap(err, "failed to create SCM")
 		}
@@ -250,14 +256,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
 		r.base.Logger,
-		os.Environ(),
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := fs.HashObject(globalHashable); err == nil {
+	if globalHash, err := fs.HashObject(getGlobalHashable(globalHashable)); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -344,18 +349,24 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	// RunSummary contains information that is statically analyzable about
+	// the tasks that we expect to run based on the user command.
+	summary := runsummary.NewRunSummary(
+		startAt,
+		rs.Opts.runOpts.profile,
+		r.base.TurboVersion,
+		packagesInScope,
+		runsummary.NewGlobalHashSummary(
+			globalHashable.globalFileHashMap,
+			globalHashable.rootExternalDepsHash,
+			globalHashable.envVars,
+			globalHashable.globalCacheKey,
+			globalHashable.pipeline,
+		),
+	)
+
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
-		// dryRunSummary contains information that is statically analyzable about
-		// the tasks that we expect to run based on the user command.
-		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
-		summary := &dryRunSummary{
-			TurboVersion:      r.base.TurboVersion,
-			Packages:          packagesInScope,
-			GlobalHashSummary: newGlobalHashSummary(globalHashable),
-			Tasks:             []taskSummary{},
-		}
-
 		return DryRun(
 			ctx,
 			g,
@@ -368,8 +379,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		)
 	}
 
-	// RunState captures the runtime results for this run (e.g. timings of each task and profile)
-	runState := NewRunState(startAt, r.opts.runOpts.profile)
 	// Regular run
 	return RealRun(
 		ctx,
@@ -380,10 +389,10 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboCache,
 		packagesInScope,
 		r.base,
+		summary,
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
 		r.processes,
-		runState,
 	)
 }
 
@@ -441,8 +450,8 @@ func buildTaskGraphEngine(
 	}
 
 	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g); err != nil {
-		return nil, fmt.Errorf("Invalid persistent task dependency:\n%v", err)
+	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.concurrency); err != nil {
+		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
 	}
 
 	return engine, nil

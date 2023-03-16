@@ -3,27 +3,30 @@ use std::io::Write as _;
 use anyhow::{anyhow, bail, Result};
 use indexmap::IndexSet;
 use indoc::{indoc, writedoc};
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::{embed_file, File, FileContent, FileSystemPathReadRef, FileSystemPathVc};
 use turbopack_core::{
     asset::AssetContentVc,
     chunk::{
-        chunk_content, chunk_content_split, ChunkContentResult, ChunkGroupVc, ChunkVc,
-        ChunkingContext, ChunkingContextVc, ModuleId,
+        availability_info::AvailabilityInfo, chunk_content, chunk_content_split,
+        ChunkContentResult, ChunkGroupVc, ChunkVc, ChunkingContext, ChunkingContextVc, ModuleId,
     },
     code_builder::{CodeBuilder, CodeVc},
     environment::{ChunkLoading, EnvironmentVc},
     reference::AssetReferenceVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
-    version::{UpdateVc, VersionVc, VersionedContent, VersionedContentVc},
+    version::{
+        MergeableVersionedContent, MergeableVersionedContentVc, UpdateVc, VersionVc,
+        VersionedContent, VersionedContentMergerVc, VersionedContentVc,
+    },
 };
 
 use super::{
     evaluate::EcmascriptChunkContentEvaluateVc,
     item::{EcmascriptChunkItemVc, EcmascriptChunkItems, EcmascriptChunkItemsVc},
+    merged::merger::EcmascriptChunkContentMergerVc,
     placeable::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
     snapshot::EcmascriptChunkContentEntriesSnapshotReadRef,
-    update::update_ecmascript_chunk,
     version::{EcmascriptChunkVersion, EcmascriptChunkVersionVc},
 };
 use crate::utils::stringify_js;
@@ -61,10 +64,13 @@ pub(crate) fn ecmascript_chunk_content(
     context: ChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
+    availability_info: Value<AvailabilityInfo>,
 ) -> EcmascriptChunkContentResultVc {
-    let mut chunk_content = ecmascript_chunk_content_internal(context, main_entries);
+    let mut chunk_content =
+        ecmascript_chunk_content_internal(context, main_entries, availability_info);
     if let Some(omit_entries) = omit_entries {
-        let omit_chunk_content = ecmascript_chunk_content_internal(context, omit_entries);
+        let omit_chunk_content =
+            ecmascript_chunk_content_internal(context, omit_entries, availability_info);
         chunk_content = chunk_content.filter(omit_chunk_content);
     }
     chunk_content
@@ -74,12 +80,13 @@ pub(crate) fn ecmascript_chunk_content(
 async fn ecmascript_chunk_content_internal(
     context: ChunkingContextVc,
     entries: EcmascriptChunkPlaceablesVc,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<EcmascriptChunkContentResultVc> {
     let entries = entries.await?;
     let entries = entries.iter().copied();
 
     let contents = entries
-        .map(|entry| ecmascript_chunk_content_single_entry(context, entry))
+        .map(|entry| ecmascript_chunk_content_single_entry(context, entry, availability_info))
         .collect::<Vec<_>>();
 
     if contents.len() == 1 {
@@ -121,14 +128,18 @@ async fn ecmascript_chunk_content_internal(
 async fn ecmascript_chunk_content_single_entry(
     context: ChunkingContextVc,
     entry: EcmascriptChunkPlaceableVc,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<EcmascriptChunkContentResultVc> {
     let asset = entry.as_asset();
 
     Ok(EcmascriptChunkContentResultVc::cell(
-        if let Some(res) = chunk_content::<EcmascriptChunkItemVc>(context, asset, None).await? {
+        if let Some(res) =
+            chunk_content::<EcmascriptChunkItemVc>(context, asset, None, availability_info).await?
+        {
             res
         } else {
-            chunk_content_split::<EcmascriptChunkItemVc>(context, asset, None).await?
+            chunk_content_split::<EcmascriptChunkItemVc>(context, asset, None, availability_info)
+                .await?
         }
         .into(),
     ))
@@ -152,10 +163,12 @@ impl EcmascriptChunkContentVc {
         omit_entries: Option<EcmascriptChunkPlaceablesVc>,
         chunk_path: FileSystemPathVc,
         evaluate: Option<EcmascriptChunkContentEvaluateVc>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Self> {
         // TODO(alexkirsz) All of this should be done in a transition, otherwise we run
         // the risks of values not being strongly consistent with each other.
-        let chunk_content = ecmascript_chunk_content(context, main_entries, omit_entries);
+        let chunk_content =
+            ecmascript_chunk_content(context, main_entries, omit_entries, availability_info);
         let chunk_content = chunk_content.await?;
         let chunk_path = chunk_path.await?;
         let module_factories = chunk_content.chunk_items.to_entry_snapshot().await?;
@@ -174,7 +187,7 @@ impl EcmascriptChunkContentVc {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkContentVc {
     #[turbo_tasks::function]
-    pub(super) async fn version(self) -> Result<EcmascriptChunkVersionVc> {
+    pub(super) async fn own_version(self) -> Result<EcmascriptChunkVersionVc> {
         let this = self.await?;
         let chunk_server_path = if let Some(path) = this.output_root.get_path_to(&this.chunk_path) {
             path
@@ -234,12 +247,29 @@ impl EcmascriptChunkContentVc {
                 .map(|id| async move {
                     let id = id.await?;
                     let id = stringify_js(&id);
-                    Ok(format!(r#"instantiateRuntimeModule({id});"#)) as Result<_>
+                    Ok(format!(r#"    instantiateRuntimeModule({id});"#)) as Result<_>
                 })
                 .try_join()
                 .await?
                 .join("\n");
 
+            let chunk_list_register = evaluate
+                .chunk_list_path
+                .as_deref()
+                .map(|path| {
+                    format!(
+                        r#"registerChunkList({}, {});"#,
+                        stringify_js(&path),
+                        stringify_js(
+                            &evaluate
+                                .ecma_chunks_server_paths
+                                .iter()
+                                .chain(&evaluate.other_chunks_server_paths)
+                                .collect::<Vec<_>>()
+                        )
+                    )
+                })
+                .unwrap_or_else(String::new);
             // Add a runnable to the chunk that requests the entry module to ensure it gets
             // executed when the chunk is evaluated.
             // The condition stops the entry module from being executed while chunks it
@@ -249,9 +279,10 @@ impl EcmascriptChunkContentVc {
             writedoc!(
                 code,
                 r#"
-                    , ({{ loadedChunks, instantiateRuntimeModule }}) => {{
-                        if(!(true{condition})) return true;
-                        {entries_instantiations}
+                    , ({{ loadedChunks, instantiateRuntimeModule, registerChunkList }}) => {{
+                        if (!(true{condition})) return true;
+                        {chunk_list_register}
+                    {entries_instantiations}
                     }}
                 "#
             )?;
@@ -322,12 +353,20 @@ impl VersionedContent for EcmascriptChunkContent {
 
     #[turbo_tasks::function]
     fn version(self_vc: EcmascriptChunkContentVc) -> VersionVc {
-        self_vc.version().into()
+        self_vc.own_version().into()
     }
 
     #[turbo_tasks::function]
-    fn update(self_vc: EcmascriptChunkContentVc, from_version: VersionVc) -> UpdateVc {
-        update_ecmascript_chunk(self_vc, from_version)
+    fn update(_self_vc: EcmascriptChunkContentVc, _from_version: VersionVc) -> Result<UpdateVc> {
+        bail!("EcmascriptChunkContent is not updateable")
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl MergeableVersionedContent for EcmascriptChunkContent {
+    #[turbo_tasks::function]
+    fn get_merger(&self) -> VersionedContentMergerVc {
+        EcmascriptChunkContentMergerVc::new().into()
     }
 }
 

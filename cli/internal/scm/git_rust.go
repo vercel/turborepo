@@ -19,8 +19,8 @@ type git struct {
 }
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
-func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
-	return ffi.ChangedFiles(g.repoRoot, fromCommit, toCommit, includeUntracked, relativeTo)
+func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, monorepoRoot string) ([]string, error) {
+	return ffi.ChangedFiles(g.repoRoot, monorepoRoot, fromCommit, toCommit, includeUntracked)
 }
 
 func (g *git) PreviousContent(fromCommit string, filePath string) ([]byte, error) {

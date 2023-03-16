@@ -32,6 +32,7 @@ func Test_manuallyHashPackage(t *testing.T) {
 		"child-dir/libA/some-file":              {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
 		"child-dir/libA/some-dir/other-file":    {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
 		"child-dir/libA/some-dir/another-one":   {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
+		"child-dir/libA/some-dir/excluded-file": {"some-file-contents", "7e59c6a6ea9098c6d3beb00e753e2c54ea502311"},
 		"child-dir/libA/ignoreme":               {"anything", ""},
 		"child-dir/libA/ignorethisdir/anything": {"anything", ""},
 		"child-dir/libA/pkgignoreme":            {"anything", ""},
@@ -110,14 +111,14 @@ func Test_manuallyHashPackage(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file")}, repoRoot)
+	justFileHashes, err := manuallyHashPackage(pkg, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")}, repoRoot)
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
 	for path, spec := range files {
 		systemPath := path.ToSystemPath()
 		if systemPath.HasPrefix(pkgName) {
-			shouldInclude := strings.HasSuffix(systemPath.ToString(), "file")
+			shouldInclude := strings.HasSuffix(systemPath.ToString(), "file") && !strings.HasSuffix(systemPath.ToString(), "excluded-file")
 			relPath := systemPath[len(pkgName)+1:]
 			got, ok := justFileHashes[relPath.ToUnixPath()]
 			if !ok && shouldInclude {

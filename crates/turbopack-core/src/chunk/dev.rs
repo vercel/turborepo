@@ -223,6 +223,17 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
+    async fn chunk_list_path(
+        &self,
+        entry_chunk_path: FileSystemPathVc,
+    ) -> Result<FileSystemPathVc> {
+        Ok(entry_chunk_path.parent().join(&format!(
+            "{}.chunk-list.json",
+            entry_chunk_path.await?.file_name()
+        )))
+    }
+
+    #[turbo_tasks::function]
     async fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> Result<BoolVc> {
         let parent_dir = asset_a.ident().path().parent().await?;
 
@@ -258,4 +269,9 @@ impl ChunkingContext for DevChunkingContext {
         context.layer = (!layer.is_empty()).then(|| layer.to_string());
         Ok(DevChunkingContextVc::new(Value::new(context)).into())
     }
+}
+
+#[turbo_tasks::function]
+fn chunk_list_modifier() -> StringVc {
+    StringVc::cell("chunk list".to_string())
 }

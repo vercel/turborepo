@@ -3,13 +3,6 @@ resolver = "2"
 
 members = [
   "crates/auto-hash-map",
-  "crates/next-binding",
-  "crates/next-core",
-  "crates/next-dev",
-  "crates/next-dev-tests",
-  "crates/next-font",
-  "crates/next-transform-dynamic",
-  "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
@@ -51,13 +44,6 @@ members = [
 
 default-members = [
   "crates/auto-hash-map",
-  "crates/next-binding",
-  "crates/next-core",
-  "crates/next-dev",
-  "crates/next-dev-tests",
-  "crates/next-font",
-  "crates/next-transform-dynamic",
-  "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
@@ -89,6 +75,9 @@ default-members = [
   "xtask",
 ]
 
+[profile.release]
+debug = 1
+
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
 
@@ -101,22 +90,15 @@ opt-level = 3
 [workspace.dependencies]
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-mdxjs = { version = "0.1.6" }
-modularize_imports = { version = "0.26.4" }
-styled_components = { version = "0.53.4" }
-styled_jsx = { version = "0.30.4" }
-swc_core = { version = "0.59.26" }
-swc_emotion = { version = "0.29.4" }
+mdxjs = { version = "0.1.8" }
+modularize_imports = { version = "0.26.10" }
+styled_components = { version = "0.53.10" }
+styled_jsx = { version = "0.30.10" }
+swc_core = { version = "0.69.6" }
+swc_emotion = { version = "0.29.10" }
 testing = { version = "0.31.31" }
 
 auto-hash-map = { path = "crates/auto-hash-map" }
-next-binding = { path = "crates/next-binding" }
-next-core = { path = "crates/next-core" }
-next-dev = { path = "crates/next-dev" }
-next-dev-tests = { path = "crates/next-dev-tests" }
-next-font = { path = "crates/next-font" }
-next-transform-dynamic = { path = "crates/next-transform-dynamic" }
-next-transform-strip-page-exports = { path = "crates/next-transform-strip-page-exports" }
 node-file-trace = { path = "crates/node-file-trace" }
 swc-ast-explorer = { path = "crates/swc-ast-explorer" }
 turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
@@ -222,4 +204,5 @@ tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 url = "2.2.2"
+urlencoding = "2.1.2"
 webbrowser = "0.8.7"

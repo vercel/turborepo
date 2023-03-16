@@ -8,10 +8,14 @@
  */
 
 //!
-//! The paths module for buck2.
+//! The paths crate for turborepo. Adapted from buck2's paths module.
 //!
-//! Introduces 'ForwardRelativePath', 'ForwardRelativePathBuf', 'AbsPath', and
-//! 'AbsPathBuf', which are equivalents of 'Path' and 'PathBuf'.
+//! Changes from buck2:
+//!  - Removed abbreviations such as `AbsPath` -> `AbsolutePath` to fit with the
+//!    turbo codebase's conventions
+//!
+//! Introduces 'ForwardRelativePath', 'ForwardRelativePathBuf', 'AbsolutePath',
+//! and 'AbsolutePathBuf', which are equivalents of 'Path' and 'PathBuf'.
 //!
 //! ForwardRelativePaths are fully normalized relative platform agnostic paths
 //! that only points forward. This means  that there is no `.` or `..` in this

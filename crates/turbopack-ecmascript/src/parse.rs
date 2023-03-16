@@ -216,6 +216,7 @@ async fn parse_content(
                             import_assertions: true,
                             allow_super_outside_method: true,
                             allow_return_outside_function: true,
+                            auto_accessors: true,
                         }),
                         EcmascriptModuleAssetType::Typescript
                         | EcmascriptModuleAssetType::TypescriptWithTypes => {
@@ -224,6 +225,7 @@ async fn parse_content(
                                 dts: false,
                                 no_early_errors: true,
                                 tsx: true,
+                                disallow_ambiguous_jsx_like: false,
                             })
                         }
                         EcmascriptModuleAssetType::TypescriptDeclaration => {
@@ -232,6 +234,7 @@ async fn parse_content(
                                 dts: true,
                                 no_early_errors: true,
                                 tsx: true,
+                                disallow_ambiguous_jsx_like: false,
                             })
                         }
                     },
@@ -288,6 +291,10 @@ async fn parse_content(
             for transform in transforms.iter() {
                 transform.apply(&mut parsed_program, &context).await?;
             }
+
+            parsed_program.visit_mut_with(
+                &mut swc_core::ecma::transforms::base::helpers::inject_helpers(unresolved_mark),
+            );
 
             let eval_context = EvalContext::new(&parsed_program, unresolved_mark);
 
