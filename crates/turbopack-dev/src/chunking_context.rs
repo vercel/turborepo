@@ -183,7 +183,6 @@ impl ChunkingContext for DevChunkingContext {
                 ModulePart::ModuleEvaluation => {
                     1_u8.deterministic_hash(&mut hasher);
                 }
-
                 ModulePart::Export(export) => {
                     2_u8.deterministic_hash(&mut hasher);
                     export.await?.deterministic_hash(&mut hasher);
