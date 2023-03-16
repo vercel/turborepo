@@ -135,7 +135,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	runSummary.Close(base.UI, exitCode)
+	runSummary.Close(base.UI)
 
 	// Write Run Summary if we wanted to
 	if rs.Opts.runOpts.summarize {
