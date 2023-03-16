@@ -111,6 +111,7 @@ type TaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
@@ -147,5 +148,6 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		ExpandedOutputs:        ht.ExpandedOutputs,
 		EnvVars:                ht.EnvVars,
 		Execution:              ht.Execution,
+		ExternalDepsHash:       ht.ExternalDepsHash,
 	}
 }

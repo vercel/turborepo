@@ -31,6 +31,8 @@ Setup
     "status": "built",
     "error": null
   }
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].hashOfExternalDependencies'
+  "ccab0b28617f1f56"
 
 # validate expandedOutputs since it won't be in dry runs and we want some testing around that
   $ cat $(ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].expandedOutputs'
