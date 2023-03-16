@@ -53,6 +53,11 @@ pub trait TurboTasksCallApi: Sync + Send {
         &self,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId;
+    fn run_once_with_reason(
+        &self,
+        reason: StaticOrArc<dyn InvalidationReason>,
+        future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> TaskId;
     fn run_once_process(
         &self,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
@@ -809,6 +814,22 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
     }
 
     #[track_caller]
+    fn run_once_with_reason(
+        &self,
+        reason: StaticOrArc<dyn InvalidationReason>,
+        future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> TaskId {
+        {
+            let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
+            reason_set.insert(reason);
+        }
+        self.spawn_once_task(async move {
+            future.await?;
+            Ok(CompletionVc::new().into())
+        })
+    }
+
+    #[track_caller]
     fn run_once_process(
         &self,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
@@ -1219,6 +1240,31 @@ pub async fn run_once<T: Send + 'static>(
             .map_err(|_| anyhow!("unable to send result"))?;
         Ok(())
     }));
+
+    // INVALIDATION: A Once task will never invalidate, therefore we don't need to
+    // track a dependency
+    let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
+    raw_result.into_read_untracked::<Completion>(&*tt).await?;
+
+    Ok(rx.await?)
+}
+
+pub async fn run_once_with_reason<T: Send + 'static>(
+    tt: Arc<dyn TurboTasksApi>,
+    reason: impl InvalidationReason,
+    future: impl Future<Output = Result<T>> + Send + 'static,
+) -> Result<T> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task_id = tt.run_once_with_reason(
+        (Arc::new(reason) as Arc<dyn InvalidationReason>).into(),
+        Box::pin(async move {
+            let result = future.await?;
+            tx.send(result)
+                .map_err(|_| anyhow!("unable to send result"))?;
+            Ok(())
+        }),
+    );
 
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
