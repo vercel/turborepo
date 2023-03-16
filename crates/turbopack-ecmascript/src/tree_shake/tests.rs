@@ -110,7 +110,6 @@ fn run(input: PathBuf) {
             g: &mut g,
             item_ids: &item_ids,
             items: &mut items,
-            last_side_effect: Default::default(),
             last_side_effects: Default::default(),
             vars: Default::default(),
         };
