@@ -52,7 +52,7 @@ impl Asset for EcmascriptModulePartAsset {
     fn content(&self) -> AssetContentVc {
         // This is not reachable because EcmascriptModulePartAsset implements
         // ChunkableAsset and ChunkableAsset::as_chunk is called instead.
-        unreachable!("EcmascriptModulePartAsset::content cannot be called directly")
+        todo!("EcmascriptModulePartAsset::content is not implemented")
     }
 
     #[turbo_tasks::function]
