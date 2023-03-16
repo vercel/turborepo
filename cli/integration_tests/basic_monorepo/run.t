@@ -33,5 +33,12 @@ Setup
   \xe2\x80\xa2 Running something in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   root task something (turbo run build) looks like it invokes turbo and might cause a loop
+  
+  No tasks were executed as part of this run.
+  
+   Tasks:    0 successful, 0 total
+  Cached:    0 cached, 0 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
    ERROR  run failed: command  exited (1)
   [1]
