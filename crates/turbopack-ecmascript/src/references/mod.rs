@@ -318,7 +318,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            if options.split_into_parts {
+            if options.import_parts {
                 for r in eval_context.imports.references() {
                     match &r.imported_symbols {
                         ImportedSymbols::Symbols(symbols) => {
