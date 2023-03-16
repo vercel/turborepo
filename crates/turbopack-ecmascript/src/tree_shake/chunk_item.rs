@@ -26,12 +26,6 @@ pub struct EcmascriptModulePartChunkItem {
     pub(super) part: ModulePartVc,
 }
 
-impl EcmascriptModulePartChunkItemVc {
-    pub(super) fn new(data: EcmascriptModulePartChunkItem) -> Self {
-        data.cell()
-    }
-}
-
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
