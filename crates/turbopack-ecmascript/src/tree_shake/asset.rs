@@ -74,7 +74,7 @@ impl Asset for EcmascriptModulePartAsset {
                 Ok(SingleAssetReferenceVc::new(
                     EcmascriptModulePartAssetVc::new(
                         self.full_module,
-                        ModulePartVc::new(ModulePart::Internal(part_id)),
+                        ModulePartVc::internal(part_id),
                     )?
                     .as_asset(),
                     StringVc::cell("ecmascript module part".to_string()),
@@ -107,15 +107,14 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
     ) -> Result<EcmascriptChunkItemVc> {
         let s = self_vc.await?;
 
-        Ok(
-            EcmascriptModulePartChunkItemVc::new(EcmascriptModulePartChunkItem {
-                module: self_vc,
-                context,
-                full_module: s.full_module,
-                part: s.part,
-            })
-            .into(),
-        )
+        Ok(EcmascriptModulePartChunkItem {
+            module: self_vc,
+            context,
+            full_module: s.full_module,
+            part: s.part,
+        }
+        .cell()
+        .into())
     }
 
     #[turbo_tasks::function]
@@ -146,7 +145,7 @@ impl EcmascriptModulePartAssetVc {
     #[turbo_tasks::function]
     pub(super) async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
         let this = self.await?;
-        let module = part.full_module.await?;
+        let module = this.full_module.await?;
         Ok(analyze_ecmascript_module(
             module.source,
             this.full_module.as_resolve_origin(),

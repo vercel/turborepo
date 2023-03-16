@@ -326,7 +326,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 origin,
                                 RequestVc::parse(Value::new(r.module_path.to_string().into())),
                                 Value::new(r.annotations.clone()),
-                                Some(ModulePartVc::new(ModulePart::ModuleEvaluation)),
+                                Some(ModulePartVc::module_evaluation()),
                             );
                             import_references.push(vc);
 
@@ -335,9 +335,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                     origin,
                                     RequestVc::parse(Value::new(r.module_path.to_string().into())),
                                     Value::new(r.annotations.clone()),
-                                    Some(ModulePartVc::new(ModulePart::Export(StringVc::cell(
-                                        symbol.to_string(),
-                                    )))),
+                                    Some(ModulePartVc::export(symbol.to_string())),
                                 );
                                 import_references.push(r);
                             }
