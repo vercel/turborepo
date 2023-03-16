@@ -1297,8 +1297,18 @@ pub enum ModulePart {
     Internal(u32),
 }
 
+#[turbo_tasks::value_impl]
 impl ModulePartVc {
-    pub fn new(part: ModulePart) -> Self {
-        part.cell()
+    #[turbo_tasks::function]
+    pub fn module_evaluation() -> Self {
+        ModulePart::ModuleEvaluation.cell()
+    }
+    #[turbo_tasks::function]
+    pub fn export(export: String) -> Self {
+        ModulePart::Export(StringVc::cell(export)).cell()
+    }
+    #[turbo_tasks::function]
+    pub fn internal(id: u32) -> Self {
+        ModulePart::Internal(id).cell()
     }
 }
