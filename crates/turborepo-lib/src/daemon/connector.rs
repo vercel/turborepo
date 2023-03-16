@@ -91,10 +91,7 @@ impl DaemonConnector {
                 rest => rest?,
             };
 
-            let mut client = DaemonClient {
-                client: conn,
-                connect_settings: (),
-            };
+            let mut client = DaemonClient::new(conn);
 
             match client.handshake().await {
                 Ok(_) => {

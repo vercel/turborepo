@@ -11,28 +11,11 @@ pub mod proto {
 
 #[derive(Debug)]
 pub struct DaemonClient<T> {
-    pub client: TurbodClient<tonic::transport::Channel>,
-    pub connect_settings: T,
+    client: TurbodClient<tonic::transport::Channel>,
+    connect_settings: T,
 }
 
 impl<T> DaemonClient<T> {
-    /// Get the status of the daemon.
-    pub async fn status(&mut self) -> Result<proto::DaemonStatus, DaemonError> {
-        self.client
-            .status(proto::StatusRequest {})
-            .await?
-            .into_inner()
-            .daemon_status
-            .ok_or(DaemonError::MalformedResponse)
-    }
-
-    /// Stops the daemon and closes the connection, returning
-    /// the connection settings that were used to connect.
-    pub async fn stop(mut self) -> Result<T, DaemonError> {
-        self.client.shutdown(proto::ShutdownRequest {}).await?;
-        Ok(self.connect_settings)
-    }
-
     /// Interrogate the server for its version.
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
         let _ret = self
@@ -45,6 +28,42 @@ impl<T> DaemonClient<T> {
             .await?;
 
         Ok(())
+    }
+
+    /// Stops the daemon and closes the connection, returning
+    /// the connection settings that were used to connect.
+    pub async fn stop(mut self) -> Result<T, DaemonError> {
+        log::info!("Stopping daemon");
+        self.client.shutdown(proto::ShutdownRequest {}).await?;
+        Ok(self.connect_settings)
+    }
+}
+
+impl DaemonClient<()> {
+    pub fn new(client: TurbodClient<tonic::transport::Channel>) -> Self {
+        Self {
+            client,
+            connect_settings: (),
+        }
+    }
+
+    /// Augment the client with the connect settings, allowing it to be
+    /// restarted.
+    pub fn with_connect_settings(
+        self,
+        connect_settings: DaemonConnector,
+    ) -> DaemonClient<DaemonConnector> {
+        DaemonClient {
+            client: self.client,
+            connect_settings,
+        }
+    }
+}
+
+impl DaemonClient<DaemonConnector> {
+    /// Stops the daemon, closes the connection, and opens a new connection.
+    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
+        self.stop().await?.connect().await.map_err(Into::into)
     }
 
     #[allow(dead_code)]
@@ -78,26 +97,23 @@ impl<T> DaemonClient<T> {
 
         Ok(())
     }
-}
 
-impl DaemonClient<()> {
-    /// Augment the client with the connect settings, allowing it to be
-    /// restarted.
-    pub fn with_connect_settings(
-        self,
-        connect_settings: DaemonConnector,
-    ) -> DaemonClient<DaemonConnector> {
-        DaemonClient {
-            client: self.client,
-            connect_settings,
-        }
+    /// Get the status of the daemon.
+    pub async fn status(&mut self) -> Result<proto::DaemonStatus, DaemonError> {
+        self.client
+            .status(proto::StatusRequest {})
+            .await?
+            .into_inner()
+            .daemon_status
+            .ok_or(DaemonError::MalformedResponse)
     }
-}
 
-impl DaemonClient<DaemonConnector> {
-    /// Stops the daemon, closes the connection, and opens a new connection.
-    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
-        self.stop().await?.connect().await.map_err(Into::into)
+    pub fn pid_file(&self) -> &std::path::Path {
+        self.connect_settings.pid_file.as_path()
+    }
+
+    pub fn sock_file(&self) -> &std::path::Path {
+        self.connect_settings.sock_file.as_path()
     }
 }
 

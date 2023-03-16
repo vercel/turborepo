@@ -35,8 +35,8 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
             let status = DaemonStatus {
                 uptime_ms: status.uptime_msec,
                 log_file: status.log_file.into(),
-                pid_file: client.connect_settings.pid_file.clone(),
-                sock_file: client.connect_settings.sock_file.clone(),
+                pid_file: client.pid_file().to_owned(),
+                sock_file: client.sock_file().to_owned(),
             };
             if *json {
                 println!("{}", serde_json::to_string_pretty(&status)?);
