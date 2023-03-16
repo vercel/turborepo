@@ -99,21 +99,7 @@ func RealRun(
 		// don't hold the lock while we run ec.exec
 		mu.Unlock()
 
-		taskSummaries = append(taskSummaries, taskSummary)
-
-		itemStatus := turboCache.Exists(packageTask.Hash)
-		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
-		if err != nil {
-			fmt.Printf("Warning: error with collecting task summary: %s", err)
-		}
-		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
-		if err != nil {
-			fmt.Printf("Warning: error with collecting task summary: %s", err)
-		}
-
-		taskSummary.CacheState = itemStatus  // TODO(mehulkar): Move this to PackageTask
-		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
-		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
+		taskSummary.CacheState = turboCache.Exists(packageTask.Hash) // TODO(mehulkar): Move this to PackageTask
 
 		// deps here are passed in to calculate the task hash
 		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
