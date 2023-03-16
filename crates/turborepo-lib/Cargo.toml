@@ -45,7 +45,7 @@ log = { workspace = true }
 notify = { version = "5.1.0", default-features = false, features = [
   "macos_kqueue",
 ] }
-pidlock = { git = "https://github.com/arlyon/pidlock", branch = "master" }
+pidlock = { path = "../pidlock" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
