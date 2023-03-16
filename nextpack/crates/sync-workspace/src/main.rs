@@ -1,10 +1,12 @@
 use std::{
-    collections::{btree_map, BTreeMap, HashMap},
+    collections::{btree_map, BTreeMap, HashMap, HashSet},
     fs::File,
     io::{Read, Write},
+    mem::take,
 };
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use indoc::indoc;
 use toml::{map::Entry, value::Array, Table, Value};
 
@@ -108,6 +110,8 @@ fn to_map(lock: Array) -> BTreeMap<String, Value> {
 fn get_diff_only(a: &Value, b: &Value) -> Value {
     if let (Some(a), Some(b)) = (a.as_table(), b.as_table()) {
         Value::Table(get_table_diff_only(a, b))
+    } else if let (Some(a), Some(b)) = (a.as_array(), b.as_array()) {
+        Value::Array(get_array_diff_only(a, b))
     } else {
         a.clone()
     }
@@ -118,13 +122,68 @@ fn get_table_diff_only(a: &Table, b: &Table) -> Table {
     for (key, value) in a {
         if let Some(b_value) = b.get(key) {
             if value != b_value {
-                diff.insert(key.to_string(), value.clone());
+                diff.insert(key.to_string(), get_diff_only(value, b_value));
             }
         } else {
             diff.insert(key.to_string(), value.clone());
         }
     }
     diff
+}
+
+fn get_array_diff_only(a: &Array, b: &Array) -> Array {
+    let mut diff = Array::new();
+    for value in a {
+        if !b.iter().any(|b_value| value == b_value) {
+            diff.push(value.clone());
+        }
+    }
+    diff
+}
+
+fn take_dependencies(lock_entry: &mut Table) -> Array {
+    if let Some(mut deps_value) = lock_entry.remove("dependencies") {
+        take(deps_value.as_array_mut().unwrap())
+    } else {
+        Array::new()
+    }
+}
+
+fn deps_to_map(deps: &Array) -> IndexMap<String, String> {
+    deps.iter()
+        .map(|v| {
+            let item = v.as_str().unwrap();
+            let (name, version) = item.split_once(' ').unwrap();
+            (name.to_string(), version.to_string())
+        })
+        .collect::<IndexMap<_, _>>()
+}
+
+fn merge_dependencies(parent: &str, next_deps: Array, turbo_deps: Array) -> (Array, usize) {
+    let next_map = deps_to_map(&next_deps);
+    let turbo_map = deps_to_map(&turbo_deps);
+    let mut conflicts = 0;
+    let mut merged = Array::new();
+    let mut handled = HashSet::new();
+    for (name, next_version) in next_map {
+        if let Some(turbo_version) = turbo_map.get(&name) {
+            if next_version != *turbo_version {
+                conflicts += 1;
+                println!(
+                    "confliction lockfile entry dependencies:\n  next:  {parent} -> {name} = \
+                     {next_version}\n  turbo: {parent} -> {name} = {turbo_version}",
+                );
+            }
+        }
+        merged.push(Value::String(format!("{} {}", name, next_version)));
+        handled.insert(name);
+    }
+    for (name, turbo_version) in turbo_map {
+        if !handled.contains(&name) {
+            merged.push(Value::String(format!("{} {}", name, turbo_version)));
+        }
+    }
+    (merged, conflicts)
 }
 
 fn main() -> Result<()> {
@@ -195,7 +254,7 @@ fn sync_cargo_toml() -> Result<usize> {
                 let next_value = e.get_mut();
                 if *next_value != turbo_value {
                     println!(
-                        "conflicting dependency:\nnext:  {} = {}\nturbo: {} = {}",
+                        "conflicting dependency:\n  next:  {} = {}\n  turbo: {} = {}",
                         key,
                         get_diff_only(next_value, &turbo_value),
                         key,
@@ -269,13 +328,15 @@ fn sync_cargo_lock() -> Result<usize> {
     // Merge dependencies from Next.js and Turbo.
     let mut conflicts_count = 0;
     let mut lock_entries = next_lock_entries;
-    for (key, turbo_value) in turbo_lock_entries {
+    for (key, mut turbo_value) in turbo_lock_entries {
+        let turbo_deps = take_dependencies(turbo_value.as_table_mut().unwrap());
         match lock_entries.entry(key.clone()) {
             btree_map::Entry::Occupied(mut e) => {
                 let next_value = e.get_mut();
+                let next_deps = take_dependencies(next_value.as_table_mut().unwrap());
                 if *next_value != turbo_value {
                     println!(
-                        "conflicting lockfile entry:\nnext:  {} = {}\nturbo: {} = {}",
+                        "conflicting lockfile entry:\n  next:  {} = {}\n  turbo: {} = {}",
                         key,
                         get_diff_only(next_value, &turbo_value),
                         key,
@@ -283,6 +344,12 @@ fn sync_cargo_lock() -> Result<usize> {
                     );
                     conflicts_count += 1;
                 }
+                let (deps, conflicts) = merge_dependencies(&key, next_deps, turbo_deps);
+                conflicts_count += conflicts;
+                next_value
+                    .as_table_mut()
+                    .unwrap()
+                    .insert("dependencies".to_string(), Value::Array(deps));
             }
             btree_map::Entry::Vacant(e) => {
                 e.insert(turbo_value);

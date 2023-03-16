@@ -98,6 +98,7 @@ type TaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	CacheState             cache.ItemStatus                      `json:"cacheState"`
 	Command                string                                `json:"command"`
+	CommandArguments       []string                              `json:"commandArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFile                string                                `json:"logFile"`
@@ -110,6 +111,7 @@ type TaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
@@ -135,6 +137,7 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Hash:                   ht.Hash,
 		CacheState:             ht.CacheState,
 		Command:                ht.Command,
+		CommandArguments:       ht.CommandArguments,
 		Outputs:                ht.Outputs,
 		LogFile:                ht.LogFile,
 		Dependencies:           dependencies,
@@ -145,5 +148,6 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		ExpandedOutputs:        ht.ExpandedOutputs,
 		EnvVars:                ht.EnvVars,
 		Execution:              ht.Execution,
+		ExternalDepsHash:       ht.ExternalDepsHash,
 	}
 }

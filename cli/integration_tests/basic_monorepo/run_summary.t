@@ -3,11 +3,14 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null
 # no output, just check for 0 status code
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
+
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | length'
+  2
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
   {
@@ -16,6 +19,10 @@ Setup
     "status": "built",
     "error": null
   }
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].commandArguments'
+  [
+    "someargs"
+  ]
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "util#build")) | .[0].execution'
   {
@@ -24,6 +31,8 @@ Setup
     "status": "built",
     "error": null
   }
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].hashOfExternalDependencies'
+  "ccab0b28617f1f56"
 
 # validate expandedOutputs since it won't be in dry runs and we want some testing around that
   $ cat $(ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].expandedOutputs'
