@@ -362,11 +362,6 @@ pub(super) async fn part_of_module(
             eval_context,
             ..
         } => {
-            // Not a module
-            if split_data.modules.is_empty() {
-                return Ok(split_data.parsed);
-            }
-
             let program = Program::Module(split_data.modules[part_id as usize].clone());
             let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
 
