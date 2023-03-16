@@ -291,7 +291,7 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
-    }
+    },
     Unparseable,
     NotFound,
 }
@@ -315,33 +315,29 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
     let filename = path.await?.file_name().to_string();
     let parse_result = parsed.await?;
 
-    if let ParseResult::Ok {
-        program: Program::Module(module),
-        ..
-    } = &*parse_result
-    {
-        let (mut dep_graph, items) = Analyzer::analyze(module);
+    match &*parse_result {
+        ParseResult::Ok {
+            program: Program::Module(module),
+            ..
+        } => {
+            let (mut dep_graph, items) = Analyzer::analyze(module);
 
-        dep_graph.handle_weak(Mode::Production);
+            dep_graph.handle_weak(Mode::Production);
 
-        let (data, deps, modules) = dep_graph.split_module(&format!("./{filename}").into(), &items);
+            let (data, deps, modules) =
+                dep_graph.split_module(&format!("./{filename}").into(), &items);
 
-        return Ok(SplitResult {
-            data,
-            deps,
-            modules,
-            parsed,
+            Ok(SplitResult::Ok {
+                data,
+                deps,
+                modules,
+                parsed,
+            }
+            .cell())
         }
-        .cell());
+        ParseResult::NotFound => Ok(SplitResult::NotFound.cell()),
+        ParseResult::Unparseable { .. } => Ok(SplitResult::Unparseable.cell()),
     }
-
-    Ok(SplitResult {
-        data: Default::default(),
-        deps: Default::default(),
-        modules: Default::default(),
-        parsed,
-    }
-    .cell())
 }
 
 #[turbo_tasks::function]
@@ -352,7 +348,7 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     let part_id = match part {
-        Some(part) => match get_part_id(&split_data, part).await?,
+        Some(part) => get_part_id(&split_data, part).await?,
         None => return Ok(split_data.parsed),
     };
 
