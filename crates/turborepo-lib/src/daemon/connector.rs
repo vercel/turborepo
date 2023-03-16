@@ -372,8 +372,13 @@ mod test {
     };
 
     use sysinfo::Pid;
+    use tokio::{
+        select,
+        sync::{oneshot::Sender, Mutex},
+    };
 
     use super::*;
+    use crate::daemon::client::proto;
 
     #[cfg(not(target_os = "windows"))]
     const NODE_EXE: &str = "node";
@@ -541,5 +546,115 @@ mod test {
                 .await,
             Ok(())
         );
+    }
+
+    struct DummyServer {
+        shutdown: Mutex<Option<Sender<bool>>>,
+    }
+
+    #[tonic::async_trait]
+    impl proto::turbod_server::Turbod for DummyServer {
+        async fn shutdown(
+            &self,
+            req: tonic::Request<proto::ShutdownRequest>,
+        ) -> tonic::Result<tonic::Response<proto::ShutdownResponse>> {
+            log::info!("shutdown request: {:?}", req);
+            self.shutdown
+                .lock()
+                .await
+                .take()
+                .unwrap()
+                .send(true)
+                .unwrap();
+            Ok(tonic::Response::new(proto::ShutdownResponse {}))
+        }
+
+        async fn hello(
+            &self,
+            _req: tonic::Request<proto::HelloRequest>,
+        ) -> tonic::Result<tonic::Response<proto::HelloResponse>> {
+            unimplemented!()
+        }
+
+        async fn status(
+            &self,
+            _req: tonic::Request<proto::StatusRequest>,
+        ) -> tonic::Result<tonic::Response<proto::StatusResponse>> {
+            unimplemented!()
+        }
+
+        async fn notify_outputs_written(
+            &self,
+            _req: tonic::Request<proto::NotifyOutputsWrittenRequest>,
+        ) -> tonic::Result<tonic::Response<proto::NotifyOutputsWrittenResponse>> {
+            unimplemented!()
+        }
+
+        async fn get_changed_outputs(
+            &self,
+            _req: tonic::Request<proto::GetChangedOutputsRequest>,
+        ) -> tonic::Result<tonic::Response<proto::GetChangedOutputsResponse>> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn handles_kill_live_server() {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+        // set up the server
+        let stream = async_stream::stream! {
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+        };
+
+        let server_fut = tonic::transport::Server::builder()
+            .add_service(proto::turbod_server::TurbodServer::new(DummyServer {
+                shutdown: Mutex::new(Some(shutdown_tx)),
+            }))
+            .serve_with_incoming(stream);
+
+        // set up the client
+        let conn = DaemonConnector {
+            pid_file: PathBuf::from(""),
+            sock_file: PathBuf::from(""),
+            can_kill_server: false,
+            can_start_server: false,
+        };
+
+        let client = Endpoint::try_from("http://[::]:50051")
+            .expect("this is a valid uri")
+            .connect_with_connector(tower::service_fn(move |_| {
+                // when a connection is made, create a duplex stream and send it to the server
+                let tx = tx.clone();
+                async move {
+                    let (client, server) = tokio::io::duplex(1024);
+                    let server: Result<_, anyhow::Error> = Ok(server);
+                    let client: Result<_, anyhow::Error> = Ok(client);
+                    tx.send(server).await.unwrap();
+                    client
+                }
+            }))
+            .await
+            .map(TurbodClient::new)
+            .unwrap();
+
+        let client = DaemonClient::new(client);
+
+        let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));
+
+        // drive the futures to completion
+        select! {
+            _ = shutdown_fut => {}
+            _ = server_fut => panic!("server should not have shut down first"),
+        }
+
+        assert!(
+            shutdown_rx.await.is_ok(),
+            "shutdown should have been received"
+        )
     }
 }

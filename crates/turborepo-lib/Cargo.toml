@@ -13,6 +13,7 @@ rustls-tls = ["reqwest/rustls-tls", "turbo-updater/rustls-tls"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 assert_cmd = { workspace = true }
+async-stream = "0.3.4"
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
@@ -60,7 +61,7 @@ tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = "0.1.12"
 tokio-util = { version = "0.7.7", features = ["compat"] }
-tonic = "0.8.3"
+tonic = { version = "0.8.3", features = ["transport"] }
 tower = "0.4.13"
 uds_windows = "1.0.2"
 url = "2.3.1"

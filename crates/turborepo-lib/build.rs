@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     check_tls_config();
 
     tonic_build::configure()
-        .build_server(false)
+        .build_server(true)
         .compile(&["turbod.proto"], &["../../cli/internal/turbodprotocol"])?;
     Ok(())
 }
