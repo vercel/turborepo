@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -60,12 +60,12 @@ impl Asset for EcmascriptModulePartAsset {
         let split_data = split_module(self.full_module).await?;
         let part_id = match get_part_id(&split_data, self.part).await {
             Ok(v) => v,
-            Err(_) => return Ok(self.full_module.references()),
+            Err(_) => bail!("Part {:?} is not found in the module", self.part),
         };
 
         let deps = match split_data.deps.get(&part_id) {
             Some(v) => v,
-            None => return Ok(self.full_module.references()),
+            None => bail!("Part {:?} is not found in the module", part_id),
         };
 
         let mut assets = deps
