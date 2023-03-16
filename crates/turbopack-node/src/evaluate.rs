@@ -7,7 +7,8 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
+use bytes::Bytes;
 use futures::Stream;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
@@ -19,7 +20,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
-    glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
+    glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -76,17 +77,55 @@ enum EvalJavaScriptIncomingMessage {
     Error(StructuredError),
 }
 
+enum LoopResult {
+    Value { data: String },
+    End { data: Option<String> },
+    Error(StructuredError),
+}
+
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub enum JavaScriptValue {
-    Error,
     Empty,
-    Value(Rope),
+    Error(StructuredError),
+    Value(BytesValue),
+}
+
+#[turbo_tasks::value(transparent, serialization = "custom")]
+#[derive(Clone, Debug)]
+pub struct BytesValue(#[turbo_tasks(trace_ignore)] Bytes);
+
+impl BytesValue {
+    pub fn to_str(&self) -> Result<Cow<'_, str>> {
+        let utf8 = std::str::from_utf8(&self.0);
+        utf8.context("failed to convert bytes into string")
+            .map(Cow::Borrowed)
+    }
+}
+
+impl Serialize for BytesValue {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for BytesValue {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let bytes = <Vec<u8>>::deserialize(deserializer)?;
+        Ok(BytesValue(bytes.into()))
+    }
+}
+
+impl std::ops::Deref for BytesValue {
+    type Target = Bytes;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl From<String> for JavaScriptValue {
     fn from(value: String) -> Self {
-        JavaScriptValue::Value(value.into())
+        JavaScriptValue::Value(BytesValue(value.into()))
     }
 }
 
@@ -95,6 +134,16 @@ impl From<Option<String>> for JavaScriptValue {
         match value {
             Some(v) => v.into(),
             None => JavaScriptValue::Empty,
+        }
+    }
+}
+
+impl From<JavaScriptValue> for Option<Result<Bytes, StructuredError>> {
+    fn from(value: JavaScriptValue) -> Self {
+        match value {
+            JavaScriptValue::Empty => None,
+            JavaScriptValue::Value(b) => Some(Ok(b.0)),
+            JavaScriptValue::Error(error) => Some(Err(error)),
         }
     }
 }
@@ -115,21 +164,23 @@ impl JavaScriptStream {
         JavaScriptStream(Arc::new(Mutex::new(JsStreamInner { done: false, data })))
     }
 
-    fn into_stream(self) -> JsStreamable {
-        JsStreamable {
+    fn into_stream(self) -> JsStreamer {
+        JsStreamer {
             inner: self,
             index: 0,
         }
     }
 }
 
-pub struct JsStreamable {
+pub struct JsStreamer {
     inner: JavaScriptStream,
     index: usize,
 }
 
-impl Stream for JsStreamable {
-    type Item = Result<Rope>;
+impl Stream for JsStreamer {
+    // The Result<Bytes> item type is required for this to be streamable into a
+    // [Hyper::Body].
+    type Item = Result<Bytes, StructuredError>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -142,12 +193,9 @@ impl Stream for JsStreamable {
                     Poll::Pending
                 }
             },
-            |data| match data {
-                JavaScriptValue::Empty => unreachable!(),
-                JavaScriptValue::Value(v) => Poll::Ready(Some(Ok(v.clone()))),
-                JavaScriptValue::Error => {
-                    Poll::Ready(Some(Err(anyhow!("error during evaluation"))))
-                }
+            |data| {
+                this.index += 1;
+                Poll::Ready(data.clone().into())
             },
         )
     }
@@ -369,17 +417,16 @@ pub async fn evaluate(
     let output = loop_operation(&mut operation, cwd, context_ident_for_issue).await?;
 
     let data = match output {
-        EvalJavaScriptIncomingMessage::End { data } => {
+        LoopResult::End { data } => {
             if kill {
                 operation.wait_or_kill().await?;
             }
             return Ok(JavaScriptEvaluation::Single(data.into()).cell());
         }
-        EvalJavaScriptIncomingMessage::Error(_) => {
-            return Ok(JavaScriptEvaluation::Single(JavaScriptValue::Error).cell());
+        LoopResult::Error(error) => {
+            return Ok(JavaScriptEvaluation::Single(JavaScriptValue::Error(error)).cell());
         }
-        EvalJavaScriptIncomingMessage::Value { data } => data,
-        _ => unreachable!("file dep messages cannot leak out of loop"),
+        LoopResult::Value { data } => data,
     };
 
     let stream = JavaScriptStream::new(vec![data.into()]);
@@ -391,22 +438,21 @@ pub async fn evaluate(
             let mut lock = inner.lock().unwrap();
 
             match output {
-                EvalJavaScriptIncomingMessage::End { data } => {
+                LoopResult::End { data } => {
                     lock.done = true;
                     if let Some(data) = data {
                         lock.data.push(data.into());
                     };
                     break;
                 }
-                EvalJavaScriptIncomingMessage::Error(_) => {
+                LoopResult::Error(error) => {
                     lock.done = true;
-                    lock.data.push(JavaScriptValue::Error);
+                    lock.data.push(JavaScriptValue::Error(error));
                     break;
                 }
-                EvalJavaScriptIncomingMessage::Value { data } => {
+                LoopResult::Value { data } => {
                     lock.data.push(data.into());
                 }
-                _ => unreachable!("file dep messages cannot leak out of loop"),
             }
         }
 
@@ -423,7 +469,7 @@ async fn loop_operation(
     operation: &mut NodeJsOperation,
     cwd: FileSystemPathVc,
     context_ident_for_issue: AssetIdentVc,
-) -> Result<EvalJavaScriptIncomingMessage> {
+) -> Result<LoopResult> {
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
 
@@ -440,14 +486,10 @@ async fn loop_operation(
                 .emit();
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
-                break EvalJavaScriptIncomingMessage::Error(error);
+                break LoopResult::Error(error);
             }
-            value @ EvalJavaScriptIncomingMessage::Value { .. } => {
-                break value;
-            }
-            value @ EvalJavaScriptIncomingMessage::End { .. } => {
-                break value;
-            }
+            EvalJavaScriptIncomingMessage::Value { data } => break LoopResult::Value { data },
+            EvalJavaScriptIncomingMessage::End { data } => break LoopResult::End { data },
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 file_dependencies.push(cwd.join(&path).read());

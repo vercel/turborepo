@@ -261,7 +261,7 @@ pub struct ResponseHeaders {
     pub headers: Vec<(String, String)>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub struct StructuredError {
     name: String,
