@@ -230,6 +230,12 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -238,6 +244,7 @@
 </span><span class="kw">pub mod </span>html;
 <span class="kw">mod </span>http;
 <span class="kw">pub mod </span>introspect;
+<span class="kw">mod </span>invalidation;
 <span class="kw">pub mod </span>source;
 <span class="kw">pub mod </span>update;
 
@@ -256,7 +263,7 @@
     Request, Response, Server,
 };
 <span class="kw">use </span>turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
 };
 <span class="kw">use </span>turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
@@ -265,6 +272,7 @@
     source::{ContentSourceResultVc, ContentSourceVc},
     update::UpdateServer,
 };
+<span class="kw">use </span><span class="kw">crate</span>::invalidation::ServerRequest;
 
 <span class="kw">pub trait </span>SourceProvider: Send + Clone + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// must call a turbo-tasks function internally
@@ -359,7 +367,11 @@
                     <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
                     <span class="kw">let </span>source_provider = source_provider.clone();
                     <span class="kw">let </span>future = <span class="kw">async move </span>{
-                        run_once(tt.clone(), <span class="kw">async move </span>{
+                        <span class="kw">let </span>reason = ServerRequest {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        run_once_with_reason(tt.clone(), reason, <span class="kw">async move </span>{
                             <span class="kw">let </span>issue_reporter = get_issue_reporter();
 
                             <span class="kw">if </span>hyper_tungstenite::is_upgrade_request(<span class="kw-2">&amp;</span>request) {

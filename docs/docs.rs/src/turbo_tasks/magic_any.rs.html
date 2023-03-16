@@ -324,7 +324,7 @@
     }
 }
 
-<span class="kw">pub struct </span>HasherMut&lt;H: <span class="question-mark">?</span>Sized&gt;(H);
+<span class="kw">pub struct </span>HasherMut&lt;H: <span class="question-mark">?</span>Sized&gt;(<span class="kw">pub </span>H);
 
 <span class="kw">impl</span>&lt;H: DerefMut + <span class="question-mark">?</span>Sized&gt; Hasher <span class="kw">for </span>HasherMut&lt;H&gt;
 <span class="kw">where

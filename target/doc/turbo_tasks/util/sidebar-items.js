@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FormatBytes","FormatDuration","IdFactory","NoMoveVec","OnceConcurrentlyMap","SafeOnceConcurrentlyMap","SharedError"]};
+window.SIDEBAR_ITEMS = {"enum":["StaticOrArc"],"struct":["FormatBytes","FormatDuration","IdFactory","NoMoveVec","OnceConcurrentlyMap","SafeOnceConcurrentlyMap","SharedError"]};
