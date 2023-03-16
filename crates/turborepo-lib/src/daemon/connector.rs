@@ -171,19 +171,19 @@ impl DaemonConnector {
         self.wait_for_socket().await?;
 
         debug!("connecting to socket: {}", path.to_string_lossy());
-        let arc = Arc::new(path);
+        let path = Arc::new(path);
 
         #[cfg(not(target_os = "windows"))]
         let make_service = move |_| {
             // we clone the reference counter here and move it into the async closure
-            let arc = arc.clone();
-            async move { tokio::net::UnixStream::connect::<&Path>(arc.as_path()).await }
+            let path = path.clone();
+            async move { tokio::net::UnixStream::connect::<&Path>(path.as_path()).await }
         };
 
         #[cfg(target_os = "windows")]
         let make_service = move |_| {
-            let arc = arc.clone();
-            async move { win(arc) }
+            let path = path.clone();
+            async move { win(path) }
         };
 
         // note, this endpoint is just a dummy. the actual path is passed in
