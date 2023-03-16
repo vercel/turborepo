@@ -270,8 +270,6 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
         _ => bail!("split failed"),
     };
 
-    // If 'split' fails, it stores an empty value in result.data and this match will
-    // fail.
     let part_id = match data.get(&key) {
         Some(id) => *id,
         None => {
