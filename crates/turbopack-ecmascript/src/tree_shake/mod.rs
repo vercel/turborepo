@@ -281,28 +281,33 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub(crate) struct SplitResult {
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub data: FxHashMap<Key, u32>,
+pub(crate) enum SplitResult {
+    Ok {
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        data: FxHashMap<Key, u32>,
 
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub modules: Vec<Module>,
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        modules: Vec<Module>,
 
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub deps: FxHashMap<u32, Vec<u32>>,
-
-    parsed: ParseResultVc,
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        deps: FxHashMap<u32, Vec<u32>>,
+    }
+    Unparseable,
+    NotFound,
 }
 
 impl PartialEq for SplitResult {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Ok { .. }, Self::Ok { .. }) => false,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
     }
 }
 
 #[turbo_tasks::function]
-pub(super) async fn split_module(asset: EcmascriptModuleAssetVc) -> Result<SplitResultVc> {
-    Ok(split(asset.origin_path(), asset.parse()))
+pub(super) fn split_module(asset: EcmascriptModuleAssetVc) -> SplitResultVc {
+    split(asset.origin_path(), asset.parse())
 }
 
 #[turbo_tasks::function]
@@ -347,10 +352,7 @@ pub(super) async fn part_of_module(
     let split_data = split_data.await?;
 
     let part_id = match part {
-        Some(part) => match get_part_id(&split_data, part).await {
-            Ok(v) => v,
-            Err(_) => return Ok(split_data.parsed),
-        },
+        Some(part) => match get_part_id(&split_data, part).await?,
         None => return Ok(split_data.parsed),
     };
 
