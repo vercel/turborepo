@@ -35,7 +35,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
+use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -48,7 +48,7 @@ use turbopack_core::{
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, ModulePart, ModulePartVc, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePartVc, PrimaryResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
