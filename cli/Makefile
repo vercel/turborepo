@@ -21,7 +21,7 @@ GO_FLAGS += -trimpath
 CLI_DIR = $(shell pwd)
 
 # allow opting in to the rust codepaths
-GO_TAG ?= go
+GO_TAG ?= rust
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")

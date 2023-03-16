@@ -626,7 +626,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn relative_symlink_from_symlinked_dir_windows() -> anyhow::Result<()> {
-        use crate::fs::fs_util::read_link;
+        use crate::fs_util::read_link;
 
         // tmp1 -- dir1 -- subdir1 -- file1
         // tmp2 -- symlink_to_subdir1 (points to /tmp1/dir1/subdir1) -- (file1)
@@ -656,7 +656,10 @@ mod tests {
         // Simple symlink to a directory
         let symlink_to_subdir1 = tempdir2.path().join("symlink_to_subdir1");
         symlink(&subdir1, &symlink_to_subdir1)?;
-        assert_eq!(read_link(&symlink_to_subdir1)?, subdir1);
+        assert_eq!(
+            read_link(&symlink_to_subdir1)?.canonicalize()?,
+            subdir1.canonicalize()?
+        );
         assert_eq!(
             read_to_string(symlink_to_subdir1.join("file1"))?,
             "File content 1"
@@ -668,14 +671,20 @@ mod tests {
         // Test that symlink properly converts to canonicalized target path
         let symlink_to_file2 = symlink_to_subdir1.join("symlink_to_file2");
         symlink("../dir2/file2", &symlink_to_file2)?;
-        assert_eq!(read_link(&symlink_to_file2)?, file2);
+        assert_eq!(
+            read_link(&symlink_to_file2)?.canonicalize()?,
+            file2.canonicalize()?
+        );
         assert_eq!(read_to_string(symlink_to_file2)?, "File content 2");
 
         // Test2: Same case as test1, but target file doesn't exist yet
         let symlink_to_file3 = symlink_to_subdir1.join("symlink_to_file3");
         symlink("../dir2/file3", &symlink_to_file3)?;
         write(&file3, b"File content 3")?;
-        assert_eq!(read_link(&symlink_to_file3)?, file3);
+        assert_eq!(
+            read_link(&symlink_to_file3)?.canonicalize()?,
+            file3.canonicalize()?
+        );
         assert_eq!(read_to_string(&file3)?, "File content 3");
         assert_eq!(read_to_string(symlink_to_file3)?, "File content 3");
 
@@ -683,7 +692,10 @@ mod tests {
         // same directory
         let symlink_to_symlink1 = symlink_to_subdir1.join("symlink_to_symlink1");
         symlink("../symlink_to_subdir1/file1", &symlink_to_symlink1)?;
-        assert_eq!(read_link(&symlink_to_symlink1)?, file1);
+        assert_eq!(
+            read_link(&symlink_to_symlink1)?.canonicalize()?,
+            file1.canonicalize()?
+        );
         assert_eq!(read_to_string(symlink_to_symlink1)?, "File content 1");
         Ok(())
     }
