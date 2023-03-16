@@ -145,16 +145,16 @@ impl ChunkableAsset for EcmascriptModulePartAsset {
 impl EcmascriptModulePartAssetVc {
     #[turbo_tasks::function]
     pub(super) async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        let part = self.await?;
-        let this = part.full_module.await?;
+        let this = self.await?;
+        let module = part.full_module.await?;
         Ok(analyze_ecmascript_module(
-            this.source,
-            part.full_module.as_resolve_origin(),
-            Value::new(this.ty),
-            this.transforms,
-            Value::new(this.options),
-            this.compile_time_info,
-            Some(part.part),
+            module.source,
+            this.full_module.as_resolve_origin(),
+            Value::new(module.ty),
+            module.transforms,
+            Value::new(module.options),
+            module.compile_time_info,
+            Some(this.part),
         ))
     }
 }
