@@ -127,7 +127,7 @@ async fn apply_module_type(
                 context.compile_time_info(),
             );
 
-            if options.import_parts {
+            if options.split_into_parts {
                 if let Some(part) = part {
                     if let Ok(v) = EcmascriptModulePartAssetVc::new(base, part) {
                         return Ok(v.into());
