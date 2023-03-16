@@ -101,6 +101,7 @@ impl Display for FormatBytes {
     }
 }
 
+/// Smart pointer that stores data either in an [Arc] or as a static reference.
 pub enum StaticOrArc<T: ?Sized + 'static> {
     Static(&'static T),
     Shared(Arc<T>),

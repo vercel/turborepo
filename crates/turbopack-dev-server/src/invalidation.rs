@@ -4,6 +4,7 @@ use hyper::{Method, Uri};
 use indexmap::IndexSet;
 use turbo_tasks::{util::StaticOrArc, InvalidationReason, InvalidationReasonKind};
 
+/// Computation was caused by a request to the server.
 #[derive(PartialEq, Eq, Hash)]
 pub struct ServerRequest {
     pub method: Method,
@@ -12,7 +13,7 @@ pub struct ServerRequest {
 
 impl InvalidationReason for ServerRequest {
     fn kind(&self) -> Option<StaticOrArc<dyn InvalidationReasonKind>> {
-        Some(StaticOrArc::Static(&SERVER_REQUEST_TYPE))
+        Some(StaticOrArc::Static(&SERVER_REQUEST_KIND))
     }
 }
 
@@ -22,12 +23,13 @@ impl Display for ServerRequest {
     }
 }
 
+/// Invalidation kind for [ServerRequest]
 #[derive(PartialEq, Eq, Hash)]
-struct ServerRequestType;
+struct ServerRequestKind;
 
-static SERVER_REQUEST_TYPE: ServerRequestType = ServerRequestType;
+static SERVER_REQUEST_KIND: ServerRequestKind = ServerRequestKind;
 
-impl InvalidationReasonKind for ServerRequestType {
+impl InvalidationReasonKind for ServerRequestKind {
     fn fmt(
         &self,
         reasons: &IndexSet<StaticOrArc<dyn InvalidationReason>>,
@@ -36,13 +38,7 @@ impl InvalidationReasonKind for ServerRequestType {
         let example = reasons
             .into_iter()
             .map(|reason| reason.as_any().downcast_ref::<ServerRequest>().unwrap())
-            .reduce(|a, b| {
-                if b.uri.path().len() < a.uri.path().len() {
-                    b
-                } else {
-                    a
-                }
-            })
+            .min_by_key(|reason| reason.uri.path().len())
             .unwrap();
         write!(
             f,

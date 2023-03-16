@@ -363,14 +363,7 @@ impl DiskFileSystem {
                     invalidator: Invalidator,
                 ) {
                     if let Some((name, root_path)) = report_invalidation_reason {
-                        if let Ok(rel_path) = path.strip_prefix(root_path) {
-                            let path = if MAIN_SEPARATOR != '/' {
-                                let rel_path =
-                                    rel_path.to_string_lossy().replace(MAIN_SEPARATOR, "/");
-                                format!("[{name}]/{}", rel_path)
-                            } else {
-                                format!("[{name}]/{}", rel_path.display())
-                            };
+                        if let Some(path) = format_absolute_fs_path(path, name, root_path) {
                             invalidator.invalidate_with_reason(WatchChange { path });
                             return;
                         }
@@ -462,6 +455,21 @@ impl DiskFileSystem {
             path.join(&*unix_to_sys(&fs_path.path))
         })
     }
+}
+
+fn format_absolute_fs_path(path: &Path, name: &str, root_path: &PathBuf) -> Option<String> {
+    let path = if let Ok(rel_path) = path.strip_prefix(root_path) {
+        let path = if MAIN_SEPARATOR != '/' {
+            let rel_path = rel_path.to_string_lossy().replace(MAIN_SEPARATOR, "/");
+            format!("[{name}]/{}", rel_path)
+        } else {
+            format!("[{name}]/{}", rel_path.display())
+        };
+        Some(path)
+    } else {
+        None
+    };
+    path
 }
 
 pub fn path_to_key(path: impl AsRef<Path>) -> String {

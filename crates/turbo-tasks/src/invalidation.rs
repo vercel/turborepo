@@ -98,9 +98,13 @@ enum MapEntry {
     },
 }
 
+/// A set of [InvalidationReason]s. They are automatically deduplicated and
+/// merged by kind during insertion. It implements [Display] to get a readable
+/// representation.
 #[derive(Default)]
 pub struct InvalidationReasonSet {
     next_unique_tag: usize,
+    // We track typed and untyped entries in the same map to keep the occurence order of entries.
     map: IndexMap<MapKey, MapEntry>,
 }
 
