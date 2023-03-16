@@ -265,15 +265,17 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
         ModulePart::Internal(part_id) => return Ok(*part_id),
     };
 
+    let data = match &result {
+        SplitResult::Ok { data, .. } => data,
+        _ => bail!("split failed"),
+    };
+
     // If 'split' fails, it stores an empty value in result.data and this match will
     // fail.
-    let part_id = match result.data.get(&key) {
+    let part_id = match data.get(&key) {
         Some(id) => *id,
         None => {
-            return Err(anyhow::anyhow!(
-                "could not find part id for module part {:?}",
-                key
-            ))
+            bail!("could not find part id for module part {:?}", key)
         }
     };
 
@@ -340,7 +342,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
             .cell())
         }
         ParseResult::NotFound => Ok(SplitResult::NotFound.cell()),
-        ParseResult::Unparseable { .. } => Ok(SplitResult::Unparseable.cell()),
+        _ => Ok(SplitResult::Unparseable.cell()),
     }
 }
 

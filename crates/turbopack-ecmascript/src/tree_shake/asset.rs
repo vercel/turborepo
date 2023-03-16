@@ -109,8 +109,6 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
         self_vc: EcmascriptModulePartAssetVc,
         context: ChunkingContextVc,
     ) -> Result<EcmascriptChunkItemVc> {
-        let s = self_vc.await?;
-
         Ok(EcmascriptModulePartChunkItem {
             module: self_vc,
             context,
