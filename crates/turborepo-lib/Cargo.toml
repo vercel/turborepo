@@ -42,7 +42,9 @@ humantime = "2.1.0"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-notify = "5.1.0"
+notify = { version = "5.1.0", default-features = false, features = [
+  "macos_kqueue",
+] }
 pidlock = { git = "https://github.com/arlyon/pidlock", branch = "master" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }

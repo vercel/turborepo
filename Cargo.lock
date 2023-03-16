@@ -1802,7 +1802,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ab7d1bd1bd33cc98b0889831b72da23c0aa4df9cec7e0702f46ecea04b35db6"
 dependencies = [
  "bitflags",
- "fsevent-sys 2.0.1",
+ "fsevent-sys",
 ]
 
 [[package]]
@@ -1810,15 +1810,6 @@ name = "fsevent-sys"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f41b048a94555da0f42f1d632e2e19510084fb8e303b0daa2816e733fb3644a0"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "fsevent-sys"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
 dependencies = [
  "libc",
 ]
@@ -3259,7 +3250,7 @@ dependencies = [
  "bitflags",
  "filetime",
  "fsevent",
- "fsevent-sys 2.0.1",
+ "fsevent-sys",
  "inotify 0.7.1",
  "libc",
  "mio 0.6.23",
@@ -3275,9 +3266,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58ea850aa68a06e48fdb069c0ec44d0d64c8dbffa49bf3b6f7f0a901fdea1ba9"
 dependencies = [
  "bitflags",
- "crossbeam-channel",
  "filetime",
- "fsevent-sys 4.1.0",
  "inotify 0.9.6",
  "kqueue",
  "libc",
