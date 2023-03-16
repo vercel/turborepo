@@ -219,7 +219,7 @@ impl DaemonConnector {
 
     /// Kills a server that is not responding.
     async fn kill_dead_server(&self, pid: sysinfo::Pid) -> Result<(), DaemonConnectorError> {
-        let mut lock = self.pid_lock();
+        let lock = self.pid_lock();
 
         let system = sysinfo::System::new_with_specifics(
             RefreshKind::new().with_processes(ProcessRefreshKind::new()),
@@ -291,11 +291,10 @@ async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitEr
         None => return Err(FileWaitError::InvalidPath(path.into())),
     };
 
-    let file_name = match path.file_name().map(|f| f.to_owned()) {
-        Some(p) => Arc::new(p),
-        // if there is no file name, then the path is invalid
-        None => return Err(FileWaitError::InvalidPath(path.into())),
-    };
+    let file_name = path
+        .file_name()
+        .map(|f| f.to_owned())
+        .ok_or_else(|| FileWaitError::InvalidPath(path.into()))?;
 
     let (tx, mut rx) = mpsc::channel(1);
 
