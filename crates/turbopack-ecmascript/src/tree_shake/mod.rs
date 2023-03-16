@@ -384,7 +384,7 @@ pub(super) async fn part_of_module(
             ParseResult::Unparseable => bail!("module is unparseable"),
             ParseResult::NotFound => bail!("module is not found"),
         },
-        SplitResult::Unparseable => Ok(ParseResult::Unparseable),
-        SplitResult::NotFound => Ok(ParseResult::NotFound),
+        SplitResult::Unparseable => Ok(ParseResultVc::cell(ParseResult::Unparseable)),
+        SplitResult::NotFound => Ok(ParseResultVc::cell(ParseResult::NotFound)),
     }
 }
