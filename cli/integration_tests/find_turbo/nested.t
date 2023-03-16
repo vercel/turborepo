@@ -3,27 +3,27 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) "nested"
 
 Make sure we use local and do not pass --skip-infer to old binary
-  $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
+  $ ${TESTDIR}/set_version.sh $TARGET_DIR "1.0.0"
   $ ${TURBO} build --filter foo -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: No local turbo binary found at: .*/nested.t/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/nested.t/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: No local turbo binary found at: .*/nested/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/nested/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo version: 1.0.0 (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/nested.t (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/nested.t/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/nested (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/nested/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: supports_skip_infer_and_single_package false (re)
   build --filter foo --
 
 Make sure we use local and pass --skip-infer to newer binary
-  $ ${TESTDIR}/set_version.sh $(pwd) "1.8.0"
+  $ ${TESTDIR}/set_version.sh $TARGET_DIR "1.8.0"
   $ ${TURBO} build --filter foo -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: No local turbo binary found at: .*/nested.t/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/nested.t/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: No local turbo binary found at: .*/nested/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/nested/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo version: 1.8.0 (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/nested.t (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/nested.t/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/nested (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/nested/node_modules/turbo/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: supports_skip_infer_and_single_package true (re)
   --skip-infer build --filter foo --single-package --

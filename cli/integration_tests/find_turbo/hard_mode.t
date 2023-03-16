@@ -1,7 +1,7 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)/subdir "hoisted"
-  $ TESTROOT=$(pwd)
+  $ . ${TESTDIR}/hard_mode_setup.sh $(pwd)/hard_mode/subdir "hoisted"
+  $ TESTROOT=$(pwd)/hard_mode
 
 When --skip-infer is used we use the current binary and output no global/local message
   $ cd $TESTROOT/subdir
@@ -14,10 +14,10 @@ It finds repo root and uses correct version
   $ cd $TESTROOT/subdir/node_modules
   $ ${TURBO} build --filter foo -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo version: 1.8.0 (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode.t/subdir (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode/subdir (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: supports_skip_infer_and_single_package true (re)
   --skip-infer build --filter foo --single-package --
@@ -27,10 +27,10 @@ It respects cwd
   $ cd $TESTROOT
   $ ${TURBO} build --filter foo -vv --cwd ${TESTROOT}/subdir
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo version: 1.8.0 (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode.t/subdir (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode/subdir (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: supports_skip_infer_and_single_package true (re)
   --skip-infer build --filter foo --single-package --
@@ -40,10 +40,10 @@ It respects cwd and finds repo root
   $ cd $TESTROOT
   $ ${TURBO} build --filter foo -vv --cwd ${TESTROOT}/subdir/node_modules
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo path: .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::local_turbo_state: Local turbo version: 1.8.0 (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode.t/subdir (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Repository Root: .*/hard_mode/subdir (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: Running local turbo binary in .*/hard_mode/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::state::turbo_state: supports_skip_infer_and_single_package true (re)
   --skip-infer build --filter foo --single-package --
