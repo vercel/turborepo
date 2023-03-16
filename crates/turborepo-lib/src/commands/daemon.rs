@@ -1,13 +1,10 @@
 use std::{path::PathBuf, time::Duration};
 
 use super::CommandBase;
-use crate::{
-    cli::DaemonCommand,
-    daemon::{DaemonConnector, DaemonError},
-};
+use crate::{cli::DaemonCommand, daemon::DaemonConnector};
 
 /// Runs the daemon command.
-pub async fn main(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
+pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result<()> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
@@ -42,7 +39,7 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> Result<(), Dae
                 sock_file: client.connect_settings.sock_file.clone(),
             };
             if *json {
-                println!("{}", serde_json::to_string_pretty(&status).unwrap());
+                println!("{}", serde_json::to_string_pretty(&status)?);
             } else {
                 println!("Daemon log file: {}", status.log_file.to_string_lossy());
                 println!(
