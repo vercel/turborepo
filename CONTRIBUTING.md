@@ -7,14 +7,16 @@ Thanks for your interest in contributing to Turbo!
 - [Contributing to Turbo](#contributing-to-turbo)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
+    - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
       - [Go Tests](#go-tests)
       - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
+  - [Manually testing `turbo`](#manually-testing-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
-  - [Adding a new crate](#adding-a-new-crate)
+  - [Adding A New Crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
@@ -78,8 +80,8 @@ You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/com
 
 ## Benchmarking Turborepo
 
-1. Build Turborepo [as described above](#Setup)
-1. From the `benchmark/` directory, run `pnpm run benchmark`.
+1. `make turbo-prod`
+2. From the `benchmark/` directory, run `pnpm run benchmark`.
 
 ## Updating `turbo`
 
