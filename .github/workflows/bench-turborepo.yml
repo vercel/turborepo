@@ -21,7 +21,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
-        run: cd cli && make turbo
+        run: cd cli && make turbo-prod
 
       - name: Download previous benchmark results
         # continue on error so that we handle the bootstrap case where there is no previous data
