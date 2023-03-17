@@ -287,14 +287,10 @@ pub(crate) enum SplitResult {
         data: FxHashMap<Key, u32>,
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
-        modules: Vec<Module>,
+        modules: Vec<ParseResultVc>,
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
-
-        /// This field is required to implement part_of_module, which produces
-        /// [ParseResultVc]
-        parsed: ParseResultVc,
     },
     Unparseable,
     NotFound,
@@ -322,6 +318,10 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
     match &*parse_result {
         ParseResult::Ok {
             program: Program::Module(module),
+            comments,
+            eval_context,
+            source_map,
+            globals,
             ..
         } => {
             let (mut dep_graph, items) = Analyzer::analyze(module);
@@ -331,11 +331,26 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
             let (data, deps, modules) =
                 dep_graph.split_module(&format!("./{filename}").into(), &items);
 
+            let modules = modules
+                .into_iter()
+                .map(|module| {
+                    let program = Program::Module(module);
+                    let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
+
+                    ParseResultVc::cell(ParseResult::Ok {
+                        program,
+                        globals: globals.clone(),
+                        comments: comments.clone(),
+                        source_map: source_map.clone(),
+                        eval_context,
+                    })
+                })
+                .collect();
+
             Ok(SplitResult::Ok {
                 data,
                 deps,
                 modules,
-                parsed,
             }
             .cell())
         }
@@ -357,30 +372,7 @@ pub(super) async fn part_of_module(
     };
 
     match &*split_data {
-        SplitResult::Ok {
-            modules, parsed, ..
-        } => match &*parsed.await? {
-            ParseResult::Ok {
-                comments,
-                eval_context,
-                source_map,
-                globals,
-                ..
-            } => {
-                let program = Program::Module(modules[part_id as usize].clone());
-                let eval_context = EvalContext::new(&program, eval_context.unresolved_mark);
-
-                Ok(ParseResultVc::cell(ParseResult::Ok {
-                    program,
-                    globals: globals.clone(),
-                    comments: comments.clone(),
-                    source_map: source_map.clone(),
-                    eval_context,
-                }))
-            }
-            ParseResult::Unparseable => bail!("module is unparseable"),
-            ParseResult::NotFound => bail!("module is not found"),
-        },
+        SplitResult::Ok { modules, .. } => Ok(modules[part_id as usize]),
         SplitResult::Unparseable => Ok(ParseResultVc::cell(ParseResult::Unparseable)),
         SplitResult::NotFound => Ok(ParseResultVc::cell(ParseResult::NotFound)),
     }
