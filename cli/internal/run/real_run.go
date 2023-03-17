@@ -106,9 +106,11 @@ func RealRun(
 		if taskExecutionSummary != nil {
 			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 			taskSummary.Execution = taskExecutionSummary
+
+			// lock since multiple things to be appending to this array at the same time
 			mu.Lock()
 			taskSummaries = append(taskSummaries, taskSummary)
-			// don't hold the lock while we run ec.exec
+			// not using defer, just release the lock
 			mu.Unlock()
 		}
 
