@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
-use swc_core::ecma::ast::{Id, Module, Program};
+use swc_core::ecma::{
+    ast::{Id, Module, Program},
+    atoms::JsWord,
+};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc};
 
@@ -292,6 +295,9 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
+
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        external_deps: FxHashMap<u32, Vec<JsWord>>,
     },
     Unparseable,
     NotFound,

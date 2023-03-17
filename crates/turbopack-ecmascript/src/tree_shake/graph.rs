@@ -183,6 +183,13 @@ pub(super) enum Mode {
     Production,
 }
 
+struct SplitModuleResult {
+    exports: FxHashMap<Key, u32>,
+    part_deps: FxHashMap<u32, Vec<u32>>,
+    external_deps: FxHashMap<u32, Vec<JsWord>>,
+    modules: Vec<Module>,
+}
+
 impl DepGraph {
     /// Weak imports are imports only if it is referenced strongly. But this
     /// is production-only, and weak dependencies are treated as strong
@@ -210,14 +217,12 @@ impl DepGraph {
     /// _connect_ here means if a variable is declared in a different part than
     /// a usage side, `import` and `export` will be added.
     ///
-    /// This returns a tuple of `(exports, part_deps, modules)`.
-    ///
     /// Note: ESM imports are immutable, but we do not handle it.
     pub(super) fn split_module(
         &self,
         uri_of_module: &JsWord,
         data: &FxHashMap<ItemId, ItemData>,
-    ) -> (FxHashMap<Key, u32>, FxHashMap<u32, Vec<u32>>, Vec<Module>) {
+    ) -> SplitModuleResult {
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
         let mut chunk_deps = FxHashMap::<_, Vec<_>>::default();
