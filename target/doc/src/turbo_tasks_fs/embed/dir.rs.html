@@ -53,6 +53,25 @@
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
 </pre><pre class="rust"><code><span class="kw">pub use </span>::include_dir::{<span class="self">self</span>, include_dir};
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::TransientInstance;
@@ -75,37 +94,56 @@
     <span class="prelude-val">Ok</span>(EmbeddedFileSystemVc::new(name.to_string(), dir).into())
 }
 
-<span class="doccomment">/// Returns an embedded filesystem for the given path.
+<span class="doccomment">/// Returns an embedded [FileSystemVc] for the given path.
 ///
-/// In debug builds, this will create a [DiskFileSystemVc].
-///
-/// In release builds, this will embed a directory&#39;s content into the binary and
+/// This will embed a directory&#39;s content into the binary and
 /// create an [EmbeddedFileSystemVc].
+///
+/// If you enable the `dynamic_embed_contents` feature, calling
+/// the macro will return a [DiskFileSystemVc].
+///
+/// This enables dynamic linking (and hot reloading) of embedded files/dirs.
+/// A binary built with `dynamic_embed_contents` enabled is **is not portable**,
+/// only the directory path will be embedded into the binary.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>embed_directory {
-    (<span class="macro-nonterminal">$name</span>:tt, <span class="macro-nonterminal">$path</span>:tt) =&gt; {{
-        <span class="comment">// make sure the path contains `$CARGO_MANIFEST_DIR`
+    (<span class="macro-nonterminal">$name</span>:tt, <span class="macro-nonterminal">$path</span>:tt) =&gt; {{        <span class="comment">// make sure the path contains `$CARGO_MANIFEST_DIR`
         </span><span class="macro">assert!</span>(<span class="macro-nonterminal">$path</span>.contains(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>));
         <span class="comment">// make sure `CARGO_MANIFEST_DIR` is the only env variable in the path
         </span><span class="macro">assert!</span>(!<span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="string">&quot;&quot;</span>).contains(<span class="string">&#39;$&#39;</span>));
 
+        <span class="macro">turbo_tasks_fs::embed_directory_internal!</span>(<span class="macro-nonterminal">$name</span>, <span class="macro-nonterminal">$path</span>)
+    }};
+}
+
+<span class="attr">#[cfg(feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>)]
+#[macro_export]
+#[doc(hidden)]
+</span><span class="macro">macro_rules! </span>embed_directory_internal {
+    (<span class="macro-nonterminal">$name</span>:tt, <span class="macro-nonterminal">$path</span>:tt) =&gt; {{
         <span class="comment">// make sure the types the `include_dir!` proc macro refers to are in scope
         </span><span class="kw">use </span>turbo_tasks_fs::embed::include_dir;
-        <span class="attr">#[cfg(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>))]
-        </span>{
-          <span class="kw">let </span>path = <span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_MANIFEST_DIR&quot;</span>));
-          turbo_tasks_fs::embed::directory_from_relative_path(<span class="macro-nonterminal">$name</span>, path)
-        }
-        <span class="attr">#[cfg(not(all(debug_assertions, feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>)))]
-        </span>{
-           <span class="comment">// check that the directory exists at compile time even for debug builds
-           </span><span class="kw">static </span>dir: include_dir::Dir&lt;<span class="lifetime">&#39;static</span>&gt; = <span class="macro">turbo_tasks_fs::embed::include_dir!</span>(<span class="macro-nonterminal">$path</span>);
 
-           turbo_tasks_fs::embed::directory_from_include_dir(
-               <span class="macro-nonterminal">$name</span>,
-               turbo_tasks::TransientInstance::new(<span class="kw-2">&amp;</span>dir),
-           )
-        }
+        <span class="kw">let </span>path = <span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_MANIFEST_DIR&quot;</span>));
+
+        turbo_tasks_fs::embed::directory_from_relative_path(<span class="macro-nonterminal">$name</span>, path)
+    }};
+}
+
+<span class="attr">#[cfg(not(feature = <span class="string">&quot;dynamic_embed_contents&quot;</span>))]
+#[macro_export]
+#[doc(hidden)]
+</span><span class="macro">macro_rules! </span>embed_directory_internal {
+    (<span class="macro-nonterminal">$name</span>:tt, <span class="macro-nonterminal">$path</span>:tt) =&gt; {{
+        <span class="comment">// make sure the types the `include_dir!` proc macro refers to are in scope
+        </span><span class="kw">use </span>turbo_tasks_fs::embed::include_dir;
+
+        <span class="kw">static </span>dir: include_dir::Dir&lt;<span class="lifetime">&#39;static</span>&gt; = <span class="macro">turbo_tasks_fs::embed::include_dir!</span>(<span class="macro-nonterminal">$path</span>);
+
+        turbo_tasks_fs::embed::directory_from_include_dir(
+            <span class="macro-nonterminal">$name</span>,
+            turbo_tasks::TransientInstance::new(<span class="kw-2">&amp;</span>dir),
+        )
     }};
 }
 </code></pre></div>
