@@ -188,7 +188,7 @@ impl<'a> Analyzer<'a> {
         let r = ImportMapReference {
             module_path,
             imported_symbol,
-            annotations: annotations.clone(),
+            annotations,
         };
         if let Some(i) = self.data.references.get_index_of(&r) {
             i
