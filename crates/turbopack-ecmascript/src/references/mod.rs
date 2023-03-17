@@ -343,11 +343,11 @@ pub(crate) async fn analyze_ecmascript_module(
 
             // Avoid adding duplicate references to the analysis
             // (this can work on unresolved Vcs as we can deduplicate on operations)
-            for r in import_references.iter().collect::<IndexSet<_>>() {
+            for r in import_references.iter_mut().collect::<IndexSet<_>>() {
                 // Resolving these references here avoids many resolve wrapper tasks when
                 // passing that to other turbo tasks functions later.
-                let r = r.resolve().await?;
-                analysis.add_reference(r);
+                *r = r.resolve().await?;
+                analysis.add_reference(*r);
             }
 
             let (
