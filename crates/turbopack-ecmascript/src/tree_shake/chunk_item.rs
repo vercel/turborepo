@@ -1,10 +1,10 @@
 use anyhow::Result;
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc, ModuleId, ModuleIdVc},
+    chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    resolve::{origin::ResolveOrigin, ModulePart},
+    resolve::origin::ResolveOrigin,
 };
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, split_module};
@@ -41,32 +41,6 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
-    }
-
-    #[turbo_tasks::function]
-    async fn id(&self) -> Result<ModuleIdVc> {
-        let module = self.module.await?;
-
-        let part = module.part.await?;
-        let module = module.full_module.origin_path().await?;
-
-        match &*part {
-            ModulePart::ModuleEvaluation => {
-                Ok(ModuleId::String(format!("{} (ecmascript evaluation)", module.path)).into())
-            }
-            ModulePart::Export(name) => {
-                let name = name.await?;
-                Ok(
-                    ModuleId::String(format!("{} (ecmascript export {})", module.path, name))
-                        .into(),
-                )
-            }
-            ModulePart::Internal(part_id) => Ok(ModuleId::String(format!(
-                "{} (ecmascript part {})",
-                module.path, part_id
-            ))
-            .into()),
-        }
     }
 }
 
