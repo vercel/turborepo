@@ -180,9 +180,9 @@ impl Analyzer<'_> {
 
                     if let Some(items) = items_to_remove_from_last_reads.get(id) {
                         for item in items {
-                            if let Some(pos) = state.last_reads.iter().position(|v| *v == *item) {
-                                state.last_reads.remove(pos);
-                            }
+                            state
+                                .last_reads
+                                .retain(|last_read| !self.g.has_strong_dep(item, last_read))
                         }
                     }
                 }

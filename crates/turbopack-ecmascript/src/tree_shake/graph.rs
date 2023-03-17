@@ -800,11 +800,14 @@ impl DepGraph {
         }
     }
 
-    pub(super) fn add_strong_dep(&mut self, item: &ItemId, dep: &ItemId) {
-        let from = self.g.node(item);
+    pub(crate) fn has_strong_dep(&mut self, id: &ItemId, dep: &ItemId) -> bool {
+        let from = self.g.node(id);
         let to = self.g.node(dep);
-
-        self.g.idx_graph.add_edge(from, to, Dependency::Strong);
+        self.g
+            .idx_graph
+            .edge_weight(from, to)
+            .map(|d| matches!(d, Dependency::Strong))
+            .unwrap_or(false)
     }
 }
 
