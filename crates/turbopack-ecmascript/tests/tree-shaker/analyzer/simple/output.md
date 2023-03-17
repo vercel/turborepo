@@ -73,6 +73,7 @@ graph TD
     Item7["export CHIMERA"];
     Item3 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
 ```
 # Phase 3
 ```mermaid
@@ -89,6 +90,7 @@ graph TD
     Item7["export CHIMERA"];
     Item3 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
 ```
 # Phase 4
 ```mermaid
@@ -105,6 +107,7 @@ graph TD
     Item7["export CHIMERA"];
     Item3 --> Item1;
     Item4 --> Item2;
+    Item4 --> Item1;
     Item6 --> Item3;
     Item7 --> Item4;
 ```
@@ -112,8 +115,11 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(0, VarDeclarator(0)), ItemId(2, VarDeclarator(0))]"];
+    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
     N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(1, VarDeclarator(0)), ItemId(3, VarDeclarator(0))]"];
+    N3["Items: [ItemId(0, VarDeclarator(0))]"];
+    N1 --> N3;
+    N2 --> N3;
 ```
 # Modules (dev)
 ## Part 0
@@ -123,20 +129,30 @@ graph TD
 ```
 ## Part 1
 ```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 export { DOG };
-const dog = "dog";
 const DOG = dog;
-export { dog };
 export { DOG };
 
 ```
 ## Part 2
 ```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
 export { cat };
 export { CHIMERA };
+
+```
+## Part 3
+```js
+const dog = "dog";
+export { dog };
 
 ```
 ## Merged (module eval)
@@ -152,20 +168,30 @@ export { CHIMERA };
 ```
 ## Part 1
 ```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 export { DOG };
-const dog = "dog";
 const DOG = dog;
-export { dog };
 export { DOG };
 
 ```
 ## Part 2
 ```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 3
+};
 export { CHIMERA };
 const cat = "cat";
 const CHIMERA = cat + dog;
 export { cat };
 export { CHIMERA };
+
+```
+## Part 3
+```js
+const dog = "dog";
+export { dog };
 
 ```
 ## Merged (module eval)

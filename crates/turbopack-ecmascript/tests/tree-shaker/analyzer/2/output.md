@@ -211,6 +211,7 @@ graph TD
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
+    Item9 --> Item5;
     Item9 --> Item8;
     Item10 -.-> Item6;
     Item10 -.-> Item9;
@@ -218,6 +219,8 @@ graph TD
     Item11 --> Item2;
     Item11 --> Item1;
     Item11 -.-> Item13;
+    Item11 -.-> Item5;
+    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
@@ -254,6 +257,7 @@ graph TD
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
+    Item9 --> Item5;
     Item9 --> Item8;
     Item10 -.-> Item6;
     Item10 -.-> Item9;
@@ -261,13 +265,19 @@ graph TD
     Item11 --> Item2;
     Item11 --> Item1;
     Item11 -.-> Item13;
+    Item11 -.-> Item5;
+    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
     Item12 -.-> Item11;
     Item3 --> Item13;
+    Item3 --> Item5;
+    Item3 --> Item8;
     Item3 --> Item10;
     Item13 --> Item4;
+    Item13 --> Item5;
+    Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
@@ -303,6 +313,7 @@ graph TD
     Item6 --> Item5;
     Item8 --> Item7;
     Item8 -.-> Item6;
+    Item9 --> Item5;
     Item9 --> Item8;
     Item10 -.-> Item6;
     Item10 -.-> Item9;
@@ -310,13 +321,19 @@ graph TD
     Item11 --> Item2;
     Item11 --> Item1;
     Item11 -.-> Item13;
+    Item11 -.-> Item5;
+    Item11 -.-> Item8;
     Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
     Item12 -.-> Item11;
     Item3 --> Item13;
+    Item3 --> Item5;
+    Item3 --> Item8;
     Item3 --> Item10;
     Item13 --> Item4;
+    Item13 --> Item5;
+    Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
@@ -324,6 +341,8 @@ graph TD
     Item15 --> Item1;
     Item15 --> Item11;
     Item16 --> Item3;
+    Item17 --> Item5;
+    Item17 --> Item8;
     Item17 --> Item10;
     Item18 --> Item6;
     Item19 --> Item14;
@@ -345,10 +364,16 @@ graph TD
     N11["Items: [ItemId(1, ImportBinding(0)), ItemId(10, Normal)]"];
     N0 --> N9;
     N0 --> N11;
+    N0 --> N5;
+    N0 --> N8;
     N0 --> N10;
     N0 --> N6;
     N1 --> N11;
+    N1 --> N5;
+    N1 --> N8;
     N1 --> N10;
+    N2 --> N5;
+    N2 --> N8;
     N2 --> N10;
     N3 --> N6;
     N4 --> N6;
@@ -356,9 +381,12 @@ graph TD
     N6 --> N5;
     N8 --> N7;
     N8 --> N6;
+    N9 --> N5;
     N9 --> N8;
     N10 --> N6;
     N10 --> N9;
+    N11 --> N5;
+    N11 --> N8;
     N11 --> N10;
 ```
 # Modules (dev)
@@ -369,6 +397,12 @@ import { foobarCopy } from "entry.js" assert {
 };
 import "entry.js" assert {
     __turbopack_chunk__: 11
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
 };
 import "entry.js" assert {
     __turbopack_chunk__: 10
@@ -389,6 +423,12 @@ import { internal } from "entry.js" assert {
     __turbopack_chunk__: 11
 };
 import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
     __turbopack_chunk__: 10
 };
 export { external1 };
@@ -400,6 +440,12 @@ function external1() {
 ## Part 2
 ```js
 import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
     __turbopack_chunk__: 10
 };
 export { foobar };
@@ -463,6 +509,9 @@ export { foobar };
 ## Part 9
 ```js
 import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
     __turbopack_chunk__: 8
 };
 let foobarCopy = foobar;
@@ -484,6 +533,12 @@ export { foobar };
 ## Part 11
 ```js
 import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
     __turbopack_chunk__: 10
 };
 import { upper } from "module";
@@ -497,10 +552,10 @@ function internal() {
 import "module";
 import { upper } from "module";
 import "other";
-const bar = "bar";
-export { bar };
 let foobar = "foo";
 export { foobar };
+const bar = "bar";
+export { bar };
 const foo = foobar;
 export { foo };
 foobar += bar;
@@ -520,15 +575,17 @@ console.log(foobarCopy);
 # Modules (prod)
 ## Part 0
 ```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
 "module evaluation";
 import "module";
-const bar = "bar";
-foobar += bar;
 let foobarCopy = foobar;
 console.log(foobarCopy);
 import "other";
-export { bar };
-export { foobar };
 export { foobarCopy };
 
 ```
@@ -536,6 +593,12 @@ export { foobarCopy };
 ```js
 import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
 };
 export { external1 };
 function external1() {
@@ -552,15 +615,22 @@ function internal() {
 import { foobar } from "entry.js" assert {
     __turbopack_chunk__: 5
 };
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
 export { foobar };
 
 ```
 ## Part 3
 ```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
 export { foo };
-let foobar = "foo";
 const foo = foobar;
-export { foobar };
 export { foo };
 
 ```
@@ -574,6 +644,27 @@ function external2() {
 ```
 ## Part 5
 ```js
+let foobar = "foo";
+export { foobar };
+
+```
+## Part 6
+```js
+const bar = "bar";
+export { bar };
+
+```
+## Part 7
+```js
+import { bar } from "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+foobar += bar;
+export { foobar };
+
+```
+## Part 8
+```js
 foobar += "foo";
 export { foobar };
 
@@ -582,13 +673,15 @@ export { foobar };
 ```js
 import "module";
 import "other";
-"module evaluation";
+let foobar = "foo";
+export { foobar };
 const bar = "bar";
+export { bar };
 foobar += bar;
+export { foobar };
+"module evaluation";
 let foobarCopy = foobar;
 console.log(foobarCopy);
-export { bar };
-export { foobar };
 export { foobarCopy };
 
 ```
