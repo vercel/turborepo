@@ -4,8 +4,8 @@ Setup
 
 Run a build to get a local cache.
   $ ${TURBO} run build --output-logs=none
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  \xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
+  \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    2 successful, 2 total
