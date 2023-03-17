@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
@@ -68,13 +67,11 @@ func RealRun(
 	}()
 	colorCache := colorcache.New()
 
-	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
+	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, rs.Opts.runOpts.logPrefix, colorCache, &cli.ConcurrentUi{Ui: base.UI})
 
 	ec := &execContext{
-		colorCache:      colorCache,
 		runSummary:      runSummary,
 		rs:              rs,
-		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
 		logger:          base.Logger,
 		packageManager:  packageManager,
@@ -161,10 +158,8 @@ func RealRun(
 }
 
 type execContext struct {
-	colorCache      *colorcache.ColorCache
 	runSummary      *runsummary.RunSummary
 	rs              *runSpec
-	ui              cli.Ui
 	runCache        *runcache.RunCache
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
@@ -172,16 +167,6 @@ type execContext struct {
 	taskHashTracker *taskhash.Tracker
 	repoRoot        turbopath.AbsoluteSystemPath
 	isSinglePackage bool
-}
-
-func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
-	ec.logger.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
@@ -208,30 +193,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		return nil, nil
 	}
 
-	var prefix string
-	var prettyPrefix string
-	if ec.rs.Opts.runOpts.logPrefix == "none" {
-		prefix = ""
-	} else {
-		prefix = packageTask.OutputPrefix(ec.isSinglePackage)
-	}
-
-	prettyPrefix = ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
-
-	// Cache ---------------------------------------------
-	taskCache := ec.runCache.TaskCache(packageTask, hash)
-	// Create a logger for replaying
-	prefixedUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
-		OutputPrefix: prettyPrefix,
-		InfoPrefix:   prettyPrefix,
-		ErrorPrefix:  prettyPrefix,
-		WarnPrefix:   prettyPrefix,
-	}
-	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	if err != nil {
-		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if hit {
+	// // Cache ---------------------------------------------
+	taskCache := ec.runCache.TaskCache(packageTask, hash, ec.isSinglePackage)
+	hit := taskCache.RestoreOutputs(ctx, progressLogger)
+	if hit {
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		tracer(runsummary.TargetCached, nil)
 		return taskExecutionSummary, nil
@@ -253,11 +218,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
+	writer, err := taskCache.OutputWriter()
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err)
 
-		ec.logError(progressLogger, prettyPrefix, err)
+		taskCache.LogTurboError(progressLogger, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
 		}
@@ -266,9 +231,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, taskCache.LogPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, taskCache.LogPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
@@ -310,17 +275,16 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		tracer(runsummary.TargetBuildFailed, err)
 
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
+
+		// If there was an error, flush the buffered output
+		taskCache.OnError(progressLogger, ec.rs.Opts.runOpts.continueOnError, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
-			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			// We're shutting everything down. Don't allow new scripts, and stop the ones in progress
 			ec.processes.Close()
 		} else {
-			prefixedUI.Warn("command finished with error, but continuing...")
 			// Set to nil so we don't short-circuit any other execution
 			err = nil
 		}
-
-		// If there was an error, flush the buffered output
-		taskCache.OnError(prefixedUI, progressLogger)
 
 		return taskExecutionSummary, err
 	}
@@ -328,10 +292,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
-		ec.logError(progressLogger, "", err)
+		taskCache.LogTurboError(progressLogger, err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
-			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
+		if err = taskCache.SaveOutputs(ctx, progressLogger, int(duration.Milliseconds())); err != nil {
+			taskCache.LogTurboError(progressLogger, fmt.Errorf("error caching output: %w", err))
 		} else {
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		}

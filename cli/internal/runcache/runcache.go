@@ -70,10 +70,12 @@ type RunCache struct {
 	logReplayer            LogReplayer
 	outputWatcher          OutputWatcher
 	colorCache             *colorcache.ColorCache
+	logPrefixMode          string
+	ui                     cli.Ui // TODO: this is a temporary home for ui. Terminal output should be consolidated on its own
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
-func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
+func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, logPrefixMode string, colorCache *colorcache.ColorCache, ui cli.Ui) *RunCache {
 	rc := &RunCache{
 		taskOutputModeOverride: opts.TaskOutputModeOverride,
 		cache:                  cache,
@@ -83,6 +85,8 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 		logReplayer:            opts.LogReplayer,
 		outputWatcher:          opts.OutputWatcher,
 		colorCache:             colorCache,
+		logPrefixMode:          logPrefixMode,
+		ui:                     ui,
 	}
 
 	if rc.logReplayer == nil {
@@ -105,21 +109,23 @@ type TaskCache struct {
 	taskOutputMode    util.TaskOutputMode
 	cachingDisabled   bool
 	LogFileName       turbopath.AbsoluteSystemPath
+	ui                *cli.PrefixedUi
+	LogPrefix         string
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns true if successful.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, progressLogger hclog.Logger) bool {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
-			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
+			tc.ui.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return false, nil
+		return false
 	}
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
-		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
+		tc.ui.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
 
@@ -131,20 +137,21 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		hit, restoredFiles, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		tc.ExpandedOutputs = restoredFiles
 		if err != nil {
-			return false, err
+			tc.ui.Error(fmt.Sprintf("error fetching from cache: %s", err))
+			return false
 		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
-				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
+				tc.ui.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
-			return false, nil
+			return false
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
-			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+			tc.ui.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
-		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		tc.ui.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
 	switch tc.taskOutputMode {
@@ -152,32 +159,51 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		prefixedUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
+		tc.ui.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
-		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		tc.ReplayLogFile(prefixedUI, progressLogger)
+		tc.ui.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
+		tc.ReplayLogFile(tc.ui, progressLogger)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
 	default:
 		// NoLogs, do not output anything
 	}
 
-	return true, nil
+	return true
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal
-func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
+func (tc *TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
 	if tc.LogFileName.FileExists() {
 		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
 	}
 }
 
+// LogTurboError is used to properly direct an error message generated by Turborepo itself,
+// not by a script that Turborepo was running.
+func (tc *TaskCache) LogTurboError(logger hclog.Logger, err error) {
+	prefix := tc.LogPrefix
+	logger.Error(prefix, "error", err)
+
+	if prefix != "" {
+		prefix += ": "
+	}
+
+	// Note: this is now scoped to this task, so the task prefix is first
+	tc.ui.Ui.Error(fmt.Sprintf("%s%s%s", prefix, ui.ERROR_PREFIX, color.RedString(" %v", err)))
+}
+
 // OnError replays the logfile if --output-mode=errors-only.
 // This is called if the task exited with an non-zero error code.
-func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
+func (tc TaskCache) OnError(logger hclog.Logger, continueOnError bool, err error) {
+	if !continueOnError {
+		tc.ui.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+	} else {
+		tc.ui.Warn("command finished with error, but continuing...")
+	}
 	if tc.taskOutputMode == util.ErrorTaskOutput {
-		tc.ReplayLogFile(terminal, logger)
+		tc.ReplayLogFile(tc.ui, logger)
 	}
 }
 
@@ -203,9 +229,9 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
+func (tc *TaskCache) OutputWriter() (io.WriteCloser, error) {
 	// an os.Stdout wrapper that will add prefixes before printing to stdout
-	stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
+	stdoutWriter := logstreamer.NewPrettyStdoutWriter(tc.LogPrefix)
 
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{stdoutWriter}, nil
@@ -235,10 +261,8 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 	return fwc, nil
 }
 
-var _emptyIgnore []string
-
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nil
 	}
@@ -256,7 +280,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
 		if err != nil {
 			logger.Error(fmt.Sprintf("error: %v", err))
-			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
+			tc.ui.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
 			continue
 		}
 		relativePaths[index] = fs.UnsafeToAnchoredSystemPath(relativePath)
@@ -270,7 +294,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 		// Don't fail the cache write because we also failed to record it, we will just do
 		// extra I/O in the future restoring files that haven't changed from cache
 		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
-		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+		tc.ui.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 	}
 
 	tc.ExpandedOutputs = relativePaths
@@ -280,7 +304,21 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string, isSinglePackage bool) *TaskCache {
+	var prefix string
+	if rc.logPrefixMode == "none" {
+		prefix = ""
+	} else {
+		prefix = pt.OutputPrefix(isSinglePackage)
+	}
+	prettyPrefix := rc.colorCache.PrefixWithColor(pt.PackageName, prefix)
+	prefixedUI := &cli.PrefixedUi{
+		Ui:           rc.ui,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
+	}
 	logFileName := rc.repoRoot.UntypedJoin(pt.LogFile)
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := fs.TaskOutputs{
@@ -300,7 +338,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		taskOutputMode = *rc.taskOutputModeOverride
 	}
 
-	return TaskCache{
+	return &TaskCache{
 		ExpandedOutputs:   []turbopath.AnchoredSystemPath{},
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
@@ -309,6 +347,8 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
 		LogFileName:       logFileName,
+		LogPrefix:         prettyPrefix,
+		ui:                prefixedUI,
 	}
 }
 
