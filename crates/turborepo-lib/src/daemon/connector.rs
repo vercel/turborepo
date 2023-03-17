@@ -285,11 +285,7 @@ pub enum FileWaitError {
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
 async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitError> {
-    let parent = match path.parent() {
-        Some(p) => p,
-        // the root can neither be created nor deleted, indicating a logic error
-        None => return Err(FileWaitError::InvalidPath(path.into())),
-    };
+    let parent = path.parent().ok_or_else(||FileWaitError::InvalidPath(path.into()))?;
 
     let file_name = path
         .file_name()
