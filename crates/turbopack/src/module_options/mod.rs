@@ -111,6 +111,11 @@ impl ModuleOptionsVc {
             });
         }
 
+        let ecmascript_options = EcmascriptOptions {
+            split_into_parts: enable_tree_shaking,
+            import_parts: enable_tree_shaking,
+        };
+
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
         }
@@ -342,7 +347,7 @@ impl ModuleOptionsVc {
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                             transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                            options: ecmascript_options.clone(),
                         }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
