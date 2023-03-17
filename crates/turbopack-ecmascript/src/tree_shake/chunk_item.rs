@@ -4,7 +4,6 @@ use turbopack_core::{
     chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    resolve::origin::ResolveOrigin,
 };
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, split_module};
