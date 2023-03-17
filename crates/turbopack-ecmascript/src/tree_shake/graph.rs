@@ -45,7 +45,7 @@ pub(crate) enum ItemIdGroupKind {
 pub(crate) enum ItemIdItemKind {
     Normal,
 
-    ImportOfModule,
+    ImportOfModule(JsWord),
     /// Imports are split as multiple items.
     ImportBinding(u32),
     VarDeclarator(u32),
@@ -185,6 +185,8 @@ pub(super) enum Mode {
 
 pub(super) struct SplitModuleResult {
     pub entrypoints: FxHashMap<Key, u32>,
+
+    /// Dependency between parts.
     pub part_deps: FxHashMap<u32, Vec<u32>>,
     pub external_deps: FxHashMap<u32, Vec<JsWord>>,
     pub modules: Vec<Module>,
@@ -262,6 +264,17 @@ impl DepGraph {
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
                         exports.insert(Key::ModuleEvaluation, ix as u32);
                     }
+
+                    ItemId::Item {
+                        kind: ItemIdItemKind::ImportOfModule(module_specifier),
+                        ..
+                    } => {
+                        external_deps
+                            .entry(ix as u32)
+                            .or_default()
+                            .push(module_specifier.clone());
+                    }
+
                     _ => {}
                 }
             }
@@ -576,7 +589,7 @@ impl DepGraph {
                         // One item for the import itself
                         let id = ItemId::Item {
                             index,
-                            kind: ItemIdItemKind::ImportOfModule,
+                            kind: ItemIdItemKind::ImportOfModule(item.src.value.clone()),
                         };
                         ids.push(id.clone());
                         items.insert(

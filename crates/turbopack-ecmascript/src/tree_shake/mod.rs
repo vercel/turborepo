@@ -337,7 +337,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 
             let SplitModuleResult {
                 entrypoints,
-                deps,
+                part_deps,
                 modules,
                 external_deps,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
@@ -360,7 +360,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 
             Ok(SplitResult::Ok {
                 entrypoints,
-                deps,
+                deps: part_deps,
                 modules,
                 external_deps,
             }
