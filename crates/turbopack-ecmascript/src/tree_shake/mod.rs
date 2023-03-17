@@ -171,7 +171,7 @@ impl Analyzer<'_> {
                     state.last_reads.push(item_id.clone());
 
                     // Optimization: Remove each module item to which we
-                    // just created a strong dependencyS
+                    // have a strong dependency
 
                     state
                         .last_reads
