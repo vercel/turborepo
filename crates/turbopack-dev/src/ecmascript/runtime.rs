@@ -7,8 +7,8 @@ use turbopack_core::{
     reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkContextVc, EcmascriptChunkPlaceableVc, EcmascriptChunkRuntime,
-    EcmascriptChunkRuntimeContentVc, EcmascriptChunkRuntimeVc, EcmascriptChunkVc,
+    EcmascriptChunkContextVc, EcmascriptChunkRuntime, EcmascriptChunkRuntimeContentVc,
+    EcmascriptChunkRuntimeVc, EcmascriptChunkVc,
 };
 
 use crate::ecmascript::content::EcmascriptDevChunkContentVc;

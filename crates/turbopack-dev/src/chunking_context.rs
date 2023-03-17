@@ -14,8 +14,7 @@ use turbopack_core::{
     ident::{AssetIdent, AssetIdentVc},
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkPlaceableVc,
-    EcmascriptChunkRuntimeVc,
+    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkRuntimeVc,
 };
 
 use crate::ecmascript::runtime::{EcmascriptDevChunkRuntimeMode, EcmascriptDevChunkRuntimeVc};

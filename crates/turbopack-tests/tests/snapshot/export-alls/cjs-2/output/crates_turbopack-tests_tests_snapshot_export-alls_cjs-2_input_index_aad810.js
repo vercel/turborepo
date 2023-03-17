@@ -1,4 +1,4 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_aad810.js", {
+(globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_export-alls_cjs-2_input_index_aad810.js", {
 
 "[project]/crates/turbopack-tests/tests/snapshot/export-alls/cjs-2/input/commonjs.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
@@ -52,10 +52,11 @@ if (!Array.isArray(globalThis.TURBOPACK)) {
 const BACKEND = {
   loadChunk(chunkPath, source) {
     return new Promise((resolve, reject) => {
-      // We don't need to load runtime chunks, as they're already
-      // present in the DOM.
+      // We don't need to load runtime chunks, as they're already present in the DOM.
+      // However, we need to wait for them to register themselves within `registerChunk`
+      // before we can start instantiating runtime modules, hence the absense of
+      // `resolve()` in this branch.
       if (source.type === SourceTypeRuntime) {
-        resolve();
         return;
       }
 
@@ -1434,6 +1435,22 @@ function instantiateRuntimeModule(moduleId, chunkPath) {
 }
 
 /**
+ * Gets or instantiates a runtime module.
+ *
+ * @param {ModuleId} moduleId
+ * @param {ChunkPath} chunkPath
+ * @returns {Module}
+ */
+function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
+  const module = moduleCache[moduleId];
+  if (module) {
+    return module;
+  }
+
+  return instantiateModule(moduleId, { type: SourceTypeRuntime, chunkPath });
+}
+
+/**
  * Subscribes to chunk list updates from the update server and applies them.
  *
  * @param {ChunkPath} chunkListPath
@@ -1544,7 +1561,7 @@ async function evaluateRuntimeParams(chunkPath, runtimeParams) {
     );
 
     for (const moduleId of runtimeParams.runtimeModuleIds) {
-      instantiateRuntimeModule(moduleId, chunkPath);
+      getOrInstantiateRuntimeModule(moduleId, chunkPath);
     }
   }
 }
