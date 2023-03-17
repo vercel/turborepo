@@ -103,6 +103,7 @@ pub(crate) struct ImportMap {
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum ImportedSymbol {
+    ModuleEvaluation,
     Symbol(JsWord),
     Namespace,
 }
@@ -243,27 +244,32 @@ impl Visit for Analyzer<'_> {
 
     fn visit_import_decl(&mut self, import: &ImportDecl) {
         let annotations = take(&mut self.current_annotations);
-        for specifier in &import.specifiers {
-            let symbol = get_import_symbol_from_import(specifier);
 
+        self.ensure_reference(
+            import.src.value.clone(),
+            ImportedSymbol::ModuleEvaluation,
+            annotations.clone(),
+        );
+
+        for s in &import.specifiers {
+            let symbol = get_import_symbol_from_import(s);
             let i = self.ensure_reference(import.src.value.clone(), symbol, annotations.clone());
-            for s in &import.specifiers {
-                let (local, orig_sym) = match s {
-                    ImportSpecifier::Named(ImportNamedSpecifier {
-                        local, imported, ..
-                    }) => match imported {
-                        Some(imported) => (local.to_id(), orig_name(imported)),
-                        _ => (local.to_id(), local.sym.clone()),
-                    },
-                    ImportSpecifier::Default(s) => (s.local.to_id(), "default".into()),
-                    ImportSpecifier::Namespace(s) => {
-                        self.data.namespace_imports.insert(s.local.to_id(), i);
-                        continue;
-                    }
-                };
 
-                self.data.imports.insert(local, (i, orig_sym));
-            }
+            let (local, orig_sym) = match s {
+                ImportSpecifier::Named(ImportNamedSpecifier {
+                    local, imported, ..
+                }) => match imported {
+                    Some(imported) => (local.to_id(), orig_name(imported)),
+                    _ => (local.to_id(), local.sym.clone()),
+                },
+                ImportSpecifier::Default(s) => (s.local.to_id(), "default".into()),
+                ImportSpecifier::Namespace(s) => {
+                    self.data.namespace_imports.insert(s.local.to_id(), i);
+                    continue;
+                }
+            };
+
+            self.data.imports.insert(local, (i, orig_sym));
         }
     }
 
@@ -283,38 +289,44 @@ impl Visit for Analyzer<'_> {
         self.data.has_exports = true;
         if let Some(ref src) = export.src {
             let annotations = take(&mut self.current_annotations);
-            for specifier in &export.specifiers {
-                let symbol = get_import_symbol_frmo_export(specifier);
+
+            self.ensure_reference(
+                src.value.clone(),
+                ImportedSymbol::ModuleEvaluation,
+                annotations.clone(),
+            );
+
+            for spec in export.specifiers.iter() {
+                let symbol = get_import_symbol_frmo_export(spec);
 
                 let i = self.ensure_reference(src.value.clone(), symbol, annotations.clone());
-                for spec in export.specifiers.iter() {
-                    match spec {
-                        ExportSpecifier::Namespace(n) => {
-                            self.data.reexports.push((
-                                i,
-                                Reexport::Namespace {
-                                    exported: to_word(&n.name),
-                                },
-                            ));
-                        }
-                        ExportSpecifier::Default(d) => {
-                            self.data.reexports.push((
-                                i,
-                                Reexport::Named {
-                                    imported: js_word!("default"),
-                                    exported: d.exported.sym.clone(),
-                                },
-                            ));
-                        }
-                        ExportSpecifier::Named(n) => {
-                            self.data.reexports.push((
-                                i,
-                                Reexport::Named {
-                                    imported: to_word(&n.orig),
-                                    exported: to_word(n.exported.as_ref().unwrap_or(&n.orig)),
-                                },
-                            ));
-                        }
+
+                match spec {
+                    ExportSpecifier::Namespace(n) => {
+                        self.data.reexports.push((
+                            i,
+                            Reexport::Namespace {
+                                exported: to_word(&n.name),
+                            },
+                        ));
+                    }
+                    ExportSpecifier::Default(d) => {
+                        self.data.reexports.push((
+                            i,
+                            Reexport::Named {
+                                imported: js_word!("default"),
+                                exported: d.exported.sym.clone(),
+                            },
+                        ));
+                    }
+                    ExportSpecifier::Named(n) => {
+                        self.data.reexports.push((
+                            i,
+                            Reexport::Named {
+                                imported: to_word(&n.orig),
+                                exported: to_word(n.exported.as_ref().unwrap_or(&n.orig)),
+                            },
+                        ));
                     }
                 }
             }
