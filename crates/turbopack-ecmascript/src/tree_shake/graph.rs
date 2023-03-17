@@ -775,9 +775,10 @@ impl DepGraph {
     where
         T: IntoIterator<Item = &'a ItemId>,
     {
-        let from = self.g.node(from);
+        let mut from_ix = None;
 
         for to in to {
+            let from = *from_ix.get_or_insert_with(|| self.g.node(from));
             let to = self.g.node(to);
 
             self.g.idx_graph.add_edge(from, to, Dependency::Strong);
