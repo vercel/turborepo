@@ -264,8 +264,8 @@ pub struct ResponseHeaders {
 #[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub struct StructuredError {
-    name: String,
-    message: String,
+    pub name: String,
+    pub message: String,
     stack: Vec<StackFrame>,
 }
 
