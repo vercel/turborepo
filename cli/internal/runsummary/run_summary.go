@@ -22,9 +22,12 @@ const MissingTaskLabel = "<NONEXISTENT>"
 // MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
+const runSummarySchemaVersion = "0"
+
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
 	ID                ksuid.KSUID        `json:"id"`
+	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
@@ -38,6 +41,7 @@ func NewRunSummary(startAt time.Time, profile string, turboVersion string, packa
 
 	return &RunSummary{
 		ID:                ksuid.New(),
+		Version:           runSummarySchemaVersion,
 		ExecutionSummary:  executionSummary,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
