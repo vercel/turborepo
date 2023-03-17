@@ -201,21 +201,12 @@ graph TD
     Item3 --> Item1;
     Item3 --> Item2;
     Item5 -.-> Item3;
-    Item6 --> Item1;
-    Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
     Item8 -.-> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item5;
     Item9 --> Item8;
     Item9 --> Item3;
     Item9 --> Item6;
-    Item10 --> Item1;
-    Item10 --> Item2;
-    Item10 --> Item5;
-    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
@@ -249,35 +240,17 @@ graph TD
     Item3 --> Item1;
     Item3 --> Item2;
     Item5 -.-> Item3;
-    Item6 --> Item1;
-    Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
     Item8 -.-> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item5;
     Item9 --> Item8;
     Item9 --> Item3;
     Item9 --> Item6;
-    Item10 --> Item1;
-    Item10 --> Item2;
-    Item10 --> Item5;
-    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
-    Item4 --> Item1;
-    Item4 --> Item2;
-    Item4 --> Item5;
-    Item4 --> Item8;
     Item7 -.-> Item9;
     Item7 -.-> Item10;
-    Item13 --> Item11;
-    Item13 --> Item1;
-    Item13 --> Item2;
-    Item13 --> Item5;
-    Item13 --> Item8;
 ```
 # Phase 4
 ```mermaid
@@ -308,40 +281,21 @@ graph TD
     Item3 --> Item1;
     Item3 --> Item2;
     Item5 -.-> Item3;
-    Item6 --> Item1;
-    Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
     Item8 -.-> Item6;
-    Item9 --> Item1;
-    Item9 --> Item2;
-    Item9 --> Item5;
     Item9 --> Item8;
     Item9 --> Item3;
     Item9 --> Item6;
-    Item10 --> Item1;
-    Item10 --> Item2;
-    Item10 --> Item5;
-    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
-    Item4 --> Item1;
-    Item4 --> Item2;
-    Item4 --> Item5;
-    Item4 --> Item8;
     Item7 -.-> Item9;
     Item7 -.-> Item10;
-    Item13 --> Item11;
-    Item13 --> Item1;
-    Item13 --> Item2;
-    Item13 --> Item5;
-    Item13 --> Item8;
     Item14 --> Item3;
     Item14 --> Item6;
     Item14 --> Item9;
     Item15 --> Item10;
-    Item16 --> Item11;
     Item17 --> Item12;
     Item18 --> Item13;
 ```
@@ -351,7 +305,7 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0))), ItemId(3, Normal), ItemId(6, Normal), ItemId(9, VarDeclarator(0))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(11, VarDeclarator(0))]"];
+    N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(10, VarDeclarator(0)), ItemId(11, VarDeclarator(0))]"];
     N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal)]"];
     N5["Items: [ItemId(0, VarDeclarator(0))]"];
     N6["Items: [ItemId(1, Normal)]"];
@@ -360,33 +314,16 @@ graph TD
     N9["Items: [ItemId(5, Normal)]"];
     N10["Items: [ItemId(7, Normal)]"];
     N11["Items: [ItemId(8, Normal)]"];
-    N12["Items: [ItemId(10, VarDeclarator(0))]"];
     N0 --> N7;
     N0 --> N9;
     N0 --> N11;
-    N1 --> N5;
-    N1 --> N6;
-    N1 --> N8;
-    N1 --> N10;
     N1 --> N11;
-    N2 --> N12;
-    N3 --> N12;
-    N4 --> N12;
-    N4 --> N5;
-    N4 --> N6;
-    N4 --> N8;
-    N4 --> N10;
     N7 --> N5;
     N7 --> N6;
     N8 --> N7;
-    N9 --> N5;
-    N9 --> N6;
     N9 --> N8;
     N9 --> N7;
     N10 --> N9;
-    N11 --> N5;
-    N11 --> N6;
-    N11 --> N8;
     N11 --> N10;
     N11 --> N7;
     N11 --> N9;
@@ -408,18 +345,6 @@ import "entry.js" assert {
 ```
 ## Part 1
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 10
-};
 import "entry.js" assert {
     __turbopack_chunk__: 11
 };
@@ -440,39 +365,20 @@ export { dogRef };
 ```
 ## Part 2
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 12
-};
 export { cat };
 
 ```
 ## Part 3
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 12
-};
 export { initialCat };
+let cat = "cat";
 const initialCat = cat;
+export { cat };
 export { initialCat };
 
 ```
 ## Part 4
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 10
-};
 export { getChimera };
 function getChimera() {
     return cat + dog;
@@ -514,12 +420,6 @@ export { dog };
 ## Part 9
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
     __turbopack_chunk__: 8
 };
 import "entry.js" assert {
@@ -540,15 +440,6 @@ export { dog };
 ## Part 11
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
     __turbopack_chunk__: 10
 };
 import "entry.js" assert {
@@ -558,12 +449,6 @@ import "entry.js" assert {
     __turbopack_chunk__: 9
 };
 console.log(dog);
-
-```
-## Part 12
-```js
-let cat = "cat";
-export { cat };
 
 ```
 ## Merged (module eval)
@@ -585,38 +470,19 @@ console.log(dog);
 # Modules (prod)
 ## Part 0
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 "module evaluation";
+let dog = "dog";
+dog += "!";
 console.log(dog);
+dog += "!";
 console.log(dog);
+dog += "!";
 console.log(dog);
+export { dog };
 
 ```
 ## Part 1
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 export { dogRef };
 function getDog() {
     return dog;
@@ -634,88 +500,36 @@ export { dogRef };
 ```
 ## Part 2
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 9
-};
 export { cat };
 
 ```
 ## Part 3
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 9
-};
 export { initialCat };
+let cat = "cat";
 const initialCat = cat;
+export { cat };
 export { initialCat };
 
 ```
 ## Part 4
 ```js
-import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 export { getChimera };
 function getChimera() {
     return cat + dog;
 }
 
 ```
-## Part 5
-```js
-let dog = "dog";
-export { dog };
-
-```
-## Part 6
-```js
-dog += "!";
-export { dog };
-
-```
-## Part 7
-```js
-dog += "!";
-export { dog };
-
-```
-## Part 8
-```js
-dog += "!";
-export { dog };
-
-```
-## Part 9
-```js
-let cat = "cat";
-export { cat };
-
-```
 ## Merged (module eval)
 ```js
-let dog = "dog";
-export { dog };
-dog += "!";
-export { dog };
-dog += "!";
-export { dog };
-dog += "!";
-export { dog };
 "module evaluation";
+let dog = "dog";
+dog += "!";
 console.log(dog);
+dog += "!";
 console.log(dog);
+dog += "!";
 console.log(dog);
+export { dog };
 
 ```
