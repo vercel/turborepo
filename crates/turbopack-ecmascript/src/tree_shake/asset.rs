@@ -57,7 +57,7 @@ impl Asset for EcmascriptModulePartAsset {
         let split_data = split_module(self.full_module).await?;
 
         let deps = match &*split_data {
-            SplitResult::Ok { deps, modules, .. } => deps,
+            SplitResult::Ok { deps, .. } => deps,
             _ => {
                 bail!("failed to split module")
             }
