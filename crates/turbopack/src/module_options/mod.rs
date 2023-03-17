@@ -249,21 +249,21 @@ impl ModuleOptionsVc {
                 ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: Default::default(),
+                    options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: Default::default(),
+                    options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: Default::default(),
+                    options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
@@ -302,7 +302,7 @@ impl ModuleOptionsVc {
                 ModuleRuleCondition::ResourcePathHasNoExtension,
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: vendor_transforms,
-                    options: Default::default(),
+                    options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
@@ -342,10 +342,7 @@ impl ModuleOptionsVc {
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                             transforms: app_transforms,
-                            options: EcmascriptOptions {
-                                split_into_parts: enable_tree_shaking,
-                                import_parts: enable_tree_shaking,
-                            },
+                    options: ecmascript_options.clone(),
                         }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
