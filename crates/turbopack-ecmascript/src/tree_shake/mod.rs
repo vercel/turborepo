@@ -167,11 +167,14 @@ impl Analyzer<'_> {
                     state.last_reads.push(item_id.clone());
 
                     // Optimization: Remove each module item to which we
-                    // just created a strong dependency from LAST_READS
+                    // just created a strong dependencyS
 
                     state
                         .last_reads
-                        .retain(|last_read| !self.g.has_strong_dep(item_id, last_read))
+                        .retain(|last_read| !self.g.has_strong_dep(item_id, last_read));
+                    state
+                        .last_writes
+                        .retain(|last_write| !self.g.has_strong_dep(item_id, last_write));
                 }
 
                 if item.side_effects {
