@@ -205,7 +205,6 @@ graph TD
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
@@ -254,7 +253,6 @@ graph TD
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
@@ -273,8 +271,6 @@ graph TD
     Item4 --> Item2;
     Item4 --> Item5;
     Item4 --> Item8;
-    Item7 -.-> Item3;
-    Item7 -.-> Item6;
     Item7 -.-> Item9;
     Item7 -.-> Item10;
     Item13 --> Item11;
@@ -316,7 +312,6 @@ graph TD
     Item6 --> Item2;
     Item6 --> Item5;
     Item6 --> Item3;
-    Item8 -.-> Item3;
     Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
@@ -335,8 +330,6 @@ graph TD
     Item4 --> Item2;
     Item4 --> Item5;
     Item4 --> Item8;
-    Item7 -.-> Item3;
-    Item7 -.-> Item6;
     Item7 -.-> Item9;
     Item7 -.-> Item10;
     Item13 --> Item11;
@@ -375,8 +368,6 @@ graph TD
     N1 --> N6;
     N1 --> N8;
     N1 --> N10;
-    N1 --> N7;
-    N1 --> N9;
     N1 --> N11;
     N2 --> N12;
     N3 --> N12;
@@ -392,7 +383,6 @@ graph TD
     N9 --> N6;
     N9 --> N8;
     N9 --> N7;
-    N10 --> N7;
     N10 --> N9;
     N11 --> N5;
     N11 --> N6;
@@ -429,12 +419,6 @@ import "entry.js" assert {
 };
 import "entry.js" assert {
     __turbopack_chunk__: 10
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
 };
 import "entry.js" assert {
     __turbopack_chunk__: 11
@@ -546,9 +530,6 @@ console.log(dog);
 ```
 ## Part 10
 ```js
-import "entry.js" assert {
-    __turbopack_chunk__: 7
-};
 import "entry.js" assert {
     __turbopack_chunk__: 9
 };
