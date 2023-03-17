@@ -43,6 +43,9 @@ Setup
     "apps/my-app/.turbo/turbo-build.log"
   ]
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "another#build"))'
+  []
+
 # Without env var, no summary file is generated
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null

@@ -94,18 +94,26 @@ func RealRun(
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		mu.Lock()
-		taskSummaries = append(taskSummaries, taskSummary)
-		// don't hold the lock while we run ec.exec
-		mu.Unlock()
-
 		// deps here are passed in to calculate the task hash
 		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
 		if err != nil {
 			return err
 		}
-		taskSummary.Execution = taskExecutionSummary
-		taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
+
+		// taskExecutionSummary will be nil if the task never executed
+		// (i.e. if the workspace didn't implement the script corresponding to the task)
+		// We don't need to collect any of the outputs or execution if the task didn't execute.
+		if taskExecutionSummary != nil {
+			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
+			taskSummary.Execution = taskExecutionSummary
+
+			// lock since multiple things to be appending to this array at the same time
+			mu.Lock()
+			taskSummaries = append(taskSummaries, taskSummary)
+			// not using defer, just release the lock
+			mu.Unlock()
+		}
+
 		return nil
 	}
 
@@ -196,7 +204,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return taskExecutionSummary, nil
+		// Return nil here because there was no execution, so there is no task execution summary
+		return nil, nil
 	}
 
 	var prefix string
