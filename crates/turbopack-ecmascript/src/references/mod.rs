@@ -20,6 +20,7 @@ use std::{
 
 use anyhow::Result;
 use constant_condition::{ConstantConditionValue, ConstantConditionVc};
+use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -342,11 +343,11 @@ pub(crate) async fn analyze_ecmascript_module(
 
             // Avoid adding duplicate references to the analysis
             // (this can work on unresolved Vcs as we can deduplicate on operations)
-            for r in IndexSet::from(import_references.iter()) {
+            for r in import_references.iter().collect::<IndexSet<_>>() {
                 // Resolving these references here avoids many resolve wrapper tasks when
                 // passing that to other turbo tasks functions later.
-                *r = r.resolve().await?;
-                analysis.add_reference(*r);
+                let r = r.resolve().await?;
+                analysis.add_reference(r);
             }
 
             let (
