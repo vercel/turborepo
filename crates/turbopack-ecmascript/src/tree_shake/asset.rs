@@ -60,8 +60,8 @@ impl Asset for EcmascriptModulePartAsset {
             Err(_) => bail!("part {:?} is not found in the module", self.part),
         };
 
-        let deps = match &*split_data {
-            SplitResult::Ok { deps, .. } => deps,
+        let (deps, module) = match &*split_data {
+            SplitResult::Ok { deps, modules, .. } => (deps, &modules[part_id as usize]),
             _ => {
                 bail!("failed to split module")
             }
@@ -87,7 +87,10 @@ impl Asset for EcmascriptModulePartAsset {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let external = self.full_module.references().await?;
+        let external = analyze(self.full_module, self.part)
+            .await?
+            .references
+            .await?;
 
         assets.extend(external.iter().cloned());
 
@@ -145,15 +148,25 @@ impl EcmascriptModulePartAssetVc {
     #[turbo_tasks::function]
     pub(super) async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
         let this = self.await?;
-        let module = this.full_module.await?;
-        Ok(analyze_ecmascript_module(
-            module.source,
-            this.full_module.as_resolve_origin(),
-            Value::new(module.ty),
-            module.transforms,
-            Value::new(module.options),
-            module.compile_time_info,
-            Some(this.part),
-        ))
+
+        Ok(analyze(this.full_module, this.part))
     }
+}
+
+#[turbo_tasks::function]
+async fn analyze(
+    full_module: EcmascriptModuleAssetVc,
+    part: ModulePartVc,
+) -> Result<AnalyzeEcmascriptModuleResultVc> {
+    let module = full_module.await?;
+
+    Ok(analyze_ecmascript_module(
+        module.source,
+        full_module.as_resolve_origin(),
+        Value::new(module.ty),
+        module.transforms,
+        Value::new(module.options),
+        module.compile_time_info,
+        Some(part),
+    ))
 }
