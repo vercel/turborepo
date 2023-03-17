@@ -52,5 +52,18 @@
     "docker-in-docker": "latest",
     "git": "latest",
     "github-cli": "latest"
+  },
+
+  // Add permissions to next.js to allow committing from nextpack
+  "customizations": {
+    "codespaces": {
+      "repositories": {
+        "vercel/next.js": {
+          "permissions": {
+            "contents": "write"
+          }
+        }
+      }
+    }
   }
 }

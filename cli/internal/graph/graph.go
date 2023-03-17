@@ -77,11 +77,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
+		passThruArgs := getArgs(taskName)
 		hash, err := g.TaskHashTracker.CalculateTaskHash(
 			packageTask,
 			taskGraph.DownEdges(taskID),
 			logger,
-			getArgs(taskName),
+			passThruArgs,
 		)
 
 		// Not being able to construct the task hash is a hard error
@@ -118,11 +119,13 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			ExpandedInputs:         expandedInputs,
 			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
 			Command:                command,
+			CommandArguments:       passThruArgs,
 			Framework:              framework,
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Configured: envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:   envVars.BySource.Matching.ToSecretHashable(),
 			},
+			ExternalDepsHash: pkg.ExternalDepsHash,
 		}
 
 		if ancestors, err := g.getTaskGraphAncestors(taskGraph, packageTask.TaskID); err == nil {

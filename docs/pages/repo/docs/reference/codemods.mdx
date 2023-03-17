@@ -156,7 +156,7 @@ For example:
   "pipeline": {
     "build": {
       "dependsOn": ["^build", "$API_BASE"],
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
@@ -179,7 +179,7 @@ For example:
 -     "dependsOn": ["^build", "$API_BASE"],
 +     "dependsOn": ["^build"],
 +     "env": ["API_BASE"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "lint": {},
     "dev": {
@@ -224,7 +224,7 @@ For example:
     "build": {
       "dependsOn": ["^build"],
       "env": ["API_BASE"],
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
       "outputs": []
@@ -247,7 +247,7 @@ For example:
     "build": {
       "dependsOn": ["^build"],
       "env": ["API_BASE"],
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
 -   "lint": {
 -     "outputs": []

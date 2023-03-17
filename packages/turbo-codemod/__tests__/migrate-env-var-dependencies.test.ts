@@ -24,7 +24,7 @@ const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
         cache: false,
       },
       build: {
-        outputs: ["dist/**/*", ".next/**/*"],
+        outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
         dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
       },
     },
@@ -207,6 +207,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -247,6 +248,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -293,6 +295,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -343,6 +346,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -395,7 +399,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,
@@ -445,7 +449,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,
@@ -529,7 +533,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,
@@ -625,7 +629,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,

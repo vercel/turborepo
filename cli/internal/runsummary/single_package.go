@@ -21,6 +21,7 @@ type singlePackageTaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	CacheState             cache.ItemStatus                      `json:"cacheState"`
 	Command                string                                `json:"command"`
+	CommandArguments       []string                              `json:"commandArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFile                string                                `json:"logFile"`
@@ -32,4 +33,5 @@ type singlePackageTaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"`
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }

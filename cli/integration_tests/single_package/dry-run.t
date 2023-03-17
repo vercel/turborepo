@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building' \u003e foo",
+        "commandArguments": [],
         "outputs": [
           "foo"
         ],
@@ -72,7 +73,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       }
     ]
   }
