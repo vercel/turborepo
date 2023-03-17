@@ -60,8 +60,8 @@ impl Asset for EcmascriptModulePartAsset {
             Err(_) => bail!("part {:?} is not found in the module", self.part),
         };
 
-        let (deps, module) = match &*split_data {
-            SplitResult::Ok { deps, modules, .. } => (deps, &modules[part_id as usize]),
+        let deps = match &*split_data {
+            SplitResult::Ok { deps, modules, .. } => deps,
             _ => {
                 bail!("failed to split module")
             }

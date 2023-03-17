@@ -1,10 +1,7 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
-use swc_core::ecma::{
-    ast::{Id, Module, Program},
-    atoms::JsWord,
-};
+use swc_core::ecma::ast::{Id, Module, Program};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc};
 
@@ -295,9 +292,6 @@ pub(crate) enum SplitResult {
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         deps: FxHashMap<u32, Vec<u32>>,
-
-        #[turbo_tasks(debug_ignore, trace_ignore)]
-        external_deps: FxHashMap<u32, Vec<JsWord>>,
     },
     Unparseable,
     NotFound,
@@ -339,7 +333,6 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                 entrypoints,
                 part_deps,
                 modules,
-                external_deps,
             } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             let modules = modules
@@ -362,7 +355,6 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                 entrypoints,
                 deps: part_deps,
                 modules,
-                external_deps,
             }
             .cell())
         }

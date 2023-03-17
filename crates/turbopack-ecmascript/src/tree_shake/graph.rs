@@ -45,7 +45,7 @@ pub(crate) enum ItemIdGroupKind {
 pub(crate) enum ItemIdItemKind {
     Normal,
 
-    ImportOfModule(JsWord),
+    ImportOfModule,
     /// Imports are split as multiple items.
     ImportBinding(u32),
     VarDeclarator(u32),
@@ -188,7 +188,6 @@ pub(super) struct SplitModuleResult {
 
     /// Dependency between parts.
     pub part_deps: FxHashMap<u32, Vec<u32>>,
-    pub external_deps: FxHashMap<u32, Vec<JsWord>>,
     pub modules: Vec<Module>,
 }
 
@@ -228,7 +227,6 @@ impl DepGraph {
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
         let mut part_deps = FxHashMap::<_, Vec<_>>::default();
-        let mut external_deps = FxHashMap::<_, Vec<_>>::default();
 
         let mut modules = vec![];
 
@@ -264,17 +262,6 @@ impl DepGraph {
                     ItemId::Group(ItemIdGroupKind::ModuleEvaluation) => {
                         exports.insert(Key::ModuleEvaluation, ix as u32);
                     }
-
-                    ItemId::Item {
-                        kind: ItemIdItemKind::ImportOfModule(module_specifier),
-                        ..
-                    } => {
-                        external_deps
-                            .entry(ix as u32)
-                            .or_default()
-                            .push(module_specifier.clone());
-                    }
-
                     _ => {}
                 }
             }
@@ -361,7 +348,6 @@ impl DepGraph {
         SplitModuleResult {
             entrypoints: exports,
             part_deps,
-            external_deps,
             modules,
         }
     }
@@ -589,7 +575,7 @@ impl DepGraph {
                         // One item for the import itself
                         let id = ItemId::Item {
                             index,
-                            kind: ItemIdItemKind::ImportOfModule(item.src.value.clone()),
+                            kind: ItemIdItemKind::ImportOfModule,
                         };
                         ids.push(id.clone());
                         items.insert(
