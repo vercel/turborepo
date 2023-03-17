@@ -67,6 +67,29 @@ impl Default for DecoratorsOptionsVc {
     }
 }
 
+#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+pub struct ReactTransformOptions {
+    pub enable_react_refresh: bool,
+    pub development: bool,
+    pub import_source: Option<String>,
+    pub runtime: Option<String>,
+}
+
+#[turbo_tasks::value_impl]
+impl ReactTransformOptionsVc {
+    #[turbo_tasks::function]
+    pub fn default() -> Self {
+        Self::cell(Default::default())
+    }
+}
+
+impl Default for ReactTransformOptionsVc {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
 /// Subset of Typescript options configured via tsconfig.json or jsconfig.json,
 /// which affects the runtime transform output.
 #[turbo_tasks::value(shared)]
@@ -103,23 +126,13 @@ impl WebpackLoadersOptions {
     }
 }
 
-// [TODO]: should enabled_react_refresh belong to this options?
-#[turbo_tasks::value(shared)]
-#[derive(Default, Clone, Debug)]
-pub struct JsxTransformOptions {
-    pub import_source: Option<String>,
-    pub runtime: Option<String>,
-}
-
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct ModuleOptionsContext {
     #[serde(default)]
-    pub enable_jsx: Option<JsxTransformOptionsVc>,
+    pub react_transform: Option<ReactTransformOptionsVc>,
     #[serde(default)]
     pub enable_emotion: bool,
-    #[serde(default)]
-    pub enable_react_refresh: bool,
     #[serde(default)]
     pub enable_styled_components: bool,
     #[serde(default)]

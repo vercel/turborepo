@@ -207,8 +207,8 @@ impl ImportMap {
             .insert(AliasPattern::wildcard(prefix, suffix), mapping);
     }
 
-    /// Inserts an alias that resolves an prefix always from a certain location
-    /// to create a singleton.
+    /// Inserts an alias that always resolves a prefix from a given location,
+    /// ensuring a singleton.
     pub fn insert_singleton_alias<'a>(
         &mut self,
         prefix: impl Into<String> + 'a,

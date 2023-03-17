@@ -18,12 +18,9 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition,
-    ecmascript::EcmascriptModuleAssetVc,
-    module_options::{JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext},
-    resolve_options_context::ResolveOptionsContext,
-    transition::TransitionsByNameVc,
-    ModuleAssetContextVc,
+    condition::ContextCondition, ecmascript::EcmascriptModuleAssetVc,
+    module_options::ModuleOptionsContext, resolve_options_context::ResolveOptionsContext,
+    transition::TransitionsByNameVc, ModuleAssetContextVc,
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -190,9 +187,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         TransitionsByNameVc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
-            enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
-                ..Default::default()
-            })),
+            react_transform: Some(Default::default()),
             enable_emotion: true,
             enable_styled_components: true,
             preset_env_versions: Some(env),

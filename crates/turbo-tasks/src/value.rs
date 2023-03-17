@@ -5,7 +5,7 @@ use crate::{SharedReference, Typed};
 /// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
 ///
 /// Persistent, requires serialization.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Value<T: Typed> {
     inner: T,
 }

@@ -10,8 +10,8 @@ pub struct NodeRenderingEntry {
     pub runtime_entries: EvaluatableAssetsVc,
     pub module: EcmascriptModuleAssetVc,
     pub chunking_context: ChunkingContextVc,
-    pub intermediate_output_path: FileSystemPathVc,
-    pub output_root: FileSystemPathVc,
+    pub node_path: FileSystemPathVc,
+    pub node_root: FileSystemPathVc,
     pub project_dir: FileSystemPathVc,
 }
 

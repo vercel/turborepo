@@ -138,8 +138,8 @@ impl GetContentSourceContent for NodeApiGetContentResult {
             entry.module,
             entry.runtime_entries,
             entry.chunking_context,
-            entry.intermediate_output_path,
-            entry.output_root,
+            entry.node_path,
+            entry.node_root,
             entry.project_dir,
             RenderData {
                 params: params.clone(),

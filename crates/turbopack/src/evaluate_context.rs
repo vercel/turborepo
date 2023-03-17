@@ -29,6 +29,7 @@ pub async fn node_evaluate_asset_context(
     project_path: FileSystemPathVc,
     import_map: Option<ImportMapVc>,
     transitions: Option<TransitionsByNameVc>,
+    node_env: String,
 ) -> Result<AssetContextVc> {
     Ok(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
@@ -36,7 +37,7 @@ pub async fn node_evaluate_asset_context(
             .defines(
                 compile_time_defines!(
                     process.turbopack = true,
-                    process.env.NODE_ENV = "development",
+                    process.env.NODE_ENV = node_env.clone(),
                 )
                 .cell(),
             )
@@ -51,7 +52,7 @@ pub async fn node_evaluate_asset_context(
             enable_node_modules: Some(project_path.root().resolve().await?),
             enable_node_externals: true,
             enable_node_native_modules: true,
-            custom_conditions: vec!["development".to_string(), "node".to_string()],
+            custom_conditions: vec![node_env, "node".to_string()],
             import_map,
             ..Default::default()
         }

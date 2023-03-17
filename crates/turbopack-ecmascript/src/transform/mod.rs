@@ -41,6 +41,8 @@ pub enum EcmascriptInputTransform {
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
+        development: bool,
+        #[serde(default)]
         refresh: bool,
         // swc.jsc.transform.react.importSource
         import_source: OptionStringVc,
@@ -130,6 +132,7 @@ impl EcmascriptInputTransform {
         } = ctx;
         match self {
             EcmascriptInputTransform::React {
+                development,
                 refresh,
                 import_source,
                 runtime,
@@ -152,7 +155,7 @@ impl EcmascriptInputTransform {
 
                 let config = Options {
                     runtime: Some(runtime),
-                    development: Some(true),
+                    development: Some(*development),
                     import_source: import_source.await?.clone_value(),
                     refresh: if *refresh {
                         Some(swc_core::ecma::transforms::react::RefreshOptions {

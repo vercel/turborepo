@@ -7259,6 +7259,7 @@ dependencies = [
  "turbo-tasks-testing",
  "turbo-updater",
  "turbopack",
+ "turbopack-build",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
@@ -7515,6 +7516,24 @@ dependencies = [
  "turbopack-mdx",
  "turbopack-node",
  "turbopack-static",
+]
+
+[[package]]
+name = "turbopack-build"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "indoc",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+ "turbopack-ecmascript",
 ]
 
 [[package]]

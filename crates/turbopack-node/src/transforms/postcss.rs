@@ -211,7 +211,7 @@ impl PostCssTransformedAssetVc {
         };
 
         let ExecutionContext {
-            project_path,
+            project_root,
             chunking_context,
             env,
         } = *this.execution_context.await?;
@@ -237,7 +237,7 @@ impl PostCssTransformedAssetVc {
 
         let config_value = evaluate(
             postcss_executor,
-            project_path,
+            project_root,
             env,
             this.source.ident(),
             context,

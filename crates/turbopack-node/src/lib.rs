@@ -9,18 +9,20 @@ use indexmap::IndexSet;
 pub use node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use turbo_tasks::{
     graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
-    CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
+    CompletionVc, CompletionsVc, TryJoinIterExt, Value, ValueToString,
 };
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
-use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathReadRef, FileSystemPathVc};
 use turbopack_core::{
-    asset::{Asset, AssetVc, AssetsSetVc},
+    asset::{Asset, AssetVc, AssetsSetVc, AssetsVc},
     chunk::{
         ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
     },
-    reference::primary_referenced_assets,
+    reference::{primary_referenced_assets, AssetReference},
     source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -211,6 +213,162 @@ pub(self) fn emit_package_json(dir: FileSystemPathVc) -> CompletionVc {
         .into(),
         dir,
     )
+}
+
+#[turbo_tasks::value]
+pub struct AssetPartition {
+    pub internal: AssetsVc,
+    pub external: AssetsVc,
+}
+
+#[derive(Eq, PartialEq, Hash, Clone)]
+enum AssetPartitionKind {
+    Internal(AssetVc),
+    External(AssetVc),
+}
+
+/// Walks the asset graph transitively and collect all assets, partitioning them
+/// into two sets:
+/// - "internal" assets, which are all assets in `predicate_path`;
+/// - the remaining "external" assets, which will not be traversed further.
+///
+/// This is useful for collecting all server-side assets and all client-side
+/// asset entry points.
+#[turbo_tasks::function]
+pub async fn partition_assets(
+    entries: AssetsVc,
+    predicate_path: FileSystemPathVc,
+) -> Result<AssetPartitionVc> {
+    let predicate_path = predicate_path.await?;
+
+    let assets = GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
+        entries
+            .await?
+            .iter()
+            .map(|entry| AssetPartitionKind::Internal(*entry)),
+        move |asset| get_partitioned_referenced_assets(asset, predicate_path.clone()),
+    )
+    .await
+    .completed()?
+    .into_inner()
+    .into_iter();
+
+    let mut internal = vec![];
+    let mut external = vec![];
+
+    for asset in assets {
+        match asset {
+            AssetPartitionKind::Internal(asset) => internal.push(asset),
+            AssetPartitionKind::External(asset) => external.push(asset),
+        }
+    }
+
+    Ok(AssetPartition {
+        internal: AssetsVc::cell(internal),
+        external: AssetsVc::cell(external),
+    }
+    .cell())
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_partitioned_referenced_assets(
+    asset: AssetPartitionKind,
+    predicate_path: FileSystemPathReadRef,
+) -> Result<impl Iterator<Item = AssetPartitionKind> + Send> {
+    Ok(match asset {
+        AssetPartitionKind::Internal(asset) => asset
+            .references()
+            .await?
+            .iter()
+            .map(|reference| async move {
+                let primary_assets = reference.resolve_reference().primary_assets().await?;
+                Ok(primary_assets.clone_value())
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
+            .map(|asset| {
+                let predicate_path = predicate_path.clone();
+                async move {
+                    Ok(if asset.ident().path().await?.is_inside(&*predicate_path) {
+                        AssetPartitionKind::Internal(asset)
+                    } else {
+                        AssetPartitionKind::External(asset)
+                    })
+                }
+            })
+            .try_join()
+            .await?
+            .into_iter(),
+        AssetPartitionKind::External(_) => vec![].into_iter(),
+    })
+}
+
+/// Walks the asset graph and collect all assets.
+#[turbo_tasks::function]
+pub async fn all_assets_from_entry(entry: AssetVc) -> Result<AssetsVc> {
+    Ok(AssetsVc::cell(
+        GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
+            [entry],
+            get_referenced_assets,
+        )
+        .await
+        .completed()?
+        .into_inner()
+        .viz(
+            format!(
+                "{}-graph.dot",
+                entry
+                    .ident()
+                    .path()
+                    .to_string()
+                    .await?
+                    .rsplit('/')
+                    .next()
+                    .unwrap()
+            ),
+            |asset| {
+                let asset = *asset;
+                async move { Ok(format!("{:?}", asset.ident().to_string().await?,)) }
+            },
+        )
+        .await?
+        .into_iter()
+        .collect(),
+    ))
+}
+
+/// Walks the asset graph and collect all assets.
+#[turbo_tasks::function]
+pub async fn all_assets_from_entries(entries: AssetsVc) -> Result<AssetsVc> {
+    Ok(AssetsVc::cell(
+        GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
+            entries.await?.iter().copied(),
+            get_referenced_assets,
+        )
+        .await
+        .completed()?
+        .into_inner()
+        .into_iter()
+        .collect(),
+    ))
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_referenced_assets(asset: AssetVc) -> Result<impl Iterator<Item = AssetVc> + Send> {
+    Ok(asset
+        .references()
+        .await?
+        .iter()
+        .map(|reference| async move {
+            let primary_assets = reference.resolve_reference().primary_assets().await?;
+            Ok(primary_assets.clone_value())
+        })
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten())
 }
 
 /// Creates a node.js renderer pool for an entrypoint.

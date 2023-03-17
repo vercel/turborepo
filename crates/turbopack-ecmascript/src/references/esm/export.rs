@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, HashSet},
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
@@ -153,25 +153,42 @@ impl CodeGenerateable for EsmExports {
         let mut cjs_exports = Vec::<Box<Expr>>::new();
 
         for esm_ref in this.star_exports.iter() {
-            if let ReferencedAsset::Some(asset) = &*esm_ref.get_referenced_asset().await? {
-                let export_info = expand_star_exports(*asset).await?;
-                let export_names = &export_info.star_exports;
-                for export in export_names.iter() {
-                    if !all_exports.contains_key(&Cow::<str>::Borrowed(export)) {
-                        all_exports.insert(
-                            Cow::Owned(export.clone()),
-                            Cow::Owned(EsmExport::ImportedBinding(*esm_ref, export.to_string())),
-                        );
+            match &*esm_ref.get_referenced_asset().await? {
+                ReferencedAsset::None => {}
+                ReferencedAsset::Some(asset) => {
+                    let export_info = expand_star_exports(*asset).await?;
+                    let export_names = &export_info.star_exports;
+                    for export in export_names.iter() {
+                        if !all_exports.contains_key(&Cow::<str>::Borrowed(export)) {
+                            all_exports.insert(
+                                Cow::Owned(export.clone()),
+                                Cow::Owned(EsmExport::ImportedBinding(
+                                    *esm_ref,
+                                    export.to_string(),
+                                )),
+                            );
+                        }
+                    }
+
+                    if export_info.has_cjs_exports {
+                        let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
+
+                        cjs_exports.push(quote_expr!(
+                            "__turbopack_cjs__($arg)",
+                            arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                        ));
                     }
                 }
-
-                if export_info.has_cjs_exports {
-                    let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
-
-                    cjs_exports.push(quote_expr!(
-                        "__turbopack_cjs__($arg)",
-                        arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
-                    ));
+                referenced_asset @ ReferencedAsset::OriginalReferenceTypeExternal(external) => {
+                    // `export * from "external";`
+                    if let Some(ident) = referenced_asset.get_ident().await? {
+                        cjs_exports.push(quote_expr!(
+                            "__turbopack_cjs__($arg)",
+                            arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                        ));
+                    } else {
+                        bail!("external reference without ident: {}", external)
+                    }
                 }
             }
         }
