@@ -152,8 +152,7 @@ impl Pidlock {
 
         let mut contents = String::new();
         if file.read_to_string(&mut contents).is_err() {
-            warn!("Removing corrupted/invalid pid file at {:?}", self.path);
-            fs::remove_file(&self.path).unwrap();
+            warn!("corrupted/invalid pid file at {:?}", self.path);
             return None;
         }
 
@@ -162,13 +161,11 @@ impl Pidlock {
                 Some(pid.try_into().expect("if a pid exists it is a valid u32"))
             }
             Ok(_) => {
-                warn!("Removing stale pid file at {:?}", self.path);
-                fs::remove_file(&self.path).unwrap();
+                warn!("stale pid file at {:?}", self.path);
                 None
             }
             Err(_) => {
-                warn!("Removing corrupted/invalid pid file at {:?}", self.path);
-                fs::remove_file(&self.path).unwrap();
+                warn!("nonnumeric pid file at {:?}", self.path);
                 None
             }
         }
@@ -286,23 +283,19 @@ mod tests {
     #[test]
     fn test_stale_pid() {
         let (_tmp, path) = make_pid_path();
-        match fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)
             .open(path.clone())
-        {
-            Ok(mut file) => {
-                file.write_all(&format!("{}", thread_rng().gen::<i32>()).into_bytes()[..])
-                    .unwrap();
-            }
-            Err(_) => {
-                panic!("Could not open file for writing");
-            }
-        };
+            .expect("Could not open file for writing");
+
+        file.write_all(&format!("{}", thread_rng().gen::<i32>()).into_bytes()[..])
+            .unwrap();
+
+        drop(file);
 
         let mut pidfile = Pidlock::new(path);
-        pidfile.acquire().unwrap();
-        assert_eq!(pidfile.state, PidlockState::Acquired);
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
     }
 
     #[test]
@@ -313,43 +306,36 @@ mod tests {
             .take(20)
             .map(char::from)
             .collect();
-        match fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)
             .open(path.clone())
-        {
-            Ok(mut file) => {
-                file.write_all(&contents.into_bytes()).unwrap();
-            }
-            Err(_) => {
-                panic!("Could not open file for writing");
-            }
-        };
+            .expect("Could not open file for writing");
+
+        file.write_all(&contents.into_bytes()).unwrap();
+
+        drop(file);
 
         let mut pidfile = Pidlock::new(path);
-        pidfile.acquire().unwrap();
-        assert_eq!(pidfile.state, PidlockState::Acquired);
+
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
     }
 
     #[test]
     fn test_stale_pid_corrupted_contents() {
         let (_tmp, path) = make_pid_path();
-        match fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)
             .open(path.clone())
-        {
-            Ok(mut file) => {
-                file.write_all(&rand::thread_rng().gen::<[u8; 32]>())
-                    .unwrap();
-            }
-            Err(_) => {
-                panic!("Could not open file for writing");
-            }
-        };
+            .expect("Could not open file for writing");
+
+        file.write_all(&rand::thread_rng().gen::<[u8; 32]>())
+            .unwrap();
+
+        drop(file);
 
         let mut pidfile = Pidlock::new(path);
-        pidfile.acquire().unwrap();
-        assert_eq!(pidfile.state, PidlockState::Acquired);
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
     }
 }

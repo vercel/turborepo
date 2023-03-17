@@ -385,12 +385,12 @@ mod test {
     #[cfg(target_os = "windows")]
     const NODE_EXE: &str = "node.exe";
 
-    fn pid_path(tmp_path: &Path) -> PathBuf {
-        tmp_path.join("turbod.pid")
+    fn pid_path(tmp_path: &Path) -> AbsoluteNormalizedPathBuf {
+        AbsoluteNormalizedPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
     }
 
-    fn sock_path(tmp_path: &Path) -> PathBuf {
-        tmp_path.join("turbod.sock")
+    fn sock_path(tmp_path: &Path) -> AbsoluteNormalizedPathBuf {
+        AbsoluteNormalizedPathBuf::try_from(tmp_path.join("turbod.sock")).unwrap()
     }
 
     #[tokio::test]
@@ -478,7 +478,7 @@ mod test {
             Ok(())
         );
 
-        assert!(!connector.pid_file.exists(), "pid file should be deleted");
+        assert!(connector.pid_file.exists(), "pid file should still exist");
     }
 
     #[tokio::test]
@@ -513,6 +513,8 @@ mod test {
             connector.kill_dead_server(kill_pid).await,
             Err(DaemonConnectorError::WrongPidProcess(daemon, running)) if daemon == kill_pid && running == proc_id
         );
+
+        assert!(connector.pid_file.exists(), "pid file should still exist");
     }
 
     #[tokio::test]
@@ -546,6 +548,8 @@ mod test {
                 .await,
             Ok(())
         );
+
+        assert!(connector.pid_file.exists(), "pid file should still exist");
     }
 
     struct DummyServer {
@@ -619,8 +623,8 @@ mod test {
 
         // set up the client
         let conn = DaemonConnector {
-            pid_file: AbsoluteNormalizedPathBuf::new(PathBuf::new()).unwrap(),
-            sock_file: AbsoluteNormalizedPathBuf::new(PathBuf::new()).unwrap(),
+            pid_file: AbsoluteNormalizedPathBuf::new(PathBuf::from("/pid")).unwrap(),
+            sock_file: AbsoluteNormalizedPathBuf::new(PathBuf::from("/sock")).unwrap(),
             can_kill_server: false,
             can_start_server: false,
         };
