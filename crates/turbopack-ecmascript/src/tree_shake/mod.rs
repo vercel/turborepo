@@ -283,6 +283,7 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub(crate) enum SplitResult {
     Ok {
+        /// `u32` is a index to `modules`.
         #[turbo_tasks(debug_ignore, trace_ignore)]
         entrypoints: FxHashMap<Key, u32>,
 
