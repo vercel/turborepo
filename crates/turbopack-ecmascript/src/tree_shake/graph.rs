@@ -183,11 +183,11 @@ pub(super) enum Mode {
     Production,
 }
 
-struct SplitModuleResult {
-    exports: FxHashMap<Key, u32>,
-    part_deps: FxHashMap<u32, Vec<u32>>,
-    external_deps: FxHashMap<u32, Vec<JsWord>>,
-    modules: Vec<Module>,
+pub(super) struct SplitModuleResult {
+    pub entrypoints: FxHashMap<Key, u32>,
+    pub part_deps: FxHashMap<u32, Vec<u32>>,
+    pub external_deps: FxHashMap<u32, Vec<JsWord>>,
+    pub modules: Vec<Module>,
 }
 
 impl DepGraph {
@@ -225,7 +225,8 @@ impl DepGraph {
     ) -> SplitModuleResult {
         let groups = self.finalize(data);
         let mut exports = FxHashMap::default();
-        let mut chunk_deps = FxHashMap::<_, Vec<_>>::default();
+        let mut part_deps = FxHashMap::<_, Vec<_>>::default();
+        let mut external_deps = FxHashMap::<_, Vec<_>>::default();
 
         let mut modules = vec![];
 
@@ -288,7 +289,7 @@ impl DepGraph {
                     }
                 }
 
-                chunk_deps.entry(ix as u32).or_default().push(dep);
+                part_deps.entry(ix as u32).or_default().push(dep);
 
                 chunk
                     .body
@@ -344,7 +345,12 @@ impl DepGraph {
             modules.push(chunk);
         }
 
-        (exports, chunk_deps, modules)
+        SplitModuleResult {
+            entrypoints: exports,
+            part_deps,
+            external_deps,
+            modules,
+        }
     }
 
     /// Merges a dependency group between [ModuleItem]s into a dependency graph

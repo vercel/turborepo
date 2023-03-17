@@ -8,7 +8,7 @@ use swc_core::ecma::{
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::resolve::{origin::ResolveOrigin, ModulePart, ModulePartVc};
 
-use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode};
+use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModuleResult};
 use crate::{
     analyzer::graph::EvalContext,
     parse::{ParseResult, ParseResultVc},
@@ -335,8 +335,12 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 
             dep_graph.handle_weak(Mode::Production);
 
-            let (entrypoints, deps, modules) =
-                dep_graph.split_module(&format!("./{filename}").into(), &items);
+            let SplitModuleResult {
+                entrypoints,
+                deps,
+                modules,
+                external_deps,
+            } = dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             let modules = modules
                 .into_iter()
@@ -358,6 +362,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                 entrypoints,
                 deps,
                 modules,
+                external_deps,
             }
             .cell())
         }
