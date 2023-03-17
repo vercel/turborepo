@@ -367,7 +367,7 @@ fn get_import_symbol_from_import(specifier: &ImportSpecifier) -> ImportedSymbol 
     }
 }
 
-fn get_import_symbol_frmo_export(specifier: &ExportSpecifier) -> ImportedSymbol {
+fn get_import_symbol_from_export(specifier: &ExportSpecifier) -> ImportedSymbol {
     match specifier {
         ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => {
             ImportedSymbol::Symbol(match exported {
