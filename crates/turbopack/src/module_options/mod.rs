@@ -14,7 +14,9 @@ use turbopack_core::{
     source_transform::SourceTransformsVc,
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
-use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+use turbopack_ecmascript::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
+};
 use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 use crate::evaluate_context::node_evaluate_asset_context;
@@ -64,6 +66,7 @@ impl ModuleOptionsVc {
             enable_styled_jsx,
             enable_styled_components,
             enable_types,
+            enable_tree_shaking,
             ref enable_typescript_transform,
             ref decorators,
             enable_mdx,
@@ -339,7 +342,10 @@ impl ModuleOptionsVc {
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                             transforms: app_transforms,
-                            options: Default::default(),
+                            options: EcmascriptOptions {
+                                split_into_parts: enable_tree_shaking,
+                                import_parts: enable_tree_shaking,
+                            },
                         }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
