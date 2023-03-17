@@ -318,50 +318,28 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            if options.import_parts {
-                for r in eval_context.imports.references() {
-                    match &r.imported_symbols {
-                        ImportedSymbols::Symbols(symbols) => {
-                            let vc = EsmAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                                Value::new(r.annotations.clone()),
-                                Some(ModulePartVc::module_evaluation()),
-                            );
-                            import_references.push(vc);
-
-                            for symbol in symbols {
-                                let r = EsmAssetReferenceVc::new(
-                                    origin,
-                                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                                    Value::new(r.annotations.clone()),
-                                    Some(ModulePartVc::export(symbol.to_string())),
-                                );
-                                import_references.push(r);
+            for r in eval_context.imports.references() {
+                let r = EsmAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                    Value::new(r.annotations.clone()),
+                    if options.import_parts {
+                        match &r.imported_symbol {
+                            ImportedSymbol::ModuleEvaluation => {
+                                Some(ModulePartVc::module_evaluation())
                             }
+                            ImportedSymbol::Symbol(name) => {
+                                Some(ModulePartVc::export(name.to_string()))
+                            }
+                            ImportedSymbol::Namespace => None,
                         }
-                        ImportedSymbols::Namespace => {
-                            let r = EsmAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                                Value::new(r.annotations.clone()),
-                                None,
-                            );
-                            import_references.push(r);
-                        }
-                    }
-                }
-            } else {
-                for r in eval_context.imports.references() {
-                    let vc = EsmAssetReferenceVc::new(
-                        origin,
-                        RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                        Value::new(r.annotations.clone()),
-                        None,
-                    );
-                    import_references.push(vc);
-                }
+                    } else {
+                        None
+                    },
+                );
+                import_references.push(r);
             }
+
             for r in import_references.iter_mut() {
                 // Resolving these references here avoids many resolve wrapper tasks when
                 // passing that to other turbo tasks functions later.
