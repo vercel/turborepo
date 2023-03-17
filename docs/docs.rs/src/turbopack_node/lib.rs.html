@@ -570,6 +570,20 @@
     .cell())
 }
 
+<span class="doccomment">/// Emit a basic package.json that sets the type of the package to commonjs.
+/// Currently code generated for Node is CommonJS, while authored code may be
+/// ESM, for example.
+</span><span class="kw">pub</span>(<span class="self">self</span>) <span class="kw">fn </span>emit_package_json(dir: FileSystemPathVc) -&gt; CompletionVc {
+    emit(
+        VirtualAssetVc::new(
+            dir.join(<span class="string">&quot;package.json&quot;</span>),
+            FileContent::Content(File::from(<span class="string">&quot;{\&quot;type\&quot;: \&quot;commonjs\&quot;}&quot;</span>)).into(),
+        )
+        .into(),
+        dir,
+    )
+}
+
 <span class="doccomment">/// Creates a node.js renderer pool for an entrypoint.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>get_renderer_pool(
@@ -580,21 +594,7 @@
     output_root: FileSystemPathVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
-    <span class="comment">// Emit a basic package.json that sets the type of the package to commonjs.
-    // Currently code generated for Node is CommonJS, while authored code may be
-    // ESM, for example.
-    //
-    // Note that this is placed at .next/server/package.json, while Next.js
-    // currently creates this file at .next/package.json.
-    </span>emit(
-        VirtualAssetVc::new(
-            intermediate_output_path.join(<span class="string">&quot;package.json&quot;</span>),
-            FileContent::Content(File::from(<span class="string">&quot;{\&quot;type\&quot;: \&quot;commonjs\&quot;}&quot;</span>)).into(),
-        )
-        .into(),
-        intermediate_output_path,
-    )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    emit_package_json(intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
 
     emit(intermediate_asset, output_root).<span class="kw">await</span><span class="question-mark">?</span>;
 

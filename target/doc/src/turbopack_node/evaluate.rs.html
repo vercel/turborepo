@@ -456,6 +456,7 @@
 <a href="#456" id="456">456</a>
 <a href="#457" id="457">457</a>
 <a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -486,7 +487,7 @@
 <span class="kw">use crate</span>::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
-    emit,
+    emit, emit_package_json,
     pool::{NodeJsPool, NodeJsPoolVc},
     EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, StructuredError,
 };
@@ -598,6 +599,7 @@
             entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
         ),
     };
+    emit_package_json(intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
     emit(bootstrap.cell().into(), intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pool = NodeJsPool::new(
         cwd,
