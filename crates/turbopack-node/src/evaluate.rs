@@ -1,23 +1,15 @@
-use std::{
-    borrow::Cow,
-    pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context as TaskContext, Poll},
-    thread::available_parallelism,
-    time::Duration,
-};
+use std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 use anyhow::{Context, Result};
-use bytes::Bytes;
-use futures::Stream;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
+use turbo_tasks_bytes::{bytes::BytesValue, stream::Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
     glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
@@ -69,6 +61,8 @@ enum EvalJavaScriptIncomingMessage {
         error: StructuredError,
     },
     Value {
+        // TODO: There is like 3 levels of JSON string encoding that goes into returning a value,
+        // making it really inefficient.
         data: String,
     },
     End {
@@ -77,163 +71,28 @@ enum EvalJavaScriptIncomingMessage {
     Error(StructuredError),
 }
 
+#[derive(Debug)]
 enum LoopResult {
-    Value { data: String },
-    End { data: Option<String> },
+    Value(String),
+    End(Option<String>),
     Error(StructuredError),
 }
 
-#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
-pub enum JavaScriptValue {
-    Empty,
-    Error(StructuredError),
-    Value(BytesValue),
-}
-
-#[turbo_tasks::value(transparent, serialization = "custom")]
-#[derive(Clone, Debug)]
-pub struct BytesValue(#[turbo_tasks(trace_ignore)] Bytes);
-
-impl BytesValue {
-    pub fn to_str(&self) -> Result<Cow<'_, str>> {
-        let utf8 = std::str::from_utf8(&self.0);
-        utf8.context("failed to convert bytes into string")
-            .map(Cow::Borrowed)
-    }
-}
-
-impl Serialize for BytesValue {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for BytesValue {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let bytes = <Vec<u8>>::deserialize(deserializer)?;
-        Ok(BytesValue(bytes.into()))
-    }
-}
-
-impl std::ops::Deref for BytesValue {
-    type Target = Bytes;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<String> for JavaScriptValue {
-    fn from(value: String) -> Self {
-        JavaScriptValue::Value(BytesValue(value.into()))
-    }
-}
-
-impl From<Option<String>> for JavaScriptValue {
-    fn from(value: Option<String>) -> Self {
-        match value {
-            Some(v) => v.into(),
-            None => JavaScriptValue::Empty,
-        }
-    }
-}
-
-impl From<JavaScriptValue> for Option<Result<Bytes, StructuredError>> {
-    fn from(value: JavaScriptValue) -> Self {
-        match value {
-            JavaScriptValue::Empty => None,
-            JavaScriptValue::Value(b) => Some(Ok(b.0)),
-            JavaScriptValue::Error(error) => Some(Err(error)),
-        }
-    }
-}
+type EvaluationItem = Result<BytesValue, StructuredError>;
+type JavaScriptStream = Stream<EvaluationItem>;
 
 #[turbo_tasks::value(shared)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum JavaScriptEvaluation {
-    Single(JavaScriptValue),
-    Stream(JavaScriptStream),
-}
-
-#[turbo_tasks::value(shared, eq = "manual", serialization = "custom")]
-#[derive(Clone)]
-pub struct JavaScriptStream(#[turbo_tasks(trace_ignore, debug_ignore)] Arc<Mutex<JsStreamInner>>);
-
-impl JavaScriptStream {
-    fn new(data: Vec<JavaScriptValue>) -> Self {
-        JavaScriptStream(Arc::new(Mutex::new(JsStreamInner { done: false, data })))
-    }
-
-    fn into_stream(self) -> JsStreamer {
-        JsStreamer {
-            inner: self,
-            index: 0,
-        }
-    }
-}
-
-pub struct JsStreamer {
-    inner: JavaScriptStream,
-    index: usize,
-}
-
-impl Stream for JsStreamer {
-    // The Result<Bytes> item type is required for this to be streamable into a
-    // [Hyper::Body].
-    type Item = Result<Bytes, StructuredError>;
-
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        let inner = this.inner.0.lock().unwrap();
-        inner.data.get(this.index).map_or_else(
-            || {
-                if inner.done {
-                    Poll::Ready(None)
-                } else {
-                    Poll::Pending
-                }
-            },
-            |data| {
-                this.index += 1;
-                Poll::Ready(data.clone().into())
-            },
-        )
-    }
-}
-
-impl PartialEq for JavaScriptStream {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || {
-            let inner = self.0.lock().unwrap();
-            let other = other.0.lock().unwrap();
-            *inner == *other
-        }
-    }
-}
-impl Eq for JavaScriptStream {}
-
-impl Serialize for JavaScriptStream {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::Error;
-        let lock = self.0.lock().map_err(Error::custom)?;
-        if !lock.done {
-            return Err(Error::custom("cannot serialize unfinished stream"));
-        }
-        lock.data.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for JavaScriptStream {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = <Vec<JavaScriptValue>>::deserialize(deserializer)?;
-        Ok(JavaScriptStream::new(data))
-    }
-}
-
-#[derive(Eq, PartialEq)]
-pub struct JsStreamInner {
-    done: bool,
-    data: Vec<JavaScriptValue>,
+    /// An Empty is only possible if the evaluation completed successfully, but
+    /// didn't send an error nor value.
+    Empty,
+    /// A Single is only possible if the evaluation returns either an error or
+    /// value, and never sends an intermediate value.
+    Single(EvaluationItem),
+    /// A Stream represents a series of intermediate values and followed by
+    /// either an error or a ending value. A stream is never empty.
+    Stream(#[turbo_tasks(trace_ignore, debug_ignore)] JavaScriptStream),
 }
 
 #[turbo_tasks::function]
@@ -414,44 +273,48 @@ pub async fn evaluate(
     .await
     .map_err(|(e, _)| e)?;
 
-    let output = loop_operation(&mut operation, cwd, context_ident_for_issue).await?;
-
+    // If we reach an End or Error value immediately, then we can return an easy
+    // Single response. If not, we need to stream multiple responses out.
+    let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
     let data = match output {
-        LoopResult::End { data } => {
+        LoopResult::End(data) => {
             if kill {
                 operation.wait_or_kill().await?;
             }
-            return Ok(JavaScriptEvaluation::Single(data.into()).cell());
+            return Ok(data
+                .map_or_else(
+                    || JavaScriptEvaluation::Empty,
+                    |b| JavaScriptEvaluation::Single(Ok(b.into())),
+                )
+                .cell());
         }
         LoopResult::Error(error) => {
-            return Ok(JavaScriptEvaluation::Single(JavaScriptValue::Error(error)).cell());
+            return Ok(JavaScriptEvaluation::Single(Err(error)).cell());
         }
-        LoopResult::Value { data } => data,
+        LoopResult::Value(data) => data,
     };
 
-    let stream = JavaScriptStream::new(vec![data.into()]);
-    let inner = stream.0.clone();
+    // The evaluation sent an initial intermediate value without completing. We'll
+    // need to spawn a new thread to continually pull data out of the process,
+    // and ferry that along.
+    let stream = JavaScriptStream::new_open(vec![Ok(data.into())]);
+    let writer = stream.write();
     tokio::spawn(async move {
-        let inner = inner.clone();
         loop {
-            let output = loop_operation(&mut operation, cwd, context_ident_for_issue).await?;
-            let mut lock = inner.lock().unwrap();
+            let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
+            let mut lock = writer.lock().unwrap();
 
             match output {
-                LoopResult::End { data } => {
-                    lock.done = true;
-                    if let Some(data) = data {
-                        lock.data.push(data.into());
-                    };
+                LoopResult::End(data) => {
+                    lock.close(data.map(|d| Ok(d.into())));
                     break;
                 }
                 LoopResult::Error(error) => {
-                    lock.done = true;
-                    lock.data.push(JavaScriptValue::Error(error));
+                    lock.close(Some(Err(error)));
                     break;
                 }
-                LoopResult::Value { data } => {
-                    lock.data.push(data.into());
+                LoopResult::Value(data) => {
+                    lock.push(Ok(data.into()));
                 }
             }
         }
@@ -465,7 +328,9 @@ pub async fn evaluate(
     Ok(JavaScriptEvaluation::Stream(stream).cell())
 }
 
-async fn loop_operation(
+/// Repeatedly pulls from the NodeJsOperation until we receive a
+/// value/error/end.
+async fn pull_operation(
     operation: &mut NodeJsOperation,
     cwd: FileSystemPathVc,
     context_ident_for_issue: AssetIdentVc,
@@ -488,8 +353,8 @@ async fn loop_operation(
                 operation.disallow_reuse();
                 break LoopResult::Error(error);
             }
-            EvalJavaScriptIncomingMessage::Value { data } => break LoopResult::Value { data },
-            EvalJavaScriptIncomingMessage::End { data } => break LoopResult::End { data },
+            EvalJavaScriptIncomingMessage::Value { data } => break LoopResult::Value(data),
+            EvalJavaScriptIncomingMessage::End { data } => break LoopResult::End(data),
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 file_dependencies.push(cwd.join(&path).read());

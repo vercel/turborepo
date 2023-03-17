@@ -343,6 +343,7 @@ pub async fn trace_stack(
 
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_bytes::register();
     turbo_tasks_fs::register();
     turbopack_dev_server::register();
     turbopack_ecmascript::register();

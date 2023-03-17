@@ -74,7 +74,7 @@ impl<T: Send + Sync + 'static> Stream<T> {
                 match n {
                     None => {
                         let mut lock = writer.lock().unwrap();
-                        lock.close();
+                        lock.close(None);
                         break;
                     }
                     Some(v) => {
@@ -153,7 +153,11 @@ impl<T> StreamInner<T> {
         self.wake();
     }
 
-    pub fn close(&mut self) {
+    pub fn close(&mut self, value: Option<T>) {
+        debug_assert!(!self.closed, "cannot close an already closed StreamInner");
+        if let Some(value) = value {
+            self.data.push(value);
+        }
         self.closed = true;
         self.wake();
     }

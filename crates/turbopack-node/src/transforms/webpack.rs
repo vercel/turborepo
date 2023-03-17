@@ -19,7 +19,7 @@ use turbopack_ecmascript::{
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
     embed_js::embed_file_path,
-    evaluate::{evaluate, JavaScriptEvaluation, JavaScriptValue},
+    evaluate::{evaluate, JavaScriptEvaluation},
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
 
@@ -173,7 +173,7 @@ impl WebpackLoadersProcessedAssetVc {
             /* debug */ false,
         )
         .await?;
-        let JavaScriptEvaluation::Single(JavaScriptValue::Value(val)) = &*config_value else {
+        let JavaScriptEvaluation::Single(Ok(val)) = &*config_value else {
             // An error happened, which has already been converted into an issue.
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
