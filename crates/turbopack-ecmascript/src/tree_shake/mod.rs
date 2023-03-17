@@ -366,14 +366,11 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 #[turbo_tasks::function]
 pub(super) async fn part_of_module(
     split_data: SplitResultVc,
-    part: Option<ModulePartVc>,
+    part: ModulePartVc,
 ) -> Result<ParseResultVc> {
     let split_data = split_data.await?;
 
-    let part_id = match part {
-        Some(part) => get_part_id(&split_data, part).await?,
-        None => bail!("part {:?} is not found in the module", part),
-    };
+    let part_id = get_part_id(&split_data, part).await?;
 
     match &*split_data {
         SplitResult::Ok { modules, .. } => Ok(modules[part_id as usize]),

@@ -211,7 +211,7 @@ pub(crate) async fn analyze_ecmascript_module(
         EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };
 
-    let parsed = if options.split_into_parts {
+    let parsed = if let Some(part) = part {
         let parsed = parse(source, ty, transforms);
         let split_data = split(path, parsed);
         part_of_module(split_data, part)

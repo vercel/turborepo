@@ -27,7 +27,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let module = self.module.await?;
         let split_data = split_module(module.full_module);
-        let parsed = part_of_module(split_data, Some(module.part));
+        let parsed = part_of_module(split_data, module.part);
 
         Ok(gen_content(
             self.context,
