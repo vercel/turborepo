@@ -150,12 +150,12 @@ The list of environment variables a task depends on.
     "build": {
       "dependsOn": ["^build"],
       "env": ["SOMETHING_ELSE"], // value will impact the hashes of all build tasks
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "web#build": {
       "dependsOn": ["^build"],
       "env": ["STRIPE_SECRET_KEY"], // value will impact hash of only web's build task
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   },
   "globalEnv": [
@@ -202,7 +202,7 @@ logs (and treat them like an artifact).
     "build": {
       // "Cache all files emitted to workspace's dist/** or .next
       // directories by a `build` task"
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "test": {
