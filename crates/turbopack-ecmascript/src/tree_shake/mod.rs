@@ -108,8 +108,6 @@ impl Analyzer<'_> {
                     continue;
                 }
 
-                let mut items_to_remove_from_last_reads = FxHashMap::<_, Vec<_>>::default();
-
                 // For each var in READ_VARS:
                 for id in item.read_vars.iter() {
                     // Create a strong dependency to all module items listed in LAST_WRITES for that
@@ -118,13 +116,6 @@ impl Analyzer<'_> {
                     // (the writes need to be executed before this read)
                     if let Some(state) = self.vars.get(id) {
                         self.g.add_strong_deps(item_id, state.last_writes.iter());
-
-                        for last_write in state.last_writes.iter() {
-                            items_to_remove_from_last_reads
-                                .entry(id.clone())
-                                .or_default()
-                                .push(last_write.clone());
-                        }
                     }
                 }
 
@@ -178,13 +169,9 @@ impl Analyzer<'_> {
                     // Optimization: Remove each module item to which we
                     // just created a strong dependency from LAST_READS
 
-                    if let Some(items) = items_to_remove_from_last_reads.get(id) {
-                        for item in items {
-                            state
-                                .last_reads
-                                .retain(|last_read| !self.g.has_strong_dep(item, last_read))
-                        }
-                    }
+                    state
+                        .last_reads
+                        .retain(|last_read| !self.g.has_strong_dep(item_id, last_read))
                 }
 
                 if item.side_effects {
