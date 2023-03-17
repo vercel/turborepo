@@ -116,16 +116,15 @@ func stringToRef(s string) *string {
 }
 
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
-func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string, includeUntracked bool) ([]string, error) {
+func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
 	toCommitRef := stringToRef(toCommit)
 
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:         repoRoot,
-		FromCommit:       fromCommitRef,
-		ToCommit:         toCommitRef,
-		IncludeUntracked: includeUntracked,
-		MonorepoRoot:     monorepoRoot,
+		RepoRoot:     repoRoot,
+		FromCommit:   fromCommitRef,
+		ToCommit:     toCommitRef,
+		MonorepoRoot: monorepoRoot,
 	}
 
 	reqBuf := Marshal(&req)

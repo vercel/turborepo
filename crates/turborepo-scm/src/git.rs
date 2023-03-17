@@ -27,7 +27,6 @@ pub fn changed_files(
     repo_root: PathBuf,
     monorepo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
-    include_untracked: bool,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
     let repo = Repository::open(&repo_root)?;
@@ -44,13 +43,7 @@ pub fn changed_files(
     let monorepo_root = repo_root.relativize(&monorepo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(
-        &repo_root,
-        &repo,
-        monorepo_root.as_ref(),
-        &mut files,
-        include_untracked,
-    )?;
+    add_changed_files_from_unstaged_changes(&repo_root, &repo, monorepo_root.as_ref(), &mut files)?;
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
@@ -102,11 +95,10 @@ fn add_changed_files_from_unstaged_changes(
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
-    include_untracked: bool,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
-    options.include_untracked(include_untracked);
-    options.recurse_untracked_dirs(include_untracked);
+    options.include_untracked(true);
+    options.recurse_untracked_dirs(true);
 
     options.pathspec(monorepo_root.to_string());
 
