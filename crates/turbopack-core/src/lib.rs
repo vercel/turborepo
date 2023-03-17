@@ -15,6 +15,7 @@ pub mod environment;
 pub mod ident;
 pub mod introspect;
 pub mod issue;
+pub mod number;
 pub mod reference;
 pub mod reference_type;
 pub mod resolve;

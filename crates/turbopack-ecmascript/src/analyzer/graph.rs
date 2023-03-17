@@ -13,8 +13,9 @@ use swc_core::{
         visit::{fields::*, VisitAstPath, VisitWithPath, *},
     },
 };
+use turbopack_core::number::ConstantNumber;
 
-use super::{ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
+use super::{ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
 use crate::{
     analyzer::{is_unresolved, FreeVarKind},
     utils::unparen,

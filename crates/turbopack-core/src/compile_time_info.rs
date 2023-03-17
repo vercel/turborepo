@@ -4,7 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 
-use crate::environment::EnvironmentVc;
+use crate::{environment::EnvironmentVc, number::ConstantNumber};
 
 // TODO stringify split map collect could be optimized with a marco
 #[macro_export]
@@ -52,9 +52,11 @@ macro_rules! compile_time_defines {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TraceRawVcs)]
+#[serde(untagged)]
 pub enum CompileTimeDefineValue {
     Bool(bool),
     String(String),
+    Number(ConstantNumber),
 }
 
 impl From<bool> for CompileTimeDefineValue {
@@ -72,6 +74,18 @@ impl From<String> for CompileTimeDefineValue {
 impl From<&str> for CompileTimeDefineValue {
     fn from(value: &str) -> Self {
         Self::String(value.to_string())
+    }
+}
+
+impl From<f64> for CompileTimeDefineValue {
+    fn from(value: f64) -> Self {
+        Self::Number(ConstantNumber(value))
+    }
+}
+
+impl From<ConstantNumber> for CompileTimeDefineValue {
+    fn from(value: ConstantNumber) -> Self {
+        Self::Number(value)
     }
 }
 
@@ -106,5 +120,37 @@ impl CompileTimeInfoVc {
     #[turbo_tasks::function]
     pub async fn environment(self) -> Result<EnvironmentVc> {
         Ok(self.await?.environment)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialization() {
+        use indexmap::{indexmap, IndexMap};
+        let values: IndexMap<&str, CompileTimeDefineValue> = serde_json::from_str(
+            r#"
+            {
+                "true": true,
+                "false": false,
+                "str": "hello",
+                "empty": "",
+                "number": 12.25
+            }
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            values,
+            indexmap! {
+                "true" => CompileTimeDefineValue::Bool(true),
+                "false" => CompileTimeDefineValue::Bool(false),
+                "str" => CompileTimeDefineValue::String("hello".to_string()),
+                "empty" => CompileTimeDefineValue::String("".to_string()),
+                "number" => CompileTimeDefineValue::Number(ConstantNumber(12.25)),
+            }
+        );
     }
 }

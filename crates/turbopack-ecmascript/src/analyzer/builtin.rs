@@ -1,6 +1,8 @@
 use std::{mem::take, sync::Arc};
 
-use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
+use turbopack_core::number::ConstantNumber;
+
+use super::{ConstantValue, JsValue, LogicalOperator, ObjectPart};
 use crate::analyzer::FreeVarKind;
 
 /// Replaces some builtin values with their resulting values. Called early
