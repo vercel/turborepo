@@ -4,9 +4,6 @@ package run
 
 import (
 	gocontext "context"
-	"fmt"
-	"path/filepath"
-	"regexp"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -17,7 +14,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/taskhash"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -75,11 +71,6 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	taskIDs := []*runsummary.TaskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		isRootTask := packageTask.PackageName == util.RootPkgName
-		if isRootTask && commandLooksLikeTurbo(taskSummary.Command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, taskSummary.Command)
-		}
-
 		// Assign some fallbacks if they were missing
 		if taskSummary.Command == "" {
 			taskSummary.Command = runsummary.MissingTaskLabel
@@ -148,10 +139,4 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 	}
 	close(queue)
 	wg.Wait()
-}
-
-var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
-
-func commandLooksLikeTurbo(command string) bool {
-	return _isTurbo.MatchString(command)
 }
