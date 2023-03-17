@@ -5,7 +5,7 @@ import { Button } from "ui";
 const IndexPage: React.FC<PageProps> = () => {
   return (
     <main>
-      <h1>Docs</h1>
+      <h1>Web</h1>
       <Button />
     </main>
   );
