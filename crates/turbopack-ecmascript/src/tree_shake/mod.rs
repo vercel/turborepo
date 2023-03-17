@@ -377,7 +377,7 @@ pub(super) async fn part_of_module(
 
     match &*split_data {
         SplitResult::Ok { modules, .. } => Ok(modules[part_id as usize]),
-        SplitResult::Unparseable => Ok(ParseResultVc::cell(ParseResult::Unparseable)),
-        SplitResult::NotFound => Ok(ParseResultVc::cell(ParseResult::NotFound)),
+        SplitResult::Unparseable => Ok(ParseResult::Unparseable.cell()),
+        SplitResult::NotFound => Ok(ParseResult::NotFound.cell()),
     }
 }
