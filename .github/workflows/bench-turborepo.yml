@@ -32,7 +32,7 @@ jobs:
         run: cd benchmark && pnpm benchmark
 
       - name: Save to Tinybird
-        # if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         run: |
           curl \
             -i \
