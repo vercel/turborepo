@@ -325,7 +325,7 @@ Let's take a look inside `turbo.json`, at the root:
     "build": {
 //   ^^^^^
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
@@ -448,7 +448,7 @@ Take a look inside `build` in `turbo.json`. There's some interesting config ther
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }

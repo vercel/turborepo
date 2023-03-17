@@ -19,7 +19,7 @@ Examples of **incorrect** code for this rule:
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
@@ -37,7 +37,7 @@ Examples of **correct** code for this rule:
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
@@ -53,7 +53,7 @@ Examples of **correct** code for this rule:
     "build": {
       "dependsOn": ["^build"],
       "env": ["MY_API_TOKEN"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
