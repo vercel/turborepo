@@ -1484,6 +1484,12 @@
 <a href="#1484" id="1484">1484</a>
 <a href="#1485" id="1485">1485</a>
 <a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -2091,13 +2097,18 @@
         )
     }
 
-    <span class="kw">pub async fn </span>get_or_wait_aggregated_update_info(<span class="kw-2">&amp;</span><span class="self">self</span>, aggregation: Duration) -&gt; UpdateInfo {
+    <span class="doccomment">/// Returns [UpdateInfo] with all updates aggregated over a given duration
+    /// (`aggregation`). Will wait until an update happens.
+    </span><span class="kw">pub async fn </span>get_or_wait_aggregated_update_info(<span class="kw-2">&amp;</span><span class="self">self</span>, aggregation: Duration) -&gt; UpdateInfo {
         <span class="self">self</span>.aggregated_update_info(aggregation, Duration::MAX)
             .<span class="kw">await
             </span>.unwrap()
     }
 
-    <span class="kw">pub async fn </span>aggregated_update_info(
+    <span class="doccomment">/// Returns [UpdateInfo] with all updates aggregated over a given duration
+    /// (`aggregation`). Will only return None when the timeout is reached while
+    /// waiting for the first update.
+    </span><span class="kw">pub async fn </span>aggregated_update_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         aggregation: Duration,
         timeout: Duration,
@@ -2107,19 +2118,20 @@
             .listen_with_note(|| <span class="string">&quot;wait for update info&quot;</span>.to_string());
         <span class="kw">let </span>wait_for_finish = {
             <span class="kw">let </span>(update, reason_set) = <span class="kw-2">&amp;mut *</span><span class="self">self</span>.aggregated_update.lock().unwrap();
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((duration, tasks)) = update.take() {
-                <span class="kw">if </span>aggregation.is_zero() {
+            <span class="kw">if </span>aggregation.is_zero() {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((duration, tasks)) = update.take() {
                     <span class="kw">return </span><span class="prelude-val">Some</span>(UpdateInfo {
                         duration,
                         tasks,
                         reasons: take(reason_set),
                         placeholder_for_future_fields: (),
                     });
-                }
-                <span class="bool-val">false
-            </span>} <span class="kw">else </span>{
-                <span class="bool-val">true
-            </span>}
+                } <span class="kw">else </span>{
+                    <span class="bool-val">true
+                </span>}
+            } <span class="kw">else </span>{
+                update.is_none()
+            }
         };
         <span class="kw">if </span>wait_for_finish {
             <span class="kw">if </span>timeout == Duration::MAX {
@@ -2164,8 +2176,8 @@
                 placeholder_for_future_fields: (),
             })
         } <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>}
+            <span class="macro">panic!</span>(<span class="string">&quot;aggregated_update_info must not called concurrently&quot;</span>)
+        }
     }
 
     <span class="kw">pub async fn </span>wait_background_done(<span class="kw-2">&amp;</span><span class="self">self</span>) {
