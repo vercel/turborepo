@@ -285,7 +285,9 @@ pub enum FileWaitError {
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
 async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitError> {
-    let parent = path.parent().ok_or_else(||FileWaitError::InvalidPath(path.into()))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| FileWaitError::InvalidPath(path.into()))?;
 
     let file_name = path
         .file_name()
