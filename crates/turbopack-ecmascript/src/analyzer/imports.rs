@@ -277,6 +277,11 @@ impl Visit for Analyzer<'_> {
         self.data.has_exports = true;
 
         let annotations = take(&mut self.current_annotations);
+        self.ensure_reference(
+            export.src.value.clone(),
+            ImportedSymbol::ModuleEvaluation,
+            annotations.clone(),
+        );
         let i = self.ensure_reference(
             export.src.value.clone(),
             ImportedSymbol::Namespace,
