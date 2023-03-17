@@ -55,9 +55,6 @@ impl Asset for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
         let split_data = split_module(self.full_module).await?;
-        let part_id = get_part_id(&split_data, self.part)
-            .await
-            .with_context(|| format!("part {:?} is not found in the module", self.part))?;
 
         let deps = match &*split_data {
             SplitResult::Ok { deps, modules, .. } => deps,
@@ -65,6 +62,10 @@ impl Asset for EcmascriptModulePartAsset {
                 bail!("failed to split module")
             }
         };
+
+        let part_id = get_part_id(&split_data, self.part)
+            .await
+            .with_context(|| format!("part {:?} is not found in the module", self.part))?;
 
         let deps = match deps.get(&part_id) {
             Some(v) => v,
