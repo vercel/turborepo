@@ -211,8 +211,8 @@ graph TD
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item3;
     Item9 --> Item6;
-    Item9 -.-> Item3;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
@@ -260,8 +260,8 @@ graph TD
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item3;
     Item9 --> Item6;
-    Item9 -.-> Item3;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
@@ -322,8 +322,8 @@ graph TD
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item3;
     Item9 --> Item6;
-    Item9 -.-> Item3;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
@@ -398,8 +398,8 @@ graph TD
     N11 --> N6;
     N11 --> N8;
     N11 --> N10;
-    N11 --> N9;
     N11 --> N7;
+    N11 --> N9;
 ```
 # Modules (dev)
 ## Part 0
@@ -571,10 +571,10 @@ import "entry.js" assert {
     __turbopack_chunk__: 10
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 9
+    __turbopack_chunk__: 7
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 9
 };
 console.log(dog);
 
