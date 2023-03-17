@@ -56,6 +56,7 @@ Check
           "remote": false
         },
         "command": "echo 'building' \u003e foo",
+        "commandArguments": [],
         "outputs": [
           "foo"
         ],
@@ -82,6 +83,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
+        "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
@@ -89,7 +91,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       },
       {
         "task": "test",
@@ -99,6 +102,7 @@ Check
           "remote": false
         },
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
+        "commandArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-test.log",
@@ -123,6 +127,7 @@ Check
           "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
           "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
         },
+        "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
@@ -130,7 +135,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       }
     ]
   }

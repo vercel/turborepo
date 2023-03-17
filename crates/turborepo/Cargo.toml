@@ -26,11 +26,13 @@ pretty_assertions = { workspace = true }
 anyhow = { workspace = true, features = ["backtrace"] }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+ctrlc = { version = "3.2.5", features = ["termination"] }
 dunce = { workspace = true }
 log = { workspace = true }
 predicates = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+shared_child = "1.0.0"
 tiny-gradient = { workspace = true }
 turborepo-lib = { workspace = true }

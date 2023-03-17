@@ -21,7 +21,7 @@ GO_FLAGS += -trimpath
 CLI_DIR = $(shell pwd)
 
 # allow opting in to the rust codepaths
-GO_TAG ?= go
+GO_TAG ?= rust
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
@@ -31,7 +31,7 @@ turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
@@ -87,11 +87,11 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target x86_64-linux-musl" cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
 
 #
 # end
@@ -307,14 +307,21 @@ CRAM_ENV := .cram_env
 
 $(CRAM_ENV)/bin/pip:
 	python3 -m venv $(CRAM_ENV)
+	.cram_env/bin/python3 -m pip install --quiet --upgrade pip
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 	$(CRAM_ENV)/bin/pip install prysk
 
+$(CRAM_ENV)/bin/pytest: $(CRAM_ENV)/bin/pip
+	$(CRAM_ENV)/bin/pip3 install --quiet pytest "prysk[pytest-plugin]" pytest-xdist
+
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
+integration-tests-serial: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
+
+integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRATION_TEST_FILES) corepack turbo
+	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES) --prysk-shell=`which bash`
 
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)

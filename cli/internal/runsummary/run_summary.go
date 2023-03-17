@@ -22,9 +22,12 @@ const MissingTaskLabel = "<NONEXISTENT>"
 // MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
+const runSummarySchemaVersion = "0"
+
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
 	ID                ksuid.KSUID        `json:"id"`
+	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
 	Packages          []string           `json:"packages"`
@@ -38,6 +41,7 @@ func NewRunSummary(startAt time.Time, profile string, turboVersion string, packa
 
 	return &RunSummary{
 		ID:                ksuid.New(),
+		Version:           runSummarySchemaVersion,
 		ExecutionSummary:  executionSummary,
 		TurboVersion:      turboVersion,
 		Packages:          packages,
@@ -98,6 +102,7 @@ type TaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	CacheState             cache.ItemStatus                      `json:"cacheState"`
 	Command                string                                `json:"command"`
+	CommandArguments       []string                              `json:"commandArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFile                string                                `json:"logFile"`
@@ -106,9 +111,11 @@ type TaskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
@@ -134,6 +141,7 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Hash:                   ht.Hash,
 		CacheState:             ht.CacheState,
 		Command:                ht.Command,
+		CommandArguments:       ht.CommandArguments,
 		Outputs:                ht.Outputs,
 		LogFile:                ht.LogFile,
 		Dependencies:           dependencies,
@@ -141,7 +149,9 @@ func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 		Framework:              ht.Framework,
 		ExpandedInputs:         ht.ExpandedInputs,
+		ExpandedOutputs:        ht.ExpandedOutputs,
 		EnvVars:                ht.EnvVars,
 		Execution:              ht.Execution,
+		ExternalDepsHash:       ht.ExternalDepsHash,
 	}
 }

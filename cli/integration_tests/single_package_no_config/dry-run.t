@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building'",
+        "commandArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
@@ -59,6 +60,7 @@ Check
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
           "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
         },
+        "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
@@ -66,7 +68,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       }
     ]
   }

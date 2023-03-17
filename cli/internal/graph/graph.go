@@ -5,6 +5,8 @@ import (
 	gocontext "context"
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
@@ -75,11 +77,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
+		passThruArgs := getArgs(taskName)
 		hash, err := g.TaskHashTracker.CalculateTaskHash(
 			packageTask,
 			taskGraph.DownEdges(taskID),
 			logger,
-			getArgs(taskName),
+			passThruArgs,
 		)
 
 		// Not being able to construct the task hash is a hard error
@@ -114,12 +117,22 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			LogFile:                logFile,
 			ResolvedTaskDefinition: taskDefinition,
 			ExpandedInputs:         expandedInputs,
+			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
 			Command:                command,
+			CommandArguments:       passThruArgs,
 			Framework:              framework,
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Configured: envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:   envVars.BySource.Matching.ToSecretHashable(),
 			},
+			ExternalDepsHash: pkg.ExternalDepsHash,
+		}
+
+		if ancestors, err := g.getTaskGraphAncestors(taskGraph, packageTask.TaskID); err == nil {
+			summary.Dependencies = ancestors
+		}
+		if descendents, err := g.getTaskGraphDescendants(taskGraph, packageTask.TaskID); err == nil {
+			summary.Dependents = descendents
 		}
 
 		return visitor(ctx, packageTask, summary)
@@ -181,4 +194,40 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 // relative path from the root of the monorepo.
 func repoRelativeLogFile(dir turbopath.AnchoredSystemPath, taskName string) string {
 	return filepath.Join(dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", taskName))
+}
+
+// getTaskGraphAncestors gets all the ancestors for a given task in the graph.
+// "ancestors" are all tasks that the given task depends on.
+func (g *CompleteGraph) getTaskGraphAncestors(taskGraph *dag.AcyclicGraph, taskID string) ([]string, error) {
+	ancestors, err := taskGraph.Ancestors(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringAncestors := []string{}
+	for _, dep := range ancestors {
+		// Don't leak out internal root node name, which are just placeholders
+		if !strings.Contains(dep.(string), g.RootNode) {
+			stringAncestors = append(stringAncestors, dep.(string))
+		}
+	}
+	// TODO(mehulkar): Why are ancestors not sorted, but getTaskGraphDescendants sorts?
+	return stringAncestors, nil
+}
+
+// getTaskGraphDescendants gets all the descendants for a given task in the graph.
+// "descendants" are all tasks that depend on the given taskID.
+func (g *CompleteGraph) getTaskGraphDescendants(taskGraph *dag.AcyclicGraph, taskID string) ([]string, error) {
+	descendents, err := taskGraph.Descendents(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringDescendents := []string{}
+	for _, dep := range descendents {
+		// Don't leak out internal root node name, which are just placeholders
+		if !strings.Contains(dep.(string), g.RootNode) {
+			stringDescendents = append(stringDescendents, dep.(string))
+		}
+	}
+	sort.Strings(stringDescendents)
+	return stringDescendents, nil
 }

@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building' \u003e foo",
+        "commandArguments": [],
         "outputs": [
           "foo"
         ],
@@ -64,6 +65,7 @@ Check
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "turbo.json": "2b9b71e8eca61cda6f4c14e07067feac9c1f9862"
         },
+        "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
           "configured": [],
@@ -71,7 +73,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       }
     ]
   }

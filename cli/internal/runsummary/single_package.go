@@ -21,6 +21,7 @@ type singlePackageTaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	CacheState             cache.ItemStatus                      `json:"cacheState"`
 	Command                string                                `json:"command"`
+	CommandArguments       []string                              `json:"commandArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFile                string                                `json:"logFile"`
@@ -28,7 +29,9 @@ type singlePackageTaskSummary struct {
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"`
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }

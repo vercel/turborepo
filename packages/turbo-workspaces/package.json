@@ -1,7 +1,7 @@
 {
   "name": "@turbo/workspaces",
-  "version": "0.0.0",
-  "description": "Tools for working with package manager workspaces",
+  "version": "0.0.3",
+  "description": "Tools for working with package managers",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
   "repository": {
@@ -14,6 +14,7 @@
   },
   "bin": "dist/cli.js",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -33,7 +34,6 @@
     "ora": "4.1.1",
     "rimraf": "^3.0.2",
     "semver": "^7.3.5",
-    "turbo-utils": "workspace:*",
     "update-check": "^1.5.4"
   },
   "devDependencies": {
@@ -54,9 +54,13 @@
     "tsconfig": "workspace:*",
     "tsup": "^5.10.3",
     "turbo-test-utils": "workspace:*",
+    "turbo-utils": "workspace:*",
     "typescript": "^4.5.5"
   },
   "files": [
     "dist"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

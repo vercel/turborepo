@@ -55,6 +55,7 @@ Setup
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": [
       "apple.json",
       "banana.txt"
@@ -79,6 +80,7 @@ Setup
     "expandedInputs": {
       "package.json": "f2a5d2525f3996a57680180a7cd9ad7310e4dec0"
     },
+    "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [],
@@ -87,7 +89,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 # Validate output of util#build task
@@ -102,6 +105,7 @@ Setup
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": null,
     "excludedOutputs": null,
     "logFile": "packages/util/.turbo/turbo-build.log",
@@ -122,6 +126,7 @@ Setup
     "expandedInputs": {
       "package.json": "8d3e121335e16dbd8d99c03522b892ec52416dda"
     },
+    "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [
@@ -132,7 +137,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

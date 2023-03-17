@@ -41,7 +41,8 @@ export default async function summary(directory: SummaryCommandArgument) {
 
   const project = await getWorkspaceDetails({ root });
 
-  const numWorkspaces = project.workspaceData.workspaces.length.toString();
+  const numWorkspaces = project.workspaceData.workspaces.length;
+  const hasWorkspaces = numWorkspaces > 0;
   // group workspaces
   const workspacesByDirectory: Record<string, Array<Workspace>> = {};
   project.workspaceData.workspaces.forEach((workspace) => {
@@ -80,16 +81,18 @@ export default async function summary(directory: SummaryCommandArgument) {
   // workspace manager header
   logger.indented(
     1,
-    `Workspace Manager: ${chalk.bold(chalk.italic(project.packageManager))}`
+    `Package Manager: ${chalk.bold(chalk.italic(project.packageManager))}`
   );
-  // workspaces header
-  logger.indented(1, `Workspaces (${chalk.bold(numWorkspaces)}):`);
-  Object.keys(workspacesByDirectory).forEach((directory, idx) => {
-    renderDirectory({
-      number: idx + 1,
-      directory,
-      workspaces: workspacesByDirectory[directory],
+  if (hasWorkspaces) {
+    // workspaces header
+    logger.indented(1, `Workspaces (${chalk.bold(numWorkspaces.toString())}):`);
+    Object.keys(workspacesByDirectory).forEach((directory, idx) => {
+      renderDirectory({
+        number: idx + 1,
+        directory,
+        workspaces: workspacesByDirectory[directory],
+      });
     });
-  });
-  logger.blankLine();
+    logger.blankLine();
+  }
 }
