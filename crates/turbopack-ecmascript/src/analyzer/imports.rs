@@ -297,7 +297,7 @@ impl Visit for Analyzer<'_> {
             );
 
             for spec in export.specifiers.iter() {
-                let symbol = get_import_symbol_frmo_export(spec);
+                let symbol = get_import_symbol_from_export(spec);
 
                 let i = self.ensure_reference(src.value.clone(), symbol, annotations.clone());
 
