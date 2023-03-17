@@ -7,7 +7,6 @@ use swc_core::ecma::{
     atoms::{js_word, JsWord},
     visit::{Visit, VisitWith},
 };
-use turbopack_core::resolve::ModulePart;
 
 use super::{JsValue, ModuleValue};
 use crate::utils::unparen;
@@ -347,22 +346,24 @@ fn get_import_symbol_from_import(specifier: &ImportSpecifier) -> ImportedSymbol 
     match specifier {
         ImportSpecifier::Named(ImportNamedSpecifier {
             local, imported, ..
-        }) => Some(match imported {
+        }) => ImportedSymbol::Symbol(match imported {
             Some(imported) => orig_name(imported),
             _ => local.sym.clone(),
         }),
-        ImportSpecifier::Default(..) => Some(js_word!("default")),
-        ImportSpecifier::Namespace(..) => None,
+        ImportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
+        ImportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }
 
 fn get_import_symbol_frmo_export(specifier: &ExportSpecifier) -> ImportedSymbol {
     match specifier {
-        ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => match exported {
-            Some(exported) => orig_name(exported),
-            _ => orig_name(orig),
-        },
-        ExportSpecifier::Default(..) => js_word!("default"),
-        ExportSpecifier::Namespace(..) => unreachable!(),
+        ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => {
+            ImportedSymbol::Symbol(match exported {
+                Some(exported) => orig_name(exported),
+                _ => orig_name(orig),
+            })
+        }
+        ExportSpecifier::Default(..) => ImportedSymbol::Symbol(js_word!("default")),
+        ExportSpecifier::Namespace(..) => ImportedSymbol::Namespace,
     }
 }
