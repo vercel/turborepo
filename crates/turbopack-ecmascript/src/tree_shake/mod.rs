@@ -265,12 +265,12 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
         ModulePart::Internal(part_id) => return Ok(*part_id),
     };
 
-    let data = match &result {
-        SplitResult::Ok { data, .. } => data,
+    let entrypoints = match &result {
+        SplitResult::Ok { entrypoints, .. } => entrypoints,
         _ => bail!("split failed"),
     };
 
-    let part_id = match data.get(&key) {
+    let part_id = match entrypoints.get(&key) {
         Some(id) => *id,
         None => {
             bail!("could not find part id for module part {:?}", key)
@@ -284,7 +284,7 @@ async fn get_part_id(result: &SplitResult, part: ModulePartVc) -> Result<u32> {
 pub(crate) enum SplitResult {
     Ok {
         #[turbo_tasks(debug_ignore, trace_ignore)]
-        data: FxHashMap<Key, u32>,
+        entrypoints: FxHashMap<Key, u32>,
 
         #[turbo_tasks(debug_ignore, trace_ignore)]
         modules: Vec<ParseResultVc>,
@@ -328,7 +328,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
 
             dep_graph.handle_weak(Mode::Production);
 
-            let (data, deps, modules) =
+            let (entrypoints, deps, modules) =
                 dep_graph.split_module(&format!("./{filename}").into(), &items);
 
             let modules = modules
@@ -348,7 +348,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                 .collect();
 
             Ok(SplitResult::Ok {
-                data,
+                entrypoints,
                 deps,
                 modules,
             }
