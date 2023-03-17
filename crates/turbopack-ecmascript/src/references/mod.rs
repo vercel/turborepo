@@ -93,7 +93,7 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::{ImportedSymbols, Reexport},
+        imports::{ImportedSymbol, Reexport},
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},

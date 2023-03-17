@@ -7,6 +7,7 @@ use swc_core::ecma::{
     atoms::{js_word, JsWord},
     visit::{Visit, VisitWith},
 };
+use turbopack_core::resolve::ModulePart;
 
 use super::{JsValue, ModuleValue};
 use crate::utils::unparen;
@@ -102,15 +103,15 @@ pub(crate) struct ImportMap {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) enum ImportedSymbols {
-    Symbols(Vec<JsWord>),
+pub(crate) enum ImportedSymbol {
+    Symbol(JsWord),
     Namespace,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
-    pub imported_symbols: ImportedSymbols,
+    pub imported_symbol: ImportedSymbol,
     pub annotations: ImportAnnotations,
 }
 
@@ -181,12 +182,13 @@ impl<'a> Analyzer<'a> {
     fn ensure_reference(
         &mut self,
         module_path: JsWord,
-        imported_symbols: ImportedSymbols,
+        imported_symbol: ImportedSymbol,
+        annotations: ImportAnnotations,
     ) -> usize {
         let r = ImportMapReference {
             module_path,
-            imported_symbols,
-            annotations: take(&mut self.current_annotations),
+            imported_symbol,
+            annotations: annotations.clone(),
         };
         if let Some(i) = self.data.references.get_index_of(&r) {
             i
@@ -241,83 +243,79 @@ impl Visit for Analyzer<'_> {
     }
 
     fn visit_import_decl(&mut self, import: &ImportDecl) {
-        let symbols = if import
-            .specifiers
-            .iter()
-            .any(|s| matches!(s, ImportSpecifier::Namespace(..)))
-        {
-            ImportedSymbols::Namespace
-        } else {
-            ImportedSymbols::Symbols(named_or_default_import_symbols(&import.specifiers))
-        };
+        let annotations = take(&mut self.current_annotations);
+        for specifier in &import.specifiers {
+            let symbol = get_import_symbol_from_import(specifier);
 
-        let i = self.ensure_reference(import.src.value.clone(), symbols);
-        for s in &import.specifiers {
-            let (local, orig_sym) = match s {
-                ImportSpecifier::Named(ImportNamedSpecifier {
-                    local, imported, ..
-                }) => match imported {
-                    Some(imported) => (local.to_id(), orig_name(imported)),
-                    _ => (local.to_id(), local.sym.clone()),
-                },
-                ImportSpecifier::Default(s) => (s.local.to_id(), "default".into()),
-                ImportSpecifier::Namespace(s) => {
-                    self.data.namespace_imports.insert(s.local.to_id(), i);
-                    continue;
-                }
-            };
+            let i = self.ensure_reference(import.src.value.clone(), symbol, annotations.clone());
+            for s in &import.specifiers {
+                let (local, orig_sym) = match s {
+                    ImportSpecifier::Named(ImportNamedSpecifier {
+                        local, imported, ..
+                    }) => match imported {
+                        Some(imported) => (local.to_id(), orig_name(imported)),
+                        _ => (local.to_id(), local.sym.clone()),
+                    },
+                    ImportSpecifier::Default(s) => (s.local.to_id(), "default".into()),
+                    ImportSpecifier::Namespace(s) => {
+                        self.data.namespace_imports.insert(s.local.to_id(), i);
+                        continue;
+                    }
+                };
 
-            self.data.imports.insert(local, (i, orig_sym));
+                self.data.imports.insert(local, (i, orig_sym));
+            }
         }
     }
 
     fn visit_export_all(&mut self, export: &ExportAll) {
         self.data.has_exports = true;
-        let i = self.ensure_reference(export.src.value.clone(), ImportedSymbols::Namespace);
+
+        let annotations = take(&mut self.current_annotations);
+        let i = self.ensure_reference(
+            export.src.value.clone(),
+            ImportedSymbol::Namespace,
+            annotations,
+        );
         self.data.reexports.push((i, Reexport::Star));
     }
 
     fn visit_named_export(&mut self, export: &NamedExport) {
         self.data.has_exports = true;
         if let Some(ref src) = export.src {
-            let symbols = if export
-                .specifiers
-                .iter()
-                .any(|s| matches!(s, ExportSpecifier::Namespace(..)))
-            {
-                ImportedSymbols::Namespace
-            } else {
-                ImportedSymbols::Symbols(named_or_default_export_symbols(&export.specifiers))
-            };
+            let annotations = take(&mut self.current_annotations);
+            for specifier in &export.specifiers {
+                let symbol = get_import_symbol_frmo_export(specifier);
 
-            let i = self.ensure_reference(src.value.clone(), symbols);
-            for spec in export.specifiers.iter() {
-                match spec {
-                    ExportSpecifier::Namespace(n) => {
-                        self.data.reexports.push((
-                            i,
-                            Reexport::Namespace {
-                                exported: to_word(&n.name),
-                            },
-                        ));
-                    }
-                    ExportSpecifier::Default(d) => {
-                        self.data.reexports.push((
-                            i,
-                            Reexport::Named {
-                                imported: js_word!("default"),
-                                exported: d.exported.sym.clone(),
-                            },
-                        ));
-                    }
-                    ExportSpecifier::Named(n) => {
-                        self.data.reexports.push((
-                            i,
-                            Reexport::Named {
-                                imported: to_word(&n.orig),
-                                exported: to_word(n.exported.as_ref().unwrap_or(&n.orig)),
-                            },
-                        ));
+                let i = self.ensure_reference(src.value.clone(), symbol, annotations.clone());
+                for spec in export.specifiers.iter() {
+                    match spec {
+                        ExportSpecifier::Namespace(n) => {
+                            self.data.reexports.push((
+                                i,
+                                Reexport::Namespace {
+                                    exported: to_word(&n.name),
+                                },
+                            ));
+                        }
+                        ExportSpecifier::Default(d) => {
+                            self.data.reexports.push((
+                                i,
+                                Reexport::Named {
+                                    imported: js_word!("default"),
+                                    exported: d.exported.sym.clone(),
+                                },
+                            ));
+                        }
+                        ExportSpecifier::Named(n) => {
+                            self.data.reexports.push((
+                                i,
+                                Reexport::Named {
+                                    imported: to_word(&n.orig),
+                                    exported: to_word(n.exported.as_ref().unwrap_or(&n.orig)),
+                                },
+                            ));
+                        }
                     }
                 }
             }
@@ -345,32 +343,26 @@ pub(crate) fn orig_name(n: &ModuleExportName) -> JsWord {
     }
 }
 
-fn named_or_default_import_symbols(specifiers: &[ImportSpecifier]) -> Vec<JsWord> {
-    specifiers
-        .iter()
-        .filter_map(|s| match s {
-            ImportSpecifier::Named(ImportNamedSpecifier {
-                local, imported, ..
-            }) => Some(match imported {
-                Some(imported) => orig_name(imported),
-                _ => local.sym.clone(),
-            }),
-            ImportSpecifier::Default(..) => Some(js_word!("default")),
-            ImportSpecifier::Namespace(..) => None,
-        })
-        .collect()
+fn get_import_symbol_from_import(specifier: &ImportSpecifier) -> ImportedSymbol {
+    match specifier {
+        ImportSpecifier::Named(ImportNamedSpecifier {
+            local, imported, ..
+        }) => Some(match imported {
+            Some(imported) => orig_name(imported),
+            _ => local.sym.clone(),
+        }),
+        ImportSpecifier::Default(..) => Some(js_word!("default")),
+        ImportSpecifier::Namespace(..) => None,
+    }
 }
 
-fn named_or_default_export_symbols(specifiers: &[ExportSpecifier]) -> Vec<JsWord> {
-    specifiers
-        .iter()
-        .map(|s| match s {
-            ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => match exported {
-                Some(exported) => orig_name(exported),
-                _ => orig_name(orig),
-            },
-            ExportSpecifier::Default(..) => js_word!("default"),
-            ExportSpecifier::Namespace(..) => unreachable!(),
-        })
-        .collect()
+fn get_import_symbol_frmo_export(specifier: &ExportSpecifier) -> ImportedSymbol {
+    match specifier {
+        ExportSpecifier::Named(ExportNamedSpecifier { orig, exported, .. }) => match exported {
+            Some(exported) => orig_name(exported),
+            _ => orig_name(orig),
+        },
+        ExportSpecifier::Default(..) => js_word!("default"),
+        ExportSpecifier::Namespace(..) => unreachable!(),
+    }
 }
