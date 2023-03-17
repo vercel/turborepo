@@ -6558,6 +6558,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-bytes"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "serde",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+]
+
+[[package]]
 name = "turbo-tasks-env"
 version = "0.1.0"
 dependencies = [
