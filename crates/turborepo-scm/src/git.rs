@@ -10,15 +10,14 @@ use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::Proj
 use crate::Error;
 
 /// Finds the changed files in a repository between index and working directory
-/// (unstaged changes) and between two commits.
+/// (unstaged changes) and between two commits. Includes untracked files,
+/// i.e. files not yet in git
 ///
 /// # Arguments
 ///
 /// * `repo_root`: The root of the repository. Guaranteed to be the root.
 /// * `commit_range`: If Some, the range of commits that should be searched for
 ///   changes
-/// * `include_untracked`: If true, untracked files will be included in the
-///   result, i.e. files not yet in git.
 /// * `monorepo_root`: The path to which the results should be relative. Must be
 ///   an absolute path
 ///
@@ -27,7 +26,6 @@ pub fn changed_files(
     repo_root: PathBuf,
     monorepo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
-    include_untracked: bool,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
     let repo = Repository::open(&repo_root)?;
@@ -44,13 +42,7 @@ pub fn changed_files(
     let monorepo_root = repo_root.relativize(&monorepo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(
-        &repo_root,
-        &repo,
-        monorepo_root.as_ref(),
-        &mut files,
-        include_untracked,
-    )?;
+    add_changed_files_from_unstaged_changes(&repo_root, &repo, monorepo_root.as_ref(), &mut files)?;
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
@@ -102,11 +94,10 @@ fn add_changed_files_from_unstaged_changes(
     repo: &Repository,
     monorepo_root: &ProjectRelativePath,
     files: &mut HashSet<String>,
-    include_untracked: bool,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
-    options.include_untracked(include_untracked);
-    options.recurse_untracked_dirs(include_untracked);
+    options.include_untracked(true);
+    options.recurse_untracked_dirs(true);
 
     options.pathspec(monorepo_root.to_string());
 
@@ -261,24 +252,13 @@ mod tests {
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
-        // Test that uncommitted file is marked as changed with `include_untracked`
+        // Test that uncommitted file is marked as changed
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
             monorepo_root.to_path_buf(),
             None,
-            true,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
-
-        // Test that uncommitted file is *not* marked as changed without
-        // `include_untracked`
-        let files = super::changed_files(
-            repo_root.path().to_path_buf(),
-            monorepo_root.to_path_buf(),
-            None,
-            false,
-        )?;
-        assert_eq!(files, HashSet::from([]));
 
         // Now commit file
         let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
@@ -291,7 +271,6 @@ mod tests {
                 first_commit_oid.to_string().as_str(),
                 second_commit_oid.to_string().as_str(),
             )),
-            false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -308,7 +287,6 @@ mod tests {
                 first_commit_oid.to_string().as_str(),
                 second_commit_oid.to_string().as_str(),
             )),
-            true,
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -332,13 +310,12 @@ mod tests {
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
-        // Test that uncommitted file is marked as changed with
-        // include_untracked` with the parameters that Go wil pass
+        // Test that uncommitted file is marked as changed with the parameters that Go
+        // will pass
         let files = super::changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
             None,
-            true,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -371,7 +348,6 @@ mod tests {
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
             None,
-            true,
         )?;
 
         #[cfg(unix)]
@@ -393,7 +369,6 @@ mod tests {
                 first_commit.to_string().as_str(),
                 repo.head()?.peel_to_commit()?.id().to_string().as_str(),
             )),
-            false,
         )?;
 
         #[cfg(unix)]
