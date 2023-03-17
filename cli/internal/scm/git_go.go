@@ -24,7 +24,7 @@ type git struct {
 }
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
-func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+func (g *git) ChangedFiles(fromCommit string, toCommit string, relativeTo string) ([]string, error) {
 	if relativeTo == "" {
 		relativeTo = g.repoRoot
 	}
@@ -54,15 +54,15 @@ func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked 
 		committedChanges := strings.Split(string(out), "\n")
 		files = append(files, committedChanges...)
 	}
-	if includeUntracked {
-		command = []string{"ls-files", "--other", "--exclude-standard"}
-		out, err = exec.Command("git", append(command, relSuffix...)...).CombinedOutput()
-		if err != nil {
-			return nil, errors.Wrap(err, "finding untracked files")
-		}
-		untracked := strings.Split(string(out), "\n")
-		files = append(files, untracked...)
+
+	command = []string{"ls-files", "--other", "--exclude-standard"}
+	out, err = exec.Command("git", append(command, relSuffix...)...).CombinedOutput()
+	if err != nil {
+		return nil, errors.Wrap(err, "finding untracked files")
 	}
+	untracked := strings.Split(string(out), "\n")
+	files = append(files, untracked...)
+
 	// git will report changed files relative to the worktree: re-relativize to relativeTo
 	normalized := make([]string, 0)
 	for _, f := range files {

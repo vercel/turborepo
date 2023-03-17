@@ -30,17 +30,17 @@
 #![feature(fs_try_exists)]
 #![feature(absolute_path)]
 
-pub mod absolute_normalized_path;
-pub mod absolute_path;
+pub mod absolute_forward_system_path;
+pub mod absolute_system_path;
 mod cmp_impls;
 pub mod file_name;
 pub(crate) mod fmt;
-pub mod forward_relative_path;
 pub mod fs_util;
 mod into_filename_buf_iterator;
 mod io_counters;
 pub mod project;
 pub mod project_relative_path;
+pub mod relative_forward_unix_path;
 
 pub use into_filename_buf_iterator::*;
 pub use relative_path::{RelativePath, RelativePathBuf};
@@ -50,17 +50,17 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{
-        absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
-        forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf},
-        project_relative_path::ProjectRelativePath,
+        absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf},
+        project_relative_path::AnchoredUnixPath,
+        relative_forward_unix_path::{RelativeForwardUnixPath, RelativeForwardUnixPathBuf},
     };
 
     #[test]
     fn wrapped_paths_work_in_maps() -> anyhow::Result<()> {
         let mut map = HashMap::new();
 
-        let p1 = ForwardRelativePath::new("foo")?;
-        let p2 = ProjectRelativePath::new("bar")?;
+        let p1 = RelativeForwardUnixPath::new("foo")?;
+        let p2 = AnchoredUnixPath::new("bar")?;
 
         map.insert(p1.to_buf(), p2.to_buf());
 
@@ -71,10 +71,10 @@ mod tests {
 
     #[test]
     fn path_buf_is_clonable() -> anyhow::Result<()> {
-        let buf = ForwardRelativePathBuf::unchecked_new("foo".into());
+        let buf = RelativeForwardUnixPathBuf::unchecked_new("foo".into());
         let buf_ref = &buf;
 
-        let cloned: ForwardRelativePathBuf = buf_ref.clone();
+        let cloned: RelativeForwardUnixPathBuf = buf_ref.clone();
         assert_eq!(buf, cloned);
 
         Ok(())
@@ -82,12 +82,18 @@ mod tests {
 
     #[test]
     fn relative_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = ForwardRelativePathBuf::unchecked_new("foo/bar".into());
+        let buf = RelativeForwardUnixPathBuf::unchecked_new("foo/bar".into());
         assert_eq!("foo/bar", format!("{}", buf));
-        assert_eq!("ForwardRelativePathBuf(\"foo/bar\")", format!("{:?}", buf));
-        let refpath: &ForwardRelativePath = &buf;
+        assert_eq!(
+            "RelativeForwardUnixPathBuf(\"foo/bar\")",
+            format!("{:?}", buf)
+        );
+        let refpath: &RelativeForwardUnixPath = &buf;
         assert_eq!("foo/bar", format!("{}", refpath));
-        assert_eq!("ForwardRelativePath(\"foo/bar\")", format!("{:?}", refpath));
+        assert_eq!(
+            "RelativeForwardUnixPath(\"foo/bar\")",
+            format!("{:?}", refpath)
+        );
 
         Ok(())
     }
@@ -95,16 +101,16 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsoluteNormalizedPathBuf::from("/foo/bar".into())?;
+        let buf = AbsoluteForwardSystemPathBuf::from("/foo/bar".into())?;
         assert_eq!("/foo/bar", format!("{}", buf));
         assert_eq!(
-            "AbsoluteNormalizedPathBuf(\"/foo/bar\")",
+            "AbsoluteForwardSystemPathBuf(\"/foo/bar\")",
             format!("{:?}", buf)
         );
-        let refpath: &AbsoluteNormalizedPath = &buf;
+        let refpath: &AbsoluteForwardSystemPath = &buf;
         assert_eq!("/foo/bar", format!("{}", refpath));
         assert_eq!(
-            "AbsoluteNormalizedPath(\"/foo/bar\")",
+            "AbsoluteForwardSystemPath(\"/foo/bar\")",
             format!("{:?}", refpath)
         );
 
@@ -114,16 +120,16 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsoluteNormalizedPathBuf::from("C:/foo/bar".into())?;
+        let buf = AbsoluteForwardSystemPathBuf::from("C:/foo/bar".into())?;
         assert_eq!("C:/foo/bar", format!("{}", buf));
         assert_eq!(
-            "AbsoluteNormalizedPathBuf(\"C:/foo/bar\")",
+            "AbsoluteForwardSystemPathBuf(\"C:/foo/bar\")",
             format!("{:?}", buf)
         );
-        let refpath: &AbsoluteNormalizedPath = &buf;
+        let refpath: &AbsoluteForwardSystemPath = &buf;
         assert_eq!("C:/foo/bar", format!("{}", refpath));
         assert_eq!(
-            "AbsoluteNormalizedPath(\"C:/foo/bar\")",
+            "AbsoluteForwardSystemPath(\"C:/foo/bar\")",
             format!("{:?}", refpath)
         );
 

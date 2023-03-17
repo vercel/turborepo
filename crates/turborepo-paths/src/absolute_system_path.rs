@@ -18,7 +18,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-enum AbsPathError {
+enum AbsolutePathError {
     #[error("expected an absolute path but got a relative path instead: `{0}`")]
     PathNotAbsolute(PathBuf),
     #[error("Cannot convert path to UTF-8, `{0:?}`")]
@@ -27,48 +27,48 @@ enum AbsPathError {
 
 #[derive(Hash, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct AbsolutePath(Path);
+pub struct AbsoluteSystemPath(Path);
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone)]
-pub struct AbsolutePathBuf(PathBuf);
+pub struct AbsoluteSystemPathBuf(PathBuf);
 
-impl fmt::Debug for AbsolutePath {
+impl fmt::Debug for AbsoluteSystemPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl fmt::Debug for AbsolutePathBuf {
+impl fmt::Debug for AbsoluteSystemPathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl AsRef<Path> for AbsolutePath {
+impl AsRef<Path> for AbsoluteSystemPath {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<AbsolutePath> for AbsolutePath {
-    fn as_ref(&self) -> &AbsolutePath {
+impl AsRef<AbsoluteSystemPath> for AbsoluteSystemPath {
+    fn as_ref(&self) -> &AbsoluteSystemPath {
         self
     }
 }
 
-impl AsRef<Path> for AbsolutePathBuf {
+impl AsRef<Path> for AbsoluteSystemPathBuf {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<AbsolutePath> for AbsolutePathBuf {
-    fn as_ref(&self) -> &AbsolutePath {
+impl AsRef<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
+    fn as_ref(&self) -> &AbsoluteSystemPath {
         self
     }
 }
 
-impl Deref for AbsolutePath {
+impl Deref for AbsoluteSystemPath {
     type Target = Path;
 
     fn deref(&self) -> &Self::Target {
@@ -76,35 +76,35 @@ impl Deref for AbsolutePath {
     }
 }
 
-impl Deref for AbsolutePathBuf {
-    type Target = AbsolutePath;
+impl Deref for AbsoluteSystemPathBuf {
+    type Target = AbsoluteSystemPath;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*(self.0.as_path() as *const Path as *const AbsolutePath) }
+        unsafe { &*(self.0.as_path() as *const Path as *const AbsoluteSystemPath) }
     }
 }
 
-impl Borrow<AbsolutePath> for AbsolutePathBuf {
-    fn borrow(&self) -> &AbsolutePath {
+impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
+    fn borrow(&self) -> &AbsoluteSystemPath {
         self
     }
 }
 
-impl ToOwned for AbsolutePath {
-    type Owned = AbsolutePathBuf;
+impl ToOwned for AbsoluteSystemPath {
+    type Owned = AbsoluteSystemPathBuf;
 
     fn to_owned(&self) -> Self::Owned {
-        AbsolutePathBuf(self.0.to_owned())
+        AbsoluteSystemPathBuf(self.0.to_owned())
     }
 }
 
-impl AbsolutePath {
-    pub fn new(path: &Path) -> anyhow::Result<&AbsolutePath> {
+impl AbsoluteSystemPath {
+    pub fn new(path: &Path) -> anyhow::Result<&AbsoluteSystemPath> {
         if path.is_absolute() {
             // SAFETY: repr transparent.
-            Ok(unsafe { &*(path as *const Path as *const AbsolutePath) })
+            Ok(unsafe { &*(path as *const Path as *const AbsoluteSystemPath) })
         } else {
-            Err(AbsPathError::PathNotAbsolute(path.to_path_buf()).into())
+            Err(AbsolutePathError::PathNotAbsolute(path.to_path_buf()).into())
         }
     }
 
@@ -112,22 +112,22 @@ impl AbsolutePath {
         &self.0
     }
 
-    pub fn join<P: AsRef<Path>>(&self, other: P) -> AbsolutePathBuf {
+    pub fn join<P: AsRef<Path>>(&self, other: P) -> AbsoluteSystemPathBuf {
         let path = self.0.join(other);
         assert!(path.is_absolute());
-        AbsolutePathBuf(path)
+        AbsoluteSystemPathBuf(path)
     }
 
-    pub fn parent(&self) -> Option<&AbsolutePath> {
-        self.0.parent().map(|p| AbsolutePath::new(p).unwrap())
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0.parent().map(|p| AbsoluteSystemPath::new(p).unwrap())
     }
 
-    pub fn strip_prefix<P: AsRef<AbsolutePath>>(&self, prefix: P) -> anyhow::Result<&Path> {
+    pub fn strip_prefix<P: AsRef<AbsoluteSystemPath>>(&self, prefix: P) -> anyhow::Result<&Path> {
         Ok(self.0.strip_prefix(prefix.as_ref())?)
     }
 }
 
-impl AbsolutePathBuf {
+impl AbsoluteSystemPathBuf {
     pub fn into_path_buf(self) -> PathBuf {
         self.0
     }
@@ -140,7 +140,7 @@ impl AbsolutePathBuf {
     pub fn into_string(self) -> anyhow::Result<String> {
         self.into_os_string()
             .into_string()
-            .map_err(|x| AbsPathError::PathCannotBeConvertedToUtf8(x).into())
+            .map_err(|x| AbsolutePathError::PathCannotBeConvertedToUtf8(x).into())
     }
 
     pub fn capacity(&self) -> usize {
@@ -176,19 +176,19 @@ impl AbsolutePathBuf {
     }
 }
 
-impl TryFrom<PathBuf> for AbsolutePathBuf {
+impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
     type Error = anyhow::Error;
 
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        AbsolutePath::new(&path)?;
-        Ok(AbsolutePathBuf(path))
+        AbsoluteSystemPath::new(&path)?;
+        Ok(AbsoluteSystemPathBuf(path))
     }
 }
 
-impl TryFrom<String> for AbsolutePathBuf {
+impl TryFrom<String> for AbsoluteSystemPathBuf {
     type Error = anyhow::Error;
 
     fn try_from(path: String) -> Result<Self, Self::Error> {
-        AbsolutePathBuf::try_from(PathBuf::from(path))
+        AbsoluteSystemPathBuf::try_from(PathBuf::from(path))
     }
 }

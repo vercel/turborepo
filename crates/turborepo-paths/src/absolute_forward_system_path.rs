@@ -21,8 +21,8 @@ use serde::{de::Error, Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    absolute_path::{AbsolutePath, AbsolutePathBuf},
-    forward_relative_path::{ForwardRelativePath, ForwardRelativePathNormalizer},
+    absolute_system_path::{AbsoluteSystemPath, AbsoluteSystemPathBuf},
+    relative_forward_unix_path::{ForwardRelativePathNormalizer, RelativeForwardUnixPath},
 };
 
 /// An absolute path. This path is not platform agnostic.
@@ -37,46 +37,46 @@ use crate::{
 #[derive(Display, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, RefCast)]
 #[display(fmt = "{}", "_0.display()")]
 #[repr(transparent)]
-pub struct AbsoluteNormalizedPath(AbsolutePath);
+pub struct AbsoluteForwardSystemPath(AbsoluteSystemPath);
 
-/// The owned version of [`AbsoluteNormalizedPath`].
+/// The owned version of [`AbsoluteForwardSystemPath`].
 #[derive(Clone, Display, Debug, Hash, PartialEq, Eq, Ord, PartialOrd)]
 #[display(fmt = "{}", "_0.display()")]
-pub struct AbsoluteNormalizedPathBuf(AbsolutePathBuf);
+pub struct AbsoluteForwardSystemPathBuf(AbsoluteSystemPathBuf);
 
-impl AsRef<Path> for AbsoluteNormalizedPath {
+impl AsRef<Path> for AbsoluteForwardSystemPath {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<Path> for AbsoluteNormalizedPathBuf {
+impl AsRef<Path> for AbsoluteForwardSystemPathBuf {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<AbsolutePath> for AbsoluteNormalizedPath {
-    fn as_ref(&self) -> &AbsolutePath {
+impl AsRef<AbsoluteSystemPath> for AbsoluteForwardSystemPath {
+    fn as_ref(&self) -> &AbsoluteSystemPath {
         &self.0
     }
 }
 
-impl AsRef<AbsolutePath> for AbsoluteNormalizedPathBuf {
-    fn as_ref(&self) -> &AbsolutePath {
+impl AsRef<AbsoluteSystemPath> for AbsoluteForwardSystemPathBuf {
+    fn as_ref(&self) -> &AbsoluteSystemPath {
         &self.0
     }
 }
 
-impl Deref for AbsoluteNormalizedPath {
-    type Target = AbsolutePath;
+impl Deref for AbsoluteForwardSystemPath {
+    type Target = AbsoluteSystemPath;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl Serialize for AbsoluteNormalizedPathBuf {
+impl Serialize for AbsoluteForwardSystemPathBuf {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -85,63 +85,63 @@ impl Serialize for AbsoluteNormalizedPathBuf {
     }
 }
 
-impl<'de> Deserialize<'de> for AbsoluteNormalizedPathBuf {
+impl<'de> Deserialize<'de> for AbsoluteForwardSystemPathBuf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        AbsoluteNormalizedPathBuf::new(PathBuf::deserialize(deserializer)?)
+        AbsoluteForwardSystemPathBuf::new(PathBuf::deserialize(deserializer)?)
             .map_err(D::Error::custom)
     }
 }
 
-impl AbsoluteNormalizedPath {
+impl AbsoluteForwardSystemPath {
     /// Creates an 'AbsPath' if the given path represents an absolute path,
     /// otherwise error.
     ///
     /// ```
-    /// # use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// # use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
-    /// assert!(AbsoluteNormalizedPath::new("foo/bar").is_err());
+    /// assert!(AbsoluteForwardSystemPath::new("foo/bar").is_err());
     /// if cfg!(windows) {
-    ///    assert!(AbsoluteNormalizedPath::new("C:\\foo\\bar").is_ok());
+    ///    assert!(AbsoluteForwardSystemPath::new("C:\\foo\\bar").is_ok());
     /// } else {
-    ///    assert!(AbsoluteNormalizedPath::new("/foo/bar").is_ok());
+    ///    assert!(AbsoluteForwardSystemPath::new("/foo/bar").is_ok());
     /// }
     /// # anyhow::Ok(())
     /// ```
-    pub fn new<P: ?Sized + AsRef<Path>>(p: &P) -> anyhow::Result<&AbsoluteNormalizedPath> {
-        let path = AbsolutePath::new(p.as_ref())?;
+    pub fn new<P: ?Sized + AsRef<Path>>(p: &P) -> anyhow::Result<&AbsoluteForwardSystemPath> {
+        let path = AbsoluteSystemPath::new(p.as_ref())?;
         verify_abs_path(path)?;
-        Ok(AbsoluteNormalizedPath::ref_cast(path))
+        Ok(AbsoluteForwardSystemPath::ref_cast(path))
     }
 
     /// Creates an owned 'AbsPathBuf' with path adjoined to self.
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf};
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let abs_path = AbsoluteNormalizedPath::new("/my")?;
-    ///     assert_eq!(AbsoluteNormalizedPathBuf::from("/my/foo/bar".into())?, abs_path.join(ForwardRelativePath::new("foo/bar")?));
+    ///     let abs_path = AbsoluteForwardSystemPath::new("/my")?;
+    ///     assert_eq!(AbsoluteForwardSystemPathBuf::from("/my/foo/bar".into())?, abs_path.join(RelativeForwardUnixPath::new("foo/bar")?));
     /// } else {
-    ///     let abs_path = AbsoluteNormalizedPath::new("C:\\my")?;
-    ///     assert_eq!("C:\\my\\foo\\bar", abs_path.join(ForwardRelativePath::new("foo/bar")?).to_string());
+    ///     let abs_path = AbsoluteForwardSystemPath::new("C:\\my")?;
+    ///     assert_eq!("C:\\my\\foo\\bar", abs_path.join(RelativeForwardUnixPath::new("foo/bar")?).to_string());
     /// }
     /// # anyhow::Ok(())
     /// ```
     #[allow(clippy::collapsible_else_if)]
-    pub fn join<P: AsRef<ForwardRelativePath>>(&self, path: P) -> AbsoluteNormalizedPathBuf {
+    pub fn join<P: AsRef<RelativeForwardUnixPath>>(&self, path: P) -> AbsoluteForwardSystemPathBuf {
         let path = path.as_ref();
         if path.is_empty() {
             self.to_buf()
         } else {
             if cfg!(windows) {
-                AbsoluteNormalizedPathBuf(self.0.join(path.as_str().replace('/', "\\")))
+                AbsoluteForwardSystemPathBuf(self.0.join(path.as_str().replace('/', "\\")))
             } else {
-                AbsoluteNormalizedPathBuf(self.0.join(path.as_str()))
+                AbsoluteForwardSystemPathBuf(self.0.join(path.as_str()))
             }
         }
     }
@@ -150,31 +150,31 @@ impl AbsoluteNormalizedPath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
     /// if cfg!(not(windows)) {
     ///     assert_eq!(
-    ///         Some(AbsoluteNormalizedPath::new("/")?),
-    ///         AbsoluteNormalizedPath::new("/my")?.parent()
+    ///         Some(AbsoluteForwardSystemPath::new("/")?),
+    ///         AbsoluteForwardSystemPath::new("/my")?.parent()
     ///     );
     ///     assert_eq!(
     ///         None,
-    ///         AbsoluteNormalizedPath::new("/")?.parent()
+    ///         AbsoluteForwardSystemPath::new("/")?.parent()
     ///     );
     /// } else {
     ///     assert_eq!(
-    ///         Some(AbsoluteNormalizedPath::new("c:/")?),
-    ///         AbsoluteNormalizedPath::new("c:/my")?.parent()
+    ///         Some(AbsoluteForwardSystemPath::new("c:/")?),
+    ///         AbsoluteForwardSystemPath::new("c:/my")?.parent()
     ///     );
     ///     assert_eq!(
     ///         None,
-    ///         AbsoluteNormalizedPath::new("c:/")?.parent()
+    ///         AbsoluteForwardSystemPath::new("c:/")?.parent()
     ///     );
     /// }
     /// # anyhow::Ok(())
     /// ```
-    pub fn parent(&self) -> Option<&AbsoluteNormalizedPath> {
-        self.0.parent().map(AbsoluteNormalizedPath::ref_cast)
+    pub fn parent(&self) -> Option<&AbsoluteForwardSystemPath> {
+        self.0.parent().map(AbsoluteForwardSystemPath::ref_cast)
     }
 
     /// Returns a 'ForwardRelativePath' that, when joined onto `base`, yields
@@ -185,69 +185,69 @@ impl AbsoluteNormalizedPath {
     ///
     /// ```
     /// use std::{borrow::Cow, path::Path};
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let path = AbsoluteNormalizedPath::new("/test/foo/bar.txt")?;
+    ///     let path = AbsoluteForwardSystemPath::new("/test/foo/bar.txt")?;
     ///
     ///     assert_eq!(
-    ///         path.strip_prefix(AbsoluteNormalizedPath::new("/test")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("foo/bar.txt")?)
+    ///         path.strip_prefix(AbsoluteForwardSystemPath::new("/test")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("foo/bar.txt")?)
     ///     );
-    ///     assert!(path.strip_prefix(AbsoluteNormalizedPath::new("/asdf")?).is_err());
+    ///     assert!(path.strip_prefix(AbsoluteForwardSystemPath::new("/asdf")?).is_err());
     /// } else {
-    ///     let path = AbsoluteNormalizedPath::new(r"C:\test\foo\bar.txt")?;
+    ///     let path = AbsoluteForwardSystemPath::new(r"C:\test\foo\bar.txt")?;
     ///
     ///     // strip_prefix will return Cow::Owned here but we still
     ///     // can compare it to Cow::Borrowed.
     ///     assert_eq!(
-    ///         path.strip_prefix(AbsoluteNormalizedPath::new("c:/test")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("foo/bar.txt")?)
+    ///         path.strip_prefix(AbsoluteForwardSystemPath::new("c:/test")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("foo/bar.txt")?)
     ///     );
     ///     assert_eq!(
-    ///         path.strip_prefix(AbsoluteNormalizedPath::new(r"c:\test")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("foo/bar.txt")?)
+    ///         path.strip_prefix(AbsoluteForwardSystemPath::new(r"c:\test")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("foo/bar.txt")?)
     ///     );
     ///     assert_eq!(
-    ///         path.strip_prefix(AbsoluteNormalizedPath::new(r"\\?\c:\test")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("foo/bar.txt")?)
+    ///         path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\?\c:\test")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("foo/bar.txt")?)
     ///     );
-    ///     assert!(path.strip_prefix(AbsoluteNormalizedPath::new("c:/asdf")?).is_err());
+    ///     assert!(path.strip_prefix(AbsoluteForwardSystemPath::new("c:/asdf")?).is_err());
     ///
-    ///     let shared_path = AbsoluteNormalizedPath::new(r"\\server\share\foo\bar.txt")?;
+    ///     let shared_path = AbsoluteForwardSystemPath::new(r"\\server\share\foo\bar.txt")?;
     ///     assert_eq!(
-    ///         shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share\")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("foo/bar.txt")?)
+    ///         shared_path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\server\share\")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("foo/bar.txt")?)
     ///     );
     ///     assert_eq!(
-    ///         shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share\foo")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("bar.txt")?)
+    ///         shared_path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\server\share\foo")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("bar.txt")?)
     ///     );
     ///     assert_eq!(
-    ///         shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\?\UNC\server\share\foo")?)?,
-    ///         Cow::Borrowed(ForwardRelativePath::new("bar.txt")?)
+    ///         shared_path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\?\UNC\server\share\foo")?)?,
+    ///         Cow::Borrowed(RelativeForwardUnixPath::new("bar.txt")?)
     ///     );
-    ///     assert!(shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share2\foo")?).is_err());
-    ///     assert!(shared_path.strip_prefix(AbsoluteNormalizedPath::new(r"\\server\share\fo")?).is_err());
+    ///     assert!(shared_path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\server\share2\foo")?).is_err());
+    ///     assert!(shared_path.strip_prefix(AbsoluteForwardSystemPath::new(r"\\server\share\fo")?).is_err());
     /// }
     /// # anyhow::Ok(())
     /// ```
-    pub fn strip_prefix<P: AsRef<AbsoluteNormalizedPath>>(
+    pub fn strip_prefix<P: AsRef<AbsoluteForwardSystemPath>>(
         &self,
         base: P,
-    ) -> anyhow::Result<Cow<ForwardRelativePath>> {
+    ) -> anyhow::Result<Cow<RelativeForwardUnixPath>> {
         let stripped_path = self.strip_prefix_impl(base.as_ref())?;
         ForwardRelativePathNormalizer::normalize_path(stripped_path)
     }
 
     #[cfg(not(windows))]
-    fn strip_prefix_impl(&self, base: &AbsoluteNormalizedPath) -> anyhow::Result<&Path> {
+    fn strip_prefix_impl(&self, base: &AbsoluteForwardSystemPath) -> anyhow::Result<&Path> {
         self.0.strip_prefix(&base.0).map_err(anyhow::Error::from)
     }
 
     #[cfg(windows)]
-    fn strip_prefix_impl(&self, base: &AbsoluteNormalizedPath) -> anyhow::Result<&Path> {
+    fn strip_prefix_impl(&self, base: &AbsoluteForwardSystemPath) -> anyhow::Result<&Path> {
         if self.windows_prefix()? == base.windows_prefix()? {
             self.strip_windows_prefix()?
                 .strip_prefix(base.strip_windows_prefix()?)
@@ -261,38 +261,38 @@ impl AbsoluteNormalizedPath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let abs_path = AbsoluteNormalizedPath::new("/some/foo")?;
-    ///     assert!(abs_path.starts_with(AbsoluteNormalizedPath::new("/some")?));
-    ///     assert!(!abs_path.starts_with(AbsoluteNormalizedPath::new("/som")?));
+    ///     let abs_path = AbsoluteForwardSystemPath::new("/some/foo")?;
+    ///     assert!(abs_path.starts_with(AbsoluteForwardSystemPath::new("/some")?));
+    ///     assert!(!abs_path.starts_with(AbsoluteForwardSystemPath::new("/som")?));
     /// } else {
-    ///     let abs_path = AbsoluteNormalizedPath::new("c:/some/foo")?;
-    ///     assert!(abs_path.starts_with(AbsoluteNormalizedPath::new("c:/some")?));
-    ///     assert!(!abs_path.starts_with(AbsoluteNormalizedPath::new("c:/som")?));
-    ///     assert!(abs_path.starts_with(AbsoluteNormalizedPath::new(r"\\?\C:\some")?));
+    ///     let abs_path = AbsoluteForwardSystemPath::new("c:/some/foo")?;
+    ///     assert!(abs_path.starts_with(AbsoluteForwardSystemPath::new("c:/some")?));
+    ///     assert!(!abs_path.starts_with(AbsoluteForwardSystemPath::new("c:/som")?));
+    ///     assert!(abs_path.starts_with(AbsoluteForwardSystemPath::new(r"\\?\C:\some")?));
     ///
-    ///     let shared_path = AbsoluteNormalizedPath::new(r"\\server\share\foo\bar.txt")?;
-    ///     assert!(shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share\")?));
-    ///     assert!(shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share\foo")?));
-    ///     assert!(shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\?\UNC\server\share\foo")?));
-    ///     assert!(!shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share2\foo")?));
-    ///     assert!(!shared_path.starts_with(AbsoluteNormalizedPath::new(r"\\server\share\fo")?));
+    ///     let shared_path = AbsoluteForwardSystemPath::new(r"\\server\share\foo\bar.txt")?;
+    ///     assert!(shared_path.starts_with(AbsoluteForwardSystemPath::new(r"\\server\share\")?));
+    ///     assert!(shared_path.starts_with(AbsoluteForwardSystemPath::new(r"\\server\share\foo")?));
+    ///     assert!(shared_path.starts_with(AbsoluteForwardSystemPath::new(r"\\?\UNC\server\share\foo")?));
+    ///     assert!(!shared_path.starts_with(AbsoluteForwardSystemPath::new(r"\\server\share2\foo")?));
+    ///     assert!(!shared_path.starts_with(AbsoluteForwardSystemPath::new(r"\\server\share\fo")?));
     /// }
     /// # anyhow::Ok(())
     /// ```
-    pub fn starts_with<P: AsRef<AbsoluteNormalizedPath>>(&self, base: P) -> bool {
+    pub fn starts_with<P: AsRef<AbsoluteForwardSystemPath>>(&self, base: P) -> bool {
         self.starts_with_impl(base.as_ref())
     }
 
     #[cfg(not(windows))]
-    fn starts_with_impl(&self, base: &AbsoluteNormalizedPath) -> bool {
+    fn starts_with_impl(&self, base: &AbsoluteForwardSystemPath) -> bool {
         self.0.starts_with(&base.0)
     }
 
     #[cfg(windows)]
-    fn starts_with_impl(&self, base: &AbsoluteNormalizedPath) -> bool {
+    fn starts_with_impl(&self, base: &AbsoluteForwardSystemPath) -> bool {
         let prefix = self.windows_prefix();
         let base_prefix = base.windows_prefix();
         if let (Ok(prefix), Ok(base_prefix)) = (prefix, base_prefix) {
@@ -312,13 +312,13 @@ impl AbsoluteNormalizedPath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let abs_path = AbsoluteNormalizedPath::new("/some/foo")?;
+    ///     let abs_path = AbsoluteForwardSystemPath::new("/some/foo")?;
     ///     assert!(abs_path.ends_with("foo"));
     /// } else {
-    ///     let abs_path = AbsoluteNormalizedPath::new("c:/some/foo")?;
+    ///     let abs_path = AbsoluteForwardSystemPath::new("c:/some/foo")?;
     ///     assert!(abs_path.ends_with("foo"));
     /// }
     /// # anyhow::Ok(())    
@@ -330,26 +330,26 @@ impl AbsoluteNormalizedPath {
     /// Build an owned `AbsPathBuf`, joined with the given path and normalized.
     ///
     /// ```
-    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
+    /// use turborepo_paths::absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf};
     ///
     /// if cfg!(not(windows)) {
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("/foo/baz.txt".into())?,
-    ///         AbsoluteNormalizedPath::new("/foo/bar")?.join_normalized("../baz.txt")?
+    ///         AbsoluteForwardSystemPathBuf::from("/foo/baz.txt".into())?,
+    ///         AbsoluteForwardSystemPath::new("/foo/bar")?.join_normalized("../baz.txt")?
     ///     );
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPath::new("/foo")?.join_normalized("../../baz.txt").is_err(),
+    ///         AbsoluteForwardSystemPath::new("/foo")?.join_normalized("../../baz.txt").is_err(),
     ///         true
     ///     );
     /// } else {
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("c:/foo/baz.txt".into())?,
-    ///         AbsoluteNormalizedPath::new("c:/foo/bar")?.join_normalized("../baz.txt")?
+    ///         AbsoluteForwardSystemPathBuf::from("c:/foo/baz.txt".into())?,
+    ///         AbsoluteForwardSystemPath::new("c:/foo/bar")?.join_normalized("../baz.txt")?
     ///     );
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPath::new("c:/foo")?.join_normalized("../../baz.txt").is_err(),
+    ///         AbsoluteForwardSystemPath::new("c:/foo")?.join_normalized("../../baz.txt").is_err(),
     ///         true
     ///     );
     /// }
@@ -358,7 +358,7 @@ impl AbsoluteNormalizedPath {
     pub fn join_normalized<P: AsRef<RelativePath>>(
         &self,
         path: P,
-    ) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
+    ) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
         let mut stack = Vec::new();
         for c in self
             .0
@@ -386,11 +386,11 @@ impl AbsoluteNormalizedPath {
         }
         let path_buf = stack.iter().collect::<PathBuf>();
 
-        AbsoluteNormalizedPathBuf::try_from(path_buf)
+        AbsoluteForwardSystemPathBuf::try_from(path_buf)
     }
 
-    /// Convert to an owned [`AbsoluteNormalizedPathBuf`].
-    pub fn to_buf(&self) -> AbsoluteNormalizedPathBuf {
+    /// Convert to an owned [`AbsoluteForwardSystemPathBuf`].
+    pub fn to_buf(&self) -> AbsoluteForwardSystemPathBuf {
         self.to_owned()
     }
 
@@ -399,16 +399,16 @@ impl AbsoluteNormalizedPath {
     /// name.
     ///
     /// ```
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
-    /// assert_eq!("D", AbsoluteNormalizedPath::new("d:/foo/bar")?.windows_prefix()?);
-    /// assert_eq!("D", AbsoluteNormalizedPath::new(r"D:\foo\bar")?.windows_prefix()?);
-    /// assert_eq!("E", AbsoluteNormalizedPath::new(r"\\?\E:\foo\bar")?.windows_prefix()?);
-    /// assert_eq!("server\\share", AbsoluteNormalizedPath::new(r"\\server\share")?.windows_prefix()?);
-    /// assert_eq!("server\\share", AbsoluteNormalizedPath::new(r"\\server\share\foo\bar")?.windows_prefix()?);
-    /// assert_eq!("server\\share", AbsoluteNormalizedPath::new(r"\\?\UNC\server\share")?.windows_prefix()?);
-    /// assert_eq!("COM42", AbsoluteNormalizedPath::new(r"\\.\COM42")?.windows_prefix()?);
-    /// assert_eq!("COM42", AbsoluteNormalizedPath::new(r"\\.\COM42\foo\bar")?.windows_prefix()?);
+    /// assert_eq!("D", AbsoluteForwardSystemPath::new("d:/foo/bar")?.windows_prefix()?);
+    /// assert_eq!("D", AbsoluteForwardSystemPath::new(r"D:\foo\bar")?.windows_prefix()?);
+    /// assert_eq!("E", AbsoluteForwardSystemPath::new(r"\\?\E:\foo\bar")?.windows_prefix()?);
+    /// assert_eq!("server\\share", AbsoluteForwardSystemPath::new(r"\\server\share")?.windows_prefix()?);
+    /// assert_eq!("server\\share", AbsoluteForwardSystemPath::new(r"\\server\share\foo\bar")?.windows_prefix()?);
+    /// assert_eq!("server\\share", AbsoluteForwardSystemPath::new(r"\\?\UNC\server\share")?.windows_prefix()?);
+    /// assert_eq!("COM42", AbsoluteForwardSystemPath::new(r"\\.\COM42")?.windows_prefix()?);
+    /// assert_eq!("COM42", AbsoluteForwardSystemPath::new(r"\\.\COM42\foo\bar")?.windows_prefix()?);
     /// ```
     pub fn windows_prefix(&self) -> anyhow::Result<OsString> {
         use std::{os::windows::ffi::OsStringExt, path::Prefix};
@@ -442,16 +442,16 @@ impl AbsoluteNormalizedPath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPath;
     ///
-    /// assert_eq!(Path::new(""), AbsoluteNormalizedPath::new("C:/")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new(""), AbsoluteNormalizedPath::new("C:\\")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("foo/bar"), AbsoluteNormalizedPath::new("d:/foo/bar")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("foo\\bar"), AbsoluteNormalizedPath::new(r"D:\foo\bar")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("foo\\bar"), AbsoluteNormalizedPath::new(r"\\?\D:\foo\bar")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("path"), AbsoluteNormalizedPath::new(r"\\server\share\path")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("path"), AbsoluteNormalizedPath::new(r"\\?\UNC\server\share\path")?.strip_windows_prefix()?);
-    /// assert_eq!(Path::new("abc"), AbsoluteNormalizedPath::new(r"\\.\COM42\abc")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new(""), AbsoluteForwardSystemPath::new("C:/")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new(""), AbsoluteForwardSystemPath::new("C:\\")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("foo/bar"), AbsoluteForwardSystemPath::new("d:/foo/bar")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("foo\\bar"), AbsoluteForwardSystemPath::new(r"D:\foo\bar")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("foo\\bar"), AbsoluteForwardSystemPath::new(r"\\?\D:\foo\bar")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("path"), AbsoluteForwardSystemPath::new(r"\\server\share\path")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("path"), AbsoluteForwardSystemPath::new(r"\\?\UNC\server\share\path")?.strip_windows_prefix()?);
+    /// assert_eq!(Path::new("abc"), AbsoluteForwardSystemPath::new(r"\\.\COM42\abc")?.strip_windows_prefix()?);
     ///
     /// # anyhow::Ok(())
     /// ```
@@ -472,40 +472,40 @@ impl AbsoluteNormalizedPath {
         self.0.as_path()
     }
 
-    pub fn as_abs_path(&self) -> &AbsolutePath {
+    pub fn as_abs_path(&self) -> &AbsoluteSystemPath {
         &self.0
     }
 }
 
-impl AbsoluteNormalizedPathBuf {
-    pub fn new(path: PathBuf) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
-        let path = AbsolutePathBuf::try_from(path)?;
+impl AbsoluteForwardSystemPathBuf {
+    pub fn new(path: PathBuf) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
+        let path = AbsoluteSystemPathBuf::try_from(path)?;
         verify_abs_path(&path)?;
-        Ok(AbsoluteNormalizedPathBuf(path))
+        Ok(AbsoluteForwardSystemPathBuf(path))
     }
 
     pub(crate) fn unchecked_new(path: PathBuf) -> Self {
-        AbsoluteNormalizedPathBuf(AbsolutePathBuf::try_from(path).unwrap())
+        AbsoluteForwardSystemPathBuf(AbsoluteSystemPathBuf::try_from(path).unwrap())
     }
 
     pub fn into_path_buf(self) -> PathBuf {
         self.0.into_path_buf()
     }
 
-    pub fn into_abs_path_buf(self) -> AbsolutePathBuf {
+    pub fn into_abs_path_buf(self) -> AbsoluteSystemPathBuf {
         self.0
     }
 
     pub fn from(s: String) -> anyhow::Result<Self> {
-        AbsoluteNormalizedPathBuf::try_from(s)
+        AbsoluteForwardSystemPathBuf::try_from(s)
     }
 
     /// Creates a new 'AbsPathBuf' with a given capacity used to create the
     /// internal 'String'. See 'with_capacity' defined on 'PathBuf'
-    pub fn with_capacity<P: AsRef<AbsoluteNormalizedPath>>(cap: usize, base: P) -> Self {
+    pub fn with_capacity<P: AsRef<AbsoluteForwardSystemPath>>(cap: usize, base: P) -> Self {
         let mut path = PathBuf::with_capacity(cap);
         path.push(base.as_ref());
-        AbsoluteNormalizedPathBuf(AbsolutePathBuf::try_from(path).unwrap())
+        AbsoluteForwardSystemPathBuf(AbsoluteSystemPathBuf::try_from(path).unwrap())
     }
 
     /// Returns the capacity of the underlying 'PathBuf'
@@ -532,8 +532,8 @@ impl AbsoluteNormalizedPathBuf {
     /// ```
     /// 
     /// use std::path::PathBuf;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPathBuf;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
     /// let prefix = if cfg!(windows) {
     ///    "C:"
@@ -541,15 +541,15 @@ impl AbsoluteNormalizedPathBuf {
     ///   ""
     /// };
     ///
-    /// let mut path = AbsoluteNormalizedPathBuf::try_from(format!("{prefix}/foo")).unwrap();
-    /// path.push(ForwardRelativePath::unchecked_new("bar"));
+    /// let mut path = AbsoluteForwardSystemPathBuf::try_from(format!("{prefix}/foo")).unwrap();
+    /// path.push(RelativeForwardUnixPath::unchecked_new("bar"));
     ///
-    /// assert_eq!(AbsoluteNormalizedPathBuf::try_from(format!("{prefix}/foo/bar")).unwrap(), path);
+    /// assert_eq!(AbsoluteForwardSystemPathBuf::try_from(format!("{prefix}/foo/bar")).unwrap(), path);
     ///
-    /// path.push(ForwardRelativePath::unchecked_new("more/file.rs"));
-    /// assert_eq!(AbsoluteNormalizedPathBuf::try_from(format!("{prefix}/foo/bar/more/file.rs")).unwrap(), path);
+    /// path.push(RelativeForwardUnixPath::unchecked_new("more/file.rs"));
+    /// assert_eq!(AbsoluteForwardSystemPathBuf::try_from(format!("{prefix}/foo/bar/more/file.rs")).unwrap(), path);
     /// ```
-    pub fn push<P: AsRef<ForwardRelativePath>>(&mut self, path: P) {
+    pub fn push<P: AsRef<RelativeForwardUnixPath>>(&mut self, path: P) {
         if cfg!(windows) {
             self.0.push(path.as_ref().as_str().replace('/', "\\"))
         } else {
@@ -628,107 +628,107 @@ impl AbsoluteNormalizedPathBuf {
     }
 }
 
-impl TryFrom<String> for AbsoluteNormalizedPathBuf {
+impl TryFrom<String> for AbsoluteForwardSystemPathBuf {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPathBuf;
     /// use std::convert::TryFrom;
     ///
-    /// assert!(AbsoluteNormalizedPathBuf::try_from("relative/bar".to_owned()).is_err());
+    /// assert!(AbsoluteForwardSystemPathBuf::try_from("relative/bar".to_owned()).is_err());
     ///
     /// if cfg!(not(windows)) {
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("/foo/bar".to_owned()).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("/".to_owned()).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("/normalize/./bar".to_owned()).is_err());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("/normalize/../bar".to_owned()).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("/foo/bar".to_owned()).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("/".to_owned()).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("/normalize/./bar".to_owned()).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("/normalize/../bar".to_owned()).is_err());
     /// } else {
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("c:/foo/bar".to_owned()).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("c:/".to_owned()).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("c:/normalize/./bar".to_owned()).is_err());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from("c:/normalize/../bar".to_owned()).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("c:/foo/bar".to_owned()).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("c:/".to_owned()).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("c:/normalize/./bar".to_owned()).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from("c:/normalize/../bar".to_owned()).is_err());
     /// }
     /// ```
-    fn try_from(s: String) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
-        AbsoluteNormalizedPathBuf::try_from(OsString::from(s))
+    fn try_from(s: String) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
+        AbsoluteForwardSystemPathBuf::try_from(OsString::from(s))
     }
 }
 
-impl TryFrom<OsString> for AbsoluteNormalizedPathBuf {
+impl TryFrom<OsString> for AbsoluteForwardSystemPathBuf {
     type Error = anyhow::Error;
 
     // no allocation
-    fn try_from(s: OsString) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
-        AbsoluteNormalizedPathBuf::try_from(PathBuf::from(s))
+    fn try_from(s: OsString) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
+        AbsoluteForwardSystemPathBuf::try_from(PathBuf::from(s))
     }
 }
 
-impl TryFrom<PathBuf> for AbsoluteNormalizedPathBuf {
+impl TryFrom<PathBuf> for AbsoluteForwardSystemPathBuf {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPathBuf;
     /// use std::convert::TryFrom;
     /// use std::path::PathBuf;
     ///
-    /// assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("relative/bar")).is_err());
+    /// assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("relative/bar")).is_err());
     ///
     /// if cfg!(not(windows)) {
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("/foo/bar")).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("/")).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("/normalize/./bar")).is_err());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("/normalize/../bar")).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("/foo/bar")).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("/")).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("/normalize/./bar")).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("/normalize/../bar")).is_err());
     /// } else {
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("c:/foo/bar")).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("c:/")).is_ok());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("c:/normalize/./bar")).is_err());
-    ///     assert!(AbsoluteNormalizedPathBuf::try_from(PathBuf::from("c:/normalize/../bar")).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("c:/foo/bar")).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("c:/")).is_ok());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("c:/normalize/./bar")).is_err());
+    ///     assert!(AbsoluteForwardSystemPathBuf::try_from(PathBuf::from("c:/normalize/../bar")).is_err());
     /// }
     /// ```
-    fn try_from(p: PathBuf) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
-        let p = AbsolutePathBuf::try_from(p)?;
+    fn try_from(p: PathBuf) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
+        let p = AbsoluteSystemPathBuf::try_from(p)?;
         verify_abs_path(&p)?;
-        Ok(AbsoluteNormalizedPathBuf(p))
+        Ok(AbsoluteForwardSystemPathBuf(p))
     }
 }
 
-impl ToOwned for AbsoluteNormalizedPath {
-    type Owned = AbsoluteNormalizedPathBuf;
+impl ToOwned for AbsoluteForwardSystemPath {
+    type Owned = AbsoluteForwardSystemPathBuf;
 
-    fn to_owned(&self) -> AbsoluteNormalizedPathBuf {
-        AbsoluteNormalizedPathBuf(self.0.to_owned())
+    fn to_owned(&self) -> AbsoluteForwardSystemPathBuf {
+        AbsoluteForwardSystemPathBuf(self.0.to_owned())
     }
 }
 
-impl AsRef<AbsoluteNormalizedPath> for AbsoluteNormalizedPath {
-    fn as_ref(&self) -> &AbsoluteNormalizedPath {
+impl AsRef<AbsoluteForwardSystemPath> for AbsoluteForwardSystemPath {
+    fn as_ref(&self) -> &AbsoluteForwardSystemPath {
         self
     }
 }
 
-impl AsRef<AbsoluteNormalizedPath> for AbsoluteNormalizedPathBuf {
-    fn as_ref(&self) -> &AbsoluteNormalizedPath {
-        AbsoluteNormalizedPath::ref_cast(&self.0)
+impl AsRef<AbsoluteForwardSystemPath> for AbsoluteForwardSystemPathBuf {
+    fn as_ref(&self) -> &AbsoluteForwardSystemPath {
+        AbsoluteForwardSystemPath::ref_cast(&self.0)
     }
 }
 
-impl Borrow<AbsoluteNormalizedPath> for AbsoluteNormalizedPathBuf {
-    fn borrow(&self) -> &AbsoluteNormalizedPath {
+impl Borrow<AbsoluteForwardSystemPath> for AbsoluteForwardSystemPathBuf {
+    fn borrow(&self) -> &AbsoluteForwardSystemPath {
         self.as_ref()
     }
 }
 
-impl Deref for AbsoluteNormalizedPathBuf {
-    type Target = AbsoluteNormalizedPath;
+impl Deref for AbsoluteForwardSystemPathBuf {
+    type Target = AbsoluteForwardSystemPath;
 
-    fn deref(&self) -> &AbsoluteNormalizedPath {
-        AbsoluteNormalizedPath::ref_cast(&self.0)
+    fn deref(&self) -> &AbsoluteForwardSystemPath {
+        AbsoluteForwardSystemPath::ref_cast(&self.0)
     }
 }
 
@@ -748,7 +748,7 @@ fn verify_abs_path_windows_part(path: &str) -> bool {
 }
 
 /// Verifier for AbsPath to ensure the path is absolute
-fn verify_abs_path(path: &AbsolutePath) -> anyhow::Result<()> {
+fn verify_abs_path(path: &AbsoluteSystemPath) -> anyhow::Result<()> {
     // `Path::components` normalizes '.'s away so we cannot iterate with it.
     // TODO maybe we actually want to allow "."s and just
     //   normalize them away entirely.
@@ -784,7 +784,7 @@ fn verify_abs_path(path: &AbsolutePath) -> anyhow::Result<()> {
 #[derive(Error, Debug)]
 enum AbsNormPathError {
     #[error("expected a normalized path, but found a non-normalized path instead: `{0}`")]
-    PathNotNormalized(AbsolutePathBuf),
+    PathNotNormalized(AbsoluteSystemPathBuf),
 }
 
 /// Errors from normalizing paths
@@ -806,10 +806,10 @@ mod tests {
     };
 
     use crate::{
-        absolute_normalized_path::{
-            verify_abs_path_windows_part, AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf,
+        absolute_forward_system_path::{
+            verify_abs_path_windows_part, AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf,
         },
-        forward_relative_path::ForwardRelativePath,
+        relative_forward_unix_path::RelativeForwardUnixPath,
     };
 
     #[cfg(not(windows))]
@@ -830,8 +830,8 @@ mod tests {
         let foo_string = make_absolute("/foo");
         let bar_string = make_absolute("/bar");
 
-        let p1 = AbsoluteNormalizedPath::new(foo_string.as_str())?;
-        let p2 = AbsoluteNormalizedPath::new(bar_string.as_str())?;
+        let p1 = AbsoluteForwardSystemPath::new(foo_string.as_str())?;
+        let p2 = AbsoluteForwardSystemPath::new(bar_string.as_str())?;
 
         map.insert(p1.to_buf(), p2.to_buf());
 
@@ -844,13 +844,13 @@ mod tests {
     fn abs_path_is_comparable() -> anyhow::Result<()> {
         let foo_string = make_absolute("/foo");
         let bar_string = make_absolute("/bar");
-        let path1_buf = AbsoluteNormalizedPathBuf::from(foo_string.clone())?;
-        let path2_buf = AbsoluteNormalizedPathBuf::from(foo_string.clone())?;
-        let path3_buf = AbsoluteNormalizedPathBuf::from(bar_string.clone())?;
+        let path1_buf = AbsoluteForwardSystemPathBuf::from(foo_string.clone())?;
+        let path2_buf = AbsoluteForwardSystemPathBuf::from(foo_string.clone())?;
+        let path3_buf = AbsoluteForwardSystemPathBuf::from(bar_string.clone())?;
 
-        let path1 = AbsoluteNormalizedPath::new(foo_string.as_str())?;
-        let path2 = AbsoluteNormalizedPath::new(foo_string.as_str())?;
-        let path3 = AbsoluteNormalizedPath::new(bar_string.as_str())?;
+        let path1 = AbsoluteForwardSystemPath::new(foo_string.as_str())?;
+        let path2 = AbsoluteForwardSystemPath::new(foo_string.as_str())?;
+        let path3 = AbsoluteForwardSystemPath::new(bar_string.as_str())?;
 
         let str2 = foo_string.as_str();
         let str3 = bar_string.as_str();
@@ -888,36 +888,36 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        assert!(AbsoluteNormalizedPath::new("relative/bar").is_err());
-        assert!(AbsoluteNormalizedPath::new(Path::new("relative/bar")).is_err());
+        assert!(AbsoluteForwardSystemPath::new("relative/bar").is_err());
+        assert!(AbsoluteForwardSystemPath::new(Path::new("relative/bar")).is_err());
 
         if cfg!(not(windows)) {
-            assert!(AbsoluteNormalizedPath::new("/foo/bar").is_ok());
-            assert!(AbsoluteNormalizedPath::new("/").is_ok());
-            assert!(AbsoluteNormalizedPath::new("/normalize/./bar").is_err());
-            assert!(AbsoluteNormalizedPath::new("/normalize/../bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("/foo/bar").is_ok());
+            assert!(AbsoluteForwardSystemPath::new("/").is_ok());
+            assert!(AbsoluteForwardSystemPath::new("/normalize/./bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("/normalize/../bar").is_err());
 
-            assert!(AbsoluteNormalizedPath::new(Path::new("/foo/bar")).is_ok());
-            assert!(AbsoluteNormalizedPath::new(Path::new("/")).is_ok());
-            assert!(AbsoluteNormalizedPath::new(Path::new("/normalize/./bar")).is_err());
-            assert!(AbsoluteNormalizedPath::new(Path::new("/normalize/../bar")).is_err());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("/foo/bar")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("/")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("/normalize/./bar")).is_err());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("/normalize/../bar")).is_err());
         } else {
-            assert!(AbsoluteNormalizedPath::new("c:/foo/bar").is_ok());
-            assert!(AbsoluteNormalizedPath::new("c:/").is_ok());
-            assert!(AbsoluteNormalizedPath::new("c:/normalize/./bar").is_err());
-            assert!(AbsoluteNormalizedPath::new("c:/normalize/../bar").is_err());
-            assert!(AbsoluteNormalizedPath::new("c:\\normalize\\.\\bar").is_err());
-            assert!(AbsoluteNormalizedPath::new("c:\\normalize\\..\\bar").is_err());
-            assert!(AbsoluteNormalizedPath::new("/foo/bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("c:/foo/bar").is_ok());
+            assert!(AbsoluteForwardSystemPath::new("c:/").is_ok());
+            assert!(AbsoluteForwardSystemPath::new("c:/normalize/./bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("c:/normalize/../bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("c:\\normalize\\.\\bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("c:\\normalize\\..\\bar").is_err());
+            assert!(AbsoluteForwardSystemPath::new("/foo/bar").is_err());
 
-            assert!(AbsoluteNormalizedPath::new(Path::new("c:/foo/bar")).is_ok());
-            assert!(AbsoluteNormalizedPath::new(Path::new("c:/")).is_ok());
-            assert!(AbsoluteNormalizedPath::new(Path::new("c:/normalize/./bar")).is_err());
-            assert!(AbsoluteNormalizedPath::new(Path::new("c:/normalize/../bar")).is_err());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("c:/foo/bar")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("c:/")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("c:/normalize/./bar")).is_err());
+            assert!(AbsoluteForwardSystemPath::new(Path::new("c:/normalize/../bar")).is_err());
 
             // UNC paths.
-            assert!(AbsoluteNormalizedPath::new(Path::new(r"\\.\COM42")).is_ok());
-            assert!(AbsoluteNormalizedPath::new(Path::new(r"\\?\c:\test")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new(r"\\.\COM42")).is_ok());
+            assert!(AbsoluteForwardSystemPath::new(Path::new(r"\\?\c:\test")).is_ok());
         }
     }
 
@@ -936,7 +936,7 @@ mod tests {
         } else {
             PathBuf::from("c:/foo/bar")
         };
-        let mut abs_path = AbsoluteNormalizedPath::new(&path).unwrap().to_buf();
+        let mut abs_path = AbsoluteForwardSystemPath::new(&path).unwrap().to_buf();
 
         assert!(path.pop());
         assert!(abs_path.pop());
@@ -954,12 +954,12 @@ mod tests {
     #[test]
     fn test_join() {
         let path = if cfg!(windows) {
-            AbsoluteNormalizedPathBuf::try_from("c:\\foo\\bar".to_owned()).unwrap()
+            AbsoluteForwardSystemPathBuf::try_from("c:\\foo\\bar".to_owned()).unwrap()
         } else {
-            AbsoluteNormalizedPathBuf::try_from("/foo/bar".to_owned()).unwrap()
+            AbsoluteForwardSystemPathBuf::try_from("/foo/bar".to_owned()).unwrap()
         };
 
-        let path = path.join(ForwardRelativePath::new("baz").unwrap());
+        let path = path.join(RelativeForwardUnixPath::new("baz").unwrap());
         assert_eq!(
             path.to_str().unwrap(),
             if cfg!(windows) {
@@ -969,7 +969,7 @@ mod tests {
             }
         );
 
-        let path = path.join(ForwardRelativePath::empty());
+        let path = path.join(RelativeForwardUnixPath::empty());
         assert_eq!(
             path.to_str().unwrap(),
             if cfg!(windows) {

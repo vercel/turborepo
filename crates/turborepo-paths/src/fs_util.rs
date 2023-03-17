@@ -26,8 +26,8 @@ use common_path::common_path;
 use relative_path::{RelativePath, RelativePathBuf};
 
 use crate::{
-    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
-    absolute_path::AbsolutePath,
+    absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf},
+    absolute_system_path::AbsoluteSystemPath,
     io_counters::{IoCounterGuard, IoCounterKey},
 };
 
@@ -157,10 +157,10 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
-    pub fn path(&self) -> AbsoluteNormalizedPathBuf {
+    pub fn path(&self) -> AbsoluteForwardSystemPathBuf {
         // This is safe, because `read_dir` is called with absolute path,
         // and filename is not dot or dot-dot.
-        AbsoluteNormalizedPathBuf::unchecked_new(self.dir_entry.path())
+        AbsoluteForwardSystemPathBuf::unchecked_new(self.dir_entry.path())
     }
 }
 
@@ -190,14 +190,14 @@ impl Iterator for ReadDir {
     }
 }
 
-pub fn read_dir<P: AsRef<AbsoluteNormalizedPath>>(path: P) -> anyhow::Result<ReadDir> {
+pub fn read_dir<P: AsRef<AbsoluteForwardSystemPath>>(path: P) -> anyhow::Result<ReadDir> {
     let _guard = IoCounterKey::ReadDir.guard();
     fs::read_dir(path.as_ref())
         .with_context(|| format!("read_dir({})", P::as_ref(&path).display()))
         .map(|read_dir| ReadDir { read_dir, _guard })
 }
 
-pub fn read_dir_if_exists<P: AsRef<AbsoluteNormalizedPath>>(
+pub fn read_dir_if_exists<P: AsRef<AbsoluteForwardSystemPath>>(
     path: P,
 ) -> anyhow::Result<Option<ReadDir>> {
     let _guard = IoCounterKey::ReadDir.guard();
@@ -374,18 +374,18 @@ pub fn read_to_string_opt<P: AsRef<Path>>(path: P) -> anyhow::Result<Option<Stri
     }
 }
 
-pub fn canonicalize<P: AsRef<Path>>(path: P) -> anyhow::Result<AbsoluteNormalizedPathBuf> {
+pub fn canonicalize<P: AsRef<Path>>(path: P) -> anyhow::Result<AbsoluteForwardSystemPathBuf> {
     let _guard = IoCounterKey::Canonicalize.guard();
     let path = dunce::canonicalize(&path)
         .with_context(|| format!("canonicalize({})", P::as_ref(&path).display()))?;
-    AbsoluteNormalizedPathBuf::new(path)
+    AbsoluteForwardSystemPathBuf::new(path)
 }
 
 /// Convert Windows UNC path to regular path.
-pub fn simplified(path: &AbsolutePath) -> anyhow::Result<&AbsolutePath> {
+pub fn simplified(path: &AbsoluteSystemPath) -> anyhow::Result<&AbsoluteSystemPath> {
     let path = dunce::simplified(path.as_ref());
     // This should not fail, but better not panic.
-    AbsolutePath::new(path)
+    AbsoluteSystemPath::new(path)
 }
 
 pub fn remove_dir<P: AsRef<Path>>(path: P) -> anyhow::Result<()> {
@@ -445,22 +445,22 @@ mod tests {
     use relative_path::RelativePath;
 
     use crate::{
-        absolute_normalized_path::AbsoluteNormalizedPath,
-        forward_relative_path::ForwardRelativePath,
+        absolute_forward_system_path::AbsoluteForwardSystemPath,
         fs_util,
         fs_util::{
             create_dir_all, metadata, read_dir_if_exists, read_to_string, remove_all,
             remove_dir_all, remove_file, symlink, symlink_metadata, write,
         },
+        relative_forward_unix_path::RelativeForwardUnixPath,
     };
 
     #[test]
     fn if_exists_read_dir() -> anyhow::Result<()> {
         let binding = std::env::temp_dir();
-        let existing_path = AbsoluteNormalizedPath::new(&binding)?;
+        let existing_path = AbsoluteForwardSystemPath::new(&binding)?;
         let res = read_dir_if_exists(existing_path)?;
         assert!(res.is_some());
-        let not_existing_dir = existing_path.join(ForwardRelativePath::unchecked_new("dir"));
+        let not_existing_dir = existing_path.join(RelativeForwardUnixPath::unchecked_new("dir"));
         let res = read_dir_if_exists(not_existing_dir)?;
         assert!(res.is_none());
         Ok(())

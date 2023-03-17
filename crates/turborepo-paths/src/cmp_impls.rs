@@ -94,68 +94,82 @@ macro_rules! impl_cmp_str {
     };
 }
 
-use crate::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
+use crate::relative_forward_unix_path::{RelativeForwardUnixPath, RelativeForwardUnixPathBuf};
 
 impl_cmp!(
-    ForwardRelativePathBuf,
-    ForwardRelativePath,
-    ForwardRelativePath
+    RelativeForwardUnixPathBuf,
+    RelativeForwardUnixPath,
+    RelativeForwardUnixPath
 );
 impl_cmp!(
-    ForwardRelativePathBuf,
-    &'_ ForwardRelativePath,
-    ForwardRelativePath
+    RelativeForwardUnixPathBuf,
+    &'_ RelativeForwardUnixPath,
+    RelativeForwardUnixPath
 );
 
-impl_cmp_str!(ForwardRelativePathBuf, str, ForwardRelativePath);
-impl_cmp_str!(ForwardRelativePathBuf, &'_ str, ForwardRelativePath);
-impl_cmp_str!(ForwardRelativePathBuf, String, ForwardRelativePath);
-impl_cmp_str!(ForwardRelativePath, str, ForwardRelativePath);
-impl_cmp_str!(ForwardRelativePath, &'_ str, ForwardRelativePath);
-impl_cmp_str!(ForwardRelativePath, String, ForwardRelativePath);
-impl_cmp_str!(&'_ ForwardRelativePath, str, ForwardRelativePath);
-impl_cmp_str!(&'_ ForwardRelativePath, String, ForwardRelativePath);
+impl_cmp_str!(RelativeForwardUnixPathBuf, str, RelativeForwardUnixPath);
+impl_cmp_str!(RelativeForwardUnixPathBuf, &'_ str, RelativeForwardUnixPath);
+impl_cmp_str!(RelativeForwardUnixPathBuf, String, RelativeForwardUnixPath);
+impl_cmp_str!(RelativeForwardUnixPath, str, RelativeForwardUnixPath);
+impl_cmp_str!(RelativeForwardUnixPath, &'_ str, RelativeForwardUnixPath);
+impl_cmp_str!(RelativeForwardUnixPath, String, RelativeForwardUnixPath);
+impl_cmp_str!(&'_ RelativeForwardUnixPath, str, RelativeForwardUnixPath);
+impl_cmp_str!(&'_ RelativeForwardUnixPath, String, RelativeForwardUnixPath);
 
-use crate::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
+use crate::absolute_forward_system_path::{
+    AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf,
+};
 
 impl_cmp!(
-    AbsoluteNormalizedPathBuf,
-    AbsoluteNormalizedPath,
-    AbsoluteNormalizedPath
+    AbsoluteForwardSystemPathBuf,
+    AbsoluteForwardSystemPath,
+    AbsoluteForwardSystemPath
 );
 impl_cmp!(
-    AbsoluteNormalizedPathBuf,
-    &'_ AbsoluteNormalizedPath,
-    AbsoluteNormalizedPath
+    AbsoluteForwardSystemPathBuf,
+    &'_ AbsoluteForwardSystemPath,
+    AbsoluteForwardSystemPath
 );
 
-impl_cmp_str!(AbsoluteNormalizedPathBuf, str, AbsoluteNormalizedPath);
-impl_cmp_str!(AbsoluteNormalizedPathBuf, &'_ str, AbsoluteNormalizedPath);
-impl_cmp_str!(AbsoluteNormalizedPathBuf, String, AbsoluteNormalizedPath);
-impl_cmp_str!(AbsoluteNormalizedPath, str, AbsoluteNormalizedPath);
-impl_cmp_str!(AbsoluteNormalizedPath, &'_ str, AbsoluteNormalizedPath);
-impl_cmp_str!(AbsoluteNormalizedPath, String, AbsoluteNormalizedPath);
-impl_cmp_str!(&'_ AbsoluteNormalizedPath, str, AbsoluteNormalizedPath);
-impl_cmp_str!(&'_ AbsoluteNormalizedPath, String, AbsoluteNormalizedPath);
-
-use crate::project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
-
-impl_cmp!(
-    ProjectRelativePathBuf,
-    ProjectRelativePath,
-    ProjectRelativePath
+impl_cmp_str!(AbsoluteForwardSystemPathBuf, str, AbsoluteForwardSystemPath);
+impl_cmp_str!(
+    AbsoluteForwardSystemPathBuf,
+    &'_ str,
+    AbsoluteForwardSystemPath
 );
-impl_cmp!(
-    ProjectRelativePathBuf,
-    &'_ ProjectRelativePath,
-    ProjectRelativePath
+impl_cmp_str!(
+    AbsoluteForwardSystemPathBuf,
+    String,
+    AbsoluteForwardSystemPath
+);
+impl_cmp_str!(AbsoluteForwardSystemPath, str, AbsoluteForwardSystemPath);
+impl_cmp_str!(
+    AbsoluteForwardSystemPath,
+    &'_ str,
+    AbsoluteForwardSystemPath
+);
+impl_cmp_str!(AbsoluteForwardSystemPath, String, AbsoluteForwardSystemPath);
+impl_cmp_str!(
+    &'_ AbsoluteForwardSystemPath,
+    str,
+    AbsoluteForwardSystemPath
+);
+impl_cmp_str!(
+    &'_ AbsoluteForwardSystemPath,
+    String,
+    AbsoluteForwardSystemPath
 );
 
-impl_cmp_str!(ProjectRelativePathBuf, str, ProjectRelativePath);
-impl_cmp_str!(ProjectRelativePathBuf, &'_ str, ProjectRelativePath);
-impl_cmp_str!(ProjectRelativePathBuf, String, ProjectRelativePath);
-impl_cmp_str!(ProjectRelativePath, str, ProjectRelativePath);
-impl_cmp_str!(ProjectRelativePath, &'_ str, ProjectRelativePath);
-impl_cmp_str!(ProjectRelativePath, String, ProjectRelativePath);
-impl_cmp_str!(&'_ ProjectRelativePath, str, ProjectRelativePath);
-impl_cmp_str!(&'_ ProjectRelativePath, String, ProjectRelativePath);
+use crate::project_relative_path::{AnchoredUnixPath, AnchoredUnixPathBuf};
+
+impl_cmp!(AnchoredUnixPathBuf, AnchoredUnixPath, AnchoredUnixPath);
+impl_cmp!(AnchoredUnixPathBuf, &'_ AnchoredUnixPath, AnchoredUnixPath);
+
+impl_cmp_str!(AnchoredUnixPathBuf, str, AnchoredUnixPath);
+impl_cmp_str!(AnchoredUnixPathBuf, &'_ str, AnchoredUnixPath);
+impl_cmp_str!(AnchoredUnixPathBuf, String, AnchoredUnixPath);
+impl_cmp_str!(AnchoredUnixPath, str, AnchoredUnixPath);
+impl_cmp_str!(AnchoredUnixPath, &'_ str, AnchoredUnixPath);
+impl_cmp_str!(AnchoredUnixPath, String, AnchoredUnixPath);
+impl_cmp_str!(&'_ AnchoredUnixPath, str, AnchoredUnixPath);
+impl_cmp_str!(&'_ AnchoredUnixPath, String, AnchoredUnixPath);

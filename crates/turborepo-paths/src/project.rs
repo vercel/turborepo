@@ -20,17 +20,18 @@ use ref_cast::RefCast;
 use relative_path::RelativePathBuf;
 
 use crate::{
-    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
-    forward_relative_path::ForwardRelativePath,
-    fs_util, RelativePath,
+    absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf},
+    fs_util,
+    relative_forward_unix_path::RelativeForwardUnixPath,
+    RelativePath,
 };
 
 #[derive(Debug, thiserror::Error)]
 enum ProjectRootError {
     #[error("Provided project root `{0}` is not equal to the canonicalized path `{1}`")]
-    NotCanonical(AbsoluteNormalizedPathBuf, AbsoluteNormalizedPathBuf),
+    NotCanonical(AbsoluteForwardSystemPathBuf, AbsoluteForwardSystemPathBuf),
     #[error("Project root `{0}` not found in path `{1}`")]
-    ProjectRootNotFound(ProjectRoot, AbsolutePathBuf),
+    ProjectRootNotFound(ProjectRoot, AbsoluteSystemPathBuf),
 }
 
 /// The 'ProjectFilesystem' that contains the root path and the current working
@@ -40,7 +41,7 @@ enum ProjectRootError {
 #[derive(Clone, Debug, Dupe, PartialEq, derive_more::Display)]
 #[display(fmt = "{root}")]
 pub struct ProjectRoot {
-    root: Arc<AbsoluteNormalizedPathBuf>,
+    root: Arc<AbsoluteForwardSystemPathBuf>,
 }
 
 pub struct ProjectRootTemp {
@@ -64,13 +65,13 @@ impl ProjectRootTemp {
     }
 
     pub fn write_file(&self, path: &str, content: &str) {
-        let path = ProjectRelativePath::new(path).unwrap();
+        let path = AnchoredUnixPath::new(path).unwrap();
         self.path().write_file(path, content, false).unwrap();
     }
 }
 
 impl ProjectRoot {
-    pub fn new(root: AbsoluteNormalizedPathBuf) -> anyhow::Result<Self> {
+    pub fn new(root: AbsoluteForwardSystemPathBuf) -> anyhow::Result<Self> {
         let canon = fs_util::canonicalize(&root).context("canonicalize project root")?;
         if canon != root {
             return Err(ProjectRootError::NotCanonical(root, canon).into());
@@ -82,13 +83,13 @@ impl ProjectRoot {
         })
     }
 
-    pub fn new_unchecked(root: AbsoluteNormalizedPathBuf) -> ProjectRoot {
+    pub fn new_unchecked(root: AbsoluteForwardSystemPathBuf) -> ProjectRoot {
         ProjectRoot {
             root: Arc::new(root),
         }
     }
 
-    pub fn root(&self) -> &AbsoluteNormalizedPath {
+    pub fn root(&self) -> &AbsoluteForwardSystemPath {
         &self.root
     }
 
@@ -98,29 +99,29 @@ impl ProjectRoot {
     ///
     /// ```
     /// use turborepo_paths::project::ProjectRoot;
-    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
+    /// use turborepo_paths::project_relative_path::AnchoredUnixPath;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPathBuf;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?;
+    ///     let root = AbsoluteForwardSystemPathBuf::from("/usr/local/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("/usr/local/vercel/turbo/turbo.json".into())?,
-    ///         fs.resolve(ProjectRelativePath::new("turbo/turbo.json")?)
+    ///         AbsoluteForwardSystemPathBuf::from("/usr/local/vercel/turbo/turbo.json".into())?,
+    ///         fs.resolve(AnchoredUnixPath::new("turbo/turbo.json")?)
     ///     );
     /// } else {
-    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?;
+    ///     let root = AbsoluteForwardSystemPathBuf::from("c:/open/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         AbsoluteNormalizedPathBuf::from("c:/open/vercel/turbo/turbo.json".into())?,
-    ///         fs.resolve(ProjectRelativePath::new("turbo/turbo.json")?)
+    ///         AbsoluteForwardSystemPathBuf::from("c:/open/vercel/turbo/turbo.json".into())?,
+    ///         fs.resolve(AnchoredUnixPath::new("turbo/turbo.json")?)
     ///     );
     /// }
     /// # anyhow::Ok(())
     /// ```
-    pub fn resolve(&self, path: impl PathLike) -> AbsoluteNormalizedPathBuf {
+    pub fn resolve(&self, path: impl PathLike) -> AbsoluteForwardSystemPathBuf {
         path.resolve(self).into_owned()
     }
 
@@ -130,25 +131,25 @@ impl ProjectRoot {
     ///
     /// ```
     /// use turborepo_paths::project::{ProjectRoot};
-    /// use turborepo_paths::absolute_normalized_path::AbsoluteNormalizedPathBuf;
+    /// use turborepo_paths::absolute_forward_system_path::AbsoluteForwardSystemPathBuf;
     /// use std::path::PathBuf;
-    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
+    /// use turborepo_paths::project_relative_path::AnchoredUnixPath;
     ///
     /// let root = if cfg!(not(windows)) {
-    ///     AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?
+    ///     AbsoluteForwardSystemPathBuf::from("/usr/local/vercel/".into())?
     /// } else {
-    ///     AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?
+    ///     AbsoluteForwardSystemPathBuf::from("c:/open/vercel/".into())?
     /// };
     /// let fs = ProjectRoot::new_unchecked(root);
     ///
     /// assert_eq!(
     ///     PathBuf::from("turbo/turbo.json"),
-    ///     fs.as_relative_path(ProjectRelativePath::new("turbo/turbo.json")?)
+    ///     fs.as_relative_path(AnchoredUnixPath::new("turbo/turbo.json")?)
     /// );
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn as_relative_path<P: AsRef<ProjectRelativePath>>(&self, path: P) -> PathBuf {
+    pub fn as_relative_path<P: AsRef<AnchoredUnixPath>>(&self, path: P) -> PathBuf {
         let rel: &RelativePath = (path.as_ref().0).as_ref();
         PathBuf::from(rel.as_str())
     }
@@ -161,44 +162,44 @@ impl ProjectRoot {
     ///
     /// ```
     /// use std::borrow::Cow;
-    /// use turborepo_paths::project_relative_path::ProjectRelativePath;
-    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPathBuf, AbsoluteNormalizedPath};
+    /// use turborepo_paths::project_relative_path::AnchoredUnixPath;
+    /// use turborepo_paths::absolute_forward_system_path::{AbsoluteForwardSystemPathBuf, AbsoluteForwardSystemPath};
     /// use turborepo_paths::project::ProjectRoot;
     ///
     /// if cfg!(not(windows)) {
-    ///     let root = AbsoluteNormalizedPathBuf::from("/usr/local/vercel/".into())?;
+    ///     let root = AbsoluteForwardSystemPathBuf::from("/usr/local/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new("/usr/local/vercel/src/turbo.js")?)?
+    ///         Cow::Borrowed(AnchoredUnixPath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteForwardSystemPath::new("/usr/local/vercel/src/turbo.js")?)?
     ///     );
-    ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("/other/path")?).is_err());
+    ///     assert!(fs.relativize(AbsoluteForwardSystemPath::new("/other/path")?).is_err());
     /// } else {
-    ///     let root = AbsoluteNormalizedPathBuf::from("c:/open/vercel/".into())?;
+    ///     let root = AbsoluteForwardSystemPathBuf::from("c:/open/vercel/".into())?;
     ///     let fs = ProjectRoot::new_unchecked(root);
     ///
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new("c:/open/vercel/src/turbo.js")?)?
+    ///         Cow::Borrowed(AnchoredUnixPath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteForwardSystemPath::new("c:/open/vercel/src/turbo.js")?)?
     ///     );
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new(r"C:\open\vercel\src\turbo.js")?)?
+    ///         Cow::Borrowed(AnchoredUnixPath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteForwardSystemPath::new(r"C:\open\vercel\src\turbo.js")?)?
     ///     );
     ///     assert_eq!(
-    ///         Cow::Borrowed(ProjectRelativePath::new("src/turbo.js")?),
-    ///         fs.relativize(AbsoluteNormalizedPath::new(r"\\?\C:\open\vercel\src\turbo.js")?)?
+    ///         Cow::Borrowed(AnchoredUnixPath::new("src/turbo.js")?),
+    ///         fs.relativize(AbsoluteForwardSystemPath::new(r"\\?\C:\open\vercel\src\turbo.js")?)?
     ///     );
-    ///     assert!(fs.relativize(AbsoluteNormalizedPath::new("c:/other/path")?).is_err());
+    ///     assert!(fs.relativize(AbsoluteForwardSystemPath::new("c:/other/path")?).is_err());
     /// }
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn relativize<'a, P: ?Sized + AsRef<AbsoluteNormalizedPath>>(
+    pub fn relativize<'a, P: ?Sized + AsRef<AbsoluteForwardSystemPath>>(
         &self,
         p: &'a P,
-    ) -> anyhow::Result<Cow<'a, ProjectRelativePath>> {
+    ) -> anyhow::Result<Cow<'a, AnchoredUnixPath>> {
         let relative_path = p.as_ref().strip_prefix(self.root()).map_err(|_| {
             anyhow::anyhow!(
                 "Error relativizing: `{}` is not relative to project root `{}`",
@@ -207,8 +208,8 @@ impl ProjectRoot {
             )
         })?;
         match relative_path {
-            Cow::Borrowed(p) => Ok(Cow::Borrowed(ProjectRelativePath::ref_cast(p))),
-            Cow::Owned(p) => Ok(Cow::Owned(ProjectRelativePathBuf::from(p))),
+            Cow::Borrowed(p) => Ok(Cow::Borrowed(AnchoredUnixPath::ref_cast(p))),
+            Cow::Owned(p) => Ok(Cow::Owned(AnchoredUnixPathBuf::from(p))),
         }
     }
 
@@ -216,7 +217,7 @@ impl ProjectRoot {
     /// and return the remaining path.
     ///
     /// Fail if canonicalized path does not start with project root.
-    fn strip_project_root<'a>(&'a self, path: &'a AbsolutePath) -> anyhow::Result<PathBuf> {
+    fn strip_project_root<'a>(&'a self, path: &'a AbsoluteSystemPath) -> anyhow::Result<PathBuf> {
         let path = fs_util::simplified(path)?;
 
         if let Ok(rem) = Path::strip_prefix(path, &*self.root) {
@@ -252,22 +253,25 @@ impl ProjectRoot {
         Err(ProjectRootError::ProjectRootNotFound(self.dupe(), path.to_owned()).into())
     }
 
-    fn relativize_any_impl(&self, path: &AbsolutePath) -> anyhow::Result<ProjectRelativePathBuf> {
+    fn relativize_any_impl(
+        &self,
+        path: &AbsoluteSystemPath,
+    ) -> anyhow::Result<AnchoredUnixPathBuf> {
         let project_relative = self.strip_project_root(path)?;
         // TODO(nga): this does not treat `..` correctly.
         //   See the test below for an example.
         // This must use `RelativePathBuf`, not `RelativePath`,
         // because `RelativePathBuf` handles backslashes on Windows, and `RelativePath`
         // does not.
-        ProjectRelativePath::empty().join_normalized(RelativePathBuf::from_path(project_relative)?)
+        AnchoredUnixPath::empty().join_normalized(RelativePathBuf::from_path(project_relative)?)
     }
 
     /// Relativize an absolute path which may be not normalized or not
     /// canonicalize. This operation may involve disk access.
-    pub fn relativize_any<P: AsRef<AbsolutePath>>(
+    pub fn relativize_any<P: AsRef<AbsoluteSystemPath>>(
         &self,
         path: P,
-    ) -> anyhow::Result<ProjectRelativePathBuf> {
+    ) -> anyhow::Result<AnchoredUnixPathBuf> {
         let path = path.as_ref();
         self.relativize_any_impl(path.as_ref()).with_context(|| {
             format!(
@@ -423,8 +427,8 @@ impl ProjectRoot {
 
     fn copy_resolved(
         &self,
-        src_abs: &AbsoluteNormalizedPathBuf,
-        dest_abs: &AbsoluteNormalizedPathBuf,
+        src_abs: &AbsoluteForwardSystemPathBuf,
+        dest_abs: &AbsoluteForwardSystemPathBuf,
     ) -> anyhow::Result<()> {
         let src_type = fs_util::symlink_metadata(src_abs)?.file_type();
 
@@ -488,8 +492,8 @@ impl ProjectRoot {
     /// e.g. given a `target` of `/foo/bar1/baz1/out` and `dest` of
     /// `/foo/bar2/baz2/out`, the      result would be `../../bar1/baz1/out`
     fn find_relative_path(
-        target: &AbsoluteNormalizedPathBuf,
-        dest: &AbsoluteNormalizedPathBuf,
+        target: &AbsoluteForwardSystemPathBuf,
+        dest: &AbsoluteForwardSystemPathBuf,
     ) -> PathBuf {
         use itertools::{EitherOrBoth::*, Itertools};
         // Assemble both the '../' traversal, and the component that will come after
@@ -529,8 +533,8 @@ impl ProjectRoot {
     /// Creates symbolic link `dest` which points at the same location as
     /// symlink `src`.
     fn copy_symlink(
-        src: &AbsoluteNormalizedPathBuf,
-        dest: &AbsoluteNormalizedPathBuf,
+        src: &AbsoluteForwardSystemPathBuf,
+        dest: &AbsoluteForwardSystemPathBuf,
     ) -> anyhow::Result<()> {
         let mut target = fs_util::read_link(src)?;
         if target.is_relative() {
@@ -541,7 +545,7 @@ impl ProjectRoot {
                     .expect("a path with a parent in symlink target"),
             );
             target = Self::find_relative_path(
-                &AbsoluteNormalizedPathBuf::try_from(absolute_target)?,
+                &AbsoluteForwardSystemPathBuf::try_from(absolute_target)?,
                 dest,
             );
         }
@@ -549,22 +553,22 @@ impl ProjectRoot {
     }
 
     fn copy_file(
-        src: &AbsoluteNormalizedPathBuf,
-        dst: &AbsoluteNormalizedPathBuf,
+        src: &AbsoluteForwardSystemPathBuf,
+        dst: &AbsoluteForwardSystemPathBuf,
     ) -> anyhow::Result<()> {
         fs_util::copy(src, dst).map(|_| ())
     }
 
     fn copy_dir(
-        src_dir: &AbsoluteNormalizedPathBuf,
-        dest_dir: &AbsoluteNormalizedPathBuf,
+        src_dir: &AbsoluteForwardSystemPathBuf,
+        dest_dir: &AbsoluteForwardSystemPathBuf,
     ) -> anyhow::Result<()> {
         fs_util::create_dir_all(dest_dir)?;
         for file in fs_util::read_dir(src_dir)? {
             let file = file?;
             let filetype = file.file_type()?;
             let src_file = file.path();
-            let dest_file = dest_dir.join(ForwardRelativePath::new(&file.file_name())?);
+            let dest_file = dest_dir.join(RelativeForwardUnixPath::new(&file.file_name())?);
             if filetype.is_dir() {
                 Self::copy_dir(&src_file, &dest_file)?;
             } else if filetype.is_symlink() {
@@ -580,17 +584,17 @@ impl ProjectRoot {
 pub use internals::PathLike;
 
 use crate::{
-    absolute_path::{AbsolutePath, AbsolutePathBuf},
-    project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
+    absolute_system_path::{AbsoluteSystemPath, AbsoluteSystemPathBuf},
+    project_relative_path::{AnchoredUnixPath, AnchoredUnixPathBuf},
 };
 
 mod internals {
     use std::borrow::Cow;
 
     use crate::{
-        absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
+        absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf},
         project::ProjectRoot,
-        project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf},
+        project_relative_path::{AnchoredUnixPath, AnchoredUnixPathBuf},
     };
 
     pub trait PathLike: PathLikeResolvable {}
@@ -598,29 +602,29 @@ mod internals {
     impl<T> PathLike for T where T: PathLikeResolvable {}
 
     pub trait PathLikeResolvable {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath>;
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteForwardSystemPath>;
     }
 
-    impl PathLikeResolvable for &AbsoluteNormalizedPath {
-        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
+    impl PathLikeResolvable for &AbsoluteForwardSystemPath {
+        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteForwardSystemPath> {
             Cow::Borrowed(self)
         }
     }
 
-    impl PathLikeResolvable for &AbsoluteNormalizedPathBuf {
-        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
+    impl PathLikeResolvable for &AbsoluteForwardSystemPathBuf {
+        fn resolve(&self, _fs: &ProjectRoot) -> Cow<'_, AbsoluteForwardSystemPath> {
             Cow::Borrowed(self)
         }
     }
 
-    impl PathLikeResolvable for &ProjectRelativePath {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
+    impl PathLikeResolvable for &AnchoredUnixPath {
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteForwardSystemPath> {
             Cow::Owned(self.0.resolve(fs.root()))
         }
     }
 
-    impl PathLikeResolvable for &ProjectRelativePathBuf {
-        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteNormalizedPath> {
+    impl PathLikeResolvable for &AnchoredUnixPathBuf {
+        fn resolve(&self, fs: &ProjectRoot) -> Cow<'_, AbsoluteForwardSystemPath> {
             Cow::Owned(self.0.resolve(fs.root()))
         }
     }
@@ -631,27 +635,27 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::{
-        absolute_path::AbsolutePath,
-        forward_relative_path::ForwardRelativePath,
+        absolute_system_path::AbsoluteSystemPath,
         fs_util,
         project::{ProjectRoot, ProjectRootTemp},
-        project_relative_path::ProjectRelativePath,
+        project_relative_path::AnchoredUnixPath,
+        relative_forward_unix_path::RelativeForwardUnixPath,
     };
 
     #[test]
     fn copy_works() -> anyhow::Result<()> {
         let fs = ProjectRootTemp::new()?;
-        let dir1 = ProjectRelativePath::new("dir1")?;
-        let dir2 = ProjectRelativePath::new("dir1/dir2")?;
-        let dir3 = ProjectRelativePath::new("dir1/dir2/dir3")?;
-        let link_dir2 = ProjectRelativePath::new("dir1/link_dir2")?;
-        let link_dir3 = ProjectRelativePath::new("dir1/link_dir3")?;
-        let link_file3 = ProjectRelativePath::new("dir1/link_file3")?;
-        let file1 = ProjectRelativePath::new("dir1/file1")?;
-        let file2 = ProjectRelativePath::new("dir1/dir2/file2")?;
-        let file3 = ProjectRelativePath::new("dir1/dir2/dir3/file3")?;
-        let file4 = ProjectRelativePath::new("dir1/dir2/dir3/file4")?;
-        let out_dir = ProjectRelativePath::new("out")?;
+        let dir1 = AnchoredUnixPath::new("dir1")?;
+        let dir2 = AnchoredUnixPath::new("dir1/dir2")?;
+        let dir3 = AnchoredUnixPath::new("dir1/dir2/dir3")?;
+        let link_dir2 = AnchoredUnixPath::new("dir1/link_dir2")?;
+        let link_dir3 = AnchoredUnixPath::new("dir1/link_dir3")?;
+        let link_file3 = AnchoredUnixPath::new("dir1/link_file3")?;
+        let file1 = AnchoredUnixPath::new("dir1/file1")?;
+        let file2 = AnchoredUnixPath::new("dir1/dir2/file2")?;
+        let file3 = AnchoredUnixPath::new("dir1/dir2/dir3/file3")?;
+        let file4 = AnchoredUnixPath::new("dir1/dir2/dir3/file4")?;
+        let out_dir = AnchoredUnixPath::new("out")?;
 
         fs_util::create_dir_all(fs.path.resolve(dir1))?;
         fs_util::create_dir_all(fs.path.resolve(dir2))?;
@@ -670,27 +674,27 @@ mod tests {
 
         fs.path
             .copy(
-                ProjectRelativePath::new("dir1/file1")?,
-                ProjectRelativePath::new("out")?,
+                AnchoredUnixPath::new("dir1/file1")?,
+                AnchoredUnixPath::new("out")?,
             )
             .expect_err("should fail because out exists");
 
-        let expected_dir1 = ProjectRelativePath::new("out/dir1")?;
-        let expected_dir2 = ProjectRelativePath::new("out/dir1/dir2")?;
-        let expected_dir3 = ProjectRelativePath::new("out/dir1/dir2/dir3")?;
-        let expected_link_dir2 = ProjectRelativePath::new("out/dir1/link_dir2")?;
-        let expected_link_dir3 = ProjectRelativePath::new("out/dir1/link_dir3")?;
-        let expected_link_file3 = ProjectRelativePath::new("out/dir1/link_file3")?;
-        let expected_file1 = ProjectRelativePath::new("out/dir1/file1")?;
-        let expected_file2 = ProjectRelativePath::new("out/dir1/dir2/file2")?;
-        let expected_file3 = ProjectRelativePath::new("out/dir1/dir2/dir3/file3")?;
-        let expected_file4 = ProjectRelativePath::new("out/other1/file4")?;
+        let expected_dir1 = AnchoredUnixPath::new("out/dir1")?;
+        let expected_dir2 = AnchoredUnixPath::new("out/dir1/dir2")?;
+        let expected_dir3 = AnchoredUnixPath::new("out/dir1/dir2/dir3")?;
+        let expected_link_dir2 = AnchoredUnixPath::new("out/dir1/link_dir2")?;
+        let expected_link_dir3 = AnchoredUnixPath::new("out/dir1/link_dir3")?;
+        let expected_link_file3 = AnchoredUnixPath::new("out/dir1/link_file3")?;
+        let expected_file1 = AnchoredUnixPath::new("out/dir1/file1")?;
+        let expected_file2 = AnchoredUnixPath::new("out/dir1/dir2/file2")?;
+        let expected_file3 = AnchoredUnixPath::new("out/dir1/dir2/dir3/file3")?;
+        let expected_file4 = AnchoredUnixPath::new("out/other1/file4")?;
 
-        fs.path.copy(dir1, ProjectRelativePath::new("out/dir1")?)?;
+        fs.path.copy(dir1, AnchoredUnixPath::new("out/dir1")?)?;
 
         // Ensure copying a file creates any parent dirs properly
         fs.path
-            .copy(file4, ProjectRelativePath::new("out/other1/file4")?)?;
+            .copy(file4, AnchoredUnixPath::new("out/other1/file4")?)?;
 
         assert!(std::path::Path::is_dir(
             fs.path.resolve(expected_dir1).as_ref()
@@ -761,9 +765,9 @@ mod tests {
     #[test]
     fn test_copy_symlink() -> anyhow::Result<()> {
         let fs = ProjectRootTemp::new()?;
-        let symlink1 = ProjectRelativePath::new("symlink1")?;
-        let symlink2 = ProjectRelativePath::new("symlink2")?;
-        let file = ProjectRelativePath::new("file")?;
+        let symlink1 = AnchoredUnixPath::new("symlink1")?;
+        let symlink2 = AnchoredUnixPath::new("symlink2")?;
+        let file = AnchoredUnixPath::new("file")?;
         fs.path.write_file(file, "hello", false)?;
         fs.path.soft_link_raw(fs.path.resolve(file), symlink1)?;
         fs.path.copy(symlink1, symlink2)?;
@@ -777,15 +781,15 @@ mod tests {
     fn test_symlink_relativized() -> anyhow::Result<()> {
         let fs = ProjectRootTemp::new()?;
 
-        let target1 = ProjectRelativePath::new("foo1/bar1/target")?;
-        let target2 = ProjectRelativePath::new("foo2/bar")?;
-        let file = target2.join(ForwardRelativePath::new("file")?);
+        let target1 = AnchoredUnixPath::new("foo1/bar1/target")?;
+        let target2 = AnchoredUnixPath::new("foo2/bar")?;
+        let file = target2.join(RelativeForwardUnixPath::new("file")?);
 
-        let dest1 = ProjectRelativePath::new("foo1/target-link")?;
-        let dest2 = ProjectRelativePath::new("foo1/bar2/target")?;
-        let dest3 = ProjectRelativePath::new("foo1-link/bar1/target")?;
-        let dest4 = ProjectRelativePath::new("foo2/bar-link")?;
-        let dest5 = ProjectRelativePath::new("foo2-link/bar")?;
+        let dest1 = AnchoredUnixPath::new("foo1/target-link")?;
+        let dest2 = AnchoredUnixPath::new("foo1/bar2/target")?;
+        let dest3 = AnchoredUnixPath::new("foo1-link/bar1/target")?;
+        let dest4 = AnchoredUnixPath::new("foo2/bar-link")?;
+        let dest5 = AnchoredUnixPath::new("foo2-link/bar")?;
 
         fs.path.write_file(target1, "foo1 contents", false)?;
         fs.path.write_file(&file, "foo2 contents", false)?;
@@ -817,12 +821,12 @@ mod tests {
         let contents4 = fs_util::read_to_string(
             fs.path
                 .resolve(dest4)
-                .join(ForwardRelativePath::new("file")?),
+                .join(RelativeForwardUnixPath::new("file")?),
         )?;
         let contents5 = fs_util::read_to_string(
             fs.path
                 .resolve(dest5)
-                .join(ForwardRelativePath::new("file")?),
+                .join(RelativeForwardUnixPath::new("file")?),
         )?;
 
         if cfg!(unix) {
@@ -852,12 +856,12 @@ mod tests {
     #[test]
     fn test_symlink_to_directory() -> anyhow::Result<()> {
         let fs = ProjectRootTemp::new()?;
-        let source_dir = ProjectRelativePath::new("foo")?;
-        let source_file = ProjectRelativePath::new("foo/file")?;
-        let dest_dir = ProjectRelativePath::new("bar")?;
-        let dest_file = ProjectRelativePath::new("bar/file")?;
-        let new_file1 = ProjectRelativePath::new("bar/new_file")?;
-        let new_file2 = ProjectRelativePath::new("foo/new_file")?;
+        let source_dir = AnchoredUnixPath::new("foo")?;
+        let source_file = AnchoredUnixPath::new("foo/file")?;
+        let dest_dir = AnchoredUnixPath::new("bar")?;
+        let dest_file = AnchoredUnixPath::new("bar/file")?;
+        let new_file1 = AnchoredUnixPath::new("bar/new_file")?;
+        let new_file2 = AnchoredUnixPath::new("foo/new_file")?;
 
         fs.path.write_file(source_file, "file content", false)?;
         fs.path.soft_link_relativized(source_dir, dest_dir)?;
@@ -877,7 +881,7 @@ mod tests {
         let fs = ProjectRootTemp::new()?;
 
         // We can delete a read-only file
-        let file = ProjectRelativePath::new("foo/bar/link")?;
+        let file = AnchoredUnixPath::new("foo/bar/link")?;
         fs.path.write_file(file, "Hello", false)?;
         let real_file = fs.path.resolve(file);
         let mut perm = fs_util::metadata(&real_file)?.permissions();
@@ -911,8 +915,8 @@ mod tests {
 
         for (target_str, dest_str, expected_str) in test_cases {
             let expected = PathBuf::from(expected_str);
-            let target = ProjectRelativePath::new(target_str)?;
-            let dest = ProjectRelativePath::new(dest_str)?;
+            let target = AnchoredUnixPath::new(target_str)?;
+            let dest = AnchoredUnixPath::new(dest_str)?;
 
             let actual =
                 ProjectRoot::find_relative_path(&fs.path.resolve(target), &fs.path.resolve(dest));
@@ -938,7 +942,7 @@ mod tests {
         let fs = ProjectRootTemp::new()?;
 
         // We can delete a read-only file
-        let file = ProjectRelativePath::new("foo/bar/file")?;
+        let file = AnchoredUnixPath::new("foo/bar/file")?;
         let real_file = fs.path.resolve(file);
 
         fs.path.write_file(file, "Hello", false)?;
@@ -986,7 +990,7 @@ mod tests {
 
         let project_root = ProjectRootTemp::new().unwrap();
         let temp_dir = tempfile::tempdir().unwrap();
-        let temp_dir = AbsolutePath::new(temp_dir.path()).unwrap();
+        let temp_dir = AbsoluteSystemPath::new(temp_dir.path()).unwrap();
 
         fs_util::symlink(project_root.path.root(), temp_dir.join("foo")).unwrap();
         assert_eq!(
@@ -1037,7 +1041,7 @@ mod tests {
         assert!(!fs_util::try_exists(project_root.root().as_path().join(non_exist_path)).unwrap());
 
         assert_eq!(
-            ProjectRelativePath::new(non_exist_path).unwrap(),
+            AnchoredUnixPath::new(non_exist_path).unwrap(),
             project_root
                 .relativize_any(
                     project_root

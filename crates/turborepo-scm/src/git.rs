@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::anyhow;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath};
+use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::AnchoredUnixPath};
 
 use crate::Error;
 
@@ -64,11 +64,11 @@ pub fn changed_files(
 fn get_stripped_system_file_path(
     repo_root: &ProjectRoot,
     file_path: &Path,
-    monorepo_root: &ProjectRelativePath,
+    monorepo_root: &AnchoredUnixPath,
 ) -> Result<PathBuf, Error> {
     // We know the path is relative to the repo root so we can convert it to a
     // ProjectRelativePath
-    let project_relative_file_path = ProjectRelativePath::new(file_path)?;
+    let project_relative_file_path = AnchoredUnixPath::new(file_path)?;
     // Which we then resolve to an absolute path
     let absolute_file_path = repo_root.resolve(project_relative_file_path);
     // Then we call canonicalize to get a system path instead of a Unix style path
@@ -92,7 +92,7 @@ fn get_stripped_system_file_path(
 fn add_changed_files_from_unstaged_changes(
     repo_root: &ProjectRoot,
     repo: &Repository,
-    monorepo_root: &ProjectRelativePath,
+    monorepo_root: &AnchoredUnixPath,
     files: &mut HashSet<String>,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
@@ -124,7 +124,7 @@ fn add_changed_files_from_unstaged_changes(
 fn add_changed_files_from_commits(
     repo_root: &ProjectRoot,
     repo: &Repository,
-    monorepo_root: &ProjectRelativePath,
+    monorepo_root: &AnchoredUnixPath,
     files: &mut HashSet<String>,
     from_commit: &str,
     to_commit: &str,

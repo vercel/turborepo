@@ -20,7 +20,7 @@ use ref_cast::RefCast;
 use relative_path::RelativePath;
 use thiserror::Error;
 
-use crate::forward_relative_path::ForwardRelativePath;
+use crate::relative_forward_unix_path::RelativeForwardUnixPath;
 
 /// Errors from ForwardRelativePath creation
 #[derive(Error, Debug)]
@@ -93,10 +93,10 @@ impl AsRef<RelativePath> for FileName {
     }
 }
 
-impl AsRef<ForwardRelativePath> for FileName {
+impl AsRef<RelativeForwardUnixPath> for FileName {
     #[inline]
-    fn as_ref(&self) -> &ForwardRelativePath {
-        ForwardRelativePath::unchecked_new(&self.0)
+    fn as_ref(&self) -> &RelativeForwardUnixPath {
+        RelativeForwardUnixPath::unchecked_new(&self.0)
     }
 }
 
@@ -155,7 +155,7 @@ impl FileName {
     /// ```
     #[inline]
     pub fn file_stem(&self) -> Option<&str> {
-        ForwardRelativePath::unchecked_new(&self.0).file_stem()
+        RelativeForwardUnixPath::unchecked_new(&self.0).file_stem()
     }
 
     /// Extracts the extension of [`self.file_name`], if possible.
@@ -170,7 +170,7 @@ impl FileName {
     /// ```
     #[inline]
     pub fn extension(&self) -> Option<&str> {
-        ForwardRelativePath::unchecked_new(&self.0).extension()
+        RelativeForwardUnixPath::unchecked_new(&self.0).extension()
     }
 }
 
@@ -300,10 +300,10 @@ impl AsRef<RelativePath> for FileNameBuf {
     }
 }
 
-impl AsRef<ForwardRelativePath> for FileNameBuf {
+impl AsRef<RelativeForwardUnixPath> for FileNameBuf {
     #[inline]
-    fn as_ref(&self) -> &ForwardRelativePath {
-        ForwardRelativePath::unchecked_new(self.0.as_str())
+    fn as_ref(&self) -> &RelativeForwardUnixPath {
+        RelativeForwardUnixPath::unchecked_new(self.0.as_str())
     }
 }
 

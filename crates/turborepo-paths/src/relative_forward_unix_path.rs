@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::{
-    absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
+    absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf},
     file_name::{FileName, FileNameBuf},
     fs_util,
 };
@@ -35,7 +35,7 @@ use crate::{
 /// This path is platform agnostic, so path separators are always '/'.
 #[derive(Display, Debug, RefCast, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct ForwardRelativePath(
+pub struct RelativeForwardUnixPath(
     // Note we transmute between `ForwardRelativePath` and `str`.
     str,
 );
@@ -44,23 +44,23 @@ pub struct ForwardRelativePath(
 /// 'Path'
 #[derive(Clone, Display, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct ForwardRelativePathBuf(String);
+pub struct RelativeForwardUnixPathBuf(String);
 
-impl AsRef<RelativePath> for ForwardRelativePath {
+impl AsRef<RelativePath> for RelativeForwardUnixPath {
     #[inline]
     fn as_ref(&self) -> &RelativePath {
         RelativePath::new(&self.0)
     }
 }
 
-impl AsRef<RelativePath> for ForwardRelativePathBuf {
+impl AsRef<RelativePath> for RelativeForwardUnixPathBuf {
     #[inline]
     fn as_ref(&self) -> &RelativePath {
         RelativePath::new(&self.0)
     }
 }
 
-pub struct ForwardRelativePathIter<'a>(&'a ForwardRelativePath);
+pub struct ForwardRelativePathIter<'a>(&'a RelativeForwardUnixPath);
 
 impl<'a> Iterator for ForwardRelativePathIter<'a> {
     type Item = &'a FileName;
@@ -75,52 +75,52 @@ impl<'a> Iterator for ForwardRelativePathIter<'a> {
 
 impl<'a> Clone for ForwardRelativePathIter<'a> {
     fn clone(&self) -> Self {
-        ForwardRelativePathIter(ForwardRelativePath::unchecked_new(self.0.as_str()))
+        ForwardRelativePathIter(RelativeForwardUnixPath::unchecked_new(self.0.as_str()))
     }
 }
 
-impl ForwardRelativePath {
+impl RelativeForwardUnixPath {
     #[inline]
     pub fn unchecked_new<S: ?Sized + AsRef<str>>(s: &S) -> &Self {
-        ForwardRelativePath::ref_cast(s.as_ref())
+        RelativeForwardUnixPath::ref_cast(s.as_ref())
     }
 
     #[inline]
-    pub fn unchecked_new_box(s: Box<str>) -> Box<ForwardRelativePath> {
+    pub fn unchecked_new_box(s: Box<str>) -> Box<RelativeForwardUnixPath> {
         unsafe {
             // SAFETY: `ForwardRelativePath` is a transparent wrapper around `str`.
-            transmute!(Box<str>, Box<ForwardRelativePath>, s)
+            transmute!(Box<str>, Box<RelativeForwardUnixPath>, s)
         }
     }
 
     #[inline]
     pub fn empty() -> &'static Self {
-        ForwardRelativePath::unchecked_new("")
+        RelativeForwardUnixPath::unchecked_new("")
     }
 
     /// Creates an 'ForwardRelativePath' if the given path represents a forward,
     /// normalized relative path, otherwise error.
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     /// use std::path::Path;
     ///
-    /// assert!(ForwardRelativePath::new("foo/bar").is_ok());
-    /// assert!(ForwardRelativePath::new("").is_ok());
-    /// assert!(ForwardRelativePath::new("./bar").is_err());
-    /// assert!(ForwardRelativePath::new("normalize/./bar").is_err());
-    /// assert!(ForwardRelativePath::new("/abs/bar").is_err());
-    /// assert!(ForwardRelativePath::new("foo//bar").is_err());
-    /// assert!(ForwardRelativePath::new("normalize/../bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new("foo/bar").is_ok());
+    /// assert!(RelativeForwardUnixPath::new("").is_ok());
+    /// assert!(RelativeForwardUnixPath::new("./bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new("normalize/./bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new("/abs/bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new("foo//bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new("normalize/../bar").is_err());
     ///
-    /// assert!(ForwardRelativePath::new(Path::new("foo/bar")).is_ok());
-    /// assert!(ForwardRelativePath::new(Path::new("")).is_ok());
-    /// assert!(ForwardRelativePath::new(Path::new("./bar")).is_err());
-    /// assert!(ForwardRelativePath::new(Path::new("normalize/./bar")).is_err());
-    /// assert!(ForwardRelativePath::new(Path::new("/abs/bar")).is_err());
-    /// assert!(ForwardRelativePath::new(Path::new("normalize/../bar")).is_err());
-    /// assert!(ForwardRelativePath::new(Path::new("normalize\\bar")).is_err());
-    /// assert!(ForwardRelativePath::new(Path::new("normalize/bar/")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("foo/bar")).is_ok());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("")).is_ok());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("./bar")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("normalize/./bar")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("/abs/bar")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("normalize/../bar")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("normalize\\bar")).is_err());
+    /// assert!(RelativeForwardUnixPath::new(Path::new("normalize/bar/")).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
@@ -129,30 +129,30 @@ impl ForwardRelativePath {
     //   Conversion of `Path` to `ForwardRelativePath` should be done via
     //   `ForwardRelativePathBuf` which should normalize slashes.
     #[inline]
-    pub fn new<S: ?Sized + AsRef<Path>>(s: &S) -> anyhow::Result<&ForwardRelativePath> {
-        <&ForwardRelativePath>::try_from(s.as_ref())
+    pub fn new<S: ?Sized + AsRef<Path>>(s: &S) -> anyhow::Result<&RelativeForwardUnixPath> {
+        <&RelativeForwardUnixPath>::try_from(s.as_ref())
     }
 
     /// `ForwardRelativePath` requires no trailing slashes. This function
     /// constructs a path ignoring trailing slashes.
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo/bar").is_ok());
-    /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo/bar/").is_ok());
-    /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo/bar//").is_ok());
-    /// assert!(ForwardRelativePath::new_trim_trailing_slashes("foo//bar").is_err());
+    /// assert!(RelativeForwardUnixPath::new_trim_trailing_slashes("foo/bar").is_ok());
+    /// assert!(RelativeForwardUnixPath::new_trim_trailing_slashes("foo/bar/").is_ok());
+    /// assert!(RelativeForwardUnixPath::new_trim_trailing_slashes("foo/bar//").is_ok());
+    /// assert!(RelativeForwardUnixPath::new_trim_trailing_slashes("foo//bar").is_err());
     /// ```
     pub fn new_trim_trailing_slashes<S: ?Sized + AsRef<Path>>(
         path: &S,
-    ) -> anyhow::Result<&ForwardRelativePath> {
+    ) -> anyhow::Result<&RelativeForwardUnixPath> {
         let path = path.as_ref();
         let path = path
             .to_str()
             .ok_or_else(|| ForwardRelativePathError::PathNotUtf8(path.display().to_string()))?;
         let path = path.trim_end_matches('/');
-        ForwardRelativePath::new(path)
+        RelativeForwardUnixPath::new(path)
     }
 
     /// Build an owned `AbsPathBuf` relative to `path` for the current relative
@@ -161,24 +161,24 @@ impl ForwardRelativePath {
     /// ```
     /// 
     /// use std::path::Path;
-    /// use turborepo_paths::absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::absolute_forward_system_path::{AbsoluteForwardSystemPath, AbsoluteForwardSystemPathBuf};
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
     /// if cfg!(not(windows)) {
-    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsoluteNormalizedPath::new("/some")?);
-    ///     assert_eq!(AbsoluteNormalizedPathBuf::from("/some/foo/bar".into())?, path);
+    ///     let path = RelativeForwardUnixPath::new("foo/bar")?.resolve(AbsoluteForwardSystemPath::new("/some")?);
+    ///     assert_eq!(AbsoluteForwardSystemPathBuf::from("/some/foo/bar".into())?, path);
     /// } else {
-    ///     let path = ForwardRelativePath::new("foo/bar")?.resolve(AbsoluteNormalizedPath::new("c:/some")?);
-    ///     assert_eq!(AbsoluteNormalizedPathBuf::from("c:/some/foo/bar".into())?, path);
+    ///     let path = RelativeForwardUnixPath::new("foo/bar")?.resolve(AbsoluteForwardSystemPath::new("c:/some")?);
+    ///     assert_eq!(AbsoluteForwardSystemPathBuf::from("c:/some/foo/bar".into())?, path);
     /// }
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    pub fn resolve<P: AsRef<AbsoluteNormalizedPath>>(
+    pub fn resolve<P: AsRef<AbsoluteForwardSystemPath>>(
         &self,
         relative_to: P,
-    ) -> AbsoluteNormalizedPathBuf {
+    ) -> AbsoluteForwardSystemPathBuf {
         relative_to.as_ref().join(self)
     }
 
@@ -201,16 +201,16 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_relative_path::{ForwardRelativePathBuf, ForwardRelativePath};
+    /// use turborepo_paths::relative_forward_unix_path::{RelativeForwardUnixPathBuf, RelativeForwardUnixPath};
     ///
-    /// let path = ForwardRelativePath::new("foo/bar")?;
-    /// let other = ForwardRelativePath::new("baz")?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/baz".to_owned()), path.join(other));
+    /// let path = RelativeForwardUnixPath::new("foo/bar")?;
+    /// let other = RelativeForwardUnixPath::new("baz")?;
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/baz".to_owned()), path.join(other));
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    pub fn join<P: AsRef<ForwardRelativePath>>(&self, path: P) -> ForwardRelativePathBuf {
+    pub fn join<P: AsRef<RelativeForwardUnixPath>>(&self, path: P) -> RelativeForwardUnixPathBuf {
         let path = path.as_ref();
         if self.0.is_empty() {
             path.to_buf()
@@ -221,41 +221,41 @@ impl ForwardRelativePath {
             buf.push_str(&self.0);
             buf.push('/');
             buf.push_str(&path.0);
-            ForwardRelativePathBuf::unchecked_new(buf)
+            RelativeForwardUnixPathBuf::unchecked_new(buf)
         }
     }
 
     /// Returns a relative path of the parent directory
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
     /// assert_eq!(
-    ///     Some(ForwardRelativePath::new("foo")?),
-    ///     ForwardRelativePath::new("foo/bar")?.parent()
+    ///     Some(RelativeForwardUnixPath::new("foo")?),
+    ///     RelativeForwardUnixPath::new("foo/bar")?.parent()
     /// );
     /// assert_eq!(
-    ///     Some(ForwardRelativePath::new("")?),
-    ///     ForwardRelativePath::new("foo")?.parent()
+    ///     Some(RelativeForwardUnixPath::new("")?),
+    ///     RelativeForwardUnixPath::new("foo")?.parent()
     /// );
     /// assert_eq!(
     ///     None,
-    ///     ForwardRelativePath::new("")?.parent()
+    ///     RelativeForwardUnixPath::new("")?.parent()
     /// );
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn parent(&self) -> Option<&ForwardRelativePath> {
+    pub fn parent(&self) -> Option<&RelativeForwardUnixPath> {
         let s = &self.0;
         for i in (0..s.len()).rev() {
             if s.as_bytes()[i] == b'/' {
-                return Some(ForwardRelativePath::unchecked_new(&s[..i]));
+                return Some(RelativeForwardUnixPath::unchecked_new(&s[..i]));
             }
         }
         if s.is_empty() {
             None
         } else {
-            Some(ForwardRelativePath::empty())
+            Some(RelativeForwardUnixPath::empty())
         }
     }
 
@@ -266,13 +266,13 @@ impl ForwardRelativePath {
     /// a directory, this is the directory name.
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     /// use turborepo_paths::file_name::FileName;
     ///
-    /// assert_eq!(Some(FileName::unchecked_new("ls")), ForwardRelativePath::new("usr/bin/ls")?.file_name());
-    /// assert_eq!(Some(FileName::unchecked_new("bin")), ForwardRelativePath::new("usr/bin")?.file_name());
-    /// assert_eq!(Some(FileName::unchecked_new("usr")), ForwardRelativePath::new("usr")?.file_name());
-    /// assert_eq!(None, ForwardRelativePath::new("")?.file_name());
+    /// assert_eq!(Some(FileName::unchecked_new("ls")), RelativeForwardUnixPath::new("usr/bin/ls")?.file_name());
+    /// assert_eq!(Some(FileName::unchecked_new("bin")), RelativeForwardUnixPath::new("usr/bin")?.file_name());
+    /// assert_eq!(Some(FileName::unchecked_new("usr")), RelativeForwardUnixPath::new("usr")?.file_name());
+    /// assert_eq!(None, RelativeForwardUnixPath::new("")?.file_name());
     ///
     /// # anyhow::Ok(())
     /// ```
@@ -292,20 +292,20 @@ impl ForwardRelativePath {
 
     /// Get the first component of the path and the remaining path,
     /// of `None` if the path is empty.
-    pub fn split_first(&self) -> Option<(&FileName, &ForwardRelativePath)> {
+    pub fn split_first(&self) -> Option<(&FileName, &RelativeForwardUnixPath)> {
         let s = &self.0;
         for (i, b) in s.bytes().enumerate() {
             if b == b'/' {
                 return Some((
                     FileName::unchecked_new(&s[..i]),
-                    ForwardRelativePath::unchecked_new(&s[i + 1..]),
+                    RelativeForwardUnixPath::unchecked_new(&s[i + 1..]),
                 ));
             }
         }
         if s.is_empty() {
             None
         } else {
-            Some((FileName::unchecked_new(s), ForwardRelativePath::empty()))
+            Some((FileName::unchecked_new(s), RelativeForwardUnixPath::empty()))
         }
     }
 
@@ -316,42 +316,42 @@ impl ForwardRelativePath {
     /// path is not a 'ForwardRelativePath'
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let path = ForwardRelativePath::new("test/haha/foo.txt")?;
+    /// let path = RelativeForwardUnixPath::new("test/haha/foo.txt")?;
     ///
     /// assert_eq!(
-    ///     path.strip_prefix(ForwardRelativePath::new("test/haha/foo.txt")?)?,
-    ///     ForwardRelativePath::new("")?
+    ///     path.strip_prefix(RelativeForwardUnixPath::new("test/haha/foo.txt")?)?,
+    ///     RelativeForwardUnixPath::new("")?
     /// );
     /// assert_eq!(
-    ///     path.strip_prefix(ForwardRelativePath::new("test/haha")?)?,
-    ///     ForwardRelativePath::new("foo.txt")?
+    ///     path.strip_prefix(RelativeForwardUnixPath::new("test/haha")?)?,
+    ///     RelativeForwardUnixPath::new("foo.txt")?
     /// );
     /// assert_eq!(
-    ///     path.strip_prefix(ForwardRelativePath::new("test")?)?,
-    ///     ForwardRelativePath::new("haha/foo.txt")?
+    ///     path.strip_prefix(RelativeForwardUnixPath::new("test")?)?,
+    ///     RelativeForwardUnixPath::new("haha/foo.txt")?
     /// );
     /// assert_eq!(
-    ///     path.strip_prefix(ForwardRelativePath::new("")?)?,
-    ///     ForwardRelativePath::new("test/haha/foo.txt")?
+    ///     path.strip_prefix(RelativeForwardUnixPath::new("")?)?,
+    ///     RelativeForwardUnixPath::new("test/haha/foo.txt")?
     /// );
-    /// assert_eq!(path.strip_prefix(ForwardRelativePath::new("asdf")?).is_err(), true);
+    /// assert_eq!(path.strip_prefix(RelativeForwardUnixPath::new("asdf")?).is_err(), true);
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn strip_prefix<P: AsRef<ForwardRelativePath>>(
+    pub fn strip_prefix<P: AsRef<RelativeForwardUnixPath>>(
         &self,
         base: P,
-    ) -> anyhow::Result<&ForwardRelativePath> {
+    ) -> anyhow::Result<&RelativeForwardUnixPath> {
         let base = base.as_ref();
         if base.0.is_empty() {
             Ok(self)
         } else if self.starts_with(base) {
             if self.0.len() == base.0.len() {
-                Ok(ForwardRelativePath::empty())
+                Ok(RelativeForwardUnixPath::empty())
             } else {
-                Ok(ForwardRelativePath::unchecked_new(
+                Ok(RelativeForwardUnixPath::unchecked_new(
                     &self.0[base.0.len() + 1..],
                 ))
             }
@@ -364,18 +364,18 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let path = ForwardRelativePath::new("some/foo")?;
+    /// let path = RelativeForwardUnixPath::new("some/foo")?;
     ///
-    /// assert!(path.starts_with(ForwardRelativePath::new("some/foo")?));
-    /// assert!(path.starts_with(ForwardRelativePath::new("some")?));
-    /// assert!(!path.starts_with(ForwardRelativePath::new("som")?));
-    /// assert!(path.starts_with(ForwardRelativePath::new("")?));
+    /// assert!(path.starts_with(RelativeForwardUnixPath::new("some/foo")?));
+    /// assert!(path.starts_with(RelativeForwardUnixPath::new("some")?));
+    /// assert!(!path.starts_with(RelativeForwardUnixPath::new("som")?));
+    /// assert!(path.starts_with(RelativeForwardUnixPath::new("")?));
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn starts_with<P: AsRef<ForwardRelativePath>>(&self, base: P) -> bool {
+    pub fn starts_with<P: AsRef<RelativeForwardUnixPath>>(&self, base: P) -> bool {
         let base = base.as_ref();
         base.0.is_empty()
             || (self.0.starts_with(&base.0)
@@ -387,18 +387,18 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use std::path::Path;
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let path = ForwardRelativePath::new("some/foo")?;
+    /// let path = RelativeForwardUnixPath::new("some/foo")?;
     ///
-    /// assert!(path.ends_with(ForwardRelativePath::new("some/foo")?));
-    /// assert!(path.ends_with(ForwardRelativePath::new("foo")?));
-    /// assert!(!path.ends_with(ForwardRelativePath::new("oo")?));
-    /// assert!(path.ends_with(ForwardRelativePath::new("")?));
+    /// assert!(path.ends_with(RelativeForwardUnixPath::new("some/foo")?));
+    /// assert!(path.ends_with(RelativeForwardUnixPath::new("foo")?));
+    /// assert!(!path.ends_with(RelativeForwardUnixPath::new("oo")?));
+    /// assert!(path.ends_with(RelativeForwardUnixPath::new("")?));
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn ends_with<P: AsRef<ForwardRelativePath>>(&self, child: P) -> bool {
+    pub fn ends_with<P: AsRef<RelativeForwardUnixPath>>(&self, child: P) -> bool {
         let child = child.as_ref();
         child.0.is_empty()
             || (self.0.ends_with(&child.0)
@@ -417,12 +417,12 @@ impl ForwardRelativePath {
     /// * Otherwise, the portion of the file name before the final `.`
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let path = ForwardRelativePath::new("foo.rs")?;
+    /// let path = RelativeForwardUnixPath::new("foo.rs")?;
     ///
     /// assert_eq!(Some("foo"), path.file_stem());
-    /// assert_eq!(Some("foo.bar"), ForwardRelativePath::new("hi/foo.bar.rs")?.file_stem());
+    /// assert_eq!(Some("foo.bar"), RelativeForwardUnixPath::new("hi/foo.bar.rs")?.file_stem());
     ///
     /// # anyhow::Ok(())
     /// ```
@@ -444,13 +444,13 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// assert_eq!(Some("rs"), ForwardRelativePath::new("hi/foo.rs")?.extension());
-    /// assert_eq!(Some("rs"), ForwardRelativePath::new("hi/foo.bar.rs")?.extension());
-    /// assert_eq!(None, ForwardRelativePath::new(".git")?.extension());
-    /// assert_eq!(None, ForwardRelativePath::new("foo/.git")?.extension());
-    /// assert_eq!(None, ForwardRelativePath::new("")?.extension());
+    /// assert_eq!(Some("rs"), RelativeForwardUnixPath::new("hi/foo.rs")?.extension());
+    /// assert_eq!(Some("rs"), RelativeForwardUnixPath::new("hi/foo.bar.rs")?.extension());
+    /// assert_eq!(None, RelativeForwardUnixPath::new(".git")?.extension());
+    /// assert_eq!(None, RelativeForwardUnixPath::new("foo/.git")?.extension());
+    /// assert_eq!(None, RelativeForwardUnixPath::new("")?.extension());
     ///
     /// # anyhow::Ok(())
     /// ```
@@ -480,15 +480,15 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
+    /// use turborepo_paths::relative_forward_unix_path::{RelativeForwardUnixPath, RelativeForwardUnixPathBuf};
     ///
     /// assert_eq!(
-    ///     ForwardRelativePathBuf::unchecked_new("foo/baz.txt".into()),
-    ///     ForwardRelativePath::new("foo/bar")?.join_normalized("../baz.txt")?,
+    ///     RelativeForwardUnixPathBuf::unchecked_new("foo/baz.txt".into()),
+    ///     RelativeForwardUnixPath::new("foo/bar")?.join_normalized("../baz.txt")?,
     /// );
     ///
     /// assert_eq!(
-    ///     ForwardRelativePath::new("foo")?.join_normalized("../../baz.txt").is_err(),
+    ///     RelativeForwardUnixPath::new("foo")?.join_normalized("../../baz.txt").is_err(),
     ///     true
     /// );
     ///
@@ -497,17 +497,17 @@ impl ForwardRelativePath {
     pub fn join_normalized<P: AsRef<RelativePath>>(
         &self,
         path: P,
-    ) -> anyhow::Result<ForwardRelativePathBuf> {
+    ) -> anyhow::Result<RelativeForwardUnixPathBuf> {
         let self_rel_path: &RelativePath = self.as_ref();
         let inner = self_rel_path.join_normalized(path.as_ref());
-        ForwardRelativePathBuf::try_from(inner)
+        RelativeForwardUnixPathBuf::try_from(inner)
     }
 
     /// Append a relative system path, obtained frome e.g. `read_link`.
     ///
     /// The path will be converted to an internal path (i.e. forward slashes)
     /// before joining.
-    pub fn join_system(&self, path: &Path) -> anyhow::Result<ForwardRelativePathBuf> {
+    pub fn join_system(&self, path: &Path) -> anyhow::Result<RelativeForwardUnixPathBuf> {
         let path = fs_util::relative_path_from_system(path)?;
         self.join_normalized(path)
     }
@@ -516,9 +516,9 @@ impl ForwardRelativePath {
     ///
     /// ```
     /// use turborepo_paths::file_name::FileName;
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let p = ForwardRelativePath::new("foo/bar/baz")?;
+    /// let p = RelativeForwardUnixPath::new("foo/bar/baz")?;
     /// let mut it = p.iter();
     ///
     /// assert_eq!(
@@ -553,24 +553,24 @@ impl ForwardRelativePath {
     /// returning the remaining path or `None` if there were none left.
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     ///
-    /// let p = ForwardRelativePath::new("foo/bar/baz")?;
+    /// let p = RelativeForwardUnixPath::new("foo/bar/baz")?;
     /// assert_eq!(
     ///     p.strip_prefix_components(0),
-    ///     Some(ForwardRelativePath::new("foo/bar/baz")?),
+    ///     Some(RelativeForwardUnixPath::new("foo/bar/baz")?),
     /// );
     /// assert_eq!(
     ///     p.strip_prefix_components(1),
-    ///     Some(ForwardRelativePath::new("bar/baz")?),
+    ///     Some(RelativeForwardUnixPath::new("bar/baz")?),
     /// );
     /// assert_eq!(
     ///     p.strip_prefix_components(2),
-    ///     Some(ForwardRelativePath::new("baz")?),
+    ///     Some(RelativeForwardUnixPath::new("baz")?),
     /// );
     /// assert_eq!(
     ///     p.strip_prefix_components(3),
-    ///     Some(ForwardRelativePath::new("")?),
+    ///     Some(RelativeForwardUnixPath::new("")?),
     /// );
     /// assert_eq!(
     ///     p.strip_prefix_components(4),
@@ -587,11 +587,11 @@ impl ForwardRelativePath {
     }
 
     #[inline]
-    pub fn to_buf(&self) -> ForwardRelativePathBuf {
+    pub fn to_buf(&self) -> RelativeForwardUnixPathBuf {
         self.to_owned()
     }
 
-    pub fn to_box(&self) -> Box<ForwardRelativePath> {
+    pub fn to_box(&self) -> Box<RelativeForwardUnixPath> {
         self.to_buf().into_box()
     }
 
@@ -602,11 +602,11 @@ impl ForwardRelativePath {
     }
 }
 
-impl ForwardRelativePathBuf {
+impl RelativeForwardUnixPathBuf {
     #[inline]
-    pub fn new(s: String) -> anyhow::Result<ForwardRelativePathBuf> {
-        ForwardRelativePath::new(&s)?;
-        Ok(ForwardRelativePathBuf(s))
+    pub fn new(s: String) -> anyhow::Result<RelativeForwardUnixPathBuf> {
+        RelativeForwardUnixPath::new(&s)?;
+        Ok(RelativeForwardUnixPathBuf(s))
     }
 
     #[inline]
@@ -654,26 +654,26 @@ impl ForwardRelativePathBuf {
     /// Pushes a `ForwardRelativePath` to the existing buffer
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
+    /// use turborepo_paths::relative_forward_unix_path::{RelativeForwardUnixPath, RelativeForwardUnixPathBuf};
     ///
-    /// let mut path = ForwardRelativePathBuf::unchecked_new("foo".to_owned());
-    /// path.push(ForwardRelativePath::unchecked_new("bar"));
+    /// let mut path = RelativeForwardUnixPathBuf::unchecked_new("foo".to_owned());
+    /// path.push(RelativeForwardUnixPath::unchecked_new("bar"));
     ///
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar".to_owned()), path);
     ///
-    /// path.push(ForwardRelativePath::unchecked_new("more/file.rs"));
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
+    /// path.push(RelativeForwardUnixPath::unchecked_new("more/file.rs"));
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
     ///
-    /// path.push(ForwardRelativePath::empty());
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
+    /// path.push(RelativeForwardUnixPath::empty());
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
     ///
-    /// let mut path = ForwardRelativePathBuf::unchecked_new("".to_owned());
-    /// path.push(ForwardRelativePath::unchecked_new("foo"));
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo".to_owned()), path);
+    /// let mut path = RelativeForwardUnixPathBuf::unchecked_new("".to_owned());
+    /// path.push(RelativeForwardUnixPath::unchecked_new("foo"));
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo".to_owned()), path);
     ///
     /// # anyhow::Ok(())
     /// ```
-    pub fn push<P: AsRef<ForwardRelativePath>>(&mut self, path: P) {
+    pub fn push<P: AsRef<RelativeForwardUnixPath>>(&mut self, path: P) {
         if path.as_ref().0.is_empty() {
             return;
         }
@@ -684,9 +684,9 @@ impl ForwardRelativePathBuf {
         self.0.push_str(path.as_ref().as_str())
     }
 
-    pub fn concat<'a, I: IntoIterator<Item = &'a ForwardRelativePath> + Copy>(
+    pub fn concat<'a, I: IntoIterator<Item = &'a RelativeForwardUnixPath> + Copy>(
         items: I,
-    ) -> ForwardRelativePathBuf {
+    ) -> RelativeForwardUnixPathBuf {
         let mut cap = 0;
         for item in items {
             if !item.is_empty() {
@@ -697,7 +697,7 @@ impl ForwardRelativePathBuf {
                 cap += item.0.len();
             }
         }
-        let mut path = ForwardRelativePathBuf::with_capacity(cap);
+        let mut path = RelativeForwardUnixPathBuf::with_capacity(cap);
         for item in items {
             path.push(item);
         }
@@ -713,28 +713,28 @@ impl ForwardRelativePathBuf {
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPathBuf;
     /// use turborepo_paths::RelativePath;
     ///
-    /// let mut path = ForwardRelativePathBuf::unchecked_new("foo".to_owned());
+    /// let mut path = RelativeForwardUnixPathBuf::unchecked_new("foo".to_owned());
     /// path.push_normalized(RelativePath::new("bar"))?;
     ///
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar".to_owned()), path);
     ///
     /// path.push_normalized(RelativePath::new("more/file.rs"))?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/more/file.rs".to_owned()), path);
     ///
     /// path.push_normalized(RelativePath::new("../other.rs"))?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/more/other.rs".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/more/other.rs".to_owned()), path);
     ///
     /// path.push_normalized(RelativePath::new(".."))?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo/bar/more".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo/bar/more".to_owned()), path);
     ///
     /// path.push_normalized(RelativePath::new("../.."))?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("foo".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("foo".to_owned()), path);
     ///
     /// path.push_normalized(RelativePath::new(".."))?;
-    /// assert_eq!(ForwardRelativePathBuf::unchecked_new("".to_owned()), path);
+    /// assert_eq!(RelativeForwardUnixPathBuf::unchecked_new("".to_owned()), path);
     ///
     /// assert!(path.push_normalized(RelativePath::new("..")).is_err());
     ///
@@ -828,9 +828,9 @@ impl ForwardRelativePathBuf {
         self.0
     }
 
-    pub fn into_box(self) -> Box<ForwardRelativePath> {
+    pub fn into_box(self) -> Box<RelativeForwardUnixPath> {
         let s: Box<str> = self.0.into_boxed_str();
-        ForwardRelativePath::unchecked_new_box(s)
+        RelativeForwardUnixPath::unchecked_new_box(s)
     }
 }
 
@@ -852,7 +852,7 @@ enum ForwardRelativePathError {
 #[error("`{0}` is not a base of `{1}`")]
 pub struct StripPrefixError(String, String);
 
-impl<'a> IntoIterator for &'a ForwardRelativePath {
+impl<'a> IntoIterator for &'a RelativeForwardUnixPath {
     type Item = &'a FileName;
     type IntoIter = ForwardRelativePathIter<'a>;
 
@@ -862,216 +862,216 @@ impl<'a> IntoIterator for &'a ForwardRelativePath {
     }
 }
 
-impl<'a> TryFrom<&'a str> for &'a ForwardRelativePath {
+impl<'a> TryFrom<&'a str> for &'a RelativeForwardUnixPath {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     /// use std::convert::TryFrom;
     ///
-    /// assert!(<&ForwardRelativePath>::try_from("foo/bar").is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from("").is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from("./bar").is_err());
-    /// assert!(<&ForwardRelativePath>::try_from("normalize/./bar").is_err());
-    /// assert!(<&ForwardRelativePath>::try_from("/abs/bar").is_err());
-    /// assert!(<&ForwardRelativePath>::try_from("normalize/../bar").is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("foo/bar").is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("").is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("./bar").is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("normalize/./bar").is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("/abs/bar").is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from("normalize/../bar").is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    fn try_from(s: &'a str) -> anyhow::Result<&'a ForwardRelativePath> {
+    fn try_from(s: &'a str) -> anyhow::Result<&'a RelativeForwardUnixPath> {
         ForwardRelativePathVerifier::verify_str(s)?;
-        Ok(ForwardRelativePath::ref_cast(s))
+        Ok(RelativeForwardUnixPath::ref_cast(s))
     }
 }
 
-impl<'a> From<&'a FileName> for &'a ForwardRelativePath {
+impl<'a> From<&'a FileName> for &'a RelativeForwardUnixPath {
     #[inline]
     fn from(p: &'a FileName) -> Self {
-        ForwardRelativePath::unchecked_new(p.as_str())
+        RelativeForwardUnixPath::unchecked_new(p.as_str())
     }
 }
 
-impl<'a> TryFrom<&'a Path> for &'a ForwardRelativePath {
+impl<'a> TryFrom<&'a Path> for &'a RelativeForwardUnixPath {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     /// use std::convert::TryFrom;
     /// use std::path::Path;
     ///
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("foo/bar")).is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("")).is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("./bar")).is_err());
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("normalize/./bar")).is_err());
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("/abs/bar")).is_err());
-    /// assert!(<&ForwardRelativePath>::try_from(Path::new("normalize/../bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("foo/bar")).is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("")).is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("./bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("normalize/./bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("/abs/bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(Path::new("normalize/../bar")).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
-    fn try_from(s: &'a Path) -> anyhow::Result<&'a ForwardRelativePath> {
+    fn try_from(s: &'a Path) -> anyhow::Result<&'a RelativeForwardUnixPath> {
         let s = s
             .as_os_str()
             .to_str()
             .ok_or_else(|| ForwardRelativePathError::PathNotUtf8(s.display().to_string()))?;
         ForwardRelativePathVerifier::verify_str(s)?;
-        Ok(ForwardRelativePath::unchecked_new(s))
+        Ok(RelativeForwardUnixPath::unchecked_new(s))
     }
 }
 
-impl<'a> TryFrom<&'a RelativePath> for &'a ForwardRelativePath {
+impl<'a> TryFrom<&'a RelativePath> for &'a RelativeForwardUnixPath {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePath;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPath;
     /// use std::convert::TryFrom;
     /// use turborepo_paths::RelativePath;
     ///
-    /// assert!(<&ForwardRelativePath>::try_from(RelativePath::new("foo/bar")).is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from(RelativePath::new("")).is_ok());
-    /// assert!(<&ForwardRelativePath>::try_from(RelativePath::new("./bar")).is_err());
-    /// assert!(<&ForwardRelativePath>::try_from(RelativePath::new("normalize/./bar")).is_err());
-    /// assert!(<&ForwardRelativePath>::try_from(RelativePath::new("normalize/../bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(RelativePath::new("foo/bar")).is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(RelativePath::new("")).is_ok());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(RelativePath::new("./bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(RelativePath::new("normalize/./bar")).is_err());
+    /// assert!(<&RelativeForwardUnixPath>::try_from(RelativePath::new("normalize/../bar")).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    fn try_from(p: &'a RelativePath) -> anyhow::Result<&'a ForwardRelativePath> {
+    fn try_from(p: &'a RelativePath) -> anyhow::Result<&'a RelativeForwardUnixPath> {
         ForwardRelativePathVerifier::verify_str(p.as_str())?;
-        Ok(ForwardRelativePath::unchecked_new(p.as_str()))
+        Ok(RelativeForwardUnixPath::unchecked_new(p.as_str()))
     }
 }
 
-impl From<ForwardRelativePathBuf> for RelativePathBuf {
-    fn from(p: ForwardRelativePathBuf) -> Self {
+impl From<RelativeForwardUnixPathBuf> for RelativePathBuf {
+    fn from(p: RelativeForwardUnixPathBuf) -> Self {
         RelativePathBuf::from(p.0)
     }
 }
 
-impl TryFrom<String> for ForwardRelativePathBuf {
+impl TryFrom<String> for RelativeForwardUnixPathBuf {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
     /// 
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPathBuf;
     /// use std::convert::TryFrom;
     ///
-    /// assert!(ForwardRelativePathBuf::try_from("foo/bar".to_owned()).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from("".to_owned()).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from("./bar".to_owned()).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from("normalize/./bar".to_owned()).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from("/abs/bar".to_owned()).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from("normalize/../bar".to_owned()).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("foo/bar".to_owned()).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("".to_owned()).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("./bar".to_owned()).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("normalize/./bar".to_owned()).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("/abs/bar".to_owned()).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from("normalize/../bar".to_owned()).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    fn try_from(s: String) -> anyhow::Result<ForwardRelativePathBuf> {
+    fn try_from(s: String) -> anyhow::Result<RelativeForwardUnixPathBuf> {
         ForwardRelativePathVerifier::verify_str(&s)?;
-        Ok(ForwardRelativePathBuf(s))
+        Ok(RelativeForwardUnixPathBuf(s))
     }
 }
 
-impl TryFrom<PathBuf> for ForwardRelativePathBuf {
+impl TryFrom<PathBuf> for RelativeForwardUnixPathBuf {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPathBuf;
     /// use turborepo_paths::RelativePathBuf;
     /// use std::convert::TryFrom;
     /// use std::path::PathBuf;
     ///
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("foo/bar")).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("")).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("./bar")).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("normalize/./bar")).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("/abs/bar")).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from(PathBuf::from("normalize/../bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("foo/bar")).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("")).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("./bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("normalize/./bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("/abs/bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(PathBuf::from("normalize/../bar")).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
-    fn try_from(p: PathBuf) -> anyhow::Result<ForwardRelativePathBuf> {
+    fn try_from(p: PathBuf) -> anyhow::Result<RelativeForwardUnixPathBuf> {
         // RelativePathBuf::from_path actually creates a copy.
         // avoid the copy by constructing RelativePathBuf from the underlying String
-        ForwardRelativePathBuf::try_from(p.into_os_string().into_string().map_err(|_| {
+        RelativeForwardUnixPathBuf::try_from(p.into_os_string().into_string().map_err(|_| {
             relative_path::FromPathError::from(relative_path::FromPathErrorKind::NonUtf8)
         })?)
     }
 }
 
-impl TryFrom<RelativePathBuf> for ForwardRelativePathBuf {
+impl TryFrom<RelativePathBuf> for RelativeForwardUnixPathBuf {
     type Error = anyhow::Error;
 
     /// no allocation conversion
     ///
     /// ```
-    /// use turborepo_paths::forward_relative_path::ForwardRelativePathBuf;
+    /// use turborepo_paths::relative_forward_unix_path::RelativeForwardUnixPathBuf;
     /// use turborepo_paths::RelativePathBuf;
     /// use std::convert::TryFrom;
     ///
-    /// assert!(ForwardRelativePathBuf::try_from(RelativePathBuf::from("foo/bar")).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from(RelativePathBuf::from("")).is_ok());
-    /// assert!(ForwardRelativePathBuf::try_from(RelativePathBuf::from("./bar")).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from(RelativePathBuf::from("normalize/./bar")).is_err());
-    /// assert!(ForwardRelativePathBuf::try_from(RelativePathBuf::from("normalize/../bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(RelativePathBuf::from("foo/bar")).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(RelativePathBuf::from("")).is_ok());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(RelativePathBuf::from("./bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(RelativePathBuf::from("normalize/./bar")).is_err());
+    /// assert!(RelativeForwardUnixPathBuf::try_from(RelativePathBuf::from("normalize/../bar")).is_err());
     ///
     /// # anyhow::Ok(())
     /// ```
     #[inline]
-    fn try_from(p: RelativePathBuf) -> anyhow::Result<ForwardRelativePathBuf> {
-        ForwardRelativePathBuf::try_from(p.into_string())
+    fn try_from(p: RelativePathBuf) -> anyhow::Result<RelativeForwardUnixPathBuf> {
+        RelativeForwardUnixPathBuf::try_from(p.into_string())
     }
 }
 
-impl ToOwned for ForwardRelativePath {
-    type Owned = ForwardRelativePathBuf;
+impl ToOwned for RelativeForwardUnixPath {
+    type Owned = RelativeForwardUnixPathBuf;
 
     #[inline]
-    fn to_owned(&self) -> ForwardRelativePathBuf {
-        ForwardRelativePathBuf::unchecked_new(self.0.to_owned())
+    fn to_owned(&self) -> RelativeForwardUnixPathBuf {
+        RelativeForwardUnixPathBuf::unchecked_new(self.0.to_owned())
     }
 }
 
-impl AsRef<ForwardRelativePath> for ForwardRelativePath {
+impl AsRef<RelativeForwardUnixPath> for RelativeForwardUnixPath {
     #[inline]
-    fn as_ref(&self) -> &ForwardRelativePath {
+    fn as_ref(&self) -> &RelativeForwardUnixPath {
         self
     }
 }
 
-impl AsRef<ForwardRelativePath> for ForwardRelativePathBuf {
+impl AsRef<RelativeForwardUnixPath> for RelativeForwardUnixPathBuf {
     #[inline]
-    fn as_ref(&self) -> &ForwardRelativePath {
-        ForwardRelativePath::unchecked_new(&self.0)
+    fn as_ref(&self) -> &RelativeForwardUnixPath {
+        RelativeForwardUnixPath::unchecked_new(&self.0)
     }
 }
 
-impl Borrow<ForwardRelativePath> for ForwardRelativePathBuf {
+impl Borrow<RelativeForwardUnixPath> for RelativeForwardUnixPathBuf {
     #[inline]
-    fn borrow(&self) -> &ForwardRelativePath {
+    fn borrow(&self) -> &RelativeForwardUnixPath {
         self.as_ref()
     }
 }
 
-impl Deref for ForwardRelativePathBuf {
-    type Target = ForwardRelativePath;
+impl Deref for RelativeForwardUnixPathBuf {
+    type Target = RelativeForwardUnixPath;
 
     #[inline]
-    fn deref(&self) -> &ForwardRelativePath {
-        ForwardRelativePath::unchecked_new(&self.0)
+    fn deref(&self) -> &RelativeForwardUnixPath {
+        RelativeForwardUnixPath::unchecked_new(&self.0)
     }
 }
 
@@ -1081,7 +1081,7 @@ pub struct ForwardRelativePathNormalizer {}
 impl ForwardRelativePathNormalizer {
     pub fn normalize_path<P: AsRef<Path> + ?Sized>(
         rel_path: &P,
-    ) -> anyhow::Result<Cow<ForwardRelativePath>> {
+    ) -> anyhow::Result<Cow<RelativeForwardUnixPath>> {
         let rel_path = rel_path.as_ref();
         if !rel_path.is_relative() {
             return Err(anyhow::anyhow!(ForwardRelativePathError::PathNotRelative(
@@ -1094,11 +1094,11 @@ impl ForwardRelativePathNormalizer {
         let bytes = path_str.as_bytes();
         if cfg!(windows) && memchr::memchr(b'\\', bytes).is_some() {
             let normalized_path = path_str.replace('\\', "/");
-            Ok(Cow::Owned(ForwardRelativePathBuf::try_from(
+            Ok(Cow::Owned(RelativeForwardUnixPathBuf::try_from(
                 normalized_path,
             )?))
         } else {
-            Ok(Cow::Borrowed(ForwardRelativePath::new(path_str)?))
+            Ok(Cow::Borrowed(RelativeForwardUnixPath::new(path_str)?))
         }
     }
 }
@@ -1161,7 +1161,7 @@ impl ForwardRelativePathVerifier {
     }
 }
 
-impl<'a> FromIterator<&'a FileName> for Option<ForwardRelativePathBuf> {
+impl<'a> FromIterator<&'a FileName> for Option<RelativeForwardUnixPathBuf> {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = &'a FileName>,
@@ -1170,7 +1170,7 @@ impl<'a> FromIterator<&'a FileName> for Option<ForwardRelativePathBuf> {
     }
 }
 
-impl<'a> FromIterator<&'a FileNameBuf> for Option<ForwardRelativePathBuf> {
+impl<'a> FromIterator<&'a FileNameBuf> for Option<RelativeForwardUnixPathBuf> {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = &'a FileNameBuf>,
@@ -1181,7 +1181,7 @@ impl<'a> FromIterator<&'a FileNameBuf> for Option<ForwardRelativePathBuf> {
     }
 }
 
-fn from_iter<'a, const N: usize, I>(iter: I) -> Option<ForwardRelativePathBuf>
+fn from_iter<'a, const N: usize, I>(iter: I) -> Option<RelativeForwardUnixPathBuf>
 where
     I: IntoIterator<Item = &'a FileName>,
 {
@@ -1210,25 +1210,25 @@ where
     if ret.is_empty() {
         None
     } else {
-        Some(ForwardRelativePathBuf(ret))
+        Some(RelativeForwardUnixPathBuf(ret))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::forward_relative_path::{
-        from_iter, FileName, ForwardRelativePath, ForwardRelativePathBuf,
+    use crate::relative_forward_unix_path::{
+        from_iter, FileName, RelativeForwardUnixPath, RelativeForwardUnixPathBuf,
     };
 
     #[test]
     fn forward_path_is_comparable() -> anyhow::Result<()> {
-        let path1_buf = ForwardRelativePathBuf::unchecked_new("foo".into());
-        let path2_buf = ForwardRelativePathBuf::unchecked_new("foo".into());
-        let path3_buf = ForwardRelativePathBuf::unchecked_new("bar".into());
+        let path1_buf = RelativeForwardUnixPathBuf::unchecked_new("foo".into());
+        let path2_buf = RelativeForwardUnixPathBuf::unchecked_new("foo".into());
+        let path3_buf = RelativeForwardUnixPathBuf::unchecked_new("bar".into());
 
-        let path1 = ForwardRelativePath::new("foo")?;
-        let path2 = ForwardRelativePath::new("foo")?;
-        let path3 = ForwardRelativePath::new("bar")?;
+        let path1 = RelativeForwardUnixPath::new("foo")?;
+        let path2 = RelativeForwardUnixPath::new("foo")?;
+        let path3 = RelativeForwardUnixPath::new("bar")?;
 
         let str2 = "foo";
         let str3 = "bar";
@@ -1269,22 +1269,22 @@ mod tests {
     #[test]
     fn test_concat() {
         assert_eq!(
-            ForwardRelativePath::new("").unwrap(),
-            AsRef::<ForwardRelativePath>::as_ref(&ForwardRelativePathBuf::concat([]))
+            RelativeForwardUnixPath::new("").unwrap(),
+            AsRef::<RelativeForwardUnixPath>::as_ref(&RelativeForwardUnixPathBuf::concat([]))
         );
         assert_eq!(
-            ForwardRelativePath::new("foo/bar/baz").unwrap(),
-            AsRef::<ForwardRelativePath>::as_ref(&ForwardRelativePathBuf::concat([
-                ForwardRelativePath::new("foo").unwrap(),
-                ForwardRelativePath::new("bar/baz").unwrap(),
+            RelativeForwardUnixPath::new("foo/bar/baz").unwrap(),
+            AsRef::<RelativeForwardUnixPath>::as_ref(&RelativeForwardUnixPathBuf::concat([
+                RelativeForwardUnixPath::new("foo").unwrap(),
+                RelativeForwardUnixPath::new("bar/baz").unwrap(),
             ]))
         );
         assert_eq!(
-            ForwardRelativePath::new("foo/bar/baz").unwrap(),
-            AsRef::<ForwardRelativePath>::as_ref(&ForwardRelativePathBuf::concat([
-                ForwardRelativePath::new("").unwrap(),
-                ForwardRelativePath::new("foo").unwrap(),
-                ForwardRelativePath::new("bar/baz").unwrap(),
+            RelativeForwardUnixPath::new("foo/bar/baz").unwrap(),
+            AsRef::<RelativeForwardUnixPath>::as_ref(&RelativeForwardUnixPathBuf::concat([
+                RelativeForwardUnixPath::new("").unwrap(),
+                RelativeForwardUnixPath::new("foo").unwrap(),
+                RelativeForwardUnixPath::new("bar/baz").unwrap(),
             ]))
         );
     }
@@ -1296,7 +1296,7 @@ mod tests {
             .map(FileName::unchecked_new)
             .collect::<Vec<_>>();
 
-        let expected = Some(ForwardRelativePath::unchecked_new("foo/bar/baz").to_buf());
+        let expected = Some(RelativeForwardUnixPath::unchecked_new("foo/bar/baz").to_buf());
 
         assert_eq!(from_iter::<1, _>(parts.iter().copied()), expected);
         assert_eq!(from_iter::<2, _>(parts.iter().copied()), expected);

@@ -11,7 +11,7 @@ use gazebo::prelude::IterOwned;
 
 use crate::{
     file_name::{FileName, FileNameBuf},
-    forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf},
+    relative_forward_unix_path::{RelativeForwardUnixPath, RelativeForwardUnixPathBuf},
 };
 
 /// Provide an iterator of FileNameBuf from inputs that can produce one. This is
@@ -22,7 +22,7 @@ pub trait IntoFileNameBufIterator {
     fn into_iter(self) -> Self::Iterator;
 }
 
-impl<'a> IntoFileNameBufIterator for &'a ForwardRelativePath {
+impl<'a> IntoFileNameBufIterator for &'a RelativeForwardUnixPath {
     type Iterator = impl Iterator<Item = FileNameBuf> + 'a;
 
     fn into_iter(self) -> Self::Iterator {
@@ -30,7 +30,7 @@ impl<'a> IntoFileNameBufIterator for &'a ForwardRelativePath {
     }
 }
 
-impl<'a> IntoFileNameBufIterator for &'a ForwardRelativePathBuf {
+impl<'a> IntoFileNameBufIterator for &'a RelativeForwardUnixPathBuf {
     type Iterator = impl Iterator<Item = FileNameBuf> + 'a;
 
     fn into_iter(self) -> Self::Iterator {
