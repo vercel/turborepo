@@ -370,10 +370,12 @@ pub(super) async fn part_of_module(
 ) -> Result<ParseResultVc> {
     let split_data = split_data.await?;
 
-    let part_id = get_part_id(&split_data, part).await?;
-
     match &*split_data {
-        SplitResult::Ok { modules, .. } => Ok(modules[part_id as usize]),
+        SplitResult::Ok { modules, .. } => {
+            let part_id = get_part_id(&split_data, part).await?;
+
+            Ok(modules[part_id as usize])
+        }
         SplitResult::Unparseable => Ok(ParseResult::Unparseable.cell()),
         SplitResult::NotFound => Ok(ParseResult::NotFound.cell()),
     }
