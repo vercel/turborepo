@@ -208,7 +208,7 @@ impl EcmascriptDevChunkContentVc {
         writedoc!(
             code,
             r#"
-                (self.TURBOPACK = self.TURBOPACK || []).push([{chunk_path}, {{
+                (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push([{chunk_path}, {{
             "#,
             chunk_path = StringifyJs(chunk_server_path)
         )?;

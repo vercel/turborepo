@@ -1283,6 +1283,22 @@ function instantiateRuntimeModule(moduleId, chunkPath) {
 }
 
 /**
+ * Gets or instantiates a runtime module.
+ *
+ * @param {ModuleId} moduleId
+ * @param {ChunkPath} chunkPath
+ * @returns {Module}
+ */
+function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
+  const module = moduleCache[moduleId];
+  if (module) {
+    return module;
+  }
+
+  return instantiateModule(moduleId, { type: SourceTypeRuntime, chunkPath });
+}
+
+/**
  * Subscribes to chunk list updates from the update server and applies them.
  *
  * @param {ChunkPath} chunkListPath
@@ -1393,7 +1409,7 @@ async function evaluateRuntimeParams(chunkPath, runtimeParams) {
     );
 
     for (const moduleId of runtimeParams.runtimeModuleIds) {
-      instantiateRuntimeModule(moduleId, chunkPath);
+      getOrInstantiateRuntimeModule(moduleId, chunkPath);
     }
   }
 }

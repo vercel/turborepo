@@ -4,10 +4,11 @@
 const BACKEND = {
   loadChunk(chunkPath, source) {
     return new Promise((resolve, reject) => {
-      // We don't need to load runtime chunks, as they're already
-      // present in the DOM.
+      // We don't need to load runtime chunks, as they're already present in the DOM.
+      // However, we need to wait for them to register themselves within `registerChunk`
+      // before we can start instantiating runtime modules, hence the absense of
+      // `resolve()` in this branch.
       if (source.type === SourceTypeRuntime) {
-        resolve();
         return;
       }
 

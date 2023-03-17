@@ -104,15 +104,12 @@ impl EcmascriptChunkVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn new_evaluated(
-        context: ChunkingContextVc,
+    pub async fn new_with_entries_and_runtime(
+        context: EcmascriptChunkContextVc,
         main_entry: EcmascriptChunkPlaceableVc,
         other_entries: EcmascriptChunkPlaceablesVc,
+        runtime: EcmascriptChunkRuntimeVc,
     ) -> Result<Self> {
-        let Some(context) = EcmascriptChunkContextVc::resolve_from(&context).await? else {
-            bail!("the chunking context does not support creating Ecmascript chunk runtimes");
-        };
-
         let mut main_entries = other_entries.await?.clone_value();
         // The main entry must always be the last entry, so all other entries
         // have been executed first.
@@ -122,7 +119,7 @@ impl EcmascriptChunkVc {
             context,
             EcmascriptChunkPlaceablesVc::cell(main_entries),
             None,
-            context.evaluated_ecmascript_runtime(),
+            runtime,
             Value::new(AvailabilityInfo::Root {
                 current_availability_root: main_entry.as_asset(),
             }),

@@ -14,7 +14,8 @@ use turbopack_core::{
     ident::{AssetIdent, AssetIdentVc},
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkRuntimeVc,
+    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkPlaceableVc,
+    EcmascriptChunkRuntimeVc,
 };
 
 use crate::ecmascript::runtime::{EcmascriptDevChunkRuntimeMode, EcmascriptDevChunkRuntimeVc};
@@ -55,7 +56,7 @@ pub struct DevChunkingContext {
     /// This path get striped off of path before creating a name out of it
     context_path: FileSystemPathVc,
     /// This path is used to compute the url to request chunks or assets from
-    output_root_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
     /// Chunks are placed at this path
     chunk_root_path: FileSystemPathVc,
     /// Css Chunks are placed at this path
@@ -73,7 +74,7 @@ pub struct DevChunkingContext {
 impl DevChunkingContextVc {
     pub fn builder(
         context_path: FileSystemPathVc,
-        output_root_path: FileSystemPathVc,
+        output_root: FileSystemPathVc,
         chunk_root_path: FileSystemPathVc,
         asset_root_path: FileSystemPathVc,
         environment: EnvironmentVc,
@@ -81,7 +82,7 @@ impl DevChunkingContextVc {
         DevChunkingContextBuilder {
             context: DevChunkingContext {
                 context_path,
-                output_root_path,
+                output_root,
                 chunk_root_path,
                 css_chunk_root_path: None,
                 asset_root_path,
@@ -105,7 +106,7 @@ impl DevChunkingContextVc {
 impl ChunkingContext for DevChunkingContext {
     #[turbo_tasks::function]
     fn output_root(&self) -> FileSystemPathVc {
-        self.output_root_path
+        self.output_root
     }
 
     #[turbo_tasks::function]

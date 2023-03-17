@@ -22,10 +22,10 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chunk::{
-    EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemVc,
-    EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemVc,
+    EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc, EcmascriptChunkVc,
 };
 use code_gen::CodeGenerateableVc;
 use indexmap::IndexMap;
@@ -171,14 +171,33 @@ impl EcmascriptModuleAssetVc {
         context: ChunkingContextVc,
         runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
     ) -> Result<ChunkVc> {
+        let Some(context) = EcmascriptChunkContextVc::resolve_from(&context).await? else {
+            bail!("Ecmascript runtime not found");
+        };
+
+        Ok(self_vc.as_chunk_with_runtime(
+            context,
+            runtime_entries,
+            context.evaluated_ecmascript_runtime(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn as_chunk_with_runtime(
+        self_vc: EcmascriptModuleAssetVc,
+        context: EcmascriptChunkContextVc,
+        runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+        runtime: EcmascriptChunkRuntimeVc,
+    ) -> Result<ChunkVc> {
         let mut main_entries = vec![];
         if let Some(runtime_entries) = runtime_entries {
             main_entries.extend(runtime_entries.await?.iter().copied());
         }
-        Ok(EcmascriptChunkVc::new_evaluated(
+        Ok(EcmascriptChunkVc::new_with_entries_and_runtime(
             context,
             self_vc.into(),
             EcmascriptChunkPlaceablesVc::cell(main_entries),
+            runtime,
         )
         .into())
     }
