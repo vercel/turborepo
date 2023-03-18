@@ -24,7 +24,12 @@ pub struct Stream<T> {
 pub enum StreamState<T> {
     /// An Open stream state can still be pushed to, so anyone polling may need
     /// to wait for new dat data.
-    Open { data: Vec<T>, wakers: Vec<Waker> },
+    OpenWritable { data: Vec<T>, wakers: Vec<Waker> },
+
+    OpenStream {
+        source: Box<dyn StreamTrait<Item = T> + Send + Sync + Unpin + 'static>,
+        data: Vec<T>,
+    },
 
     /// A Closed stream state cannot be pushed to, so it's anyone polling can
     /// read all values at their leisure.
@@ -46,7 +51,7 @@ impl<T> Stream<T> {
     /// written.
     pub fn new_open(data: Vec<T>) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(StreamState::Open {
+            inner: Arc::new(Mutex::new(StreamState::OpenWritable {
                 data,
                 wakers: vec![],
             })),
@@ -70,31 +75,16 @@ impl<T> Stream<T> {
 }
 
 impl<T: Send + Sync + 'static> Stream<T> {
-    /// Crates a new Stream, which will attempt to eagerly read all values from
-    /// another stream.
-    // TODO: this would be better if it was lazy on polling.
-    pub fn from_stream<S: StreamTrait<Item = T> + Send + Sync + 'static>(input: S) -> Self {
-        let stream = Stream::default();
-        let writer = stream.write();
-        tokio::spawn(async move {
-            let mut input = Box::pin(input);
-            loop {
-                let n = input.next().await;
-                match n {
-                    None => {
-                        let mut lock = writer.lock().unwrap();
-                        lock.close(None);
-                        break;
-                    }
-                    Some(v) => {
-                        let mut lock = writer.lock().unwrap();
-                        lock.push(v)
-                    }
-                }
-            }
-        });
-
-        stream
+    /// Crates a new Stream, which will lazily pull from the source stream.
+    pub fn from_stream<S: StreamTrait<Item = T> + Send + Sync + Unpin + 'static>(
+        source: S,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(StreamState::OpenStream {
+                source: Box::new(source),
+                data: vec![],
+            })),
+        }
     }
 }
 
@@ -151,8 +141,8 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Stream<T> {
 impl<T> StreamState<T> {
     /// Pushes a new value to the open Stream, waking any pending pollers.
     pub fn push(&mut self, value: T) {
-        let Self::Open { data, wakers } = self else {
-            panic!("cannot push to an already closed StreamState");
+        let Self::OpenWritable { data, wakers } = self else {
+            panic!("can only push to an open stream");
         };
 
         data.push(value);
@@ -163,8 +153,8 @@ impl<T> StreamState<T> {
 
     /// Closes an open Stream, waking any pending pollers.
     pub fn close(&mut self, value: Option<T>) {
-        let Self::Open { data, wakers } = self else {
-            panic!("cannot close an already closed StreamState");
+        let Self::OpenWritable { data, wakers } = self else {
+            panic!("can only close an open stream");
         };
         if let Some(value) = value {
             data.push(value);
@@ -176,18 +166,11 @@ impl<T> StreamState<T> {
             w.wake();
         }
     }
-
-    fn get(&mut self, index: usize) -> GetState<'_, T> {
-        match self {
-            Self::Open { data, wakers } => GetState::Open(data.get(index), wakers),
-            Self::Closed { data } => GetState::Closed(data.get(index)),
-        }
-    }
 }
 
 impl<T> Default for StreamState<T> {
     fn default() -> Self {
-        Self::Open {
+        Self::OpenWritable {
             data: vec![],
             wakers: vec![],
         }
@@ -197,10 +180,14 @@ impl<T> Default for StreamState<T> {
 impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Open { data, wakers } => f
-                .debug_struct("StreamState::Open")
+            Self::OpenWritable { data, wakers } => f
+                .debug_struct("StreamState::OpenWriter")
                 .field("data", data)
                 .field("wakers", wakers)
+                .finish(),
+            Self::OpenStream { data, .. } => f
+                .debug_struct("StreamState::OpenStream")
+                .field("data", data)
                 .finish(),
             Self::Closed { data } => f
                 .debug_struct("StreamState::Closed")
@@ -213,7 +200,6 @@ impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
 impl<T: PartialEq> PartialEq for StreamState<T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Open { data: a, .. }, Self::Open { data: b, .. }) => a == b,
             (Self::Closed { data: a }, Self::Closed { data: b }) => a == b,
             _ => false,
         }
@@ -225,8 +211,8 @@ impl<T: Serialize> Serialize for StreamState<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         match self {
-            Self::Open { .. } => Err(Error::custom("cannot serialize open stream")),
             Self::Closed { data } => data.serialize(serializer),
+            _ => Err(Error::custom("cannot serialize open stream")),
         }
     }
 }
@@ -236,11 +222,6 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for StreamState<T> {
         let data = <Box<[T]>>::deserialize(deserializer)?;
         Ok(StreamState::Closed { data })
     }
-}
-
-enum GetState<'a, T> {
-    Open(Option<&'a T>, &'a mut Vec<Waker>),
-    Closed(Option<&'a T>),
 }
 
 /// Implements [StreamTrait] over our Stream.
@@ -254,17 +235,34 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
+        let index = this.index;
         let mut source = this.source.inner.lock().unwrap();
-        match source.get(this.index) {
-            GetState::Open(Some(data), _) | GetState::Closed(Some(data)) => {
-                this.index += 1;
-                Poll::Ready(Some(data.clone()))
-            }
-            GetState::Open(None, wakers) => {
-                wakers.push(cx.waker().clone());
-                Poll::Pending
-            }
-            GetState::Closed(None) => Poll::Ready(None),
+        match &mut *source {
+            StreamState::OpenWritable { data, wakers } => match data.get(index) {
+                Some(v) => {
+                    this.index += 1;
+                    Poll::Ready(Some(v.clone()))
+                }
+                None => {
+                    wakers.push(cx.waker().clone());
+                    Poll::Pending
+                }
+            },
+
+            StreamState::OpenStream { source, data } => match data.get(index) {
+                Some(v) => {
+                    this.index += 1;
+                    Poll::Ready(Some(v.clone()))
+                }
+                None => match source.poll_next_unpin(cx) {
+                    Poll::Ready(Some(v)) => {
+                        data.push(v.clone());
+                        Poll::Ready(Some(v))
+                    }
+                    _ => Poll::Pending,
+                },
+            },
+            StreamState::Closed { data } => Poll::Ready(data.get(index).cloned()),
         }
     }
 }

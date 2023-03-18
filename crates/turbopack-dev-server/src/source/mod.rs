@@ -278,7 +278,9 @@ impl Body {
         self.chunks.read()
     }
 
-    pub fn from_stream<T: StreamTrait<Item = Chunk> + Send + Sync + 'static>(stream: T) -> Self {
+    pub fn from_stream<T: StreamTrait<Item = Chunk> + Send + Sync + Unpin + 'static>(
+        stream: T,
+    ) -> Self {
         Self {
             chunks: Stream::from_stream(stream),
         }
