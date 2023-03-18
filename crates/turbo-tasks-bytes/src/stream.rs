@@ -33,7 +33,7 @@ pub enum StreamState<T> {
 
     /// A Closed stream state cannot be pushed to, so it's anyone polling can
     /// read all values at their leisure.
-    Closed { data: Box<[T]> },
+    Closed(Box<[T]>),
 }
 
 impl<T> Stream<T> {
@@ -41,9 +41,7 @@ impl<T> Stream<T> {
     /// values.
     pub fn new_closed(data: Vec<T>) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(StreamState::Closed {
-                data: data.into_boxed_slice(),
-            })),
+            inner: Arc::new(Mutex::new(StreamState::Closed(data.into_boxed_slice()))),
         }
     }
 
@@ -74,7 +72,7 @@ impl<T> Stream<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> Stream<T> {
+impl<T> Stream<T> {
     /// Crates a new Stream, which will lazily pull from the source stream.
     pub fn from_stream<S: StreamTrait<Item = T> + Send + Sync + Unpin + 'static>(
         source: S,
@@ -161,7 +159,7 @@ impl<T> StreamState<T> {
         }
         let data = mem::take(data).into_boxed_slice();
         let wakers = mem::take(wakers);
-        *self = Self::Closed { data };
+        *self = Self::Closed(data);
         for w in wakers {
             w.wake();
         }
@@ -189,10 +187,7 @@ impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
                 .debug_struct("StreamState::OpenStream")
                 .field("data", data)
                 .finish(),
-            Self::Closed { data } => f
-                .debug_struct("StreamState::Closed")
-                .field("data", data)
-                .finish(),
+            Self::Closed(data) => f.debug_tuple("StreamState::Closed").field(data).finish(),
         }
     }
 }
@@ -200,7 +195,7 @@ impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
 impl<T: PartialEq> PartialEq for StreamState<T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Closed { data: a }, Self::Closed { data: b }) => a == b,
+            (Self::Closed(a), Self::Closed(b)) => a == b,
             _ => false,
         }
     }
@@ -211,7 +206,7 @@ impl<T: Serialize> Serialize for StreamState<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         match self {
-            Self::Closed { data } => data.serialize(serializer),
+            Self::Closed(data) => data.serialize(serializer),
             _ => Err(Error::custom("cannot serialize open stream")),
         }
     }
@@ -220,7 +215,7 @@ impl<T: Serialize> Serialize for StreamState<T> {
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for StreamState<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let data = <Box<[T]>>::deserialize(deserializer)?;
-        Ok(StreamState::Closed { data })
+        Ok(StreamState::Closed(data))
     }
 }
 
@@ -236,8 +231,8 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         let index = this.index;
-        let mut source = this.source.inner.lock().unwrap();
-        match &mut *source {
+        let mut inner = this.source.inner.lock().unwrap();
+        match &mut *inner {
             StreamState::OpenWritable { data, wakers } => match data.get(index) {
                 Some(v) => {
                     this.index += 1;
@@ -256,13 +251,23 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
                 }
                 None => match source.poll_next_unpin(cx) {
                     Poll::Ready(Some(v)) => {
+                        this.index += 1;
                         data.push(v.clone());
                         Poll::Ready(Some(v))
                     }
-                    _ => Poll::Pending,
+                    Poll::Ready(None) => {
+                        let data = mem::take(data);
+                        *inner = StreamState::Closed(data.into_boxed_slice());
+                        Poll::Ready(None)
+                    }
+                    Poll::Pending => Poll::Pending,
                 },
             },
-            StreamState::Closed { data } => Poll::Ready(data.get(index).cloned()),
+
+            StreamState::Closed(data) => Poll::Ready(data.get(index).map(|v| {
+                this.index += 1;
+                v.clone()
+            })),
         }
     }
 }
