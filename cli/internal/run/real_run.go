@@ -259,7 +259,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
-			os.Exit(1)
+			return nil, errors.Wrapf(err, "failed to initialize output capture for task %v", packageTask.TaskID)
 		}
 	}
 
@@ -315,6 +315,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			ec.processes.Close()
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
+			// Set to nil so we don't short-circuit any other execution
+			err = nil
 		}
 
 		// If there was an error, flush the buffered output

@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
@@ -74,7 +75,16 @@ type EngineExecutionOptions struct {
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
 func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
+	errored := &atomic.Bool{}
 	return e.TaskGraph.Walk(func(v dag.Vertex) error {
+		// If something has already errored, short-circuit.
+		// There is a race here between concurrent tasks. However, if there is not a
+		// dependency edge between them, we are not required to have a strict order
+		// between them, so a failed task can fail to short-circuit a concurrent
+		// task that happened to be starting at the same time.
+		if errored.Load() {
+			return nil
+		}
 		// Each vertex in the graph is a taskID (package#task format)
 		taskID := dag.VertexName(v)
 
@@ -89,7 +99,12 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 			defer sema.Release()
 		}
 
-		return visitor(taskID)
+		if err := visitor(taskID); err != nil {
+			// We only ever flip from false to true, so we don't need to compare and swap the atomic
+			errored.Store(true)
+			return err
+		}
+		return nil
 	})
 }
 
