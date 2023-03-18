@@ -11,7 +11,7 @@ use mime::Mime;
 use mime_guess::mime;
 use tokio_util::io::{ReaderStream, StreamReader};
 use turbo_tasks::TransientInstance;
-use turbo_tasks_bytes::bytes::Bytes;
+use turbo_tasks_bytes::Bytes;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
 use turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 

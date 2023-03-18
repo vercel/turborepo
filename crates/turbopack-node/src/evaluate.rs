@@ -9,7 +9,7 @@ use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
-use turbo_tasks_bytes::{bytes::Bytes, stream::Stream};
+use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
     glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,

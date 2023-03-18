@@ -1,5 +1,10 @@
-pub mod bytes;
-pub mod stream;
+mod bytes;
+mod stream;
+
+pub use crate::{
+    bytes::{Bytes, BytesVc},
+    stream::{Stream, StreamRead, StreamWrite},
+};
 
 pub fn register() {
     turbo_tasks::register();

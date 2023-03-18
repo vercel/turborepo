@@ -20,10 +20,7 @@ use anyhow::Result;
 use futures::stream::Stream as StreamTrait;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_bytes::{
-    bytes::Bytes,
-    stream::{Stream, StreamRead},
-};
+use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::version::VersionedContentVc;
 
