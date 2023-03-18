@@ -255,7 +255,7 @@ impl PostCssTransformedAssetVc {
                 assets: Vec::new()
             }.cell());
         };
-        let processed_css: PostCssProcessingResult = parse_json_with_source_context(&val.to_str()?)
+        let processed_css: PostCssProcessingResult = parse_json_with_source_context(val.to_str()?)
             .context("Unable to deserializate response from PostCSS transform operation")?;
         // TODO handle SourceMap
         let file = File::from(processed_css.css);

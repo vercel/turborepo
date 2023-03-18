@@ -181,7 +181,7 @@ impl WebpackLoadersProcessedAssetVc {
             }.cell());
         };
         let processed: WebpackLoadersProcessingResult = parse_json_with_source_context(
-            &val.to_str()?,
+            val.to_str()?,
         )
         .context("Unable to deserializate response from webpack loaders transform operation")?;
         // TODO handle SourceMap
