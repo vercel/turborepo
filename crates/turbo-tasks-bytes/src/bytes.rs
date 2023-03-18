@@ -4,8 +4,10 @@ use anyhow::{Context, Result};
 use bytes::Bytes;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[turbo_tasks::value(transparent, serialization = "custom")]
+/// BytesValue is a thin wrapper around [Bytes], implementing easy conversion
+/// to/from, ser/de support, and Vc containers.
 #[derive(Clone, Debug, Default)]
+#[turbo_tasks::value(transparent, serialization = "custom")]
 pub struct BytesValue(#[turbo_tasks(trace_ignore)] Bytes);
 
 impl BytesValue {
@@ -36,9 +38,10 @@ impl Deref for BytesValue {
     }
 }
 
+/// Types that implement From<X> for Bytes {}
+/// Unfortunately, we cannot just use the more generic `Into<Bytes>` without
+/// running afoul of the `From<X> for X` base case, causing conflicting impls.
 trait IntoBytes: Into<Bytes> {}
-
-// Types that implement From<X> for Bytes {}
 impl IntoBytes for &'static [u8] {}
 impl IntoBytes for &'static str {}
 impl IntoBytes for Vec<u8> {}
