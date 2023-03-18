@@ -9,7 +9,7 @@ use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
-use turbo_tasks_bytes::{bytes::BytesValue, stream::Stream};
+use turbo_tasks_bytes::{bytes::Bytes, stream::Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
     glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
@@ -78,7 +78,7 @@ enum LoopResult {
     Error(StructuredError),
 }
 
-type EvaluationItem = Result<BytesValue, StructuredError>;
+type EvaluationItem = Result<Bytes, StructuredError>;
 type JavaScriptStream = Stream<EvaluationItem>;
 
 #[turbo_tasks::value(shared)]

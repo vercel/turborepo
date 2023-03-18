@@ -11,7 +11,7 @@ use mime::Mime;
 use mime_guess::mime;
 use tokio_util::io::{ReaderStream, StreamReader};
 use turbo_tasks::TransientInstance;
-use turbo_tasks_bytes::bytes::BytesValue;
+use turbo_tasks_bytes::bytes::Bytes;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
 use turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 
@@ -202,7 +202,7 @@ async fn http_request_to_source_request(request: Request<hyper::Body>) -> Result
                 |e| Err(BodyError::new(e.to_string())),
                 // The outer Ok is consumed by try_collect, but the Body type requires a Result, so
                 // we need to double wrap.
-                |b| Ok(Ok(BytesValue::from(b))),
+                |b| Ok(Ok(Bytes::from(b))),
             )
         })
         .try_collect::<Vec<_>>()

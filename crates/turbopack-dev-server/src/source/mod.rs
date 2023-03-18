@@ -21,7 +21,7 @@ use futures::stream::Stream as StreamTrait;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Value};
 use turbo_tasks_bytes::{
-    bytes::BytesValue,
+    bytes::Bytes,
     stream::{Stream, StreamRead},
 };
 use turbo_tasks_fs::FileSystemPathVc;
@@ -256,7 +256,7 @@ pub struct ContentSourceData {
     pub cache_buster: u64,
 }
 
-type Chunk = Result<BytesValue, BodyError>;
+type Chunk = Result<Bytes, BodyError>;
 /// A request body.
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
@@ -285,7 +285,7 @@ impl Body {
     }
 }
 
-impl<T: Into<BytesValue>> From<T> for Body {
+impl<T: Into<Bytes>> From<T> for Body {
     fn from(value: T) -> Self {
         Body::new(vec![Ok(value.into())])
     }
