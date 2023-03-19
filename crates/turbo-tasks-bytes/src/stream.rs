@@ -21,7 +21,7 @@ pub struct Stream<T> {
 }
 
 /// The StreamState actually holds the data of a Stream.
-pub enum StreamState<T> {
+enum StreamState<T> {
     /// An OpenStream is tied directly to a source stream, and will lazily pull
     /// new values out as a reader reaches the end of our already-pulled
     /// data.
