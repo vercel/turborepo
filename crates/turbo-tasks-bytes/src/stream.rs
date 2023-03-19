@@ -68,14 +68,14 @@ impl<T> Stream<T> {
 impl<T: Send + Sync + 'static> Stream<T> {
     /// Constructs a new Stream, and leaves it open for new values to be
     /// written.
-    pub fn new_open(data: Vec<T>) -> (UnboundedSender<T>, Self) {
+    pub fn new_open(pulled: Vec<T>) -> (UnboundedSender<T>, Self) {
         let (sender, receiver) = unbounded_channel();
         (
             sender,
             Self {
                 inner: Arc::new(Mutex::new(StreamState::OpenStream {
                     source: Box::new(ReceiverStream { receiver }),
-                    pulled: data,
+                    pulled,
                 })),
             },
         )
@@ -138,9 +138,9 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Stream<T> {
 impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::OpenStream { pulled: data, .. } => f
+            Self::OpenStream { pulled, .. } => f
                 .debug_struct("StreamState::OpenStream")
-                .field("data", data)
+                .field("pulled", pulled)
                 .finish(),
             Self::Closed(data) => f.debug_tuple("StreamState::Closed").field(data).finish(),
         }
@@ -162,10 +162,7 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
         let index = this.index;
         let mut inner = this.source.inner.lock().unwrap();
         match &mut *inner {
-            StreamState::OpenStream {
-                source,
-                pulled: data,
-            } => match data.get(index) {
+            StreamState::OpenStream { source, pulled } => match pulled.get(index) {
                 // If the current reader can be satisfied by a value we've already pulled, then just
                 // do that.
                 Some(v) => {
@@ -178,13 +175,13 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
                     // be able to read the value from the already-pulled data.
                     Poll::Ready(Some(v)) => {
                         this.index += 1;
-                        data.push(v.clone());
+                        pulled.push(v.clone());
                         Poll::Ready(Some(v))
                     }
                     // If the source stream is finished, then we can transition to the closed state
                     // to drop the source stream.
                     Poll::Ready(None) => {
-                        let data = mem::take(data).into_boxed_slice();
+                        let data = mem::take(pulled).into_boxed_slice();
                         *inner = StreamState::Closed(data);
                         Poll::Ready(None)
                     }
