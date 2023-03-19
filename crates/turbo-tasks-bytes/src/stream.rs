@@ -1,34 +1,33 @@
 use std::{
     fmt, mem,
     pin::Pin,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
-    task::{Context as TaskContext, Poll, Waker},
-    vec,
+    sync::{Arc, Mutex},
+    task::{Context as TaskContext, Poll},
 };
 
 use anyhow::Result;
 use futures::{Stream as StreamTrait, StreamExt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Streams allow for streaming values from source to sink.
 ///
 /// A Stream implements both a reader (which implements the Stream trait), and a
-/// writer (which can be cloned and sent to any thread). As new values are
-/// written, any pending readers will be woken up to receive the new value.
+/// writer (which can be sent to another thread). As new values are written, any
+/// pending readers will be woken up to receive the new value.
+#[derive(Debug)]
 pub struct Stream<T> {
     inner: Arc<Mutex<StreamState<T>>>,
 }
 
-/// The StreamState actually holds the data of a Stream, including any pending
-/// threads that are pol polling for the next value.
+/// The StreamState actually holds the data of a Stream.
 pub enum StreamState<T> {
-    /// An Open stream state can still be pushed to, so anyone polling may need
-    /// to wait for new dat data.
-    OpenWritable { data: Vec<T>, wakers: Vec<Waker> },
-
+    /// An OpenStream is tied directly to a source stream, and will lazily pull
+    /// new values out as a reader reaches the end of our already-pulled
+    /// data.
     OpenStream {
-        source: Box<dyn StreamTrait<Item = T> + Send + Sync + Unpin + 'static>,
-        data: Vec<T>,
+        source: Box<dyn StreamTrait<Item = T> + Send + Sync + Unpin>,
+        pulled: Vec<T>,
     },
 
     /// A Closed stream state cannot be pushed to, so it's anyone polling can
@@ -45,17 +44,6 @@ impl<T> Stream<T> {
         }
     }
 
-    /// Constructs a new Stream, and leaves it open for new values to be
-    /// written.
-    pub fn new_open(data: Vec<T>) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(StreamState::OpenWritable {
-                data,
-                wakers: vec![],
-            })),
-        }
-    }
-
     /// Returns a [StreamTrait] implementation to poll values out of our Stream.
     pub fn read(&self) -> StreamRead<T> {
         StreamRead {
@@ -64,15 +52,6 @@ impl<T> Stream<T> {
         }
     }
 
-    /// Returns a writing wrapper to allow pushing new values onto the Stream.
-    pub fn write(&self) -> StreamWrite<T> {
-        StreamWrite {
-            source: self.clone(),
-        }
-    }
-}
-
-impl<T> Stream<T> {
     /// Crates a new Stream, which will lazily pull from the source stream.
     pub fn from_stream<S: StreamTrait<Item = T> + Send + Sync + Unpin + 'static>(
         source: S,
@@ -80,13 +59,32 @@ impl<T> Stream<T> {
         Self {
             inner: Arc::new(Mutex::new(StreamState::OpenStream {
                 source: Box::new(source),
-                data: vec![],
+                pulled: vec![],
             })),
         }
     }
 }
 
+impl<T: Send + Sync + 'static> Stream<T> {
+    /// Constructs a new Stream, and leaves it open for new values to be
+    /// written.
+    pub fn new_open(data: Vec<T>) -> (UnboundedSender<T>, Self) {
+        let (sender, receiver) = unbounded_channel();
+        (
+            sender,
+            Self {
+                inner: Arc::new(Mutex::new(StreamState::OpenStream {
+                    source: Box::new(ReceiverStream { receiver }),
+                    pulled: data,
+                })),
+            },
+        )
+    }
+}
+
 impl<T> Clone for Stream<T> {
+    // The derived Clone impl will only work if `T: Clone`, which is wrong because
+    // we just need to clone the Arc, not the internal data.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -94,28 +92,26 @@ impl<T> Clone for Stream<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Stream<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Stream")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
 impl<T> Default for Stream<T> {
     fn default() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(StreamState::default())),
+            inner: Arc::new(Mutex::new(StreamState::Closed(Box::new([])))),
         }
     }
 }
 
 impl<T: PartialEq> PartialEq for Stream<T> {
+    // A Stream is equal if its the same internal pointer, or both streams are
+    // closed with equivalent values.
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner) || {
-            let this = self.inner.lock().unwrap();
-            let other = other.inner.lock().unwrap();
-            *this == *other
+            let left = self.inner.lock().unwrap();
+            let right = other.inner.lock().unwrap();
+
+            match (&*left, &*right) {
+                (StreamState::Closed(a), StreamState::Closed(b)) => a == b,
+                _ => false,
+            }
         }
     }
 }
@@ -125,7 +121,10 @@ impl<T: Serialize> Serialize for Stream<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         let lock = self.inner.lock().map_err(Error::custom)?;
-        lock.serialize(serializer)
+        match &*lock {
+            StreamState::Closed(data) => data.serialize(serializer),
+            _ => Err(Error::custom("cannot serialize open stream")),
+        }
     }
 }
 
@@ -136,54 +135,10 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Stream<T> {
     }
 }
 
-impl<T> StreamState<T> {
-    /// Pushes a new value to the open Stream, waking any pending pollers.
-    pub fn push(&mut self, value: T) {
-        let Self::OpenWritable { data, wakers } = self else {
-            panic!("can only push to an open stream");
-        };
-
-        data.push(value);
-        for w in wakers.drain(0..) {
-            w.wake();
-        }
-    }
-
-    /// Closes an open Stream, waking any pending pollers.
-    pub fn close(&mut self, value: Option<T>) {
-        let Self::OpenWritable { data, wakers } = self else {
-            panic!("can only close an open stream");
-        };
-        if let Some(value) = value {
-            data.push(value);
-        }
-        let data = mem::take(data).into_boxed_slice();
-        let wakers = mem::take(wakers);
-        *self = Self::Closed(data);
-        for w in wakers {
-            w.wake();
-        }
-    }
-}
-
-impl<T> Default for StreamState<T> {
-    fn default() -> Self {
-        Self::OpenWritable {
-            data: vec![],
-            wakers: vec![],
-        }
-    }
-}
-
 impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::OpenWritable { data, wakers } => f
-                .debug_struct("StreamState::OpenWriter")
-                .field("data", data)
-                .field("wakers", wakers)
-                .finish(),
-            Self::OpenStream { data, .. } => f
+            Self::OpenStream { pulled: data, .. } => f
                 .debug_struct("StreamState::OpenStream")
                 .field("data", data)
                 .finish(),
@@ -192,34 +147,8 @@ impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for StreamState<T> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Closed(a), Self::Closed(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-impl<T: Eq> Eq for StreamState<T> {}
-
-impl<T: Serialize> Serialize for StreamState<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::Error;
-        match self {
-            Self::Closed(data) => data.serialize(serializer),
-            _ => Err(Error::custom("cannot serialize open stream")),
-        }
-    }
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for StreamState<T> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = <Box<[T]>>::deserialize(deserializer)?;
-        Ok(StreamState::Closed(data))
-    }
-}
-
 /// Implements [StreamTrait] over our Stream.
+#[derive(Debug)]
 pub struct StreamRead<T> {
     index: usize,
     source: Stream<T>,
@@ -233,37 +162,40 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
         let index = this.index;
         let mut inner = this.source.inner.lock().unwrap();
         match &mut *inner {
-            StreamState::OpenWritable { data, wakers } => match data.get(index) {
-                Some(v) => {
-                    this.index += 1;
-                    Poll::Ready(Some(v.clone()))
-                }
-                None => {
-                    wakers.push(cx.waker().clone());
-                    Poll::Pending
-                }
-            },
-
-            StreamState::OpenStream { source, data } => match data.get(index) {
+            StreamState::OpenStream {
+                source,
+                pulled: data,
+            } => match data.get(index) {
+                // If the current reader can be satisfied by a value we've already pulled, then just
+                // do that.
                 Some(v) => {
                     this.index += 1;
                     Poll::Ready(Some(v.clone()))
                 }
                 None => match source.poll_next_unpin(cx) {
+                    // Else, if the source stream is ready to give us a new value, we can
+                    // immediately store that and return it to the caller. Any other readers will
+                    // be able to read the value from the already-pulled data.
                     Poll::Ready(Some(v)) => {
                         this.index += 1;
                         data.push(v.clone());
                         Poll::Ready(Some(v))
                     }
+                    // If the source stream is finished, then we can transition to the closed state
+                    // to drop the source stream.
                     Poll::Ready(None) => {
-                        let data = mem::take(data);
-                        *inner = StreamState::Closed(data.into_boxed_slice());
+                        let data = mem::take(data).into_boxed_slice();
+                        *inner = StreamState::Closed(data);
                         Poll::Ready(None)
                     }
+                    // Else, we need to wait for the source stream to give us a new value. The
+                    // source stream will be responsible for waking the TaskContext.
                     Poll::Pending => Poll::Pending,
                 },
             },
 
+            // The Closed state is easiest. We either have the value at the index, or not, there is
+            // no need to return pending.
             StreamState::Closed(data) => Poll::Ready(data.get(index).map(|v| {
                 this.index += 1;
                 v.clone()
@@ -272,33 +204,16 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for StreamRead<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StreamRead")
-            .field("index", &self.index)
-            .field("source", &self.source)
-            .finish()
-    }
+/// A small wrapper around a channel Receiver which allows it to be used as a
+/// source Stream.
+struct ReceiverStream<T> {
+    receiver: UnboundedReceiver<T>,
 }
 
-/// Implements basic writing over our Stream.
-#[derive(Clone)]
-pub struct StreamWrite<T> {
-    source: Stream<T>,
-}
+impl<T> StreamTrait for ReceiverStream<T> {
+    type Item = T;
 
-impl<T> StreamWrite<T> {
-    pub fn lock(
-        &self,
-    ) -> Result<MutexGuard<'_, StreamState<T>>, PoisonError<MutexGuard<'_, StreamState<T>>>> {
-        self.source.inner.lock()
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for StreamWrite<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StreamWrite")
-            .field("source", &self.source)
-            .finish()
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
+        self.receiver.poll_recv(cx)
     }
 }

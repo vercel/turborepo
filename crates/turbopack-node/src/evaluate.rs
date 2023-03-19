@@ -297,24 +297,24 @@ pub async fn evaluate(
     // The evaluation sent an initial intermediate value without completing. We'll
     // need to spawn a new thread to continually pull data out of the process,
     // and ferry that along.
-    let stream = JavaScriptStream::new_open(vec![Ok(data.into())]);
-    let writer = stream.write();
+    let (sender, stream) = JavaScriptStream::new_open(vec![Ok(data.into())]);
     tokio::spawn(async move {
         loop {
             let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
-            let mut lock = writer.lock().unwrap();
 
             match output {
                 LoopResult::End(data) => {
-                    lock.close(data.map(|d| Ok(d.into())));
+                    if let Some(data) = data {
+                        sender.send(Ok(data.into()))?;
+                    }
                     break;
                 }
                 LoopResult::Error(error) => {
-                    lock.close(Some(Err(error)));
+                    sender.send(Err(error))?;
                     break;
                 }
                 LoopResult::Value(data) => {
-                    lock.push(Ok(data.into()));
+                    sender.send(Ok(data.into()))?;
                 }
             }
         }

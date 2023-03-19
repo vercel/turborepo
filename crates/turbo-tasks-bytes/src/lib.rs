@@ -3,7 +3,7 @@ mod stream;
 
 pub use crate::{
     bytes::{Bytes, BytesVc},
-    stream::{Stream, StreamRead, StreamWrite},
+    stream::{Stream, StreamRead},
 };
 
 pub fn register() {
