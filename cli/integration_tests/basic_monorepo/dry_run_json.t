@@ -17,6 +17,15 @@ Setup
     "rootExternalDepsHash": "ccab0b28617f1f56",
     "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
     "pipeline": {
+      "//#something": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
       "build": {
         "outputs": [],
         "cache": true,
@@ -39,6 +48,15 @@ Setup
         "outputMode": "full",
         "env": [],
         "persistent": false
+      },
+      "something": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
       }
     }
   }
@@ -49,7 +67,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "e8ca4fc486de5b37",
+    "hash": "45ec4e15c3dcf5c2",
     "cacheState": {
       "local": false,
       "remote": false
@@ -99,7 +117,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "1a3651e1149bfaf7",
+    "hash": "c36e55f947cd2d28",
     "cacheState": {
       "local": false,
       "remote": false
