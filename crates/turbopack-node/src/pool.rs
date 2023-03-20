@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     future::Future,
     mem::take,
@@ -23,6 +24,9 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout},
 };
+use turbo_tasks_fs::FileSystemPathVc;
+
+use crate::{source_map::apply_source_mapping, AssetsForSourceMappingVc};
 
 enum NodeJsPoolProcess {
     Spawned(SpawnedNodeJsPoolProcess),
@@ -32,6 +36,8 @@ enum NodeJsPoolProcess {
 struct SpawnedNodeJsPoolProcess {
     child: Child,
     listener: TcpListener,
+    assets_for_source_mapping: AssetsForSourceMappingVc,
+    assets_root: FileSystemPathVc,
     shared_stdout: SharedOutputSet,
     shared_stderr: SharedOutputSet,
     debug: bool,
@@ -40,8 +46,26 @@ struct SpawnedNodeJsPoolProcess {
 struct RunningNodeJsPoolProcess {
     child: Option<Child>,
     connection: TcpStream,
+    assets_for_source_mapping: AssetsForSourceMappingVc,
+    assets_root: FileSystemPathVc,
     stdout_future: Pin<Box<dyn Future<Output = ()> + Send>>,
     stderr_future: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+
+impl RunningNodeJsPoolProcess {
+    pub async fn apply_source_mapping<'a>(
+        &self,
+        text: &'a str,
+        ansi_colors: bool,
+    ) -> Result<Cow<'a, str>> {
+        apply_source_mapping(
+            text,
+            self.assets_for_source_mapping,
+            self.assets_root,
+            ansi_colors,
+        )
+        .await
+    }
 }
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -64,6 +88,8 @@ static MARKER_STR: &str = "TURBOPACK_OUTPUT_";
 async fn handle_output_stream(
     mut stream: BufReader<impl AsyncRead + Unpin>,
     shared: SharedOutputSet,
+    assets_for_source_mapping: AssetsForSourceMappingVc,
+    root: FileSystemPathVc,
     mut final_stream: impl AsyncWrite + Unpin,
 ) {
     let mut buffer = Vec::new();
@@ -148,10 +174,30 @@ async fn handle_output_stream(
             // When inside of a marked output we want to aggregate until the end marker
             continue;
         }
-        let _lock = GLOBAL_OUTPUT_LOCK.lock().await;
-        if final_stream.write(&buffer).await.is_err() {
-            // Whatever happened with stdout/stderr, we can't write to it anymore.
-            break;
+
+        macro_rules! write_final {
+            ($($args:tt)+) => {
+                {
+                    let _lock = GLOBAL_OUTPUT_LOCK.lock().await;
+                    if final_stream.write($($args)+).await.is_err() {
+                        // Whatever happened with stdout/stderr, we can't write to it anymore.
+                        break;
+                    }
+                }
+            };
+        }
+
+        if let Ok(text) = std::str::from_utf8(&buffer) {
+            match apply_source_mapping(text, assets_for_source_mapping, root, true).await {
+                Err(e) => {
+                    write_final!(format!("Error applying source mapping: {e}\n").as_bytes());
+                }
+                Ok(text) => {
+                    write_final!(text.as_bytes());
+                }
+            }
+        } else {
+            write_final!(&buffer);
         }
         buffer.clear();
     }
@@ -162,6 +208,8 @@ impl NodeJsPoolProcess {
         cwd: &Path,
         env: &HashMap<String, String>,
         entrypoint: &Path,
+        assets_for_source_mapping: AssetsForSourceMappingVc,
+        assets_root: FileSystemPathVc,
         shared_stdout: SharedOutputSet,
         shared_stderr: SharedOutputSet,
         debug: bool,
@@ -199,6 +247,8 @@ impl NodeJsPoolProcess {
             listener,
             child,
             debug,
+            assets_for_source_mapping,
+            assets_root,
             shared_stdout,
             shared_stderr,
         }))
@@ -209,6 +259,8 @@ impl NodeJsPoolProcess {
             NodeJsPoolProcess::Spawned(SpawnedNodeJsPoolProcess {
                 mut child,
                 listener,
+                assets_for_source_mapping,
+                assets_root,
                 shared_stdout,
                 shared_stderr,
                 debug,
@@ -274,14 +326,26 @@ impl NodeJsPoolProcess {
                 let child_stdout = BufReader::new(child.stdout.take().unwrap());
                 let child_stderr = BufReader::new(child.stderr.take().unwrap());
 
-                let stdout_future =
-                    Box::pin(handle_output_stream(child_stdout, shared_stdout, stdout()));
-                let stderr_future =
-                    Box::pin(handle_output_stream(child_stderr, shared_stderr, stderr()));
+                let stdout_future = Box::pin(handle_output_stream(
+                    child_stdout,
+                    shared_stdout,
+                    assets_for_source_mapping.clone(),
+                    assets_root.clone(),
+                    stdout(),
+                ));
+                let stderr_future = Box::pin(handle_output_stream(
+                    child_stderr,
+                    shared_stderr,
+                    assets_for_source_mapping.clone(),
+                    assets_root.clone(),
+                    stderr(),
+                ));
 
                 RunningNodeJsPoolProcess {
                     child: Some(child),
                     connection,
+                    assets_for_source_mapping: assets_for_source_mapping.clone(),
+                    assets_root: assets_root.clone(),
                     stdout_future,
                     stderr_future,
                 }
@@ -347,6 +411,8 @@ pub struct NodeJsPool {
     cwd: PathBuf,
     entrypoint: PathBuf,
     env: HashMap<String, String>,
+    pub assets_for_source_mapping: AssetsForSourceMappingVc,
+    pub assets_root: FileSystemPathVc,
     #[turbo_tasks(trace_ignore, debug_ignore)]
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
     #[turbo_tasks(trace_ignore, debug_ignore)]
@@ -365,6 +431,8 @@ impl NodeJsPool {
         cwd: PathBuf,
         entrypoint: PathBuf,
         env: HashMap<String, String>,
+        assets_for_source_mapping: AssetsForSourceMappingVc,
+        assets_root: FileSystemPathVc,
         concurrency: usize,
         debug: bool,
     ) -> Self {
@@ -372,6 +440,8 @@ impl NodeJsPool {
             cwd,
             entrypoint,
             env,
+            assets_for_source_mapping,
+            assets_root,
             processes: Arc::new(Mutex::new(Vec::new())),
             semaphore: Arc::new(Semaphore::new(if debug { 1 } else { concurrency })),
             shared_stdout: Arc::new(Mutex::new(IndexSet::new())),
@@ -393,6 +463,8 @@ impl NodeJsPool {
                 self.cwd.as_path(),
                 &self.env,
                 self.entrypoint.as_path(),
+                self.assets_for_source_mapping,
+                self.assets_root,
                 self.shared_stdout.clone(),
                 self.shared_stderr.clone(),
                 self.debug,
@@ -498,6 +570,18 @@ impl NodeJsOperation {
 
     pub fn disallow_reuse(&mut self) {
         self.allow_process_reuse = false;
+    }
+
+    pub async fn apply_source_mapping<'a>(
+        &self,
+        text: &'a str,
+        ansi_colors: bool,
+    ) -> Result<Cow<'a, str>> {
+        if let Some(process) = self.process.as_ref() {
+            process.apply_source_mapping(text, ansi_colors).await
+        } else {
+            Ok(Cow::Borrowed(text))
+        }
     }
 }
 

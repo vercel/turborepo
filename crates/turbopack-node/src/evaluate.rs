@@ -1,6 +1,6 @@
 use std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
 use turbo_tasks::{
@@ -28,9 +28,10 @@ use turbopack_ecmascript::{
 use crate::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
-    emit, emit_package_json,
+    emit, emit_package_json, internal_assets_for_source_mapping,
     pool::{NodeJsPool, NodeJsPoolVc},
-    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, StructuredError,
+    source_map::StructuredError,
+    AssetsForSourceMappingVc, EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage,
 };
 
 #[turbo_tasks::value(shared)]
@@ -129,9 +130,16 @@ pub async fn get_evaluate_pool(
         chunk_group: ChunkGroupVc::from_chunk(
             entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
         ),
-    };
-    emit_package_json(chunking_context.output_root()).await?;
-    emit(bootstrap.cell().into(), chunking_context.output_root()).await?;
+    }
+    .cell()
+    .into();
+
+    let output_root = chunking_context.output_root();
+    let emit_package = emit_package_json(output_root);
+    let emit = emit(bootstrap, output_root);
+    let assets_for_source_mapping = internal_assets_for_source_mapping(bootstrap, output_root);
+    emit_package.await?;
+    emit.await?;
     let pool = NodeJsPool::new(
         cwd,
         entrypoint,
@@ -140,6 +148,8 @@ pub async fn get_evaluate_pool(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        assets_for_source_mapping,
+        output_root,
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     );
@@ -225,7 +235,8 @@ pub async fn evaluate(
                 EvaluationIssue {
                     error,
                     context_ident: context_ident_for_issue,
-                    cwd,
+                    assets_for_source_mapping: pool.assets_for_source_mapping,
+                    assets_root: pool.assets_root,
                 }
                 .cell()
                 .as_issue()
@@ -265,9 +276,10 @@ pub async fn evaluate(
             EvalJavaScriptIncomingMessage::EmittedError { error, severity } => {
                 EvaluateEmittedErrorIssue {
                     context: context_ident_for_issue.path(),
-                    cwd,
                     error,
                     severity: severity.cell(),
+                    assets_for_source_mapping: pool.assets_for_source_mapping,
+                    assets_root: pool.assets_root,
                 }
                 .cell()
                 .as_issue()
@@ -290,8 +302,9 @@ pub async fn evaluate(
 #[turbo_tasks::value(shared)]
 pub struct EvaluationIssue {
     pub context_ident: AssetIdentVc,
-    pub cwd: FileSystemPathVc,
     pub error: StructuredError,
+    pub assets_for_source_mapping: AssetsForSourceMappingVc,
+    pub assets_root: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -313,13 +326,9 @@ impl Issue for EvaluationIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<StringVc> {
-        let cwd = to_sys_path(self.cwd.root())
-            .await?
-            .context("Must have path on disk")?;
-
         Ok(StringVc::cell(
             self.error
-                .print(Default::default(), &cwd.to_string_lossy())
+                .print(self.assets_for_source_mapping, self.assets_root, false)
                 .await?,
         ))
     }
@@ -405,9 +414,10 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
 #[turbo_tasks::value(shared)]
 pub struct EvaluateEmittedErrorIssue {
     pub context: FileSystemPathVc,
-    pub cwd: FileSystemPathVc,
     pub severity: IssueSeverityVc,
     pub error: StructuredError,
+    pub assets_for_source_mapping: AssetsForSourceMappingVc,
+    pub assets_root: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -434,13 +444,9 @@ impl Issue for EvaluateEmittedErrorIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<StringVc> {
-        let root = to_sys_path(self.cwd.root())
-            .await?
-            .context("Must have path on disk")?;
-
         Ok(StringVc::cell(
             self.error
-                .print(Default::default(), &root.to_string_lossy())
+                .print(self.assets_for_source_mapping, self.assets_root, false)
                 .await?,
         ))
     }

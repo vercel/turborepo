@@ -248,6 +248,7 @@ impl ChunkingContext for DevChunkingContext {
         let mut source_maps = self.chunk_source_maps;
         let path = chunk.path().await?;
         let extension = path.extension().unwrap_or_default();
+        #[allow(clippy::single_match, reason = "future extensions")]
         match extension {
             ".css" => {
                 source_maps = self.css_chunk_source_maps;

@@ -10,7 +10,9 @@ use super::{
     issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
     ResponseHeaders,
 };
-use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+use crate::{
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+};
 
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]

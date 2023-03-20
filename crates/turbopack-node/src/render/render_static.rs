@@ -16,7 +16,9 @@ use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleA
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
-use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+use crate::{
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+};
 
 #[turbo_tasks::value]
 pub enum StaticResult {
