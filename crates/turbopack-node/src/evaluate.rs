@@ -90,7 +90,7 @@ pub enum JavaScriptEvaluation {
     /// A Single is only possible if the evaluation returns either an error or
     /// value, and never sends an intermediate value.
     Single(EvaluationItem),
-    /// A Stream represents a series of intermediate values and followed by
+    /// A Stream represents a series of intermediate values followed by
     /// either an error or a ending value. A stream is never empty.
     Stream(#[turbo_tasks(trace_ignore, debug_ignore)] JavaScriptStream),
 }

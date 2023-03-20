@@ -101,7 +101,7 @@ impl<T> Default for Stream<T> {
 }
 
 impl<T: PartialEq> PartialEq for Stream<T> {
-    // A Stream is equal if its the same internal pointer, or both streams are
+    // A Stream is equal if it's the same internal pointer, or both streams are
     // closed with equivalent values.
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner) || {
