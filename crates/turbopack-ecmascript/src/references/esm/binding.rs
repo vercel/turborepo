@@ -12,7 +12,7 @@ use swc_core::{
 
 use super::EsmAssetReferenceVc;
 use crate::{
-    chunk::EcmascriptChunkContextVc,
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -48,7 +48,7 @@ impl CodeGenerateable for EsmBinding {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmBindingVc,
-        _context: EcmascriptChunkContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let this = self_vc.await?;
         let mut visitors = Vec::new();

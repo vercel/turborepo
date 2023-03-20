@@ -12,7 +12,7 @@ use turbopack_core::{
 
 use super::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveType::Cjs};
 use crate::{
-    chunk::EcmascriptChunkContextVc,
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::{util::throw_module_not_found_expr, AstPathVc},
@@ -101,7 +101,10 @@ impl ChunkableAssetReference for CjsRequireAssetReference {}
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for CjsRequireAssetReference {
     #[turbo_tasks::function]
-    async fn code_generation(&self, context: EcmascriptChunkContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        context: EcmascriptChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
         let pm = PatternMappingVc::resolve_request(
             self.request,
             self.origin,
@@ -190,7 +193,10 @@ impl ChunkableAssetReference for CjsRequireResolveAssetReference {}
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
-    async fn code_generation(&self, context: EcmascriptChunkContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        context: EcmascriptChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
         let pm = PatternMappingVc::resolve_request(
             self.request,
             self.origin,
@@ -239,7 +245,7 @@ impl CodeGenerateable for CjsRequireCacheAccess {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        _context: EcmascriptChunkContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 

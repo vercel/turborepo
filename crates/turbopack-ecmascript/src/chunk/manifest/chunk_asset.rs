@@ -19,7 +19,7 @@ use crate::chunk::{
         EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptExports,
         EcmascriptExportsVc,
     },
-    EcmascriptChunkContextVc, EcmascriptChunkVc,
+    EcmascriptChunkVc, EcmascriptChunkingContextVc,
 };
 
 #[turbo_tasks::function]
@@ -45,7 +45,7 @@ fn chunk_list_modifier() -> StringVc {
 #[turbo_tasks::value(shared)]
 pub struct ManifestChunkAsset {
     pub asset: ChunkableAssetVc,
-    pub chunking_context: EcmascriptChunkContextVc,
+    pub chunking_context: EcmascriptChunkingContextVc,
     pub availability_info: AvailabilityInfo,
 }
 
@@ -54,7 +54,7 @@ impl ManifestChunkAssetVc {
     #[turbo_tasks::function]
     pub fn new(
         asset: ChunkableAssetVc,
-        chunking_context: EcmascriptChunkContextVc,
+        chunking_context: EcmascriptChunkingContextVc,
         availability_info: Value<AvailabilityInfo>,
     ) -> Self {
         Self::cell(ManifestChunkAsset {
@@ -139,7 +139,7 @@ impl EcmascriptChunkPlaceable for ManifestChunkAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: ManifestChunkAssetVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ManifestChunkItem {
             context,

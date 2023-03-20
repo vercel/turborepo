@@ -18,7 +18,7 @@ use crate::{
             EcmascriptChunkItemVc,
         },
         placeable::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
-        EcmascriptChunkContextVc,
+        EcmascriptChunkingContextVc,
     },
     utils::StringifyJs,
 };
@@ -72,7 +72,7 @@ impl ChunkItem for ManifestLoaderItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestLoaderItem {
     #[turbo_tasks::function]
-    async fn chunking_context(&self) -> Result<EcmascriptChunkContextVc> {
+    async fn chunking_context(&self) -> Result<EcmascriptChunkingContextVc> {
         Ok(self.manifest.await?.chunking_context)
     }
 

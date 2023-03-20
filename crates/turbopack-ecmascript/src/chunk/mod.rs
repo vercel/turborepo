@@ -39,7 +39,7 @@ use self::{
 };
 pub use self::{
     content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
-    context::{EcmascriptChunkContext, EcmascriptChunkContextVc},
+    context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemOptions, EcmascriptChunkItemVc,
@@ -57,7 +57,7 @@ use crate::utils::FormatIter;
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunk {
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
     runtime: EcmascriptChunkRuntimeVc,
@@ -68,7 +68,7 @@ pub struct EcmascriptChunk {
 impl EcmascriptChunkVc {
     #[turbo_tasks::function]
     pub fn new_normalized(
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
         main_entries: EcmascriptChunkPlaceablesVc,
         omit_entries: Option<EcmascriptChunkPlaceablesVc>,
         runtime: EcmascriptChunkRuntimeVc,
@@ -90,7 +90,7 @@ impl EcmascriptChunkVc {
         main_entry: EcmascriptChunkPlaceableVc,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Self> {
-        let Some(context) = EcmascriptChunkContextVc::resolve_from(&context).await? else {
+        let Some(context) = EcmascriptChunkingContextVc::resolve_from(&context).await? else {
             bail!("Ecmascript runtime not found");
         };
 
@@ -105,7 +105,7 @@ impl EcmascriptChunkVc {
 
     #[turbo_tasks::function]
     pub async fn new_with_entries_and_runtime(
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
         main_entry: EcmascriptChunkPlaceableVc,
         other_entries: EcmascriptChunkPlaceablesVc,
         runtime: EcmascriptChunkRuntimeVc,

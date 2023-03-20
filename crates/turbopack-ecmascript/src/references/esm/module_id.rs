@@ -9,7 +9,7 @@ use turbopack_core::{
 
 use super::{base::ReferencedAsset, EsmAssetReferenceVc};
 use crate::{
-    chunk::{EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -60,7 +60,10 @@ impl ChunkableAssetReference for EsmModuleIdAssetReference {
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for EsmModuleIdAssetReference {
     #[turbo_tasks::function]
-    async fn code_generation(&self, context: EcmascriptChunkContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        context: EcmascriptChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
         if let ReferencedAsset::Some(asset) = &*self.inner.get_referenced_asset().await? {

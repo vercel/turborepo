@@ -17,7 +17,7 @@ use crate::{
             EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
             EcmascriptChunkItemVc,
         },
-        EcmascriptChunkContextVc,
+        EcmascriptChunkingContextVc,
     },
     utils::StringifyJs,
 };
@@ -27,14 +27,14 @@ use crate::{
 /// __turbopack_import__ the actual module that was dynamically imported.
 #[turbo_tasks::value(shared)]
 pub(super) struct ManifestChunkItem {
-    pub context: EcmascriptChunkContextVc,
+    pub context: EcmascriptChunkingContextVc,
     pub manifest: ManifestChunkAssetVc,
 }
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ManifestChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> EcmascriptChunkContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

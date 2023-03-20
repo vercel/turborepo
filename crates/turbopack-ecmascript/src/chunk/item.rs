@@ -11,10 +11,10 @@ use turbopack_core::{
 };
 
 use super::{
-    context::EcmascriptChunkContextVc,
+    context::EcmascriptChunkingContextVc,
     manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
     placeable::EcmascriptChunkPlaceableVc,
-    EcmascriptChunkContext, EcmascriptChunkPlaceable,
+    EcmascriptChunkPlaceable, EcmascriptChunkingContext,
 };
 use crate::ParseResultSourceMapVc;
 
@@ -38,9 +38,15 @@ pub struct EcmascriptChunkItemOptions {
 #[turbo_tasks::value_trait]
 pub trait EcmascriptChunkItem: ChunkItem {
     fn content(&self) -> EcmascriptChunkItemContentVc;
-    fn chunking_context(&self) -> EcmascriptChunkContextVc;
-    fn id(&self) -> ModuleIdVc {
-        self.chunking_context().chunk_item_id(*self)
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc;
+}
+
+#[turbo_tasks::value_impl]
+impl EcmascriptChunkItemVc {
+    /// Returns the module id of this chunk item.
+    #[turbo_tasks::function]
+    pub fn id(self) -> ModuleIdVc {
+        self.chunking_context().chunk_item_id(self)
     }
 }
 
@@ -51,7 +57,7 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
             return Ok(None);
         };
 
-        let Some(context) = EcmascriptChunkContextVc::resolve_from(context).await? else {
+        let Some(context) = EcmascriptChunkingContextVc::resolve_from(context).await? else {
             return Ok(None);
         };
 
@@ -63,7 +69,7 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
         asset: ChunkableAssetVc,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Self>> {
-        let Some(context) = EcmascriptChunkContextVc::resolve_from(context).await? else {
+        let Some(context) = EcmascriptChunkingContextVc::resolve_from(context).await? else {
             return Ok(None);
         };
 

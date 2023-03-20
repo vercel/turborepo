@@ -22,7 +22,7 @@ use turbopack_core::{
 use super::{base::ReferencedAsset, EsmAssetReferenceVc};
 use crate::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc,
         EcmascriptExports,
     },
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
@@ -139,7 +139,7 @@ impl CodeGenerateable for EsmExports {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmExportsVc,
-        _context: EcmascriptChunkContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let this = self_vc.await?;
         let mut visitors = Vec::new();

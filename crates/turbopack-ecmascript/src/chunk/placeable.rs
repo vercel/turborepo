@@ -4,12 +4,12 @@ use turbopack_core::{
     chunk::{ChunkableAsset, ChunkableAssetVc},
 };
 
-use super::{item::EcmascriptChunkItemVc, EcmascriptChunkContextVc};
+use super::{item::EcmascriptChunkItemVc, EcmascriptChunkingContextVc};
 use crate::references::esm::EsmExportsVc;
 
 #[turbo_tasks::value_trait]
 pub trait EcmascriptChunkPlaceable: ChunkableAsset + Asset {
-    fn as_chunk_item(&self, context: EcmascriptChunkContextVc) -> EcmascriptChunkItemVc;
+    fn as_chunk_item(&self, context: EcmascriptChunkingContextVc) -> EcmascriptChunkItemVc;
     fn get_exports(&self) -> EcmascriptExportsVc;
 }
 

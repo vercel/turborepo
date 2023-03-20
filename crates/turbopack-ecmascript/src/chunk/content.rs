@@ -12,7 +12,7 @@ use turbopack_core::{
 use super::{
     item::EcmascriptChunkItemVc,
     placeable::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
-    EcmascriptChunkContextVc,
+    EcmascriptChunkingContextVc,
 };
 
 #[turbo_tasks::value]
@@ -44,7 +44,7 @@ impl EcmascriptChunkContentVc {
 
 #[turbo_tasks::function]
 pub(crate) fn ecmascript_chunk_content(
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: Option<EcmascriptChunkPlaceablesVc>,
     availability_info: Value<AvailabilityInfo>,
@@ -61,7 +61,7 @@ pub(crate) fn ecmascript_chunk_content(
 
 #[turbo_tasks::function]
 async fn ecmascript_chunk_content_internal(
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     entries: EcmascriptChunkPlaceablesVc,
     availability_info: Value<AvailabilityInfo>,
 ) -> Result<EcmascriptChunkContentVc> {
@@ -105,7 +105,7 @@ async fn ecmascript_chunk_content_internal(
 
 #[turbo_tasks::function]
 async fn ecmascript_chunk_content_single_entry(
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     entry: EcmascriptChunkPlaceableVc,
     availability_info: Value<AvailabilityInfo>,
 ) -> Result<EcmascriptChunkContentVc> {

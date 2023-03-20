@@ -11,7 +11,7 @@ use swc_core::{
 };
 
 use crate::{
-    chunk::EcmascriptChunkContextVc,
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::AstPathVc,
@@ -39,7 +39,7 @@ impl CodeGenerateable for EsmModuleItem {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        _context: EcmascriptChunkContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 

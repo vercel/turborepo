@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::{bail, Context, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{TryJoinIterExt, Value};
+use turbo_tasks::TryJoinIterExt;
 use turbo_tasks_fs::{embed_file, File, FileContent};
 use turbopack_core::{
     asset::AssetContentVc,
@@ -18,25 +18,25 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkPlaceable,
+        EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceablesVc,
         EcmascriptChunkRuntimeContent, EcmascriptChunkRuntimeContentVc, EcmascriptChunkVc,
+        EcmascriptChunkingContextVc,
     },
     utils::StringifyJs,
 };
 
 use super::{
     content_entry::EcmascriptDevChunkContentEntriesVc,
-    merged::merger::EcmascriptDevChunkContentMergerVc, runtime::EcmascriptDevChunkRuntimeMode,
-    version::EcmascriptDevChunkVersionVc,
+    merged::merger::EcmascriptDevChunkContentMergerVc, version::EcmascriptDevChunkVersionVc,
 };
 
 #[turbo_tasks::value(serialization = "none")]
 pub(super) struct EcmascriptDevChunkContent {
     pub(super) entries: EcmascriptDevChunkContentEntriesVc,
-    pub(super) chunking_context: EcmascriptChunkContextVc,
+    pub(super) chunking_context: EcmascriptChunkingContextVc,
     pub(super) chunk: EcmascriptChunkVc,
     pub(super) chunk_group: Option<ChunkGroupVc>,
-    pub(super) runtime_mode: EcmascriptDevChunkRuntimeMode,
+    pub(super) evaluated_entries: Option<EcmascriptChunkPlaceablesVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -44,9 +44,9 @@ impl EcmascriptDevChunkContentVc {
     #[turbo_tasks::function]
     pub(crate) async fn new(
         chunk: EcmascriptChunkVc,
-        chunking_context: EcmascriptChunkContextVc,
+        chunking_context: EcmascriptChunkingContextVc,
         chunk_group: Option<ChunkGroupVc>,
-        runtime_mode: Value<EcmascriptDevChunkRuntimeMode>,
+        evaluated_entries: Option<EcmascriptChunkPlaceablesVc>,
     ) -> Result<Self> {
         let chunk_content = chunk.chunk_content();
         let entries = EcmascriptDevChunkContentEntriesVc::new(chunk_content)
@@ -57,7 +57,7 @@ impl EcmascriptDevChunkContentVc {
             chunking_context,
             chunk,
             chunk_group,
-            runtime_mode: runtime_mode.into_value(),
+            evaluated_entries,
         }
         .cell())
     }
@@ -76,7 +76,7 @@ impl EcmascriptDevChunkContentVc {
     }
 
     #[turbo_tasks::function]
-    async fn params(self) -> Result<CodeVc> {
+    async fn params(self, evaluated_entries: EcmascriptChunkPlaceablesVc) -> Result<CodeVc> {
         let this = self.await?;
         let chunk_group = this
             .chunk_group
@@ -106,9 +106,7 @@ impl EcmascriptDevChunkContentVc {
             }
         }
 
-        let runtime_module_ids = this
-            .chunk
-            .main_entries()
+        let runtime_module_ids = evaluated_entries
             .await?
             .iter()
             .map(|entry| entry.as_chunk_item(this.chunking_context).id())
@@ -222,16 +220,16 @@ impl EcmascriptDevChunkContentVc {
         write!(code, "\n}}")?;
 
         // Only include params when we're evaluating the current chunk.
-        if this.runtime_mode == EcmascriptDevChunkRuntimeMode::RegisterAndEvaluate {
+        if let Some(evaluated_entries) = this.evaluated_entries {
             write!(code, "\n,")?;
-            let params = self.params().await?;
+            let params = self.params(evaluated_entries).await?;
             code.push_code(&params);
         }
 
         writeln!(code, "]);")?;
 
         // Only include the runtime code when we're evaluating the current chunk.
-        if this.runtime_mode == EcmascriptDevChunkRuntimeMode::RegisterAndEvaluate {
+        if this.evaluated_entries.is_some() {
             writeln!(code)?;
             let runtime = self.runtime().await?;
             code.push_code(&runtime);

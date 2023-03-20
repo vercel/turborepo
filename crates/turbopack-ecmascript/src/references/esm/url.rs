@@ -21,7 +21,7 @@ use turbopack_core::{
 
 use super::base::{ReferencedAsset, ReferencedAssetVc};
 use crate::{
-    chunk::{EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -110,7 +110,7 @@ impl CodeGenerateable for UrlAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: UrlAssetReferenceVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let this = self_vc.await?;
         let mut visitors = vec![];

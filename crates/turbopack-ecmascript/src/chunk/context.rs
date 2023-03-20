@@ -2,19 +2,22 @@ use anyhow::Result;
 use turbo_tasks::ValueToString;
 use turbopack_core::chunk::{ChunkItem, ChunkingContext, ChunkingContextVc, ModuleId, ModuleIdVc};
 
-use super::{item::EcmascriptChunkItemVc, EcmascriptChunkRuntimeVc};
+use super::{item::EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc};
 
-/// [`EcmascriptChunkContext`] must be implemented by [`ChunkingContext`]
+/// [`EcmascriptChunkingContext`] must be implemented by [`ChunkingContext`]
 /// implementors that want to operate on [`EcmascriptChunk`]s.
 #[turbo_tasks::value_trait]
-pub trait EcmascriptChunkContext: ChunkingContext {
+pub trait EcmascriptChunkingContext: ChunkingContext {
     /// Returns an EcmascriptChunkRuntime implementation that registers a
     /// chunk's contents when executed.
     fn ecmascript_runtime(&self) -> EcmascriptChunkRuntimeVc;
 
     /// Returns an EcmascriptChunkRuntime implementation that registers a
     /// chunk's contents and evaluates its main entries when executed.
-    fn evaluated_ecmascript_runtime(&self) -> EcmascriptChunkRuntimeVc;
+    fn evaluated_ecmascript_runtime(
+        &self,
+        evaluated_entries: EcmascriptChunkPlaceablesVc,
+    ) -> EcmascriptChunkRuntimeVc;
 
     async fn chunk_item_id(&self, chunk_item: EcmascriptChunkItemVc) -> Result<ModuleIdVc> {
         let layer = self.layer();

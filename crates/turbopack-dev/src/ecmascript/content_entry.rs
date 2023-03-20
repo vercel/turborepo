@@ -35,7 +35,7 @@ impl EcmascriptDevChunkContentEntry {
         let code = item_code(chunk_item).resolve().await?;
         Ok(EcmascriptDevChunkContentEntry {
             code,
-            hash: code.hash().resolve().await?,
+            hash: code.source_code_hash().resolve().await?,
         })
     }
 }

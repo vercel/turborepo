@@ -26,9 +26,9 @@ use turbopack_core::{
 use turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     utils::StringifyJs,
 };
@@ -99,7 +99,7 @@ impl EcmascriptChunkPlaceable for StaticModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: StaticModuleAssetVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ModuleChunkItemVc::cell(ModuleChunkItem {
             module: self_vc,
@@ -164,7 +164,7 @@ impl Asset for StaticAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: StaticModuleAssetVc,
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     static_asset: StaticAssetVc,
 }
 
@@ -191,7 +191,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> EcmascriptChunkContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

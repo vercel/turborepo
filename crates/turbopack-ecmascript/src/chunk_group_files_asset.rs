@@ -18,9 +18,9 @@ use turbopack_core::{
 
 use crate::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc,
         EcmascriptExports, EcmascriptExportsVc,
     },
     utils::StringifyJs,
@@ -115,7 +115,7 @@ impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self_vc: ChunkGroupFilesAssetVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<EcmascriptChunkItemVc> {
         let this = self_vc.await?;
         Ok(ChunkGroupFilesChunkItem {
@@ -141,7 +141,7 @@ impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
 
 #[turbo_tasks::value]
 struct ChunkGroupFilesChunkItem {
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     client_root: FileSystemPathVc,
     inner: ChunkGroupFilesAssetVc,
     chunk: ChunkVc,
@@ -150,7 +150,7 @@ struct ChunkGroupFilesChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ChunkGroupFilesChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> EcmascriptChunkContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

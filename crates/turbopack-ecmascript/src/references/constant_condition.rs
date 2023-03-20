@@ -4,7 +4,7 @@ use turbo_tasks::Value;
 
 use super::AstPathVc;
 use crate::{
-    chunk::EcmascriptChunkContextVc,
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
 };
@@ -39,7 +39,7 @@ impl CodeGenerateable for ConstantCondition {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        _context: EcmascriptChunkContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let value = self.value;
         let visitors = [

@@ -7,8 +7,8 @@ use turbopack_core::{
     reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkContextVc, EcmascriptChunkRuntime, EcmascriptChunkRuntimeContentVc,
-    EcmascriptChunkRuntimeVc, EcmascriptChunkVc,
+    EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntime, EcmascriptChunkRuntimeContentVc,
+    EcmascriptChunkRuntimeVc, EcmascriptChunkVc, EcmascriptChunkingContextVc,
 };
 
 use crate::ecmascript::content::EcmascriptDevChunkContentVc;
@@ -17,12 +17,14 @@ use crate::ecmascript::content::EcmascriptDevChunkContentVc;
 #[turbo_tasks::value(shared)]
 pub(crate) struct EcmascriptDevChunkRuntime {
     /// The chunking context that created this runtime.
-    chunking_context: EcmascriptChunkContextVc,
+    chunking_context: EcmascriptChunkingContextVc,
     /// All chunks of this chunk group need to be ready for execution to start.
     /// When None, it will use a chunk group created from the current chunk.
     chunk_group: Option<ChunkGroupVc>,
-    /// The mode of this runtime.
-    mode: EcmascriptDevChunkRuntimeMode,
+    /// If any evaluated entries are set, the main runtime code will be included
+    /// in the chunk and the provided entries will be evaluated as soon as the
+    /// chunk executes.
+    evaluated_entries: Option<EcmascriptChunkPlaceablesVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -30,13 +32,13 @@ impl EcmascriptDevChunkRuntimeVc {
     /// Creates a new [`EcmascriptDevChunkRuntimeVc`].
     #[turbo_tasks::function]
     pub fn new(
-        chunking_context: EcmascriptChunkContextVc,
-        mode: Value<EcmascriptDevChunkRuntimeMode>,
+        chunking_context: EcmascriptChunkingContextVc,
+        evaluated_entries: Option<EcmascriptChunkPlaceablesVc>,
     ) -> Self {
         EcmascriptDevChunkRuntime {
             chunking_context,
             chunk_group: None,
-            mode: mode.into_value(),
+            evaluated_entries,
         }
         .cell()
     }
@@ -66,7 +68,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         let Self {
             chunking_context: _,
             chunk_group,
-            mode,
+            evaluated_entries,
         } = self;
 
         let mut ident = ident.await?.clone_value();
@@ -77,10 +79,9 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         // Only add other modifiers when the chunk is evaluated. Otherwise, it will
         // not receive any params and as such won't differ from another chunk in a
         // different chunk group.
-        if matches!(mode, EcmascriptDevChunkRuntimeMode::RegisterAndEvaluate) {
+        if let Some(evaluated_entries) = evaluated_entries {
             ident.modifiers.extend(
-                origin_chunk
-                    .main_entries()
+                evaluated_entries
                     .await?
                     .iter()
                     .map(|entry| entry.ident().to_string()),
@@ -107,7 +108,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         EcmascriptDevChunkRuntimeVc::cell(EcmascriptDevChunkRuntime {
             chunking_context: self.chunking_context,
             chunk_group: Some(chunk_group),
-            mode: self.mode,
+            evaluated_entries: self.evaluated_entries,
         })
     }
 
@@ -116,7 +117,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         let Self {
             chunk_group,
             chunking_context,
-            mode: _,
+            evaluated_entries: _,
         } = self;
 
         let chunk_group =
@@ -134,7 +135,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
             origin_chunk,
             self.chunking_context,
             self.chunk_group,
-            Value::new(self.mode),
+            self.evaluated_entries,
         )
         .into()
     }
@@ -147,12 +148,18 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         let Self {
             chunking_context,
             chunk_group,
-            mut mode,
+            evaluated_entries,
         } = self;
 
         let chunking_context = chunking_context.resolve().await?;
         let chunk_group = if let Some(chunk_group) = chunk_group {
             Some(chunk_group.resolve().await?)
+        } else {
+            None
+        };
+
+        let mut evaluated_entries = if let Some(evaluated_entries) = evaluated_entries {
+            Some(evaluated_entries.await?.clone_value())
         } else {
             None
         };
@@ -165,7 +172,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
             let Self {
                 chunking_context: other_chunking_context,
                 chunk_group: other_chunk_group,
-                mode: other_mode,
+                evaluated_entries: other_evaluated_entries,
             } = &*runtime.await?;
 
             let other_chunking_context = other_chunking_context.resolve().await?;
@@ -183,54 +190,24 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
                 bail!("cannot merge EcmascriptDevChunkRuntime with different chunk groups",);
             }
 
-            mode |= *other_mode;
+            match (&mut evaluated_entries, other_evaluated_entries) {
+                (Some(evaluated_entries), Some(other_evaluated_entries)) => {
+                    evaluated_entries.extend(other_evaluated_entries.await?.iter().copied());
+                }
+                (None, Some(other_evaluated_entries)) => {
+                    evaluated_entries = Some(other_evaluated_entries.await?.clone_value());
+                }
+                _ => {}
+            }
         }
 
         Ok(EcmascriptDevChunkRuntime {
             chunking_context,
             chunk_group,
-            mode,
+            evaluated_entries: evaluated_entries
+                .map(|evaluated_entries| EcmascriptChunkPlaceablesVc::cell(evaluated_entries)),
         }
         .cell()
         .into())
-    }
-
-    #[turbo_tasks::function]
-    fn evaluated(&self) -> EcmascriptChunkRuntimeVc {
-        EcmascriptDevChunkRuntime {
-            chunking_context: self.chunking_context,
-            chunk_group: self.chunk_group,
-            mode: EcmascriptDevChunkRuntimeMode::RegisterAndEvaluate,
-        }
-        .cell()
-        .into()
-    }
-}
-
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, Copy, PartialOrd, Ord, Hash)]
-pub(crate) enum EcmascriptDevChunkRuntimeMode {
-    /// The main runtime code will be included in the chunk and the main entries
-    /// will be evaluated as soon as the chunk executes.
-    RegisterAndEvaluate,
-    /// The chunk's entries will be registered within an existing runtime.
-    Register,
-}
-
-impl std::ops::BitOr for EcmascriptDevChunkRuntimeMode {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Self::RegisterAndEvaluate, _) => Self::RegisterAndEvaluate,
-            (_, Self::RegisterAndEvaluate) => Self::RegisterAndEvaluate,
-            _ => Self::Register,
-        }
-    }
-}
-
-impl std::ops::BitOrAssign for EcmascriptDevChunkRuntimeMode {
-    fn bitor_assign(&mut self, rhs: Self) {
-        *self = *self | rhs;
     }
 }

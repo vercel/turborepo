@@ -28,9 +28,9 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     utils::StringifyJs,
     ParseResultSourceMap, ParseResultSourceMapVc,
@@ -213,7 +213,7 @@ impl EcmascriptChunkPlaceable for ModuleCssModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: ModuleCssModuleAssetVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ModuleChunkItem {
             context,
@@ -245,7 +245,7 @@ impl ResolveOrigin for ModuleCssModuleAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: ModuleCssModuleAssetVc,
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -277,7 +277,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> EcmascriptChunkContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

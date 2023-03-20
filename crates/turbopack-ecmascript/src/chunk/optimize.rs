@@ -12,17 +12,17 @@ use turbopack_core::chunk::{
 };
 
 use super::{
-    runtime::EcmascriptChunkRuntime, EcmascriptChunkContextVc, EcmascriptChunkPlaceablesVc,
-    EcmascriptChunkVc,
+    runtime::EcmascriptChunkRuntime, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+    EcmascriptChunkingContextVc,
 };
 
 #[turbo_tasks::value]
-pub struct EcmascriptChunkOptimizer(EcmascriptChunkContextVc);
+pub struct EcmascriptChunkOptimizer(EcmascriptChunkingContextVc);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkOptimizerVc {
     #[turbo_tasks::function]
-    pub fn new(context: EcmascriptChunkContextVc) -> Self {
+    pub fn new(context: EcmascriptChunkingContextVc) -> Self {
         EcmascriptChunkOptimizer(context).cell()
     }
 }

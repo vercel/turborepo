@@ -14,10 +14,11 @@ use turbopack_core::{
     ident::{AssetIdent, AssetIdentVc},
 };
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkContext, EcmascriptChunkContextVc, EcmascriptChunkRuntimeVc,
+    EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc, EcmascriptChunkingContext,
+    EcmascriptChunkingContextVc,
 };
 
-use crate::ecmascript::runtime::{EcmascriptDevChunkRuntimeMode, EcmascriptDevChunkRuntimeVc};
+use crate::ecmascript::runtime::{EcmascriptDevChunkRuntimeVc};
 
 pub struct DevChunkingContextBuilder {
     context: DevChunkingContext,
@@ -276,22 +277,17 @@ impl ChunkingContext for DevChunkingContext {
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkContext for DevChunkingContext {
+impl EcmascriptChunkingContext for DevChunkingContext {
     #[turbo_tasks::function]
-    fn ecmascript_runtime(self_vc: EcmascriptChunkContextVc) -> EcmascriptChunkRuntimeVc {
-        EcmascriptDevChunkRuntimeVc::new(
-            self_vc,
-            Value::new(EcmascriptDevChunkRuntimeMode::Register),
-        )
-        .into()
+    fn ecmascript_runtime(self_vc: EcmascriptChunkingContextVc) -> EcmascriptChunkRuntimeVc {
+        EcmascriptDevChunkRuntimeVc::new(self_vc, None).into()
     }
 
     #[turbo_tasks::function]
-    fn evaluated_ecmascript_runtime(self_vc: EcmascriptChunkContextVc) -> EcmascriptChunkRuntimeVc {
-        EcmascriptDevChunkRuntimeVc::new(
-            self_vc,
-            Value::new(EcmascriptDevChunkRuntimeMode::RegisterAndEvaluate),
-        )
-        .into()
+    fn evaluated_ecmascript_runtime(
+        self_vc: EcmascriptChunkingContextVc,
+        evaluated_entries: EcmascriptChunkPlaceablesVc,
+    ) -> EcmascriptChunkRuntimeVc {
+        EcmascriptDevChunkRuntimeVc::new(self_vc, Some(evaluated_entries)).into()
     }
 }

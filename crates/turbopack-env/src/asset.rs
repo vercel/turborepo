@@ -15,9 +15,9 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunkContextVc, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkItemContentVc, EcmascriptChunkItemVc, EcmascriptChunkPlaceable,
-        EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     utils::StringifyJs,
 };
@@ -76,7 +76,7 @@ impl EcmascriptChunkPlaceable for ProcessEnvAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: ProcessEnvAssetVc,
-        context: EcmascriptChunkContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ProcessEnvChunkItem {
             context,
@@ -94,7 +94,7 @@ impl EcmascriptChunkPlaceable for ProcessEnvAsset {
 
 #[turbo_tasks::value]
 struct ProcessEnvChunkItem {
-    context: EcmascriptChunkContextVc,
+    context: EcmascriptChunkingContextVc,
     inner: ProcessEnvAssetVc,
 }
 
@@ -114,7 +114,7 @@ impl ChunkItem for ProcessEnvChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ProcessEnvChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> EcmascriptChunkContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

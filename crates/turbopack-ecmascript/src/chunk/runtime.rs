@@ -12,10 +12,6 @@ use super::EcmascriptChunkVc;
 /// The runtime for an EcmaScript chunk.
 #[turbo_tasks::value_trait]
 pub trait EcmascriptChunkRuntime: ValueToString {
-    /// Returns a version of this runtime that will generate an evaluation
-    /// section for the chunk's main entries.
-    fn evaluated(&self) -> EcmascriptChunkRuntimeVc;
-
     /// Decorates the asset identifiers of the chunk to make it unique for this
     /// runtime.
     fn decorate_asset_ident(&self, chunk: EcmascriptChunkVc, ident: AssetIdentVc) -> AssetIdentVc;
