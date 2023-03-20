@@ -259,7 +259,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 		ec.logError(progressLogger, prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
-			return nil, errors.Wrapf(err, "failed to initialize output capture for task %v", packageTask.TaskID)
+			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
 		}
 	}
 
