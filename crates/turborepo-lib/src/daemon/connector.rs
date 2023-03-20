@@ -621,10 +621,22 @@ mod test {
             }))
             .serve_with_incoming(stream);
 
+        let (pid_file, sock_file) = if cfg!(windows) {
+            (
+                AbsoluteNormalizedPathBuf::new(PathBuf::from("C:\\pid")).unwrap(),
+                AbsoluteNormalizedPathBuf::new(PathBuf::from("C:\\sock")).unwrap(),
+            )
+        } else {
+            (
+                AbsoluteNormalizedPathBuf::new(PathBuf::from("/pid")).unwrap(),
+                AbsoluteNormalizedPathBuf::new(PathBuf::from("/sock")).unwrap(),
+            )
+        };
+
         // set up the client
         let conn = DaemonConnector {
-            pid_file: AbsoluteNormalizedPathBuf::new(PathBuf::from("/pid")).unwrap(),
-            sock_file: AbsoluteNormalizedPathBuf::new(PathBuf::from("/sock")).unwrap(),
+            pid_file,
+            sock_file,
             can_kill_server: false,
             can_start_server: false,
         };
