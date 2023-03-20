@@ -261,7 +261,7 @@ impl DaemonConnector {
 
 #[cfg(target_os = "windows")]
 fn win(
-    path: Arc<PathBuf>,
+    path: Arc<turborepo_paths::AbsoluteNormalizedPathBuf>,
 ) -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite, std::io::Error> {
     use tokio_util::compat::FuturesAsyncReadCompatExt;
     uds_windows::UnixStream::connect(&*path)
