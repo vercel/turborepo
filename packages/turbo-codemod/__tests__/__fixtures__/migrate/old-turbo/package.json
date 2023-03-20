@@ -10,12 +10,14 @@
     "pipeline": {
       "build": {
         "outputs": [
-          ".next/**"
+          ".next/**",
+          "!.next/cache/**"
         ]
       },
       "lint": {
         "outputs": []
       },
+      "test": {},
       "dev": {
         "cache": false
       }

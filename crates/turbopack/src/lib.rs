@@ -34,6 +34,7 @@ use turbopack_core::{
     asset::{Asset, AssetVc},
     compile_time_info::CompileTimeInfoVc,
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
     reference::all_referenced_assets,
     reference_type::ReferenceType,
@@ -76,7 +77,7 @@ lazy_static! {
 
 #[turbo_tasks::value]
 struct ModuleIssue {
-    path: FileSystemPathVc,
+    ident: AssetIdentVc,
     title: StringVc,
     description: StringVc,
 }
@@ -90,7 +91,7 @@ impl Issue for ModuleIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> FileSystemPathVc {
-        self.path
+        self.ident.path()
     }
 
     #[turbo_tasks::function]
@@ -159,97 +160,13 @@ async fn apply_module_type(
     })
 }
 
-#[turbo_tasks::function]
-async fn module(
-    source: AssetVc,
-    context: ModuleAssetContextVc,
-    reference_type: Value<ReferenceType>,
-) -> Result<AssetVc> {
-    let path = source.path().resolve().await?;
-    let options = ModuleOptionsVc::new(path.parent(), context.module_options_context());
-
-    let reference_type = reference_type.into_value();
-    let mut current_source = source;
-    let mut current_module_type = None;
-    for rule in options.await?.rules.iter() {
-        if rule.matches(source, &*path.await?, &reference_type).await? {
-            for effect in rule.effects() {
-                match effect {
-                    ModuleRuleEffect::SourceTransforms(transforms) => {
-                        current_source = transforms.transform(current_source);
-                        if current_source.path().resolve().await? != path {
-                            // The path has been changed, so we need to apply new rules.
-                            return Ok(module(current_source, context, Value::new(reference_type)));
-                        }
-                    }
-                    ModuleRuleEffect::ModuleType(module) => {
-                        current_module_type = Some(*module);
-                    }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
-                        current_module_type = match current_module_type {
-                            Some(ModuleType::Ecmascript(transforms)) => Some(
-                                ModuleType::Ecmascript(transforms.extend(*additional_transforms)),
-                            ),
-                            Some(ModuleType::Typescript(transforms)) => Some(
-                                ModuleType::Typescript(transforms.extend(*additional_transforms)),
-                            ),
-                            Some(ModuleType::TypescriptWithTypes(transforms)) => {
-                                Some(ModuleType::TypescriptWithTypes(
-                                    transforms.extend(*additional_transforms),
-                                ))
-                            }
-                            Some(module_type) => {
-                                ModuleIssue {
-                                    path,
-                                    title: StringVc::cell("Invalid module type".to_string()),
-                                    description: StringVc::cell(
-                                        "The module type must be Ecmascript or Typescript to add \
-                                         Ecmascript transforms"
-                                            .to_string(),
-                                    ),
-                                }
-                                .cell()
-                                .as_issue()
-                                .emit();
-                                Some(module_type)
-                            }
-                            None => {
-                                ModuleIssue {
-                                    path,
-                                    title: StringVc::cell("Missing module type".to_string()),
-                                    description: StringVc::cell(
-                                        "The module type effect must be applied before adding \
-                                         Ecmascript transforms"
-                                            .to_string(),
-                                    ),
-                                }
-                                .cell()
-                                .as_issue()
-                                .emit();
-                                None
-                            }
-                        };
-                    }
-                    ModuleRuleEffect::Custom => {
-                        todo!("Custom module rule effects are not yet supported");
-                    }
-                }
-            }
-        }
-    }
-
-    let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
-
-    Ok(apply_module_type(current_source, context, module_type))
-}
-
 #[derive(Debug)]
 #[turbo_tasks::value]
 pub struct ModuleAssetContext {
-    transitions: TransitionsByNameVc,
-    compile_time_info: CompileTimeInfoVc,
-    module_options_context: ModuleOptionsContextVc,
-    resolve_options_context: ResolveOptionsContextVc,
+    pub transitions: TransitionsByNameVc,
+    pub compile_time_info: CompileTimeInfoVc,
+    pub module_options_context: ModuleOptionsContextVc,
+    pub resolve_options_context: ResolveOptionsContextVc,
     transition: Option<TransitionVc>,
 }
 
@@ -319,6 +236,98 @@ impl ModuleAssetContextVc {
             resolve_options_context,
         ))
     }
+
+    #[turbo_tasks::function]
+    async fn process_default(
+        self_vc: ModuleAssetContextVc,
+        source: AssetVc,
+        reference_type: Value<ReferenceType>,
+    ) -> Result<AssetVc> {
+        let ident = source.ident().resolve().await?;
+        let options = ModuleOptionsVc::new(ident.path().parent(), self_vc.module_options_context());
+
+        let reference_type = reference_type.into_value();
+        let mut current_source = source;
+        let mut current_module_type = None;
+        for rule in options.await?.rules.iter() {
+            if rule
+                .matches(source, &*ident.path().await?, &reference_type)
+                .await?
+            {
+                for effect in rule.effects() {
+                    match effect {
+                        ModuleRuleEffect::SourceTransforms(transforms) => {
+                            current_source = transforms.transform(current_source);
+                            if current_source.ident().resolve().await? != ident {
+                                // The ident has been changed, so we need to apply new rules.
+                                return Ok(self_vc
+                                    .process_default(current_source, Value::new(reference_type)));
+                            }
+                        }
+                        ModuleRuleEffect::ModuleType(module) => {
+                            current_module_type = Some(*module);
+                        }
+                        ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
+                            current_module_type = match current_module_type {
+                                Some(ModuleType::Ecmascript(transforms)) => {
+                                    Some(ModuleType::Ecmascript(
+                                        transforms.extend(*additional_transforms),
+                                    ))
+                                }
+                                Some(ModuleType::Typescript(transforms)) => {
+                                    Some(ModuleType::Typescript(
+                                        transforms.extend(*additional_transforms),
+                                    ))
+                                }
+                                Some(ModuleType::TypescriptWithTypes(transforms)) => {
+                                    Some(ModuleType::TypescriptWithTypes(
+                                        transforms.extend(*additional_transforms),
+                                    ))
+                                }
+                                Some(module_type) => {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StringVc::cell("Invalid module type".to_string()),
+                                        description: StringVc::cell(
+                                            "The module type must be Ecmascript or Typescript to \
+                                             add Ecmascript transforms"
+                                                .to_string(),
+                                        ),
+                                    }
+                                    .cell()
+                                    .as_issue()
+                                    .emit();
+                                    Some(module_type)
+                                }
+                                None => {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StringVc::cell("Missing module type".to_string()),
+                                        description: StringVc::cell(
+                                            "The module type effect must be applied before adding \
+                                             Ecmascript transforms"
+                                                .to_string(),
+                                        ),
+                                    }
+                                    .cell()
+                                    .as_issue()
+                                    .emit();
+                                    None
+                                }
+                            };
+                        }
+                        ModuleRuleEffect::Custom => {
+                            todo!("Custom module rule effects are not yet supported");
+                        }
+                    }
+                }
+            }
+        }
+
+        let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
+
+        Ok(apply_module_type(current_source, self_vc, module_type))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -383,7 +392,6 @@ impl AssetContext for ModuleAssetContext {
             .await?
             .into())
     }
-
     #[turbo_tasks::function]
     async fn process(
         self_vc: ModuleAssetContextVc,
@@ -392,28 +400,9 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<AssetVc> {
         let this = self_vc.await?;
         if let Some(transition) = this.transition {
-            let asset = transition.process_source(asset);
-            let compile_time_info = transition.process_compile_time_info(this.compile_time_info);
-            let module_options_context =
-                transition.process_module_options_context(this.module_options_context);
-            let resolve_options_context =
-                transition.process_resolve_options_context(this.resolve_options_context);
-            let context = ModuleAssetContextVc::new(
-                this.transitions,
-                compile_time_info,
-                module_options_context,
-                resolve_options_context,
-            );
-            let m = module(asset, context, reference_type);
-            Ok(transition.process_module(m, context))
+            Ok(transition.process(asset, self_vc, reference_type))
         } else {
-            let context = ModuleAssetContextVc::new(
-                this.transitions,
-                this.compile_time_info,
-                this.module_options_context,
-                this.resolve_options_context,
-            );
-            Ok(module(asset, context, reference_type))
+            Ok(self_vc.process_default(asset, reference_type))
         }
     }
 
@@ -472,7 +461,7 @@ async fn emit_aggregated_assets(
 
 #[turbo_tasks::function]
 pub async fn emit_asset(asset: AssetVc) -> CompletionVc {
-    asset.content().write(asset.path())
+    asset.content().write(asset.ident().path())
 }
 
 #[turbo_tasks::function]
@@ -481,19 +470,11 @@ pub async fn emit_asset_into_dir(
     output_dir: FileSystemPathVc,
 ) -> Result<CompletionVc> {
     let dir = &*output_dir.await?;
-    Ok(if asset.path().await?.is_inside(dir) {
+    Ok(if asset.ident().path().await?.is_inside(dir) {
         emit_asset(asset)
     } else {
         CompletionVc::new()
     })
-}
-
-#[turbo_tasks::function]
-pub fn print_most_referenced(asset: AssetVc) {
-    let aggregated = aggregate(asset);
-    let back_references = compute_back_references(aggregated);
-    let sorted_back_references = top_references(back_references);
-    print_references(sorted_back_references);
 }
 
 #[turbo_tasks::value(shared)]
@@ -556,20 +537,6 @@ async fn top_references(list: ReferencesListVc) -> Result<ReferencesListVc> {
             .collect(),
     }
     .into())
-}
-
-#[turbo_tasks::function]
-async fn print_references(list: ReferencesListVc) -> Result<()> {
-    let list = list.await?;
-    println!("TOP REFERENCES:");
-    for (asset, references) in list.referenced_by.iter() {
-        println!(
-            "{} -> {} times referenced",
-            asset.path().await?.path,
-            references.len()
-        );
-    }
-    Ok(())
 }
 
 async fn warn_on_unsupported_modules(

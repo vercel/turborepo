@@ -8,9 +8,9 @@ import (
 
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 func setMatches(t *testing.T, name string, s util.Set, expected []string) {
@@ -37,7 +37,7 @@ func Test_filter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: make(map[string]*fs.PackageJSON),
 	}
 	packageJSONs := workspaceInfos.PackageJSONs
@@ -341,7 +341,7 @@ func Test_matchScopedPackage(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: make(map[string]*fs.PackageJSON),
 	}
 	packageJSONs := workspaceInfos.PackageJSONs
@@ -377,7 +377,7 @@ func Test_matchExactPackages(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: make(map[string]*fs.PackageJSON),
 	}
 	packageJSONs := workspaceInfos.PackageJSONs
@@ -418,7 +418,7 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: make(map[string]*fs.PackageJSON),
 	}
 	packageJSONs := workspaceInfos.PackageJSONs
@@ -464,7 +464,7 @@ func Test_SCM(t *testing.T) {
 	head1Changed.Add(util.RootPkgName)
 	head2Changed := make(util.Set)
 	head2Changed.Add("package-3")
-	workspaceInfos := graph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: make(map[string]*fs.PackageJSON),
 	}
 	packageJSONs := workspaceInfos.PackageJSONs

@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{debug::ValueDebug, primitives::StringVc};
+use turbo_tasks::primitives::StringVc;
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc},
+    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
-    version::{Update, UpdateVc, Version, VersionVc, VersionedContent, VersionedContentVc},
+    version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
 
 /// The HTML entry point of the dev server.
@@ -24,8 +25,8 @@ pub struct DevHtmlAsset {
 #[turbo_tasks::value_impl]
 impl Asset for DevHtmlAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.path
+    fn ident(&self) -> AssetIdentVc {
+        AssetIdentVc::from_path(self.path)
     }
 
     #[turbo_tasks::function]
@@ -181,28 +182,6 @@ impl VersionedContent for DevHtmlAssetContent {
     #[turbo_tasks::function]
     fn version(self_vc: DevHtmlAssetContentVc) -> VersionVc {
         self_vc.version().into()
-    }
-
-    #[turbo_tasks::function]
-    async fn update(self_vc: DevHtmlAssetContentVc, from_version: VersionVc) -> Result<UpdateVc> {
-        let from_version = DevHtmlAssetVersionVc::resolve_from(from_version)
-            .await?
-            .context("version must be an `DevHtmlAssetVersionVc`")?;
-        let to_version = self_vc.version();
-
-        let to = to_version.await?;
-        let from = from_version.await?;
-
-        if to.content.chunk_paths == from.content.chunk_paths {
-            return Ok(Update::None.into());
-        }
-
-        Err(anyhow!(
-            "cannot update `DevHtmlAssetContentVc` from version {:?} to version {:?}: the \
-             versions contain different chunks, which is not yet supported",
-            from_version.dbg().await?,
-            to_version.dbg().await?,
-        ))
     }
 }
 

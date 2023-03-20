@@ -7,12 +7,16 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     context::AssetContextVc,
+    ident::AssetIdentVc,
     reference::{AssetReference, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -35,6 +39,11 @@ use crate::{
     transform::CssInputTransformsVc,
     CssModuleAssetType,
 };
+
+#[turbo_tasks::function]
+fn modifier() -> StringVc {
+    StringVc::cell("css".to_string())
+}
 
 #[turbo_tasks::value]
 #[derive(Clone)]
@@ -84,8 +93,8 @@ impl CssModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for CssModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -109,8 +118,12 @@ impl Asset for CssModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for CssModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: CssModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        CssChunkVc::new(context, self_vc.into()).into()
+    fn as_chunk(
+        self_vc: CssModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        CssChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 
@@ -130,7 +143,7 @@ impl CssChunkPlaceable for CssModuleAsset {
 impl ResolveOrigin for CssModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.source.path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -146,18 +159,12 @@ struct ModuleChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for ModuleChunkItem {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "{} (css)",
-            self.module.await?.source.path().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for ModuleChunkItem {
+    #[turbo_tasks::function]
+    fn asset_ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         self.module.references()
@@ -279,7 +286,7 @@ impl CssChunkItem for ModuleChunkItem {
             Ok(CssChunkItemContent {
                 inner_code: format!(
                     "/* unparseable {} */",
-                    self.module.path().to_string().await?
+                    self.module.ident().to_string().await?
                 )
                 .into(),
                 imports: vec![],

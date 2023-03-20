@@ -24,7 +24,7 @@ const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
         cache: false,
       },
       build: {
-        outputs: ["dist/**/*", ".next/**/*"],
+        outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
         dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
       },
     },
@@ -207,6 +207,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -247,6 +248,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -293,6 +295,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -343,6 +346,7 @@ describe("migrate-env-var-dependencies", () => {
               "outputs": Array [
                 "dist/**/*",
                 ".next/**/*",
+                "!.next/cache/**",
               ],
             },
             "dev": Object {
@@ -395,7 +399,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,
@@ -425,6 +429,90 @@ describe("migrate-env-var-dependencies", () => {
       `);
     });
 
+    it("migrates turbo.json env var dependencies - workspace configs", async () => {
+      // load the fixture for the test
+      const { root, readJson } = useFixture({
+        fixture: "workspace-configs",
+      });
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(readJson("turbo.json") || "{}").toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        globalDependencies: [".env"],
+        globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
+        pipeline: {
+          build: {
+            dependsOn: ["^build"],
+            env: ["PROD_API_KEY"],
+            outputs: [".next/**", "!.next/cache/**"],
+          },
+          dev: {
+            cache: false,
+          },
+          lint: {
+            dependsOn: [],
+            env: ["IS_TEST"],
+            outputs: [],
+          },
+          test: {
+            dependsOn: ["test"],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+        },
+      });
+
+      expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        extends: ["//"],
+        pipeline: {
+          build: {
+            // old
+            dependsOn: ["build"],
+            // new
+            env: ["ENV_1", "ENV_2"],
+          },
+        },
+      });
+
+      expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        extends: ["//"],
+        pipeline: {
+          build: {
+            dependsOn: [],
+            env: ["IS_SERVER"],
+          },
+        },
+      });
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "apps/web/turbo.json": Object {
+            "action": "modified",
+            "additions": 1,
+            "deletions": 0,
+          },
+          "packages/ui/turbo.json": Object {
+            "action": "modified",
+            "additions": 1,
+            "deletions": 1,
+          },
+          "turbo.json": Object {
+            "action": "modified",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+    });
+
     it("migrates turbo.json env var dependencies - repeat run", async () => {
       // load the fixture for the test
       const { root, read } = useFixture({
@@ -445,7 +533,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,
@@ -541,7 +629,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**"],
+            outputs: [".next/**", "!.next/cache/**"],
           },
           dev: {
             cache: false,

@@ -10,7 +10,8 @@ builds:
   - id: turbo
     main: ./cmd/turbo
     tags:
-      - go
+      - rust
+      - staticbinary
     binary: bin/go-turbo
     flags:
       - -trimpath
@@ -19,6 +20,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     env:
       - CGO_ENABLED=1
+    hooks:
+      pre:
+        - cmd: make turborepo-ffi-install-{{ .Os }}-{{ .Arch }}
+          output: true
     targets:
       - linux_arm64
       - linux_amd64
@@ -26,15 +31,17 @@ builds:
     overrides:
       - goos: linux
         goarch: arm64
+        ldflags: -linkmode external -extldflags="-static" -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
         env:
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
+          - CC=zig cc -target aarch64-linux-musl
+          - CXX=zig c++ -target aarch64-linux-musl
       - goos: linux
         goarch: amd64
         goamd64: v1
+        ldflags: -linkmode external -extldflags="-static" -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}} -X main.builtBy=goreleaser
         env:
-          - CC=x86_64-linux-gnu-gcc
-          - CXX=x86_64-linux-gnu-g++
+          - CC=zig cc -target x86_64-linux-musl
+          - CXX=zig c++ -target x86_64-linux-musl
       - goos: windows
         goarch: arm64
         env:

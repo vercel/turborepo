@@ -1,12 +1,16 @@
 use std::fmt::Write as _;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::Value;
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::{
@@ -40,8 +44,8 @@ impl ProcessEnvAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for ProcessEnvAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.root.join(".env.js")
+    fn ident(&self) -> AssetIdentVc {
+        AssetIdentVc::from_path(self.root.join(".env.js"))
     }
 
     #[turbo_tasks::function]
@@ -58,8 +62,12 @@ impl Asset for ProcessEnvAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for ProcessEnvAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: ProcessEnvAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+    fn as_chunk(
+        self_vc: ProcessEnvAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 
@@ -91,15 +99,12 @@ struct ProcessEnvChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for ProcessEnvChunkItem {
-    #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        self.inner.path().to_string()
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for ProcessEnvChunkItem {
+    #[turbo_tasks::function]
+    fn asset_ident(&self) -> AssetIdentVc {
+        self.inner.ident()
+    }
+
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         AssetReferencesVc::empty()
@@ -111,11 +116,6 @@ impl EcmascriptChunkItem for ProcessEnvChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
-    }
-
-    #[turbo_tasks::function]
-    fn related_path(&self) -> FileSystemPathVc {
-        self.inner.path()
     }
 
     #[turbo_tasks::function]

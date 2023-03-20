@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -65,6 +65,9 @@ pub struct Args {
     /// Skip any attempts to infer which version of Turbo the project is
     /// configured to use
     pub skip_infer: bool,
+    /// Disable the turbo update notification
+    #[clap(long, global = true)]
+    pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
     pub api: Option<String>,
@@ -90,6 +93,9 @@ pub struct Args {
     /// for authorization
     #[clap(long, global = true)]
     pub preflight: bool,
+    /// Set a timeout for all HTTP requests.
+    #[clap(long, value_name = "TIMEOUT", global = true, value_parser)]
+    pub remote_cache_timeout: Option<u64>,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
     pub team: Option<String>,
@@ -141,7 +147,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "command")]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
@@ -500,9 +506,19 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon { .. } | Command::Prune { .. } | Command::Run(_) => {
-            Ok(Payload::Go(Box::new(clap_args)))
-        }
+        Command::Daemon {
+            command: Some(command),
+            ..
+        } => {
+            let command = *command;
+            let base = CommandBase::new(clap_args, repo_root)?;
+            daemon::main(&command, &base).await?;
+            Ok(Payload::Rust(Ok(0)))
+        },
+        Command::Prune { .. }
+        | Command::Run(_)
+        // the daemon itself still delegates to Go
+        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 

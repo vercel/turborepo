@@ -76,6 +76,21 @@ declare -x FORCE_COLOR=0
 turbo run build
 ```
 
+#### `--no-update-notifier`
+
+Disables the update notification. This notification will be automatically disabled when running in CI environments, but can also be disabled manually via this flag.
+
+```sh
+turbo run build --no-update-notifier
+```
+
+Alternatively, you can also disable the update notification by using either the `TURBO_NO_UPDATE_NOTIFIER` environment variable, or the `NO_UPDATE_NOTIFIER` environment variable (borrowed from the [update-notifier nodejs package](https://github.com/yeoman/update-notifier)).
+
+```sh
+declare -x TURBO_NO_UPDATE_NOTIFIER=1
+turbo run build
+```
+
 ## `turbo run <task>`
 
 Run npm scripts across all workspaces in specified scope. Tasks must be specified in your `pipeline` configuration.

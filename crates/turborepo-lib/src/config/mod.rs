@@ -1,3 +1,4 @@
+mod client;
 mod env;
 mod repo;
 mod user;
@@ -5,6 +6,7 @@ mod user;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+pub use client::{ClientConfig, ClientConfigLoader};
 #[cfg(not(windows))]
 use dirs_next::config_dir;
 // Go's xdg implementation uses FOLDERID_LocalAppData for config home

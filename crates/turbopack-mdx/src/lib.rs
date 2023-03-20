@@ -2,12 +2,16 @@
 
 use anyhow::{anyhow, Result};
 use mdxjs::compile;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     context::{AssetContext, AssetContextVc},
+    ident::AssetIdentVc,
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
     virtual_asset::VirtualAssetVc,
@@ -21,6 +25,11 @@ use turbopack_ecmascript::{
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
 };
+
+#[turbo_tasks::function]
+fn modifier() -> StringVc {
+    StringVc::cell("mdx".to_string())
+}
 
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
@@ -53,8 +62,8 @@ async fn into_ecmascript_module_asset(
     let mdx_jsx_component =
         compile(&file.content().to_str()?, &Default::default()).map_err(|e| anyhow!("{}", e))?;
 
-    let source = VirtualAssetVc::new(
-        this.source.path(),
+    let source = VirtualAssetVc::new_with_ident(
+        this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );
     Ok(EcmascriptModuleAssetVc::new(
@@ -82,16 +91,18 @@ impl MdxModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        Ok(into_ecmascript_module_asset(&self).await?.analyze())
+    async fn failsafe_analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        Ok(into_ecmascript_module_asset(&self)
+            .await?
+            .failsafe_analyze())
     }
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for MdxModuleAsset {
     #[turbo_tasks::function]
-    fn path(&self) -> FileSystemPathVc {
-        self.source.path()
+    fn ident(&self) -> AssetIdentVc {
+        self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -101,15 +112,24 @@ impl Asset for MdxModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: MdxModuleAssetVc) -> Result<AssetReferencesVc> {
-        Ok(self_vc.analyze().await?.references)
+        Ok(self_vc.failsafe_analyze().await?.references)
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for MdxModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: MdxModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
+    fn as_chunk(
+        self_vc: MdxModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.as_ecmascript_chunk_placeable(),
+            availability_info,
+        )
+        .into()
     }
 }
 
@@ -137,7 +157,7 @@ impl EcmascriptChunkPlaceable for MdxModuleAsset {
 impl ResolveOrigin for MdxModuleAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.source.path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]
@@ -153,18 +173,12 @@ struct MdxChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for MdxChunkItem {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "{} (mdx)",
-            self.module.await?.source.path().to_string().await?
-        )))
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for MdxChunkItem {
+    #[turbo_tasks::function]
+    fn asset_ident(&self) -> AssetIdentVc {
+        self.module.ident()
+    }
+
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
         self.module.references()
@@ -176,11 +190,6 @@ impl EcmascriptChunkItem for MdxChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
-    }
-
-    #[turbo_tasks::function]
-    fn related_path(&self) -> FileSystemPathVc {
-        self.module.path()
     }
 
     /// Once we have mdx contents, we should treat it as j|tsx components and

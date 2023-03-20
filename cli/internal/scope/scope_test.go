@@ -12,12 +12,12 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
-	internalGraph "github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 type mockSCM struct {
@@ -25,7 +25,7 @@ type mockSCM struct {
 	contents map[string][]byte
 }
 
-func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _relativeTo string) ([]string, error) {
 	return m.changed, nil
 }
 
@@ -128,7 +128,7 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
-	workspaceInfos := internalGraph.WorkspaceInfos{
+	workspaceInfos := workspace.Catalog{
 		PackageJSONs: map[string]*fs.PackageJSON{
 			"//": {
 				Dir:                    turbopath.AnchoredSystemPath("").ToSystemPath(),

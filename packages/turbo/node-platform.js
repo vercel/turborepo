@@ -48,6 +48,28 @@ function downloadedBinPath(pkg, subpath) {
   return path.join(turboLibDir, `downloaded-${pkg}-${path.basename(subpath)}`);
 }
 
+function pkgForSomeOtherPlatform() {
+  const libMainJS = require.resolve("turbo");
+  const nodeModulesDirectory = path.dirname(
+    path.dirname(path.dirname(libMainJS))
+  );
+  if (path.basename(nodeModulesDirectory) === "node_modules") {
+    for (const unixKey in knownUnixlikePackages) {
+      try {
+        const pkg = knownUnixlikePackages[unixKey];
+        if (fs.existsSync(path.join(nodeModulesDirectory, pkg))) return pkg;
+      } catch {}
+    }
+    for (const windowsKey in knownWindowsPackages) {
+      try {
+        const pkg = knownWindowsPackages[windowsKey];
+        if (fs.existsSync(path.join(nodeModulesDirectory, pkg))) return pkg;
+      } catch {}
+    }
+  }
+  return null;
+}
+
 function generateBinPath() {
   // This feature was added to give external code a way to modify the binary
   // path without modifying the code itself. Do not remove this because

@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error};
+use log::{debug, error, trace};
 use turborepo_lib::{Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
@@ -42,14 +42,24 @@ fn run_go_binary(args: Args) -> Result<i32> {
     }
 
     let serialized_args = serde_json::to_string(&args)?;
-    let mut command = process::Command::new(go_binary_path)
+    trace!("Invoking go binary with {}", serialized_args);
+    let mut command = process::Command::new(go_binary_path);
+    command
         .arg(serialized_args)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to execute turbo.");
+        .stderr(Stdio::inherit());
 
-    let exit_code = command.wait()?.code().unwrap_or(2);
+    let shared_child = shared_child::SharedChild::spawn(&mut command).unwrap();
+    let child_arc = std::sync::Arc::new(shared_child);
+
+    let child_arc_clone = child_arc.clone();
+    ctrlc::set_handler(move || {
+        // we are quiting anyways so just ignore
+        child_arc_clone.kill().ok().unwrap();
+    })
+    .expect("handler set");
+
+    let exit_code = child_arc.wait()?.code().unwrap_or(2);
 
     Ok(exit_code)
 }

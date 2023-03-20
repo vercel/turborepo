@@ -7,14 +7,16 @@ Thanks for your interest in contributing to Turbo!
 - [Contributing to Turbo](#contributing-to-turbo)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
+    - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
       - [Go Tests](#go-tests)
       - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
+  - [Manually testing `turbo`](#manually-testing-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
-  - [Adding a new crate](#adding-a-new-crate)
+  - [Adding A New Crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
@@ -78,8 +80,8 @@ You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/com
 
 ## Benchmarking Turborepo
 
-1. Build Turborepo [as described above](#Setup)
-1. From the `benchmark/` directory, run `pnpm run benchmark`.
+1. `make turbo-prod`
+2. From the `benchmark/` directory, run `pnpm run benchmark`.
 
 ## Updating `turbo`
 
@@ -189,6 +191,18 @@ The crate must also be explicitly excluded from build commands
 when building Turbopack. To do so, add a `--exclude turbopack-foo`
 flag to the build command. Search through `test.yml` and add this
 flag to all cargo commands that already exclude `turborepo-lib`.
+
+Finally, the crate must be added to the Turborepo section of CODEOWNERS:
+
+```diff
+# overrides for crates that are owned by turbo-oss
+  /crates/turborepo @vercel/turbo-oss
+  /crates/turborepo-ffi @vercel/turbo-oss
++ /crates/turborepo-foo @vercel/turbo-oss
+  /crates/turborepo-lib @vercel/turbo-oss
+  /crates/turborepo-scm @vercel/turbo-oss
+  /crates/turbo-updater @vercel/turbo-oss
+```
 
 ## Contributing to Turbopack
 

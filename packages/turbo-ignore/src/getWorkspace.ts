@@ -8,7 +8,7 @@ export function getWorkspace(args: TurboIgnoreArgs): string | null {
 
   // if the workspace is provided via args, use that
   if (workspace) {
-    info(`using "${workspace}" as workspace from arguments`);
+    info(`Using "${workspace}" as workspace from arguments`);
     return workspace;
   }
 
@@ -25,7 +25,7 @@ export function getWorkspace(args: TurboIgnoreArgs): string | null {
     }
 
     info(
-      `inferred "${packageJsonContent.name}" as workspace from "package.json"`
+      `Inferred "${packageJsonContent.name}" as workspace from "package.json"`
     );
     return packageJsonContent.name;
   } catch (e) {

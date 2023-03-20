@@ -4,15 +4,14 @@ use std::{cmp::Ordering, collections::HashSet};
 
 use anyhow::{bail, Result};
 use indexmap::{IndexMap, IndexSet};
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
     ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
 };
 
-use super::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
-use crate::chunk::EcmascriptChunkEvaluate;
+use super::{evaluate::EcmascriptChunkEvaluate, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunkOptimizer(ChunkingContextVc);
@@ -64,11 +63,13 @@ async fn merge_chunks(
         .flat_map(|e| e.iter().copied())
         .collect::<IndexSet<_>>();
     let evaluate = chunks.iter().find_map(|e| e.evaluate);
+    let first = first.await?;
     Ok(EcmascriptChunkVc::new_normalized(
-        first.await?.context,
+        first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         None,
         evaluate,
+        Value::new(first.availability_info),
     ))
 }
 
@@ -403,6 +404,7 @@ async fn optimize_ecmascript(
                         }
                         .cell(),
                     ),
+                    Value::new(content.availability_info),
                 )
             }
         }

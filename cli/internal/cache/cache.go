@@ -9,7 +9,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -22,7 +21,7 @@ type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
 	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
-	Exists(hash string) (ItemStatus, error)
+	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
 	Clean(anchor turbopath.AbsoluteSystemPath)
@@ -81,14 +80,6 @@ func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.
 
 var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
 allow reading and caching artifacts using the remote cache.`
-
-// AddFlags adds cache-related flags to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	// skipping remote caching not currently a flag
-	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
-	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directory.")
-	flags.IntVar(&opts.Workers, "cache-workers", 10, "Set the number of concurrent cache operations")
-}
 
 // New creates a new cache
 func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
@@ -277,18 +268,15 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	return false, nil, 0, nil
 }
 
-func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
+func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {
 	syncCacheState := ItemStatus{}
 	for _, cache := range mplex.caches {
-		itemStatus, err := cache.Exists(target)
-		if err != nil {
-			return syncCacheState, err
-		}
+		itemStatus := cache.Exists(target)
 		syncCacheState.Local = syncCacheState.Local || itemStatus.Local
 		syncCacheState.Remote = syncCacheState.Remote || itemStatus.Remote
 	}
 
-	return syncCacheState, nil
+	return syncCacheState
 }
 
 func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {

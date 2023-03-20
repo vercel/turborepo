@@ -24,6 +24,28 @@ pub struct WebpackLoadersOptions {
     pub placeholder_for_future_extensions: (),
 }
 
+/// Subset of Typescript options configured via tsconfig.json or jsconfig.json,
+/// which affects the runtime transform output.
+#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+pub struct TypescriptTransformOptions {
+    pub use_define_for_class_fields: bool,
+}
+
+#[turbo_tasks::value_impl]
+impl TypescriptTransformOptionsVc {
+    #[turbo_tasks::function]
+    pub fn default() -> Self {
+        Self::cell(Default::default())
+    }
+}
+
+impl Default for TypescriptTransformOptionsVc {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
 impl WebpackLoadersOptions {
     pub fn is_empty(&self) -> bool {
         self.extension_to_loaders.is_empty()
@@ -41,25 +63,42 @@ impl WebpackLoadersOptions {
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct ModuleOptionsContext {
+    #[serde(default)]
     pub enable_jsx: bool,
+    #[serde(default)]
     pub enable_emotion: bool,
+    #[serde(default)]
     pub enable_react_refresh: bool,
+    #[serde(default)]
     pub enable_styled_components: bool,
+    #[serde(default)]
     pub enable_styled_jsx: bool,
+    #[serde(default)]
     pub enable_postcss_transform: Option<PostCssTransformOptions>,
+    #[serde(default)]
     pub enable_webpack_loaders: Option<WebpackLoadersOptions>,
+    #[serde(default)]
     pub enable_types: bool,
-    pub enable_typescript_transform: bool,
+    #[serde(default)]
+    pub enable_typescript_transform: Option<TypescriptTransformOptionsVc>,
+    #[serde(default)]
     pub enable_mdx: bool,
+    #[serde(default)]
     pub preset_env_versions: Option<EnvironmentVc>,
+    #[serde(default)]
     pub custom_ecmascript_app_transforms: Vec<EcmascriptInputTransform>,
+    #[serde(default)]
     pub custom_ecmascript_transforms: Vec<EcmascriptInputTransform>,
+    #[serde(default)]
     /// Custom rules to be applied after all default rules.
     pub custom_rules: Vec<ModuleRule>,
+    #[serde(default)]
     pub execution_context: Option<ExecutionContextVc>,
+    #[serde(default)]
     /// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
     pub rules: Vec<(ContextCondition, ModuleOptionsContextVc)>,
+    #[serde(default)]
     pub placeholder_for_future_extensions: (),
 }
 

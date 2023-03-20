@@ -54,7 +54,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pnpm -- turbo run test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter=!cli --color
+          pnpm -- turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter=!cli --color
 
   cleanup:
     name: Cleanup

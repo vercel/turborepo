@@ -101,7 +101,13 @@ func globWalkFs(fsys iofs.FS, fsysRoot string, basePath string, includePatterns 
 		// This will not error as it follows the call to checkRelativePath.
 		iofsRelativePath, _ := fs.IofsRelativePath(fsysRoot, excludePath)
 
-		// Excludes operate on entire folders.
+		// In case this is a file pattern and not a directory, add the exact pattern.
+		// In the event that the user has already specified /**,
+		if !strings.HasSuffix(iofsRelativePath, string(filepath.Separator)+"**") {
+			processedExcludes = append(processedExcludes, iofsRelativePath)
+		}
+		// TODO: we need to either document or change this behavior
+		// Excludes operate on entire folders, so we also exclude everything under this in case it represents a directory
 		processedExcludes = append(processedExcludes, filepath.Join(iofsRelativePath, "**"))
 	}
 

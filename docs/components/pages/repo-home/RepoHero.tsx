@@ -84,7 +84,7 @@ export function RepoHero() {
         </FadeIn>
         <FadeIn
           delay={0.3}
-          className="z-50 flex flex-col items-center w-full max-w-md gap-5 px-6 md:max-w-lg"
+          className="z-50 flex flex-col items-center w-full max-w-md gap-5 px-6"
         >
           <div className="flex flex-col w-full gap-3 md:!flex-row">
             <CTAButton>

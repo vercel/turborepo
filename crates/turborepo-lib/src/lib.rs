@@ -1,7 +1,10 @@
+#![feature(assert_matches)]
+
 mod cli;
 mod client;
 mod commands;
 mod config;
+mod daemon;
 mod package_manager;
 mod retry;
 mod shim;

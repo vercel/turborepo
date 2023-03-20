@@ -7,13 +7,13 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -60,7 +60,7 @@ func (h *Helper) RegisterCleanup(cleanup io.Closer) {
 
 // Cleanup runs the register cleanup handlers. It requires the flags
 // to the root command so that it can construct a UI if necessary
-func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
+func (h *Helper) Cleanup(cliConfig *turbostate.ParsedArgsFromRust) {
 	h.cleanupsMu.Lock()
 	defer h.cleanupsMu.Unlock()
 	var ui cli.Ui
@@ -74,12 +74,12 @@ func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
 	}
 }
 
-func (h *Helper) getUI(flags config.CLIConfigProvider) cli.Ui {
+func (h *Helper) getUI(cliConfig *turbostate.ParsedArgsFromRust) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
-	if flags.GetNoColor() {
+	if cliConfig.GetNoColor() {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if flags.GetColor() {
+	if cliConfig.GetColor() {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -122,18 +122,9 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 	}), nil
 }
 
-// AddFlags adds common flags for all turbo commands to the given flagset and binds
-// them to this instance of Helper
-func (h *Helper) AddFlags(flags *pflag.FlagSet) {
-	flags.CountVarP(&h.verbosity, "verbosity", "v", "verbosity")
-	client.AddFlags(&h.clientOpts, flags)
-	config.AddRepoConfigFlags(flags)
-	config.AddUserConfigFlags(flags)
-}
-
 // NewHelper returns a new helper instance to hold configuration values for the root
 // turbo command.
-func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper {
+func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper {
 	return &Helper{
 		TurboVersion:   turboVersion,
 		UserConfigPath: config.DefaultUserConfigPath(),
@@ -143,7 +134,7 @@ func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper 
 
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
-func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error) {
+func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase, error) {
 	// terminal is for color/no-color output
 	terminal := h.getUI(cliConfig)
 	// logger is configured with verbosity level using --verbosity flag from end users
@@ -183,6 +174,21 @@ func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error
 			remoteConfig.TeamID = vercelArtifactsOwner
 		}
 	}
+
+	// Primacy: Arg > Env
+	timeout, err := cliConfig.GetRemoteCacheTimeout()
+	if err == nil {
+		h.clientOpts.Timeout = timeout
+	} else {
+		val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
+		if ok {
+			number, err := strconv.ParseUint(val, 10, 64)
+			if err == nil {
+				h.clientOpts.Timeout = number
+			}
+		}
+	}
+
 	apiClient := client.NewClient(
 		remoteConfig,
 		logger,

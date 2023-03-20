@@ -64,13 +64,15 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -199,10 +201,12 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
+        },
+        test: {
           outputs: ["dist/**", "build/**"],
         },
         lint: {},
@@ -273,13 +277,15 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -431,13 +437,15 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 
@@ -514,13 +522,15 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
-          outputs: ["dist/**", "build/**"],
         },
         lint: {},
+        test: {
+          outputs: ["dist/**", "build/**"],
+        },
       },
     });
 

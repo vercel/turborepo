@@ -1,19 +1,21 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 
 use crate::{
     client::APIClient,
     config::{
-        default_user_config_path, get_repo_config_path, RepoConfig, RepoConfigLoader, UserConfig,
-        UserConfigLoader,
+        default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
+        RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
     },
     ui::UI,
     Args,
 };
 
 pub(crate) mod bin;
+pub(crate) mod daemon;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
@@ -24,6 +26,7 @@ pub struct CommandBase {
     pub ui: UI,
     user_config: OnceCell<UserConfig>,
     repo_config: OnceCell<RepoConfig>,
+    client_config: OnceCell<ClientConfig>,
     args: Args,
 }
 
@@ -35,6 +38,7 @@ impl CommandBase {
             args,
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
+            client_config: OnceCell::new(),
         })
     }
 
@@ -73,6 +77,15 @@ impl CommandBase {
         Ok(())
     }
 
+    fn create_client_config(&self) -> Result<()> {
+        let client_config = ClientConfigLoader::new()
+            .with_remote_cache_timeout(self.args.remote_cache_timeout)
+            .load()?;
+        self.client_config.set(client_config)?;
+
+        Ok(())
+    }
+
     pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig> {
         if self.repo_config.get().is_none() {
             self.create_repo_config()?;
@@ -105,9 +118,60 @@ impl CommandBase {
         Ok(self.user_config.get().unwrap())
     }
 
+    pub fn client_config(&self) -> Result<&ClientConfig> {
+        if self.client_config.get().is_none() {
+            self.create_client_config()?;
+        }
+
+        Ok(self.client_config.get().unwrap())
+    }
+
     pub fn api_client(&mut self) -> Result<APIClient> {
         let repo_config = self.repo_config()?;
+        let client_config = self.client_config()?;
+
         let api_url = repo_config.api_url();
-        APIClient::new(api_url)
+        let timeout = client_config.remote_cache_timeout();
+        APIClient::new(api_url, timeout)
+    }
+
+    pub fn daemon_file_root(&self) -> turborepo_paths::AbsoluteNormalizedPathBuf {
+        turborepo_paths::AbsoluteNormalizedPathBuf::new(std::env::temp_dir())
+            .expect("temp dir is valid")
+            .join(turborepo_paths::ForwardRelativePath::new("turbod").expect("turbod is valid"))
+            .join(
+                turborepo_paths::ForwardRelativePath::new(&self.repo_hash())
+                    .expect("hash is valid"),
+            )
+            .into()
+    }
+
+    fn repo_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(self.repo_root.to_str().unwrap().as_bytes());
+        hex::encode(&hasher.finalize()[..8])
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
+    #[test_case("", "e3b0c44298fc1c14"; "empty string ok")]
+    fn test_repo_hash(path: &str, expected_hash: &str) {
+        use std::path::PathBuf;
+
+        use super::CommandBase;
+        use crate::Args;
+
+        let args = Args::default();
+        let repo_root = PathBuf::from(path);
+        let command_base = CommandBase::new(args, repo_root).unwrap();
+
+        let hash = command_base.repo_hash();
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
     }
 }
