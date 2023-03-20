@@ -13,12 +13,12 @@ pub mod specificity;
 pub mod static_assets;
 pub mod wrapping_source;
 
-use core::fmt;
 use std::collections::BTreeSet;
 
 use anyhow::Result;
 use futures::stream::Stream as StreamTrait;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use turbo_tasks::{trace::TraceRawVcs, Value};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPathVc;
@@ -40,7 +40,8 @@ pub struct ProxyResult {
     pub body: Body,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Error)]
+#[error("{err}")]
 pub struct BodyError {
     err: String,
 }
@@ -50,14 +51,6 @@ impl BodyError {
         BodyError { err }
     }
 }
-
-impl fmt::Display for BodyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.err.fmt(f)
-    }
-}
-
-impl std::error::Error for BodyError {}
 
 /// The return value of a content source when getting a path. A specificity is
 /// attached and when combining results this specificity should be used to order
