@@ -79,17 +79,6 @@ var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
 // ExecuteDaemon executes the root daemon command
 func ExecuteDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
-	if args.Command.Daemon.Command != "" {
-		var subcommandError error
-		if args.Command.Daemon.Command == "Status" {
-			subcommandError = RunStatus(ctx, helper, args)
-		} else {
-			subcommandError = RunLifecycle(ctx, helper, args)
-		}
-
-		return subcommandError
-	}
-
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -147,7 +147,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "command")]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
@@ -506,9 +506,19 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon { .. } | Command::Prune { .. } | Command::Run(_) => {
-            Ok(Payload::Go(Box::new(clap_args)))
-        }
+        Command::Daemon {
+            command: Some(command),
+            ..
+        } => {
+            let command = *command;
+            let base = CommandBase::new(clap_args, repo_root)?;
+            daemon::main(&command, &base).await?;
+            Ok(Payload::Rust(Ok(0)))
+        },
+        Command::Prune { .. }
+        | Command::Run(_)
+        // the daemon itself still delegates to Go
+        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
