@@ -52,9 +52,7 @@ var nodejsYarn = PackageManager{
 			// In case of a non-monorepo, the workspaces field is empty and only node_modules in the root should be ignored
 			var e *NoWorkspacesFoundError
 			if errors.As(err, &e) {
-				ignores := make([]string, 1)
-				ignores[0] = "node_modules/**"
-				return ignores, nil
+				return []string{"node_modules/**"}, nil
 			}
 
 			return nil, err
