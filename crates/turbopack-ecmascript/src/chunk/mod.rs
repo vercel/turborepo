@@ -30,6 +30,7 @@ use turbopack_core::{
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::AssetReferencesVc,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     version::{VersionedContent, VersionedContentVc},
 };
 
@@ -453,5 +454,13 @@ impl Introspectable for EcmascriptChunk {
             children.insert((entry_module_key(), IntrospectableAssetVc::new(entry.into())));
         }
         Ok(IntrospectableChildrenVc::cell(children))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for EcmascriptChunk {
+    #[turbo_tasks::function]
+    fn generate_source_map(self_vc: EcmascriptChunkVc) -> SourceMapVc {
+        self_vc.runtime_content().generate_source_map()
     }
 }

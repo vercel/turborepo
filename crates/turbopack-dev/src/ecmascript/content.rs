@@ -18,9 +18,8 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceablesVc,
-        EcmascriptChunkRuntimeContent, EcmascriptChunkRuntimeContentVc, EcmascriptChunkVc,
-        EcmascriptChunkingContextVc,
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeContent,
+        EcmascriptChunkRuntimeContentVc, EcmascriptChunkVc, EcmascriptChunkingContextVc,
     },
     utils::StringifyJs,
 };

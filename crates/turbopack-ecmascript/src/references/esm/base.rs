@@ -18,10 +18,7 @@ use turbopack_core::{
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{
-        EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkingContextVc,
-    },
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},

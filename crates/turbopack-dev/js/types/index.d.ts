@@ -99,6 +99,7 @@ type ModuleFactory = (
 type ModuleFactoryString = string;
 
 interface RuntimeBackend {
+  registerChunk: (chunkPath: ChunkPath, params?: DevRuntimeParams) => void;
   loadChunk: (chunkPath: ChunkPath, source: SourceInfo) => Promise<void>;
   reloadChunk?: (chunkPath: ChunkPath) => Promise<void>;
   unloadChunk?: (chunkPath: ChunkPath) => void;
@@ -122,6 +123,10 @@ export interface TurbopackGlobals {
 }
 
 export type GetFirstModuleChunk = (moduleId: ModuleId) => ChunkPath | null;
+export type GetOrInstantiateRuntimeModule = (
+  moduleId: ModuleId,
+  chunkPath: ChunkPath
+) => Module;
 
 export interface Loader {
   promise: Promise<undefined>;

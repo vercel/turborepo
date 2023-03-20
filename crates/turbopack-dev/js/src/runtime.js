@@ -28,7 +28,6 @@
 /** @typedef {import('../types/protocol').EcmascriptMergedChunkUpdate} EcmascriptMergedChunkUpdate */
 /** @typedef {import('../types/protocol').EcmascriptModuleEntry} EcmascriptModuleEntry */
 
-/** @typedef {import('../types/runtime').Loader} Loader */
 /** @typedef {import('../types/runtime').ModuleEffect} ModuleEffect */
 /** @typedef {import('../types/runtime').DevRuntimeParams} DevRuntimeParams */
 
@@ -36,18 +35,6 @@
 const moduleFactories = { __proto__: null };
 /** @type {Object.<ModuleId, Module>} */
 const moduleCache = { __proto__: null };
-/**
- * Contains the IDs of all chunks that have been loaded.
- *
- * @type {Set<ChunkPath>}
- */
-const loadedChunks = new Set();
-/**
- * Maps a chunk ID to the chunk's loader if the chunk is currently being loaded.
- *
- * @type {Map<ChunkPath, Loader>}
- */
-const chunkLoaders = new Map();
 /**
  * Maps module IDs to persisted data between executions of their hot module
  * implementation (`hot.data`).
@@ -233,36 +220,10 @@ externalRequire.resolve = (name, opt) => {
  * @param {string} chunkPath
  * @returns {Promise<any> | undefined}
  */
-function loadChunk(source, chunkPath) {
-  if (loadedChunks.has(chunkPath)) {
-    return Promise.resolve();
-  }
-
-  const chunkLoader = getOrCreateChunkLoader(chunkPath, source);
-
-  return chunkLoader.promise;
-}
-
-/**
- * @param {string} chunkPath
- * @param {SourceInfo} source
- * @returns {Loader}
- */
-function getOrCreateChunkLoader(chunkPath, source) {
-  let chunkLoader = chunkLoaders.get(chunkPath);
-  if (chunkLoader) {
-    return chunkLoader;
-  }
-
-  let resolve;
-  let reject;
-  const promise = new Promise((innerResolve, innerReject) => {
-    resolve = innerResolve;
-    reject = innerReject;
-  });
-
-  const onError = (error) => {
-    chunkLoaders.delete(chunkPath);
+async function loadChunk(source, chunkPath) {
+  try {
+    await BACKEND.loadChunk(chunkPath, source);
+  } catch (error) {
     let loadReason;
     switch (source.type) {
       case SourceTypeRuntime:
@@ -275,30 +236,12 @@ function getOrCreateChunkLoader(chunkPath, source) {
         loadReason = "from an HMR update";
         break;
     }
-    reject(
-      new Error(
-        `Failed to load chunk ${chunkPath} ${loadReason}${
-          error ? `: ${error}` : ""
-        }`
-      )
+    throw new Error(
+      `Failed to load chunk ${chunkPath} ${loadReason}${
+        error ? `: ${error}` : ""
+      }`
     );
-  };
-
-  const onLoad = () => {
-    loadedChunks.add(chunkPath);
-    chunkLoaders.delete(chunkPath);
-    resolve();
-  };
-
-  chunkLoader = {
-    promise,
-    onLoad,
-  };
-  chunkLoaders.set(chunkPath, chunkLoader);
-
-  BACKEND.loadChunk(chunkPath, source).then(onLoad, onError);
-
-  return chunkLoader;
+  }
 }
 
 /** @type {SourceTypeRuntime} */
@@ -813,7 +756,6 @@ function applyChunkListUpdate(chunkListPath, update) {
           BACKEND.reloadChunk?.(chunkPath);
           break;
         case "deleted":
-          loadedChunks.delete(chunkPath);
           BACKEND.unloadChunk?.(chunkPath);
           break;
         case "partial":
@@ -1248,7 +1190,6 @@ function disposeChunkList(chunkListPath) {
 function disposeChunk(chunkPath) {
   // This should happen whether or not the chunk has any modules in it. For instance,
   // CSS chunks have no modules in them, but they still need to be unloaded.
-  loadedChunks.delete(chunkPath);
   BACKEND.unloadChunk(chunkPath);
 
   const chunkModules = chunkModulesMap.get(chunkPath);
@@ -1348,27 +1289,16 @@ function markChunkListAsRuntime(chunkListPath) {
 }
 
 /**
- * @param {ChunkPath} chunkPath
- */
-function markChunkAsLoaded(chunkPath) {
-  const chunkLoader = chunkLoaders.get(chunkPath);
-  if (!chunkLoader) {
-    loadedChunks.add(chunkPath);
-
-    // This happens for all initial chunks that are loaded directly from
-    // the HTML.
-    return;
-  }
-
-  // Only chunks that are loaded via `loadChunk` will have a loader.
-  chunkLoader.onLoad();
-}
-
-/**
  * @param {ChunkRegistration} chunkRegistration
  */
 async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
-  markChunkAsLoaded(chunkPath);
+  if (runtimeParams != null) {
+    registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
+      chunkPath,
+      ...runtimeParams.otherChunks,
+    ]);
+  }
+
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
     if (!moduleFactories[moduleId]) {
       moduleFactories[moduleId] = moduleFactory;
@@ -1376,54 +1306,7 @@ async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
     addModuleToChunk(moduleId, chunkPath);
   }
 
-  if (runtimeParams) {
-    try {
-      await evaluateRuntimeParams(chunkPath, runtimeParams);
-    } catch (err) {
-      console.error(
-        `The following error occurred while evaluating runtime entries of ${chunkPath}:`
-      );
-      console.error(err);
-      return;
-    }
-  }
-}
-
-/**
- * @param {ChunkPath} chunkPath
- * @param {DevRuntimeParams} runtimeParams
- */
-async function evaluateRuntimeParams(chunkPath, runtimeParams) {
-  registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
-    chunkPath,
-    ...runtimeParams.otherChunks,
-  ]);
-
-  if (runtimeParams.runtimeModuleIds.length > 0) {
-    await waitForChunksToLoad(
-      {
-        type: SourceTypeRuntime,
-        chunkPath,
-      },
-      runtimeParams.otherChunks
-    );
-
-    for (const moduleId of runtimeParams.runtimeModuleIds) {
-      getOrInstantiateRuntimeModule(moduleId, chunkPath);
-    }
-  }
-}
-
-/**
- * @param {SourceInfo} source
- * @param {ChunkPath[]} chunkPaths
- */
-async function waitForChunksToLoad(source, chunkPaths) {
-  await Promise.all(
-    chunkPaths.map((chunkPathDependency) =>
-      loadChunk(source, chunkPathDependency)
-    )
-  );
+  BACKEND.registerChunk(chunkPath, runtimeParams);
 }
 
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
