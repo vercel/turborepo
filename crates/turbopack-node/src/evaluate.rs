@@ -1,4 +1,4 @@
-use std::{borrow::Cow, thread::available_parallelism, time::Duration};
+use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 use anyhow::{Context, Result};
 use futures_retry::{FutureRetry, RetryPolicy};
@@ -71,12 +71,7 @@ enum EvalJavaScriptIncomingMessage {
     Error(StructuredError),
 }
 
-#[derive(Debug)]
-enum LoopResult {
-    Value(String),
-    End(Option<String>),
-    Error(StructuredError),
-}
+type LoopResult = ControlFlow<Result<Option<String>, StructuredError>, String>;
 
 type EvaluationItem = Result<Bytes, StructuredError>;
 type JavaScriptStream = Stream<EvaluationItem>;
@@ -277,21 +272,20 @@ pub async fn evaluate(
     // Single response. If not, we need to stream multiple responses out.
     let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
     let data = match output {
-        LoopResult::End(data) => {
+        LoopResult::Continue(data) => data,
+        LoopResult::Break(Err(e)) => {
+            return Ok(JavaScriptEvaluation::Single(Err(e)).cell());
+        }
+        LoopResult::Break(Ok(data)) => {
             if kill {
                 operation.wait_or_kill().await?;
             }
-            return Ok(data
-                .map_or_else(
-                    || JavaScriptEvaluation::Empty,
-                    |b| JavaScriptEvaluation::Single(Ok(b.into())),
-                )
-                .cell());
+            let data = data.map_or_else(
+                || JavaScriptEvaluation::Empty,
+                |data| JavaScriptEvaluation::Single(Ok(data.into())),
+            );
+            return Ok(data.cell());
         }
-        LoopResult::Error(error) => {
-            return Ok(JavaScriptEvaluation::Single(Err(error)).cell());
-        }
-        LoopResult::Value(data) => data,
     };
 
     // The evaluation sent an initial intermediate value without completing. We'll
@@ -303,18 +297,19 @@ pub async fn evaluate(
             let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
 
             match output {
-                LoopResult::End(data) => {
-                    if let Some(data) = data {
-                        sender.send(Ok(data.into()))?;
-                    }
-                    break;
-                }
-                LoopResult::Error(error) => {
-                    sender.send(Err(error))?;
-                    break;
-                }
-                LoopResult::Value(data) => {
+                LoopResult::Continue(data) => {
                     sender.send(Ok(data.into()))?;
+                }
+                LoopResult::Break(Ok(Some(data))) => {
+                    sender.send(Ok(data.into()))?;
+                    break;
+                }
+                LoopResult::Break(Err(e)) => {
+                    sender.send(Err(e))?;
+                    break;
+                }
+                LoopResult::Break(Ok(None)) => {
+                    break;
                 }
             }
         }
@@ -351,10 +346,10 @@ async fn pull_operation(
                 .emit();
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
-                break LoopResult::Error(error);
+                break ControlFlow::Break(Err(error));
             }
-            EvalJavaScriptIncomingMessage::Value { data } => break LoopResult::Value(data),
-            EvalJavaScriptIncomingMessage::End { data } => break LoopResult::End(data),
+            EvalJavaScriptIncomingMessage::Value { data } => break ControlFlow::Continue(data),
+            EvalJavaScriptIncomingMessage::End { data } => break ControlFlow::Break(Ok(data)),
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 file_dependencies.push(cwd.join(&path).read());
