@@ -552,6 +552,11 @@ jobs:
         with:
           save-cache: true
 
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run tests
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
