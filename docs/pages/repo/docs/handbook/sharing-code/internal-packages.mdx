@@ -191,7 +191,7 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
   <Tab>
 If you want to use `math-helpers` with a backend app, you'll need a bundler like [Webpack](https://webpack.js.org/), [Parcel](https://parceljs.org/) or [Rollup](https://rollupjs.org/) to bundle your internal package with your app. For this example, we'll use Webpack.
 
-You'll likely want not bundle any `node_modules` or node imports like `path`. In order to exclude all these from your bundle, we can use something like [`webpack-node-externals`](https://www.npmjs.com/package/webpack-node-externals) or the equivalent in your bundler of choice.
+You'll likely not want to bundle any `node_modules` or node imports like `path`. In order to exclude all these from your bundle, we can use something like [`webpack-node-externals`](https://www.npmjs.com/package/webpack-node-externals) or the equivalent in your bundler of choice.
 
 In Webpack 5, your `webpack.config.js` will look something like this:
 
