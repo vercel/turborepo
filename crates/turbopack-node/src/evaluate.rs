@@ -61,8 +61,8 @@ enum EvalJavaScriptIncomingMessage {
         error: StructuredError,
     },
     Value {
-        // TODO: There is like 3 levels of JSON string encoding that goes into returning a value,
-        // making it really inefficient.
+        // TODO(WEB-735): There is like 3 levels of JSON string encoding that goes into returning a
+        // value, making it really inefficient.
         data: String,
     },
     End {
