@@ -12,6 +12,12 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+type NoWorkspacesFoundError struct {}
+
+func (e *NoWorkspacesFoundError) Error() string {
+	return "package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json"
+}
+
 var nodejsYarn = PackageManager{
 	Name:         "nodejs-yarn",
 	Slug:         "yarn",
@@ -27,7 +33,7 @@ var nodejsYarn = PackageManager{
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
 		if len(pkg.Workspaces) == 0 {
-			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
+			return nil, &NoWorkspacesFoundError{}
 		}
 		return pkg.Workspaces, nil
 	},
@@ -40,20 +46,15 @@ var nodejsYarn = PackageManager{
 		// For example: `apps/*/node_modules/**/+(package.json|yarn.json)`
 		// The `extglob` `+(package.json|yarn.json)` (from micromatch) after node_modules/** is redundant.
 
-		// In case of a non-monorepo the workspaces field is empty and getWorkspaceGlobs would fail,
-		// and should therefore be handled separately.
-		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
-		if err != nil {
-			return nil, fmt.Errorf("package.json: %w", err)
-		}
-		if len(pkg.Workspaces) == 0 {
-			ignores := make([]string, 1)
-			ignores[0] = "node_modules/**"
-			return ignores, nil
-		}
-
 		globs, err := pm.getWorkspaceGlobs(rootpath)
 		if err != nil {
+			// In case of a non-monorepo, the workspaces field is empty and only node_modules in the root should be ignored
+			_, ok := err.(*NoWorkspacesFoundError)
+			if ok {
+				ignores := make([]string, 1)
+				ignores[0] = "node_modules/**"
+				return ignores, nil
+			}
 			return nil, err
 		}
 
