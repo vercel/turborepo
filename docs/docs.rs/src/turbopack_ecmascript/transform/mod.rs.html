@@ -235,6 +235,62 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{fmt::Debug, path::Path, sync::Arc};
@@ -253,7 +309,7 @@
         visit::{FoldWith, VisitMutWith},
     },
 };
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringVc};
 <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
@@ -270,12 +326,26 @@
     React {
         <span class="attr">#[serde(default)]
         </span>refresh: bool,
+        <span class="comment">// swc.jsc.transform.react.importSource
+        </span>import_source: OptionStringVc,
+        <span class="comment">// swc.jsc.transform.react.runtime,
+        </span>runtime: OptionStringVc,
     },
     StyledComponents,
     StyledJsx,
     <span class="comment">// These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn&#39;t derive `Copy` so repeating values in here
     </span>TypeScript {
+        <span class="attr">#[serde(default)]
+        </span>use_define_for_class_fields: bool,
+    },
+    Decorators {
+        <span class="attr">#[serde(default)]
+        </span>is_legacy: bool,
+        <span class="attr">#[serde(default)]
+        </span>is_ecma: bool,
+        <span class="attr">#[serde(default)]
+        </span>emit_decorators_metadata: bool,
         <span class="attr">#[serde(default)]
         </span>use_define_for_class_fields: bool,
     },
@@ -341,22 +411,45 @@
             ..
         } = ctx;
         <span class="kw">match </span><span class="self">self </span>{
-            EcmascriptInputTransform::React { refresh } =&gt; {
+            EcmascriptInputTransform::React {
+                refresh,
+                import_source,
+                runtime,
+            } =&gt; {
+                <span class="kw">use </span>swc_core::ecma::transforms::react::{Options, Runtime};
+                <span class="kw">let </span>runtime = <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime) = <span class="kw-2">&amp;*</span>runtime.<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">match </span>runtime.as_str() {
+                        <span class="string">&quot;classic&quot; </span>=&gt; Runtime::Classic,
+                        <span class="string">&quot;automatic&quot; </span>=&gt; Runtime::Automatic,
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
+                                <span class="string">&quot;Invalid value for swc.jsc.transform.react.runtime: {}&quot;</span>,
+                                runtime
+                            ))
+                        }
+                    }
+                } <span class="kw">else </span>{
+                    Runtime::Automatic
+                };
+
+                <span class="kw">let </span>config = Options {
+                    runtime: <span class="prelude-val">Some</span>(runtime),
+                    development: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
+                    import_source: (<span class="kw-2">&amp;*</span>import_source.<span class="kw">await</span><span class="question-mark">?</span>).clone(),
+                    refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
+                        <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
+                            ..Default::default()
+                        })
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>},
+                    ..Default::default()
+                };
+
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>react(
                     source_map.clone(),
                     <span class="prelude-val">Some</span>(comments.clone()),
-                    swc_core::ecma::transforms::react::Options {
-                        runtime: <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::Runtime::Automatic),
-                        development: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
-                        refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
-                            <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
-                                ..Default::default()
-                            })
-                        } <span class="kw">else </span>{
-                            <span class="prelude-val">None
-                        </span>},
-                        ..Default::default()
-                    },
+                    config,
                     top_level_mark,
                 ));
             }
@@ -429,6 +522,25 @@
                     ..Default::default()
                 };
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip_with_config(config, top_level_mark));
+            }
+            EcmascriptInputTransform::Decorators {
+                is_legacy,
+                is_ecma: <span class="kw">_</span>,
+                emit_decorators_metadata,
+                use_define_for_class_fields,
+            } =&gt; {
+                <span class="kw">use </span>swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
+                <span class="kw">let </span>config = Config {
+                    legacy: <span class="kw-2">*</span>is_legacy,
+                    emit_metadata: <span class="kw-2">*</span>emit_decorators_metadata,
+                    use_define_for_class_fields: <span class="kw-2">*</span>use_define_for_class_fields,
+                };
+
+                <span class="kw">let </span>p = std::mem::replace(program, Program::Module(Module::dummy()));
+                <span class="kw-2">*</span>program = p.fold_with(<span class="kw-2">&amp;mut </span><span class="macro">chain!</span>(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
+                ));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
                 <span class="kw">let </span>transition_name = <span class="kw-2">&amp;*</span>transition_name.<span class="kw">await</span><span class="question-mark">?</span>;

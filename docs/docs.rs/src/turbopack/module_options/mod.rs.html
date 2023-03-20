@@ -309,6 +309,53 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -317,6 +364,7 @@
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
+<span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -375,6 +423,7 @@
             enable_styled_components,
             enable_types,
             <span class="kw-2">ref </span>enable_typescript_transform,
+            <span class="kw-2">ref </span>decorators,
             enable_mdx,
             <span class="kw-2">ref </span>enable_postcss_transform,
             <span class="kw-2">ref </span>enable_webpack_loaders,
@@ -400,17 +449,20 @@
         <span class="comment">// Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won&#39;t be JSX nodes for Styled JSX to transform.
         </span><span class="kw">if </span>enable_styled_jsx {
-            transforms.push(EcmascriptInputTransform::StyledJsx)
+            transforms.push(EcmascriptInputTransform::StyledJsx);
         }
         <span class="kw">if </span>enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion)
+            transforms.push(EcmascriptInputTransform::Emotion);
         }
         <span class="kw">if </span>enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents)
+            transforms.push(EcmascriptInputTransform::StyledComponents);
         }
-        <span class="kw">if </span>enable_jsx {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
+            <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
             transforms.push(EcmascriptInputTransform::React {
                 refresh: enable_react_refresh,
+                import_source: OptionStringVc::cell(jsx.import_source.clone()),
+                runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
         }
 
@@ -427,33 +479,75 @@
             <span class="prelude-val">None
         </span>};
 
-        <span class="kw">let </span>app_transforms = EcmascriptInputTransformsVc::cell(transforms);
+        <span class="kw">let </span>decorators_transform = <span class="kw">if let </span><span class="prelude-val">Some</span>(options) = <span class="kw-2">&amp;</span>decorators {
+            <span class="kw">let </span>options = options.<span class="kw">await</span><span class="question-mark">?</span>;
+            options
+                .decorators_kind
+                .as_ref()
+                .map(|kind| EcmascriptInputTransform::Decorators {
+                    is_legacy: kind == <span class="kw-2">&amp;</span>DecoratorsKind::Legacy,
+                    is_ecma: kind == <span class="kw-2">&amp;</span>DecoratorsKind::Ecma,
+                    emit_decorators_metadata: options.emit_decorators_metadata,
+                    use_define_for_class_fields: options.use_define_for_class_fields,
+                })
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
         <span class="kw">let </span>vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
         <span class="kw">let </span>ts_app_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = <span class="kw-2">&amp;</span>ts_transform {
-            <span class="kw">let </span><span class="kw-2">mut </span>base_transforms = <span class="macro">vec!</span>[transform.clone()];
+            <span class="kw">let </span><span class="kw-2">mut </span>base_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(decorators_transform) = <span class="kw-2">&amp;</span>decorators_transform {
+                <span class="macro">vec!</span>[decorators_transform.clone(), transform.clone()]
+            } <span class="kw">else </span>{
+                <span class="macro">vec!</span>[transform.clone()]
+            };
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms
                     .iter()
                     .cloned()
-                    .chain(app_transforms.<span class="kw">await</span><span class="question-mark">?</span>.iter().cloned())
+                    .chain(transforms.iter().cloned())
                     .collect(),
             )
         } <span class="kw">else </span>{
-            app_transforms
+            EcmascriptInputTransformsVc::cell(transforms.clone())
         };
 
         <span class="kw">let </span>css_transforms = CssInputTransformsVc::cell(<span class="macro">vec!</span>[CssInputTransform::Nested]);
         <span class="kw">let </span>mdx_transforms = EcmascriptInputTransformsVc::cell(
             <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = <span class="kw-2">&amp;</span>ts_transform {
-                <span class="macro">vec!</span>[transform.clone()]
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(decorators_transform) = <span class="kw-2">&amp;</span>decorators_transform {
+                    <span class="macro">vec!</span>[decorators_transform.clone(), transform.clone()]
+                } <span class="kw">else </span>{
+                    <span class="macro">vec!</span>[transform.clone()]
+                }
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[]
             }
             .iter()
-            .chain(app_transforms.<span class="kw">await</span><span class="question-mark">?</span>.iter())
             .cloned()
+            .chain(transforms.iter().cloned())
+            .collect(),
+        );
+
+        <span class="comment">// Apply decorators transform for the ModuleType::Ecmascript as well after
+        // constructing ts_app_transforms. Ecmascript can have decorators for
+        // the cases of 1. using jsconfig, to enable ts-specific runtime
+        // decorators (i.e legacy) 2. ecma spec decorators
+        //
+        // Since typescript transform (`ts_app_transforms`) needs to apply decorators
+        // _before_ stripping types, we create ts_app_transforms first in a
+        // specific order with typescript, then apply decorators to app_transforms.
+        </span><span class="kw">let </span>app_transforms = EcmascriptInputTransformsVc::cell(
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(decorators_transform) = <span class="kw-2">&amp;</span>decorators_transform {
+                <span class="macro">vec!</span>[decorators_transform.clone()]
+            } <span class="kw">else </span>{
+                <span class="macro">vec!</span>[]
+            }
+            .iter()
+            .cloned()
+            .chain(transforms.iter().cloned())
             .collect(),
         );
 
