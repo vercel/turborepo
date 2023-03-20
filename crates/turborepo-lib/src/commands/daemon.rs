@@ -14,8 +14,12 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join("turbod.pid"),
-        sock_file: base.daemon_file_root().join("turbod.sock"),
+        pid_file: base.daemon_file_root().join(
+            turborepo_paths::ForwardRelativePath::new("turbod.pid").expect("forward relative"),
+        ),
+        sock_file: base.daemon_file_root().join(
+            turborepo_paths::ForwardRelativePath::new("turbod.sock").expect("forward relative"),
+        ),
     };
 
     let mut client = connector.connect().await?;
@@ -58,7 +62,9 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
 #[derive(serde::Serialize)]
 pub struct DaemonStatus {
     pub uptime_ms: u64,
+    // this comes from the daemon server, so we trust that
+    // it is correct
     pub log_file: PathBuf,
-    pub pid_file: PathBuf,
-    pub sock_file: PathBuf,
+    pub pid_file: turborepo_paths::AbsoluteNormalizedPathBuf,
+    pub sock_file: turborepo_paths::AbsoluteNormalizedPathBuf,
 }

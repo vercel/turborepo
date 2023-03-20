@@ -42,7 +42,11 @@ mod io_counters;
 pub mod project;
 pub mod project_relative_path;
 
+pub use absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
+pub use absolute_path::{AbsolutePath, AbsolutePathBuf};
+pub use forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
 pub use into_filename_buf_iterator::*;
+pub use project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
 pub use relative_path::{RelativePath, RelativePathBuf};
 
 #[cfg(test)]

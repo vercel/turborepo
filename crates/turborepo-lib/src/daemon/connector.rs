@@ -1,5 +1,4 @@
 use std::{
-    path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
     time::{Duration, Instant},
@@ -60,8 +59,8 @@ pub struct DaemonConnector {
     /// Whether the connector is allowed to kill a running daemon (for example,
     /// in the event of a version mismatch).
     pub can_kill_server: bool,
-    pub pid_file: PathBuf,
-    pub sock_file: PathBuf,
+    pub pid_file: turborepo_paths::AbsoluteNormalizedPathBuf,
+    pub sock_file: turborepo_paths::AbsoluteNormalizedPathBuf,
 }
 
 impl DaemonConnector {
@@ -164,7 +163,7 @@ impl DaemonConnector {
     /// platform and retry in case of error.
     async fn get_connection(
         &self,
-        path: PathBuf,
+        path: turborepo_paths::AbsoluteNormalizedPathBuf,
     ) -> Result<TurbodClient<tonic::transport::Channel>, DaemonConnectorError> {
         // windows doesn't treat sockets as files, so don't attempt to wait
         #[cfg(not(target_os = "windows"))]
@@ -177,7 +176,7 @@ impl DaemonConnector {
         let make_service = move |_| {
             // we clone the reference counter here and move it into the async closure
             let path = path.clone();
-            async move { tokio::net::UnixStream::connect::<&Path>(path.as_path()).await }
+            async move { tokio::net::UnixStream::connect(path.as_path()).await }
         };
 
         #[cfg(target_os = "windows")]
@@ -256,7 +255,7 @@ impl DaemonConnector {
     }
 
     fn pid_lock(&self) -> pidlock::Pidlock {
-        pidlock::Pidlock::new(self.pid_file.clone())
+        pidlock::Pidlock::new(self.pid_file.clone().into_path_buf())
     }
 }
 
@@ -277,22 +276,25 @@ pub enum FileWaitError {
     #[error("failed to wait for event {0}")]
     Io(#[from] std::io::Error),
     #[error("invalid path {0}")]
-    InvalidPath(PathBuf),
+    InvalidPath(turborepo_paths::AbsoluteNormalizedPathBuf),
 }
 
 /// Waits for a file at some path on the filesystem to be created or deleted.
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
-async fn wait_for_file(path: &Path, action: WaitAction) -> Result<(), FileWaitError> {
+async fn wait_for_file(
+    path: &turborepo_paths::AbsoluteNormalizedPath,
+    action: WaitAction,
+) -> Result<(), FileWaitError> {
     let parent = path
         .parent()
-        .ok_or_else(|| FileWaitError::InvalidPath(path.into()))?;
+        .ok_or_else(|| FileWaitError::InvalidPath(path.to_owned()))?;
 
     let file_name = path
         .file_name()
         .map(|f| f.to_owned())
-        .ok_or_else(|| FileWaitError::InvalidPath(path.into()))?;
+        .ok_or_else(|| FileWaitError::InvalidPath(path.to_owned()))?;
 
     let (tx, mut rx) = mpsc::channel(1);
 
@@ -373,6 +375,7 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use turborepo_paths::AbsoluteNormalizedPathBuf;
 
     use super::*;
     use crate::daemon::client::proto;
@@ -616,8 +619,8 @@ mod test {
 
         // set up the client
         let conn = DaemonConnector {
-            pid_file: PathBuf::from(""),
-            sock_file: PathBuf::from(""),
+            pid_file: AbsoluteNormalizedPathBuf::new(PathBuf::new()).unwrap(),
+            sock_file: AbsoluteNormalizedPathBuf::new(PathBuf::new()).unwrap(),
             can_kill_server: false,
             can_start_server: false,
         };

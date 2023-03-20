@@ -108,12 +108,12 @@ impl DaemonClient<DaemonConnector> {
             .ok_or(DaemonError::MalformedResponse)
     }
 
-    pub fn pid_file(&self) -> &std::path::Path {
-        self.connect_settings.pid_file.as_path()
+    pub fn pid_file(&self) -> &turborepo_paths::AbsoluteNormalizedPathBuf {
+        &self.connect_settings.pid_file
     }
 
-    pub fn sock_file(&self) -> &std::path::Path {
-        self.connect_settings.sock_file.as_path()
+    pub fn sock_file(&self) -> &turborepo_paths::AbsoluteNormalizedPathBuf {
+        &self.connect_settings.sock_file
     }
 }
 

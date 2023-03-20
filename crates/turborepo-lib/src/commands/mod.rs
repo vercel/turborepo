@@ -135,8 +135,15 @@ impl CommandBase {
         APIClient::new(api_url, timeout)
     }
 
-    pub fn daemon_file_root(&self) -> PathBuf {
-        std::env::temp_dir().join("turbod").join(self.repo_hash())
+    pub fn daemon_file_root(&self) -> turborepo_paths::AbsoluteNormalizedPathBuf {
+        turborepo_paths::AbsoluteNormalizedPathBuf::new(std::env::temp_dir())
+            .expect("temp dir is valid")
+            .join(turborepo_paths::ForwardRelativePath::new("turbod").expect("turbod is valid"))
+            .join(
+                turborepo_paths::ForwardRelativePath::new(&self.repo_hash())
+                    .expect("hash is valid"),
+            )
+            .into()
     }
 
     fn repo_hash(&self) -> String {
