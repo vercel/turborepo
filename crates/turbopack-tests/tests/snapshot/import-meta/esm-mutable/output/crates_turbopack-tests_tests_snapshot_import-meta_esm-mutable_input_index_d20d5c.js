@@ -32,110 +32,221 @@ if (!Array.isArray(globalThis.TURBOPACK)) {
     return;
 }
 /** @typedef {import('../types/backend').RuntimeBackend} RuntimeBackend */
+/** @typedef {import('../types/dom').ChunkResolver} ChunkResolver */
+/** @typedef {import('../types').ChunkPath} ChunkPath */
+/** @typedef {import('../types').SourceInfo} SourceInfo */
 
 /** @type {RuntimeBackend} */
-const BACKEND = {
-  loadChunk(chunkPath, source) {
-    return new Promise((resolve, reject) => {
-      // We don't need to load chunks references from runtime code, as they're already
-      // present in the DOM.
-      // However, we need to wait for them to register themselves within `registerChunk`
-      // before we can start instantiating runtime modules, hence the absense of
-      // `resolve()` in this branch.
-      if (source.type === SourceTypeRuntime) {
+let BACKEND;
+
+(() => {
+  BACKEND = {
+    async registerChunk(chunkPath, params) {
+      const resolver = getOrCreateResolver(chunkPath);
+      resolver.resolve();
+
+      if (params == null) {
         return;
       }
 
+      const chunksToWaitFor = [];
+      for (const otherChunkPath of params.otherChunks) {
+        if (otherChunkPath.endsWith(".css")) {
+          // Mark all CSS chunks within the same chunk group as this chunk as loaded.
+          const cssResolver = getOrCreateResolver(chunkPath);
+          cssResolver.resolve();
+        } else if (otherChunkPath.endsWith(".js")) {
+          // Only wait for JS chunks to load.
+          chunksToWaitFor.push(otherChunkPath);
+        }
+      }
+
+      if (params.runtimeModuleIds.length > 0) {
+        await waitForChunksToLoad(chunksToWaitFor);
+
+        for (const moduleId of params.runtimeModuleIds) {
+          getOrInstantiateRuntimeModule(moduleId, chunkPath);
+        }
+      }
+    },
+
+    loadChunk(chunkPath, source) {
+      return loadChunk(chunkPath, source);
+    },
+
+    unloadChunk(chunkPath) {
+      deleteResolver(chunkPath);
+
       if (chunkPath.endsWith(".css")) {
+        const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
+        for (const link of Array.from(links)) {
+          link.remove();
+        }
+      } else if (chunkPath.endsWith(".js")) {
+        // Unloading a JS chunk would have no effect, as it lives in the JS
+        // runtime once evaluated.
+        // However, we still want to remove the script tag from the DOM to keep
+        // the HTML somewhat consistent from the user's perspective.
+        const scripts = document.querySelectorAll(
+          `script[src="/${chunkPath}"]`
+        );
+        for (const script of Array.from(scripts)) {
+          script.remove();
+        }
+      } else {
+        throw new Error(`can't infer type of chunk from path ${chunkPath}`);
+      }
+    },
+
+    reloadChunk(chunkPath) {
+      return new Promise((resolve, reject) => {
+        if (!chunkPath.endsWith(".css")) {
+          reject(new Error("The DOM backend can only reload CSS chunks"));
+          return;
+        }
+
+        const previousLink = document.querySelector(
+          `link[href^="/${chunkPath}"]`
+        );
+
+        if (previousLink == null) {
+          reject(new Error(`No link element found for chunk ${chunkPath}`));
+          return;
+        }
+
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = `/${chunkPath}`;
+        link.href = `/${chunkPath}?t=${Date.now()}`;
         link.onerror = () => {
           reject();
         };
         link.onload = () => {
+          // First load the new CSS, then remove the old one. This prevents visible
+          // flickering that would happen in-between removing the previous CSS and
+          // loading the new one.
+          previousLink.remove();
+
           // CSS chunks do not register themselves, and as such must be marked as
           // loaded instantly.
           resolve();
         };
-        document.body.appendChild(link);
-      } else if (chunkPath.endsWith(".js")) {
-        const script = document.createElement("script");
-        script.src = `/${chunkPath}`;
-        // We'll only mark the chunk as loaded once the script has been executed,
-        // which happens in `registerChunk`. Hence the absence of `resolve()` in
-        // this branch.
-        script.onerror = () => {
-          reject();
-        };
-        document.body.appendChild(script);
-      } else {
-        throw new Error(`can't infer type of chunk from path ${chunkPath}`);
-      }
-    });
-  },
 
-  unloadChunk(chunkPath) {
+        // Make sure to insert the new CSS right after the previous one, so that
+        // its precedence is higher.
+        previousLink.parentElement.insertBefore(link, previousLink.nextSibling);
+      });
+    },
+
+    restart: () => self.location.reload(),
+  };
+
+  /**
+   * Maps chunk paths to the corresponding resolver.
+   *
+   * @type {Map<ChunkPath, ChunkResolver>}
+   */
+  const chunkResolvers = new Map();
+
+  /**
+   * @param {ChunkPath} chunkPath
+   * @returns {ChunkResolver}
+   */
+  function getOrCreateResolver(chunkPath) {
+    let resolver = chunkResolvers.get(chunkPath);
+    if (!resolver) {
+      let resolve;
+      let reject;
+      const promise = new Promise((innerResolve, innerReject) => {
+        resolve = innerResolve;
+        reject = innerReject;
+      });
+      resolver = {
+        resolved: false,
+        promise,
+        resolve: () => {
+          resolver.resolved = true;
+          resolve();
+        },
+        reject,
+      };
+      chunkResolvers.set(chunkPath, resolver);
+    }
+    return resolver;
+  }
+
+  function deleteResolver(chunkPath) {
+    chunkResolvers.delete(chunkPath);
+  }
+
+  /**
+   * Waits for all provided chunks to load.
+   *
+   * @param {ChunkPath[]} chunks
+   * @returns {Promise<void>}
+   */
+  async function waitForChunksToLoad(chunks) {
+    const promises = [];
+    for (const chunkPath of chunks) {
+      const resolver = getOrCreateResolver(chunkPath);
+      if (!resolver.resolved) {
+        promises.push(resolver.promise);
+      }
+    }
+    await Promise.all(promises);
+  }
+
+  /**
+   * Loads the given chunk, and returns a promise that resolves once the chunk
+   * has been loaded.
+   *
+   * @param {ChunkPath} chunkPath
+   * @param {SourceInfo} source
+   */
+  async function loadChunk(chunkPath, source) {
+    const resolver = getOrCreateResolver(chunkPath);
+    if (resolver.resolved) {
+      return resolver.promise;
+    }
+
+    // We don't need to load chunks references from runtime code, as they're already
+    // present in the DOM.
+    // However, we need to wait for them to register themselves within `registerChunk`
+    // before we can start instantiating runtime modules, hence the absense of
+    // `resolver.resolve()` in this branch.
+    if (source.type === SourceTypeRuntime) {
+      return resolver.promise;
+    }
+
     if (chunkPath.endsWith(".css")) {
-      const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
-      for (const link of Array.from(links)) {
-        link.remove();
-      }
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = `/${chunkPath}`;
+      link.onerror = () => {
+        resolver.reject();
+      };
+      link.onload = () => {
+        // CSS chunks do not register themselves, and as such must be marked as
+        // loaded instantly.
+        resolver.resolve();
+      };
+      document.body.appendChild(link);
     } else if (chunkPath.endsWith(".js")) {
-      // Unloading a JS chunk would have no effect, as it lives in the JS
-      // runtime once evaluated.
-      // However, we still want to remove the script tag from the DOM to keep
-      // the HTML somewhat consistent from the user's perspective.
-      const scripts = document.querySelectorAll(`script[src="/${chunkPath}"]`);
-      for (const script of Array.from(scripts)) {
-        script.remove();
-      }
+      const script = document.createElement("script");
+      script.src = `/${chunkPath}`;
+      // We'll only mark the chunk as loaded once the script has been executed,
+      // which happens in `registerChunk`. Hence the absence of `resolve()` in
+      // this branch.
+      script.onerror = () => {
+        resolver.reject();
+      };
+      document.body.appendChild(script);
     } else {
       throw new Error(`can't infer type of chunk from path ${chunkPath}`);
     }
-  },
 
-  reloadChunk(chunkPath) {
-    return new Promise((resolve, reject) => {
-      if (!chunkPath.endsWith(".css")) {
-        reject(new Error("The DOM backend can only reload CSS chunks"));
-        return;
-      }
-
-      const previousLink = document.querySelector(
-        `link[href^="/${chunkPath}"]`
-      );
-
-      if (previousLink == null) {
-        reject(new Error(`No link element found for chunk ${chunkPath}`));
-        return;
-      }
-
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = `/${chunkPath}?t=${Date.now()}`;
-      link.onerror = () => {
-        reject();
-      };
-      link.onload = () => {
-        // First load the new CSS, then remove the old one. This prevents visible
-        // flickering that would happen in-between removing the previous CSS and
-        // loading the new one.
-        previousLink.remove();
-
-        // CSS chunks do not register themselves, and as such must be marked as
-        // loaded instantly.
-        resolve();
-      };
-
-      // Make sure to insert the new CSS right after the previous one, so that
-      // its precedence is higher.
-      previousLink.parentElement.insertBefore(link, previousLink.nextSibling);
-    });
-  },
-
-  restart: () => self.location.reload(),
-};
+    return resolver.promise;
+  }
+})();
 /* eslint-disable @next/next/no-assign-module-variable */
 
 /** @typedef {import('../types').ChunkRegistration} ChunkRegistration */
@@ -166,7 +277,6 @@ const BACKEND = {
 /** @typedef {import('../types/protocol').EcmascriptMergedChunkUpdate} EcmascriptMergedChunkUpdate */
 /** @typedef {import('../types/protocol').EcmascriptModuleEntry} EcmascriptModuleEntry */
 
-/** @typedef {import('../types/runtime').Loader} Loader */
 /** @typedef {import('../types/runtime').ModuleEffect} ModuleEffect */
 /** @typedef {import('../types/runtime').DevRuntimeParams} DevRuntimeParams */
 
@@ -174,18 +284,6 @@ const BACKEND = {
 const moduleFactories = { __proto__: null };
 /** @type {Object.<ModuleId, Module>} */
 const moduleCache = { __proto__: null };
-/**
- * Contains the IDs of all chunks that have been loaded.
- *
- * @type {Set<ChunkPath>}
- */
-const loadedChunks = new Set();
-/**
- * Maps a chunk ID to the chunk's loader if the chunk is currently being loaded.
- *
- * @type {Map<ChunkPath, Loader>}
- */
-const chunkLoaders = new Map();
 /**
  * Maps module IDs to persisted data between executions of their hot module
  * implementation (`hot.data`).
@@ -371,36 +469,10 @@ externalRequire.resolve = (name, opt) => {
  * @param {string} chunkPath
  * @returns {Promise<any> | undefined}
  */
-function loadChunk(source, chunkPath) {
-  if (loadedChunks.has(chunkPath)) {
-    return Promise.resolve();
-  }
-
-  const chunkLoader = getOrCreateChunkLoader(chunkPath, source);
-
-  return chunkLoader.promise;
-}
-
-/**
- * @param {string} chunkPath
- * @param {SourceInfo} source
- * @returns {Loader}
- */
-function getOrCreateChunkLoader(chunkPath, source) {
-  let chunkLoader = chunkLoaders.get(chunkPath);
-  if (chunkLoader) {
-    return chunkLoader;
-  }
-
-  let resolve;
-  let reject;
-  const promise = new Promise((innerResolve, innerReject) => {
-    resolve = innerResolve;
-    reject = innerReject;
-  });
-
-  const onError = (error) => {
-    chunkLoaders.delete(chunkPath);
+async function loadChunk(source, chunkPath) {
+  try {
+    await BACKEND.loadChunk(chunkPath, source);
+  } catch (error) {
     let loadReason;
     switch (source.type) {
       case SourceTypeRuntime:
@@ -413,30 +485,12 @@ function getOrCreateChunkLoader(chunkPath, source) {
         loadReason = "from an HMR update";
         break;
     }
-    reject(
-      new Error(
-        `Failed to load chunk ${chunkPath} ${loadReason}${
-          error ? `: ${error}` : ""
-        }`
-      )
+    throw new Error(
+      `Failed to load chunk ${chunkPath} ${loadReason}${
+        error ? `: ${error}` : ""
+      }`
     );
-  };
-
-  const onLoad = () => {
-    loadedChunks.add(chunkPath);
-    chunkLoaders.delete(chunkPath);
-    resolve();
-  };
-
-  chunkLoader = {
-    promise,
-    onLoad,
-  };
-  chunkLoaders.set(chunkPath, chunkLoader);
-
-  BACKEND.loadChunk(chunkPath, source).then(onLoad, onError);
-
-  return chunkLoader;
+  }
 }
 
 /** @type {SourceTypeRuntime} */
@@ -951,7 +1005,6 @@ function applyChunkListUpdate(chunkListPath, update) {
           BACKEND.reloadChunk?.(chunkPath);
           break;
         case "deleted":
-          loadedChunks.delete(chunkPath);
           BACKEND.unloadChunk?.(chunkPath);
           break;
         case "partial":
@@ -1386,7 +1439,6 @@ function disposeChunkList(chunkListPath) {
 function disposeChunk(chunkPath) {
   // This should happen whether or not the chunk has any modules in it. For instance,
   // CSS chunks have no modules in them, but they still need to be unloaded.
-  loadedChunks.delete(chunkPath);
   BACKEND.unloadChunk(chunkPath);
 
   const chunkModules = chunkModulesMap.get(chunkPath);
@@ -1486,27 +1538,16 @@ function markChunkListAsRuntime(chunkListPath) {
 }
 
 /**
- * @param {ChunkPath} chunkPath
- */
-function markChunkAsLoaded(chunkPath) {
-  const chunkLoader = chunkLoaders.get(chunkPath);
-  if (!chunkLoader) {
-    loadedChunks.add(chunkPath);
-
-    // This happens for all initial chunks that are loaded directly from
-    // the HTML.
-    return;
-  }
-
-  // Only chunks that are loaded via `loadChunk` will have a loader.
-  chunkLoader.onLoad();
-}
-
-/**
  * @param {ChunkRegistration} chunkRegistration
  */
 async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
-  markChunkAsLoaded(chunkPath);
+  if (runtimeParams != null) {
+    registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
+      chunkPath,
+      ...runtimeParams.otherChunks,
+    ]);
+  }
+
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
     if (!moduleFactories[moduleId]) {
       moduleFactories[moduleId] = moduleFactory;
@@ -1514,54 +1555,7 @@ async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
     addModuleToChunk(moduleId, chunkPath);
   }
 
-  if (runtimeParams) {
-    try {
-      await evaluateRuntimeParams(chunkPath, runtimeParams);
-    } catch (err) {
-      console.error(
-        `The following error occurred while evaluating runtime entries of ${chunkPath}:`
-      );
-      console.error(err);
-      return;
-    }
-  }
-}
-
-/**
- * @param {ChunkPath} chunkPath
- * @param {DevRuntimeParams} runtimeParams
- */
-async function evaluateRuntimeParams(chunkPath, runtimeParams) {
-  registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
-    chunkPath,
-    ...runtimeParams.otherChunks,
-  ]);
-
-  if (runtimeParams.runtimeModuleIds.length > 0) {
-    await waitForChunksToLoad(
-      {
-        type: SourceTypeRuntime,
-        chunkPath,
-      },
-      runtimeParams.otherChunks
-    );
-
-    for (const moduleId of runtimeParams.runtimeModuleIds) {
-      getOrInstantiateRuntimeModule(moduleId, chunkPath);
-    }
-  }
-}
-
-/**
- * @param {SourceInfo} source
- * @param {ChunkPath[]} chunkPaths
- */
-async function waitForChunksToLoad(source, chunkPaths) {
-  await Promise.all(
-    chunkPaths.map((chunkPathDependency) =>
-      loadChunk(source, chunkPathDependency)
-    )
-  );
+  BACKEND.registerChunk(chunkPath, runtimeParams);
 }
 
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
