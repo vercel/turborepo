@@ -92,6 +92,9 @@ pub trait ChunkingContext {
     /// chunk path.
     fn chunk_list_path(&self, entry_chunk_path: FileSystemPathVc) -> FileSystemPathVc;
 
+    /// Reference Source Map Assets for chunks
+    fn chunk_source_maps(&self, chunk: ChunkVc) -> BoolVc;
+
     fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> BoolVc;
 
     fn asset_path(&self, content_hash: &str, extension: &str) -> FileSystemPathVc;

@@ -391,7 +391,9 @@ impl Asset for EcmascriptChunk {
             references.push(ChunkGroupReferenceVc::new(*chunk_group).into());
         }
         references.extend(this.runtime.references(self_vc).await?.iter().copied());
-        references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        if *this.context.chunk_source_maps(self_vc.into()).await? {
+            references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        }
 
         Ok(AssetReferencesVc::cell(references))
     }

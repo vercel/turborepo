@@ -58,17 +58,7 @@ async fn emit(
             .strongly_consistent()
             .await?
             .iter()
-            .map(|a| async {
-                Ok(if *a.ident().path().extension().await? != "map" {
-                    Some(a.content().write(a.ident().path()))
-                } else {
-                    None
-                })
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
+            .map(|a| a.content().write(a.ident().path()))
             .collect(),
     )
     .completed())
