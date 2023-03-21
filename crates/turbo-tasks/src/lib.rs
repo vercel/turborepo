@@ -59,7 +59,7 @@ pub mod registry;
 pub mod small_duration;
 mod state;
 mod task_input;
-pub mod timed_future;
+mod timed_future;
 pub mod trace;
 mod trait_ref;
 pub mod util;
