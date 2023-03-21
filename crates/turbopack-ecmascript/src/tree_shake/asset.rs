@@ -15,7 +15,7 @@ use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module
 use crate::{
     chunk::{
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExportsVc,
     },
     references::analyze_ecmascript_module,
     AnalyzeEcmascriptModuleResultVc, EcmascriptModuleAssetVc,
@@ -110,7 +110,7 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self_vc: EcmascriptModulePartAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<EcmascriptChunkItemVc> {
         Ok(EcmascriptModulePartChunkItem {
             module: self_vc,

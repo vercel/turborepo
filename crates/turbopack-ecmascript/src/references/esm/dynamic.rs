@@ -79,7 +79,7 @@ impl CodeGenerateable for EsmAsyncAssetReference {
         let pm = PatternMappingVc::resolve_request(
             self.request,
             self.origin,
-            context,
+            context.into(),
             esm_resolve(
                 self.origin,
                 self.request,

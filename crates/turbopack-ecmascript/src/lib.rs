@@ -416,7 +416,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
 #[turbo_tasks::function]
 async fn gen_content(
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
     analyzed: AnalyzeEcmascriptModuleResultVc,
     parsed: ParseResultVc,
     ident: AssetIdentVc,

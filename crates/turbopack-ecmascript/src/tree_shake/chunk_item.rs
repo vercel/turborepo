@@ -8,7 +8,10 @@ use turbopack_core::{
 
 use super::{asset::EcmascriptModulePartAssetVc, part_of_module, split_module};
 use crate::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc},
+    chunk::{
+        EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
+        EcmascriptChunkingContextVc,
+    },
     gen_content,
 };
 
@@ -18,7 +21,7 @@ use crate::{
 #[turbo_tasks::value(shared)]
 pub struct EcmascriptModulePartChunkItem {
     pub(super) module: EcmascriptModulePartAssetVc,
-    pub(super) context: ChunkingContextVc,
+    pub(super) context: EcmascriptChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
