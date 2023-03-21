@@ -1,17 +1,17 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_d20d5c.js", {
 
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/output/crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_67d1c2.js
 "[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
-=======
-"crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript part 0)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
->>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/output/crates_turbopack-tests_tests_snapshot_import-meta_esm-mutable_input_index_dc37f8.js
 
-"module evaluation";
+const __TURBOPACK__import$2e$meta__ = {
+    url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs"
+};
+"__TURBOPACK__ecmascript__hoisting__location__";
+__TURBOPACK__import$2e$meta__.foo = 1;
 
 }.call(this) }),
 "[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$import$2d$meta$2f$esm$2d$mutable$2f$input$2f$mod$2e$mjs$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript part 0)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$import$2d$meta$2f$esm$2d$mutable$2f$input$2f$mod$2e$mjs__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-mutable/input/mod.mjs (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 

@@ -1,80 +1,23 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_372408.js", {
 
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_b81b04.js
 "[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
-=======
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
 __turbopack_esm__({
     "prop": ()=>prop
 });
 const prop = 1;
-;
-;
 
-})()),
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
-
-"module evaluation";
-
-}.call(this) }),
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
-
-__turbopack_esm__({
-    "prop": ()=>prop
-});
-const prop = 1;
-;
-;
-
-})()),
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
-
-"module evaluation";
-
-}.call(this) }),
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
-
-__turbopack_esm__({
-    "prop": ()=>prop
-});
-const prop = 1;
-;
-;
-
-})()),
-"crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
->>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_3d21b6.js
-
-"module evaluation";
-
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_b81b04.js
 })()),
 "[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, k: __turbopack_register_chunk_list__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
 
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript)");
-=======
-}.call(this) }),
-"[project]/crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname }) => (() => {
-
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$0__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 0)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$1__$28$ecmascript$29__ = __turbopack_import__("crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/input/prop.js (ecmascript part 1)");
->>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_3d21b6.js
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 ;
 ;
-<<<<<<< HEAD:crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_b81b04.js
 console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__["prop"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__["prop"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js__$28$ecmascript$29__["prop"]);
-=======
-console.log(__TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$0__$28$ecmascript$29__["prop"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$1__$28$ecmascript$29__["prop"], __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$jsconfig$2d$baseurl$2f$input$2f$prop$2e$js$3f$part$3d$0__$28$ecmascript$29__["prop"]);
->>>>>>> c238ce64f (Code path (`continue`)):crates/turbopack-tests/tests/snapshot/typescript/jsconfig-baseurl/output/79fb1_turbopack-tests_tests_snapshot_typescript_jsconfig-baseurl_input_index_3d21b6.js
 
 })()),
 }
