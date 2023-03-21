@@ -551,6 +551,6 @@ export const users: Array<TurboUser> = [
     caption: "Clinia",
     image: "/images/logos/clinia.svg",
     infoLink: "https://clinia.dev/",
-    pinned: true
-  }
+    pinned: true,
+  },
 ];
