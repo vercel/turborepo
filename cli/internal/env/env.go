@@ -35,6 +35,11 @@ func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
 	}
 }
 
+// Add creates one new environment variable.
+func (evm EnvironmentVariableMap) Add(key string, value string) {
+	evm[key] = value
+}
+
 // Names returns a sorted list of env var names for the EnvironmentVariableMap
 func (evm EnvironmentVariableMap) Names() []string {
 	names := []string{}
@@ -85,7 +90,8 @@ func (evm EnvironmentVariableMap) ToHashable() EnvironmentVariablePairs {
 	})
 }
 
-func getEnvMap() EnvironmentVariableMap {
+// GetEnvMap returns a map of env vars and their values from os.Environ
+func GetEnvMap() EnvironmentVariableMap {
 	envMap := make(map[string]string)
 	for _, envVar := range os.Environ() {
 		if i := strings.Index(envVar, "="); i >= 0 {
@@ -96,8 +102,8 @@ func getEnvMap() EnvironmentVariableMap {
 	return envMap
 }
 
-// fromKeys returns a map of env vars and their values from a given set of env var names
-func fromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap {
+// FromKeys returns a map of env vars and their values from a given set of env var names
+func FromKeys(all EnvironmentVariableMap, keys []string) EnvironmentVariableMap {
 	output := EnvironmentVariableMap{}
 	for _, key := range keys {
 		output[key] = all[key]
@@ -138,14 +144,14 @@ func fromMatching(all EnvironmentVariableMap, keyMatchers []string, shouldExclud
 
 // GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
 func GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
-	all := getEnvMap()
+	all := GetEnvMap()
 
 	detailedMap := DetailedMap{
 		All:      EnvironmentVariableMap{},
 		BySource: BySource{},
 	}
 
-	detailedMap.BySource.Explicit = fromKeys(all, keys)
+	detailedMap.BySource.Explicit = FromKeys(all, keys)
 	detailedMap.All.Merge(detailedMap.BySource.Explicit)
 
 	// Create an excluder function to pass to matcher.

@@ -388,6 +388,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		engine,
 		taskHashTracker,
 		turboCache,
+		turboJSON.GlobalEnv,
 		packagesInScope,
 		r.base,
 		summary,

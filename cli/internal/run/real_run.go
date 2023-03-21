@@ -1,6 +1,8 @@
 package run
 
 import (
+	"bufio"
+	"bytes"
 	gocontext "context"
 	"fmt"
 	"log"
@@ -18,6 +20,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -39,6 +42,7 @@ func RealRun(
 	engine *core.Engine,
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
+	envVars []string,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -75,6 +79,7 @@ func RealRun(
 		rs:              rs,
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
+		envVars:         envVars,
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
@@ -184,6 +189,7 @@ type execContext struct {
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
+	envVars         []string
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
@@ -271,8 +277,55 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
-	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
-	cmd.Env = append(os.Environ(), envs)
+
+	currentState := env.GetEnvMap()
+	passthroughEnv := env.EnvironmentVariableMap{}
+
+	// What are we sending in?
+	fileName := "turbo.env"
+	strict := true
+	if strict {
+		rootPassthrough := env.EnvironmentVariableMap{}
+		projectPassthrough := env.EnvironmentVariableMap{}
+
+		defaultPassthrough := []string{
+			"PATH",
+			"SHELL",
+		}
+
+		rootTurboEnv, err := ec.repoRoot.UntypedJoin(fileName).ReadFile()
+		if err == nil {
+			var variableList []string
+			scanner := bufio.NewScanner(bytes.NewReader(rootTurboEnv))
+			for scanner.Scan() {
+				variableList = append(variableList, scanner.Text())
+			}
+			rootPassthrough = env.FromKeys(currentState, variableList)
+			ec.logger.Debug(fmt.Sprintf("rootTurboEnv %v", variableList))
+		}
+
+		packageTurboEnv, err := packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).UntypedJoin(fileName).ReadFile()
+		if err == nil {
+			var variableList []string
+			scanner := bufio.NewScanner(bytes.NewReader(packageTurboEnv))
+			for scanner.Scan() {
+				variableList = append(variableList, scanner.Text())
+			}
+			projectPassthrough = env.FromKeys(currentState, variableList)
+			ec.logger.Debug(fmt.Sprintf("packageTurboEnv %v", variableList))
+		}
+
+		passthroughEnv.Merge(env.FromKeys(currentState, defaultPassthrough))
+		passthroughEnv.Merge(env.FromKeys(currentState, ec.envVars))
+		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.EnvVarDependencies))
+		passthroughEnv.Merge(rootPassthrough)
+		passthroughEnv.Merge(projectPassthrough)
+	} else {
+		passthroughEnv.Merge(currentState)
+	}
+	passthroughEnv.Add("TURBO_HASH", hash)
+
+	cmd.Env = passthroughEnv.ToHashable()
 
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
