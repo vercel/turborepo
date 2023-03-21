@@ -222,6 +222,8 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
@@ -244,9 +246,10 @@
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc,
+        EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js_pretty,
+    utils::StringifyJs,
     EcmascriptModuleAssetVc,
 };
 
@@ -260,9 +263,8 @@
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ChunkGroupFilesAsset {
     <span class="kw">pub </span>asset: ChunkableAssetVc,
+    <span class="kw">pub </span>client_root: FileSystemPathVc,
     <span class="kw">pub </span>chunking_context: ChunkingContextVc,
-    <span class="kw">pub </span>base_path: FileSystemPathVc,
-    <span class="kw">pub </span>server_root: FileSystemPathVc,
     <span class="kw">pub </span>runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
 }
 
@@ -339,14 +341,15 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>as_chunk_item(
         self_vc: ChunkGroupFilesAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ChunkGroupFilesChunkItem {
             context,
+            client_root: this.client_root,
             inner: self_vc,
             chunk: this.asset.as_chunk(
-                context,
+                context.into(),
                 Value::new(AvailabilityInfo::Root {
                     current_availability_root: this.asset.into(),
                 }),
@@ -364,7 +367,8 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ChunkGroupFilesChunkItem {
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
+    client_root: FileSystemPathVc,
     inner: ChunkGroupFilesAssetVc,
     chunk: ChunkVc,
 }
@@ -372,14 +376,14 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ChunkGroupFilesChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="kw">let </span>chunks = <span class="self">self</span>.inner.chunk_group().chunks();
-        <span class="kw">let </span>base_path = <span class="self">self</span>.inner.<span class="kw">await</span><span class="question-mark">?</span>.base_path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client_root = <span class="self">self</span>.client_root.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunks_paths = chunks
             .<span class="kw">await</span><span class="question-mark">?
             </span>.iter()
@@ -388,12 +392,12 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunks_paths: Vec&lt;<span class="kw">_</span>&gt; = chunks_paths
             .iter()
-            .filter_map(|path| base_path.get_path_to(path))
+            .filter_map(|path| client_root.get_path_to(path))
             .collect();
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: <span class="macro">format!</span>(
-                <span class="string">&quot;__turbopack_export_value__({});\n&quot;</span>,
-                stringify_js_pretty(<span class="kw-2">&amp;</span>chunks_paths)
+                <span class="string">&quot;__turbopack_export_value__({:#});\n&quot;</span>,
+                StringifyJs(<span class="kw-2">&amp;</span>chunks_paths)
             )
             .into(),
             ..Default::default()

@@ -562,7 +562,7 @@
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(options) = enable_postcss_transform {
                         <span class="kw">let </span>execution_context = execution_context
                             .context(<span class="string">&quot;execution_context is required for the postcss_transform&quot;</span>)<span class="question-mark">?
-                            </span>.join(<span class="string">&quot;postcss&quot;</span>);
+                            </span>.with_layer(<span class="string">&quot;postcss&quot;</span>);
 
                         <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss_package) = options.postcss_package {
                             package_import_map_from_import_mapping(<span class="string">&quot;postcss&quot;</span>, postcss_package)
@@ -676,7 +676,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(webpack_loaders_options) = enable_webpack_loaders {
             <span class="kw">let </span>execution_context = execution_context
                 .context(<span class="string">&quot;execution_context is required for webpack_loaders&quot;</span>)<span class="question-mark">?
-                </span>.join(<span class="string">&quot;webpack_loaders&quot;</span>);
+                </span>.with_layer(<span class="string">&quot;webpack_loaders&quot;</span>);
             <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(loader_runner_package) =
                 webpack_loaders_options.loader_runner_package
             {

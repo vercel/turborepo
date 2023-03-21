@@ -3344,7 +3344,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::imports::ImportAnnotations;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span><span class="self">self</span>::imports::ImportMap;
-<span class="kw">use </span><span class="kw">crate</span>::utils::stringify_js;
+<span class="kw">use </span><span class="kw">crate</span>::utils::StringifyJs;
 
 <span class="kw">pub mod </span>builtin;
 <span class="kw">pub mod </span>graph;
@@ -3569,7 +3569,7 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
             ConstantValue::Undefined =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;undefined&quot;</span>),
-            ConstantValue::Str(str) =&gt; f.write_str(<span class="kw-2">&amp;</span>stringify_js(str.as_str())),
+            ConstantValue::Str(str) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, StringifyJs(str.as_str())),
             ConstantValue::True =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;true&quot;</span>),
             ConstantValue::False =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;false&quot;</span>),
             ConstantValue::Null =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;null&quot;</span>),

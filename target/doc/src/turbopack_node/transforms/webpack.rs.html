@@ -189,7 +189,6 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -328,7 +327,7 @@
 
         <span class="kw">let </span>ExecutionContext {
             project_path,
-            intermediate_output_path,
+            chunking_context,
             env,
         } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>source_content = this.source.content();
@@ -349,13 +348,12 @@
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
         <span class="kw">let </span>loaders = this.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>config_value = evaluate(
-            project_path,
             webpack_loaders_executor,
             project_path,
             env,
             this.source.ident(),
             context,
-            intermediate_output_path,
+            chunking_context,
             <span class="prelude-val">None</span>,
             <span class="macro">vec!</span>[
                 JsonValueVc::cell(content.into()),

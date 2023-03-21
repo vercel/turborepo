@@ -140,6 +140,9 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Callee, ExprOrSpread},
@@ -148,8 +151,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -157,6 +159,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveType::EsmAsync};
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -213,11 +216,14 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>EsmAsyncAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>pm = PatternMappingVc::resolve_request(
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
-            context,
+            context.into(),
             esm_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
             Value::new(EsmAsync),
         )

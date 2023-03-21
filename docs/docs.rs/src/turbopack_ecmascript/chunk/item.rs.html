@@ -101,53 +101,9 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, TryJoinIterExt, Value};
+<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, Value};
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
@@ -158,14 +114,10 @@
 };
 
 <span class="kw">use super</span>::{
-    context::EcmascriptChunkContextVc,
+    context::EcmascriptChunkingContextVc,
     manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
     placeable::EcmascriptChunkPlaceableVc,
-    snapshot::{
-        EcmascriptChunkContentEntries, EcmascriptChunkContentEntriesSnapshot,
-        EcmascriptChunkContentEntriesSnapshotVc, EcmascriptChunkContentEntryVc,
-    },
-    EcmascriptChunkPlaceable,
+    EcmascriptChunkPlaceable, EcmascriptChunkingContext,
 };
 <span class="kw">use </span><span class="kw">crate</span>::ParseResultSourceMapVc;
 
@@ -189,19 +141,30 @@
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>EcmascriptChunkItem: ChunkItem {
     <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkItemContentVc;
-    <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
-    <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleIdVc {
-        EcmascriptChunkContextVc::of(<span class="self">self</span>.chunking_context()).chunk_item_id(<span class="kw-2">*</span><span class="self">self</span>)
+    <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc;
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EcmascriptChunkItemVc {
+    <span class="doccomment">/// Returns the module id of this chunk item.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>id(<span class="self">self</span>) -&gt; ModuleIdVc {
+        <span class="self">self</span>.chunking_context().chunk_item_id(<span class="self">self</span>)
     }
 }
 
 <span class="attr">#[async_trait::async_trait]
 </span><span class="kw">impl </span>FromChunkableAsset <span class="kw">for </span>EcmascriptChunkItemVc {
     <span class="kw">async fn </span>from_asset(context: ChunkingContextVc, asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(placeable.as_chunk_item(context)));
-        }
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        <span class="kw">let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+
+        <span class="kw">let </span><span class="prelude-val">Some</span>(context) = EcmascriptChunkingContextVc::resolve_from(context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(placeable.as_chunk_item(context)))
     }
 
     <span class="kw">async fn </span>from_async_asset(
@@ -209,6 +172,10 @@
         asset: ChunkableAssetVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(context) = EcmascriptChunkingContextVc::resolve_from(context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+
         <span class="kw">let </span>next_availability_info = <span class="kw">match </span>availability_info.into_value() {
             AvailabilityInfo::Untracked =&gt; AvailabilityInfo::Untracked,
             AvailabilityInfo::Root {
@@ -236,59 +203,6 @@
 </span><span class="kw">pub struct </span>EcmascriptChunkItemsChunk(Vec&lt;EcmascriptChunkItemVc&gt;);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>EcmascriptChunkItems(<span class="kw">pub</span>(<span class="kw">super</span>) Vec&lt;EcmascriptChunkItemsChunkVc&gt;);
-
-<span class="kw">impl </span>EcmascriptChunkItems {
-    <span class="kw">pub fn </span>make_chunks(list: <span class="kw-2">&amp;</span>[EcmascriptChunkItemVc]) -&gt; Vec&lt;EcmascriptChunkItemsChunkVc&gt; {
-        <span class="kw">let </span>size = list.len().div_ceil(<span class="number">100</span>);
-        <span class="kw">let </span>chunk_items = list
-            .chunks(size)
-            .map(|chunk| EcmascriptChunkItemsChunkVc::cell(chunk.to_vec()))
-            .collect();
-        chunk_items
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>EcmascriptChunkItemsChunkVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_entry_snapshot(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentEntriesSnapshotVc&gt; {
-        <span class="kw">let </span>list = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EcmascriptChunkContentEntries(
-            list.iter()
-                .map(|chunk_item| EcmascriptChunkContentEntryVc::new(<span class="kw-2">*</span>chunk_item))
-                .collect(),
-        )
-        .cell()
-        .snapshot())
-    }
-}
-
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>EcmascriptChunkItemsSet(IndexSet&lt;EcmascriptChunkItemVc&gt;);
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>EcmascriptChunkItemsVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>to_entry_snapshot(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentEntriesSnapshotVc&gt; {
-        <span class="kw">let </span>list = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EcmascriptChunkContentEntriesSnapshot::Nested(
-            list.iter()
-                .map(|chunk| chunk.to_entry_snapshot())
-                .try_join()
-                .<span class="kw">await</span><span class="question-mark">?</span>,
-        )
-        .cell())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>to_set(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemsSetVc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>set = IndexSet::new();
-        <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().try_join().<span class="kw">await</span><span class="question-mark">? </span>{
-            set.extend(chunk.iter().copied())
-        }
-        <span class="prelude-val">Ok</span>(EcmascriptChunkItemsSetVc::cell(set))
-    }
-}
+</span><span class="kw">pub struct </span>EcmascriptChunkItems(<span class="kw">pub</span>(<span class="kw">super</span>) Vec&lt;EcmascriptChunkItemVc&gt;);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_ecmascript" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

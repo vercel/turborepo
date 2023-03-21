@@ -464,93 +464,18 @@
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
-<a href="#467" id="467">467</a>
-<a href="#468" id="468">468</a>
-<a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
-<a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
-<a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>evaluate;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>item;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>manifest;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>merged;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>module_factory;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>placeable;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>snapshot;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>runtime;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>source_map;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>update;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>version;
 
 <span class="kw">use </span>std::fmt::Write;
 
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringReadRef, StringVc, UsizeVc},
@@ -562,8 +487,8 @@
     chunk::{
         availability_info::AvailabilityInfo,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkListReferenceVc,
-        ChunkReferenceVc, ChunkVc, ChunkingContext, ChunkingContextVc,
+        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContext,
+        ChunkingContextVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -576,12 +501,12 @@
 };
 
 <span class="kw">use </span><span class="self">self</span>::{
-    content::{ecmascript_chunk_content, EcmascriptChunkContentResultVc, EcmascriptChunkContentVc},
-    optimize::EcmascriptChunkOptimizerVc,
+    content::ecmascript_chunk_content, optimize::EcmascriptChunkOptimizerVc,
     source_map::EcmascriptChunkSourceMapAssetReferenceVc,
 };
 <span class="kw">pub use </span><span class="self">self</span>::{
-    evaluate::{EcmascriptChunkEvaluate, EcmascriptChunkEvaluateVc},
+    content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
+    context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemOptions, EcmascriptChunkItemVc,
@@ -590,15 +515,19 @@
         EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceables,
         EcmascriptChunkPlaceablesVc, EcmascriptExports, EcmascriptExportsVc,
     },
+    runtime::{
+        EcmascriptChunkRuntime, EcmascriptChunkRuntimeContent, EcmascriptChunkRuntimeContentVc,
+        EcmascriptChunkRuntimeVc,
+    },
 };
 <span class="kw">use </span><span class="kw">crate</span>::utils::FormatIter;
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptChunk {
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
     main_entries: EcmascriptChunkPlaceablesVc,
     omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
-    evaluate: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkEvaluateVc&gt;,
+    runtime: EcmascriptChunkRuntimeVc,
     availability_info: AvailabilityInfo,
 }
 
@@ -606,60 +535,58 @@
 </span><span class="kw">impl </span>EcmascriptChunkVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new_normalized(
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
         main_entries: EcmascriptChunkPlaceablesVc,
         omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
-        evaluate: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkEvaluateVc&gt;,
+        runtime: EcmascriptChunkRuntimeVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="self">Self </span>{
         EcmascriptChunk {
             context,
             main_entries,
             omit_entries,
-            evaluate,
+            runtime,
             availability_info: availability_info.into_value(),
         }
         .cell()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(
+    </span><span class="kw">pub async fn </span>new(
         context: ChunkingContextVc,
         main_entry: EcmascriptChunkPlaceableVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_normalized(
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(context) = EcmascriptChunkingContextVc::resolve_from(<span class="kw-2">&amp;</span>context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Ecmascript runtime not found&quot;</span>);
+        };
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_normalized(
             context,
             EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[main_entry]),
             <span class="prelude-val">None</span>,
-            <span class="prelude-val">None</span>,
+            context.ecmascript_runtime(),
             availability_info,
-        )
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>new_evaluate(
-        context: ChunkingContextVc,
+    </span><span class="kw">pub async fn </span>new_with_entries_and_runtime(
+        context: EcmascriptChunkingContextVc,
         main_entry: EcmascriptChunkPlaceableVc,
-        runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+        other_entries: EcmascriptChunkPlaceablesVc,
+        runtime: EcmascriptChunkRuntimeVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>entries = Vec::new();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime_entries) = runtime_entries {
-            entries.extend(runtime_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
-        }
-        entries.push(main_entry);
-        <span class="kw">let </span>entries = EcmascriptChunkPlaceablesVc::cell(entries);
+        <span class="kw">let </span><span class="kw-2">mut </span>main_entries = other_entries.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+        <span class="comment">// The main entry must always be the last entry, so all other entries
+        // have been executed first.
+        </span>main_entries.push(main_entry);
+
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_normalized(
             context,
-            entries,
+            EcmascriptChunkPlaceablesVc::cell(main_entries),
             <span class="prelude-val">None</span>,
-            <span class="prelude-val">Some</span>(
-                EcmascriptChunkEvaluate {
-                    evaluate_entries: entries,
-                    chunk_group: <span class="prelude-val">None</span>,
-                }
-                .cell(),
-            ),
+            runtime,
             Value::new(AvailabilityInfo::Root {
                 current_availability_root: main_entry.as_asset(),
             }),
@@ -714,18 +641,15 @@
             Value::new(b.availability_info),
         );
 
-        <span class="kw">let </span>a = a.<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.to_set();
-        <span class="kw">let </span>b = b.<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.to_set();
-
-        <span class="kw">let </span>a = <span class="kw-2">&amp;*</span>a.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>b = <span class="kw-2">&amp;*</span>b.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>a: IndexSet&lt;<span class="kw">_</span>&gt; = a.<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.iter().copied().collect();
+        <span class="kw">let </span>b: IndexSet&lt;<span class="kw">_</span>&gt; = b.<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.iter().copied().collect();
 
         <span class="kw">let </span><span class="kw-2">mut </span>unshared_a = a.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>unshared_b = b.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>shared = IndexSet::new();
         <span class="kw">for </span>item <span class="kw">in </span>b {
-            <span class="kw">if </span>unshared_a.remove(item) {
-                shared.insert(<span class="kw-2">*</span>item);
+            <span class="kw">if </span>unshared_a.remove(<span class="kw-2">&amp;</span>item) {
+                shared.insert(item);
             }
         }
         <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;</span>shared {
@@ -751,7 +675,7 @@
 </span><span class="kw">impl </span>Chunk <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
-        <span class="self">self</span>.context
+        <span class="self">self</span>.context.into()
     }
 }
 
@@ -767,28 +691,6 @@
 </span><span class="kw">impl </span>ValueToString <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="kw">let </span>suffix = <span class="kw">match </span><span class="self">self</span>.evaluate {
-            <span class="prelude-val">None </span>=&gt; <span class="string">&quot;&quot;</span>.to_string(),
-            <span class="prelude-val">Some</span>(evaluate) =&gt; {
-                <span class="kw">let </span>EcmascriptChunkEvaluate {
-                    evaluate_entries, ..
-                } = <span class="kw-2">&amp;*</span>evaluate.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>evaluate_entries_ids = evaluate_entries
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.iter()
-                    .map(|entry| entry.ident().to_string())
-                    .try_join()
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">format!</span>(
-                    <span class="string">&quot; (evaluate {})&quot;</span>,
-                    FormatIter(|| evaluate_entries_ids
-                        .iter()
-                        .map(|s| s.as_str())
-                        .intersperse(<span class="string">&quot;, &quot;</span>))
-                )
-            }
-        };
-
         <span class="kw">async fn </span>entries_to_string(
             entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;StringReadRef&gt;&gt; {
@@ -807,11 +709,14 @@
         <span class="kw">let </span>entry_strs = || entry_strings.iter().map(|s| s.as_str()).intersperse(<span class="string">&quot; + &quot;</span>);
         <span class="kw">let </span>omit_entry_strings = entries_to_string(<span class="self">self</span>.omit_entries).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>omit_entry_strs = || omit_entry_strings.iter().flat_map(|s| [<span class="string">&quot; - &quot;</span>, s.as_str()]);
+
+        <span class="kw">let </span>runtime_string = <span class="self">self</span>.runtime.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;chunk {}{}{}&quot;</span>,
+            <span class="string">&quot;chunk {}{} (runtime {})&quot;</span>,
             FormatIter(entry_strs),
             FormatIter(omit_entry_strs),
-            suffix
+            runtime_string
         )))
     }
 }
@@ -819,7 +724,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_content_result(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentResultVc&gt; {
+    </span><span class="kw">pub async fn </span>chunk_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ecmascript_chunk_content(
             this.context,
@@ -830,37 +735,20 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_items_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UsizeVc&gt; {
-        <span class="prelude-val">Ok</span>(UsizeVc::cell(
-            <span class="self">self</span>.chunk_content_result()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.chunk_items
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
-                .try_join()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.into_iter()
-                .map(|chunk| chunk.len())
-                .sum(),
-        ))
+    </span><span class="kw">pub async fn </span>main_entries(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceablesVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(this.main_entries)
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkContentVc&gt; {
+    </span><span class="kw">async fn </span>chunk_items_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UsizeVc&gt; {
+        <span class="prelude-val">Ok</span>(UsizeVc::cell(<span class="self">self</span>.chunk_content().<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.len()))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>runtime_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkRuntimeContentVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>evaluate = this
-            .evaluate
-            .map(|evaluate| evaluate.content(this.context, <span class="self">self</span>));
-        <span class="kw">let </span>chunk_path = <span class="self">self</span>.path();
-        <span class="kw">let </span>content = EcmascriptChunkContentVc::new(
-            this.context,
-            this.main_entries,
-            this.omit_entries,
-            chunk_path,
-            evaluate,
-            Value::new(this.availability_info),
-        );
-        <span class="prelude-val">Ok</span>(content)
+        <span class="prelude-val">Ok</span>(this.runtime.content(<span class="self">self</span>))
     }
 }
 
@@ -915,29 +803,7 @@
             }
         }
 
-        <span class="comment">// Evaluate info is included
-        </span><span class="kw">let </span><span class="kw-2">mut </span>modifiers = Vec::new();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = this.evaluate {
-            <span class="kw">let </span>evaluate = evaluate.<span class="kw">await</span><span class="question-mark">?</span>;
-            modifiers.extend(
-                evaluate
-                    .evaluate_entries
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.iter()
-                    .map(|entry| entry.ident().to_string()),
-            );
-            <span class="comment">// When the chunk group has changed, e.g. due to optimization, we want to
-            // include the information too. Since the optimization is
-            // deterministic, it&#39;s enough to include the entry chunk which is the only
-            // factor that influences the chunk group chunks.
-            // We want to avoid a cycle when this chunk is the entry chunk.
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_group) = evaluate.chunk_group {
-                <span class="kw">let </span>entry = chunk_group.entry().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>entry != self_vc.into() {
-                    modifiers.push(entry.ident().to_string());
-                }
-            }
-        }
+        <span class="kw">let </span><span class="kw-2">mut </span>modifiers = <span class="macro">vec!</span>[];
 
         <span class="comment">// Available assets are included
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(available_assets) = this.availability_info.available_assets() {
@@ -957,6 +823,9 @@
             }))
         };
 
+        <span class="comment">// Decorate with runtime modifiers.
+        </span><span class="kw">let </span>ident = this.runtime.decorate_asset_ident(self_vc, ident);
+
         <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
             this.context.chunk_path(ident, <span class="string">&quot;.js&quot;</span>),
         ))
@@ -964,7 +833,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(self_vc: EcmascriptChunkVc) -&gt; AssetContentVc {
-        self_vc.chunk_content().content()
+        self_vc.runtime_content().content()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -987,13 +856,7 @@
         <span class="kw">for </span>chunk_group <span class="kw">in </span>content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
         }
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = this.evaluate {
-            <span class="kw">let </span>EcmascriptChunkEvaluate { chunk_group, .. } = <span class="kw-2">*</span>evaluate.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>chunk_group =
-                chunk_group.unwrap_or_else(|| ChunkGroupVc::from_chunk(self_vc.into()));
-            references
-                .push(ChunkListReferenceVc::new(this.context.output_root(), chunk_group).into());
-        }
+        references.extend(this.runtime.references(self_vc).<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
         references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
@@ -1001,7 +864,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>versioned_content(self_vc: EcmascriptChunkVc) -&gt; VersionedContentVc {
-        self_vc.chunk_content().into()
+        self_vc.runtime_content().into()
     }
 }
 
@@ -1039,12 +902,9 @@
             Value::new(this.availability_info),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_items = chunk_content.chunk_items.<span class="kw">await</span><span class="question-mark">?</span>;
         details += <span class="string">&quot;Chunk items:\n\n&quot;</span>;
-        <span class="kw">for </span>chunk <span class="kw">in </span>chunk_items.iter() {
-            <span class="kw">for </span>item <span class="kw">in </span>chunk.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
-            }
+        <span class="kw">for </span>chunk_item <span class="kw">in </span>chunk_content.chunk_items.iter() {
+            <span class="macro">writeln!</span>(details, <span class="string">&quot;- {}&quot;</span>, chunk_item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
         }
         details += <span class="string">&quot;\nContent:\n\n&quot;</span>;
         <span class="macro">write!</span>(details, <span class="string">&quot;{}&quot;</span>, content.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
@@ -1067,7 +927,7 @@
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>generate_source_map(self_vc: EcmascriptChunkVc) -&gt; SourceMapVc {
-        self_vc.chunk_content().generate_source_map()
+        self_vc.runtime_content().generate_source_map()
     }
 }
 </code></pre></div>

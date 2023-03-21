@@ -605,9 +605,9 @@
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
     ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
@@ -788,7 +788,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: ModuleCssModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         ModuleChunkItem {
             context,
@@ -820,7 +820,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ModuleChunkItem {
     module: ModuleCssModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -852,7 +852,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 
@@ -907,16 +907,16 @@
                             <span class="macro">unreachable!</span>(<span class="string">&quot;ModuleCssModuleAsset implements EcmascriptChunkPlaceableVc&quot;</span>);
                         };
 
-                        <span class="kw">let </span>module_id =
-                            stringify_js(<span class="kw-2">&amp;*</span>placeable.as_chunk_item(<span class="self">self</span>.context).id().<span class="kw">await</span><span class="question-mark">?</span>);
-                        <span class="kw">let </span>original_name = stringify_js(original_name);
+                        <span class="kw">let </span>module_id = placeable.as_chunk_item(<span class="self">self</span>.context).id().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>module_id = StringifyJs(<span class="kw-2">&amp;*</span>module_id);
+                        <span class="kw">let </span>original_name = StringifyJs(original_name);
                         exported_class_names.push(<span class="macro">format! </span>{
                             <span class="string">&quot;__turbopack_import__({module_id})[{original_name}]&quot;
                         </span>});
                     }
                     ModuleCssClass::Local { name: class_name }
                     | ModuleCssClass::Global { name: class_name } =&gt; {
-                        exported_class_names.push(stringify_js(class_name));
+                        exported_class_names.push(StringifyJs(class_name).to_string());
                     }
                 }
             }
@@ -924,7 +924,7 @@
             <span class="macro">writeln!</span>(
                 code,
                 <span class="string">&quot;  {}: {},&quot;</span>,
-                stringify_js(export_name),
+                StringifyJs(export_name),
                 exported_class_names.join(<span class="string">&quot; + \&quot; \&quot; + &quot;</span>)
             )<span class="question-mark">?</span>;
         }

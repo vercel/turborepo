@@ -251,6 +251,16 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -258,13 +268,14 @@
 };
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 
 <span class="kw">use </span><span class="kw">super</span>::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveType::Cjs};
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::{util::throw_module_not_found_expr, AstPathVc},
@@ -353,11 +364,14 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>CjsRequireAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>pm = PatternMappingVc::resolve_request(
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
-            context,
+            context.into(),
             cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
             Value::new(Cjs),
         )
@@ -442,11 +456,14 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>CjsRequireResolveAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>pm = PatternMappingVc::resolve_request(
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
-            context,
+            context.into(),
             cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
             Value::new(Cjs),
         )
@@ -489,7 +506,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>CjsRequireCacheAccess {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;

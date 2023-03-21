@@ -201,7 +201,6 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
@@ -210,8 +209,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     environment::{Rendering, RenderingVc},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
@@ -226,7 +224,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::base::{ReferencedAsset, ReferencedAssetVc};
 <span class="kw">use crate</span>::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -315,7 +313,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code_generation(
         self_vc: UrlAssetReferenceVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = <span class="macro">vec!</span>[];

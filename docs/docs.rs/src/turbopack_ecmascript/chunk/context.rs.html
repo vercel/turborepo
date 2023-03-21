@@ -26,27 +26,31 @@
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbopack_core::chunk::{ChunkItem, ChunkingContext, ChunkingContextVc, ModuleId, ModuleIdVc};
 
-<span class="kw">use </span><span class="kw">super</span>::item::EcmascriptChunkItemVc;
+<span class="kw">use super</span>::{item::EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc};
 
-<span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>EcmascriptChunkContext {
-    context: ChunkingContextVc,
-}
+<span class="doccomment">/// [`EcmascriptChunkingContext`] must be implemented by [`ChunkingContext`]
+/// implementors that want to operate on [`EcmascriptChunk`]s.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>EcmascriptChunkingContext: ChunkingContext {
+    <span class="doccomment">/// Returns an EcmascriptChunkRuntime implementation that registers a
+    /// chunk&#39;s contents when executed.
+    </span><span class="kw">fn </span>ecmascript_runtime(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkRuntimeVc;
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>EcmascriptChunkContextVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>of(context: ChunkingContextVc) -&gt; EcmascriptChunkContextVc {
-        EcmascriptChunkContextVc::cell(EcmascriptChunkContext { context })
-    }
+    <span class="doccomment">/// Returns an EcmascriptChunkRuntime implementation that registers a
+    /// chunk&#39;s contents and evaluates its main entries when executed.
+    </span><span class="kw">fn </span>evaluated_ecmascript_runtime(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        evaluated_entries: EcmascriptChunkPlaceablesVc,
+    ) -&gt; EcmascriptChunkRuntimeVc;
 
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>chunk_item_id(<span class="self">self</span>, chunk_item: EcmascriptChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleIdVc&gt; {
-        <span class="kw">let </span>layer = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.context.layer();
+    <span class="kw">async fn </span>chunk_item_id(<span class="kw-2">&amp;</span><span class="self">self</span>, chunk_item: EcmascriptChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleIdVc&gt; {
+        <span class="kw">let </span>layer = <span class="self">self</span>.layer();
         <span class="kw">let </span><span class="kw-2">mut </span>ident = chunk_item.asset_ident();
         <span class="kw">if </span>!layer.<span class="kw">await</span><span class="question-mark">?</span>.is_empty() {
             ident = ident.with_modifier(layer)

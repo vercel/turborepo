@@ -116,8 +116,10 @@
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
 </pre><pre class="rust"><code><span class="kw">use </span>swc_core::ecma::visit::{AstParentKind, VisitMut};
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
+
+<span class="kw">use </span><span class="kw">crate</span>::chunk::EcmascriptChunkingContextVc;
 
 <span class="doccomment">/// impl of code generation inferred from a AssetReference.
 /// This is rust only and can&#39;t be implemented by non-rust plugins.
@@ -140,7 +142,7 @@
 
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>CodeGenerateable {
-    <span class="kw">fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; CodeGenerationVc;
+    <span class="kw">fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: EcmascriptChunkingContextVc) -&gt; CodeGenerationVc;
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]

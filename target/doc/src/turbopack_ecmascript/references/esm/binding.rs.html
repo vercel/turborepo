@@ -127,10 +127,10 @@
         visit::fields::{ExprField, PropField},
     },
 };
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
 
 <span class="kw">use </span><span class="kw">super</span>::EsmAssetReferenceVc;
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -166,7 +166,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code_generation(
         self_vc: EsmBindingVc,
-        _context: ChunkingContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();

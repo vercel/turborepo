@@ -163,9 +163,9 @@
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
 };
 
 <span class="doccomment">/// The `process.env` asset, responsible for initializing the env (shared by all
@@ -222,7 +222,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: ProcessEnvAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         ProcessEnvChunkItem {
             context,
@@ -240,7 +240,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ProcessEnvChunkItem {
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
     inner: ProcessEnvAssetVc,
 }
 
@@ -260,7 +260,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ProcessEnvChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 
@@ -280,7 +280,7 @@
             // env can be used to inject live code into the output.
             // TODO this is not completely correct as env vars need to ignore casing
             // So `process.env.path === process.env.PATH === process.env.PaTh`
-            </span><span class="macro">writeln!</span>(code, <span class="string">&quot;env[{}] = {};&quot;</span>, stringify_js(name), val)<span class="question-mark">?</span>;
+            </span><span class="macro">writeln!</span>(code, <span class="string">&quot;env[{}] = {};&quot;</span>, StringifyJs(name), val)<span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

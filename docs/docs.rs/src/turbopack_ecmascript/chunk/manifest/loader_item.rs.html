@@ -151,6 +151,7 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -158,7 +159,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkingContext},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -171,8 +172,9 @@
             EcmascriptChunkItemVc,
         },
         placeable::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+        EcmascriptChunkingContextVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -224,7 +226,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ManifestLoaderItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkingContextVc&gt; {
+    </span><span class="kw">async fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkingContextVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.manifest.<span class="kw">await</span><span class="question-mark">?</span>.chunking_context)
     }
 
@@ -292,9 +294,9 @@
                     }});
                 }});
             &quot;#</span>,
-            chunk_server_path = stringify_js(chunk_server_path),
-            item_id = stringify_js(item_id),
-            dynamic_id = stringify_js(dynamic_id),
+            chunk_server_path = StringifyJs(chunk_server_path),
+            item_id = StringifyJs(item_id),
+            dynamic_id = StringifyJs(dynamic_id),
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

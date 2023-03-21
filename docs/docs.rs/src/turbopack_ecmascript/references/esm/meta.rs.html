@@ -168,6 +168,12 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 
 <span class="kw">use </span>anyhow::Result;
@@ -177,9 +183,9 @@
     quote,
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
 
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::{as_abs_path, esm::base::insert_hoisted_stmt, AstPathVc},
@@ -207,7 +213,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ImportMetaBinding {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>path = as_abs_path(<span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">?</span>.as_str().map_or_else(
             || {
                 <span class="macro">quote!</span>(
@@ -256,7 +265,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ImportMetaRef {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>ast_path = <span class="kw-2">&amp;</span><span class="self">self</span>.ast_path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>visitor = <span class="macro">create_visitor!</span>(ast_path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
             <span class="kw-2">*</span>expr = Expr::Ident(meta_ident());

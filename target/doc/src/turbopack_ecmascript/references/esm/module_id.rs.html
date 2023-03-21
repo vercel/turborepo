@@ -94,17 +94,14 @@
 <span class="kw">use </span>swc_core::{ecma::ast::Expr, quote};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc,
-        ChunkingTypeOptionVc, ModuleId,
-    },
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingTypeOptionVc, ModuleId},
     reference::{AssetReference, AssetReferenceVc},
     resolve::ResolveResultVc,
 };
 
 <span class="kw">use super</span>::{base::ReferencedAsset, EsmAssetReferenceVc};
 <span class="kw">use crate</span>::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
@@ -155,7 +152,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>EsmModuleIdAssetReference {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">if let </span>ReferencedAsset::Some(asset) = <span class="kw-2">&amp;*</span><span class="self">self</span>.inner.get_referenced_asset().<span class="kw">await</span><span class="question-mark">? </span>{

@@ -99,6 +99,9 @@
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::replace;
 
 <span class="kw">use </span>anyhow::Result;
@@ -110,9 +113,9 @@
     },
     quote,
 };
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
 
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::AstPathVc,
@@ -138,7 +141,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>EsmModuleItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;

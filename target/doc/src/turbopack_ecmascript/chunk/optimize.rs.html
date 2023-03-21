@@ -445,10 +445,6 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -459,18 +455,21 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
-    ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
+    ChunkGroupVc, ChunkVc, ChunksVc,
 };
 
-<span class="kw">use super</span>::{evaluate::EcmascriptChunkEvaluate, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc};
+<span class="kw">use super</span>::{
+    runtime::EcmascriptChunkRuntime, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
+    EcmascriptChunkingContextVc,
+};
 
 <span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub struct </span>EcmascriptChunkOptimizer(ChunkingContextVc);
+</span><span class="kw">pub struct </span>EcmascriptChunkOptimizer(EcmascriptChunkingContextVc);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkOptimizerVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(context: ChunkingContextVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(context: EcmascriptChunkingContextVc) -&gt; <span class="self">Self </span>{
         EcmascriptChunkOptimizer(context).cell()
     }
 }
@@ -504,6 +503,7 @@
     first: EcmascriptChunkVc,
     chunks: <span class="kw-2">&amp;</span>[EcmascriptChunkVc],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVc&gt; {
+    <span class="kw">let </span>first = first.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>chunks = chunks.iter().copied().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>main_entries = chunks
         .iter()
@@ -513,13 +513,14 @@
         </span>.iter()
         .flat_map(|e| e.iter().copied())
         .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>evaluate = chunks.iter().find_map(|e| e.evaluate);
-    <span class="kw">let </span>first = first.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>runtime = first
+        .runtime
+        .merge(chunks.iter().skip(<span class="number">1</span>).map(|chunk| chunk.runtime).collect());
     <span class="prelude-val">Ok</span>(EcmascriptChunkVc::new_normalized(
         first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         <span class="prelude-val">None</span>,
-        evaluate,
+        runtime,
         Value::new(first.availability_info),
     ))
 }
@@ -842,22 +843,13 @@
         }
         <span class="kw">for </span>chunk <span class="kw">in </span>local.iter_mut() {
             <span class="kw">let </span>content = (<span class="kw-2">*</span>chunk).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = content.evaluate {
-                <span class="kw">let </span>evaluate = evaluate.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw-2">*</span>chunk = EcmascriptChunkVc::new_normalized(
-                    content.context,
-                    content.main_entries,
-                    content.omit_entries,
-                    <span class="prelude-val">Some</span>(
-                        EcmascriptChunkEvaluate {
-                            evaluate_entries: evaluate.evaluate_entries,
-                            chunk_group: <span class="prelude-val">Some</span>(chunk_group),
-                        }
-                        .cell(),
-                    ),
-                    Value::new(content.availability_info),
-                )
-            }
+            <span class="kw-2">*</span>chunk = EcmascriptChunkVc::new_normalized(
+                content.context,
+                content.main_entries,
+                content.omit_entries,
+                content.runtime.with_chunk_group(chunk_group),
+                Value::new(content.availability_info),
+            )
         }
         unoptimized_count = local.len();
         chunks.extend(local.into_iter().map(|c| (c, <span class="prelude-val">None</span>)));

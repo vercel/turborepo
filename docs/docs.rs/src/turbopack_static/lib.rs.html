@@ -241,6 +241,9 @@
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -271,9 +274,9 @@
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -342,12 +345,12 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: StaticModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         ModuleChunkItemVc::cell(ModuleChunkItem {
             module: self_vc,
             context,
-            static_asset: self_vc.static_asset(context),
+            static_asset: self_vc.static_asset(context.into()),
         })
         .into()
     }
@@ -407,7 +410,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ModuleChunkItem {
     module: StaticModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
     static_asset: StaticAssetVc,
 }
 
@@ -434,7 +437,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 
@@ -443,7 +446,10 @@
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: <span class="macro">format!</span>(
                 <span class="string">&quot;__turbopack_export_value__({path});&quot;</span>,
-                path = stringify_js(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="kw-2">&amp;*</span><span class="self">self</span>.static_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>))
+                path = StringifyJs(<span class="kw-2">&amp;</span><span class="macro">format_args!</span>(
+                    <span class="string">&quot;/{}&quot;</span>,
+                    <span class="kw-2">&amp;*</span><span class="self">self</span>.static_asset.ident().path().<span class="kw">await</span><span class="question-mark">?
+                </span>))
             )
             .into(),
             ..Default::default()

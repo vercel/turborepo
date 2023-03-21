@@ -193,7 +193,7 @@
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
     EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
-    EcmascriptExports, EcmascriptExportsVc,
+    EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -249,7 +249,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: JsonModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         JsonChunkItemVc::cell(JsonChunkItem {
             module: self_vc,
@@ -267,7 +267,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>JsonChunkItem {
     module: JsonModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -286,7 +286,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>JsonChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 

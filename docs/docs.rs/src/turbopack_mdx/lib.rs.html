@@ -231,8 +231,8 @@
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports,
-        EcmascriptExportsVc,
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
+        EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
@@ -350,7 +350,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: MdxModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         MdxChunkItemVc::cell(MdxChunkItem {
             module: self_vc,
@@ -381,7 +381,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>MdxChunkItem {
     module: MdxModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -400,7 +400,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>MdxChunkItem {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
         <span class="self">self</span>.context
     }
 

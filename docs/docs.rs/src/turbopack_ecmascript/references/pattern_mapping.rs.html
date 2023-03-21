@@ -194,9 +194,6 @@
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
@@ -219,10 +216,7 @@
 };
 
 <span class="kw">use </span><span class="kw">super</span>::util::{request_to_string, throw_module_not_found_expr};
-<span class="kw">use crate</span>::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemVc},
-    utils::module_id_to_lit,
-};
+<span class="kw">use crate</span>::{chunk::EcmascriptChunkItemVc, utils::module_id_to_lit};
 
 <span class="doccomment">/// A mapping from a request pattern (e.g. &quot;./module&quot;, `./images/${name}.png`)
 /// to corresponding module ids. The same pattern can map to multiple module ids

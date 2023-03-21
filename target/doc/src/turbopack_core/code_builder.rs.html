@@ -186,6 +186,19 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     io::{BufRead, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
@@ -194,7 +207,9 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>sourcemap::SourceMapBuilder;
+<span class="kw">use </span>turbo_tasks::primitives::U64Vc;
 <span class="kw">use </span>turbo_tasks_fs::rope::{Rope, RopeBuilder};
+<span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 
 <span class="kw">use crate</span>::{
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapSection, SourceMapVc},
@@ -361,6 +376,17 @@
         }
 
         <span class="prelude-val">Ok</span>(SourceMapVc::new_sectioned(sections))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CodeVc {
+    <span class="doccomment">/// Returns the hash of the source code of this Code.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>source_code_hash(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
+        <span class="kw">let </span>code = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>hash = hash_xxh3_hash64(code.source_code());
+        <span class="prelude-val">Ok</span>(U64Vc::cell(hash))
     }
 }
 

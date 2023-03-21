@@ -312,8 +312,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc, ModuleId,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
+        ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
@@ -321,7 +321,7 @@
 
 <span class="kw">use crate</span>::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -480,7 +480,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code_generation(
         self_vc: EsmAssetReferenceVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 

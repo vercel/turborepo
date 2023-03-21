@@ -54,6 +54,11 @@
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -71,6 +76,16 @@
 };
 
 <span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub fn </span>node_build_environment() -&gt; EnvironmentVc {
+    EnvironmentVc::new(
+        Value::new(ExecutionEnvironment::NodeJsBuildTime(
+            NodeJsEnvironment::default().cell(),
+        )),
+        Value::new(EnvironmentIntention::Build),
+    )
+}
+
+<span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>node_evaluate_asset_context(
     project_path: FileSystemPathVc,
     import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
@@ -79,12 +94,7 @@
     <span class="prelude-val">Ok</span>(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
         CompileTimeInfo {
-            environment: EnvironmentVc::new(
-                Value::new(ExecutionEnvironment::NodeJsBuildTime(
-                    NodeJsEnvironment::default().cell(),
-                )),
-                Value::new(EnvironmentIntention::Build),
-            ),
+            environment: node_build_environment(),
             defines: <span class="macro">compile_time_defines!</span>(
                 process.turbopack = <span class="bool-val">true</span>,
                 process.env.NODE_ENV = <span class="string">&quot;development&quot;</span>,

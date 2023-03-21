@@ -477,7 +477,7 @@
 
         <span class="kw">let </span>ExecutionContext {
             project_path,
-            intermediate_output_path,
+            chunking_context,
             env,
         } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>source_content = this.source.content();
@@ -499,14 +499,14 @@
         <span class="kw">let </span>postcss_executor = postcss_executor(context, config_path);
         <span class="kw">let </span>css_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>css_path = css_fs_path.path.as_str();
+
         <span class="kw">let </span>config_value = evaluate(
-            project_path,
             postcss_executor,
             project_path,
             env,
             this.source.ident(),
             context,
-            intermediate_output_path,
+            chunking_context,
             <span class="prelude-val">None</span>,
             <span class="macro">vec!</span>[
                 JsonValueVc::cell(content.into()),

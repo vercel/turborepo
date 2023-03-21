@@ -53,13 +53,16 @@
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::quote;
 <span class="kw">use </span>turbo_tasks::Value;
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
 
 <span class="kw">use </span><span class="kw">super</span>::AstPathVc;
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
 };
@@ -92,7 +95,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ConstantCondition {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>value = <span class="self">self</span>.value;
         <span class="kw">let </span>visitors = [
             <span class="macro">create_visitor!</span>(exact <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {

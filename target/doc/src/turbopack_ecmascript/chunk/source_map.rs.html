@@ -124,7 +124,7 @@
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
         <span class="kw">let </span>sm = <span class="self">self
             </span>.chunk
-            .chunk_content()
+            .runtime_content()
             .generate_source_map()
             .to_rope()
             .<span class="kw">await</span><span class="question-mark">?</span>;

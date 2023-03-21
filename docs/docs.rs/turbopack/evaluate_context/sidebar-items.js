@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["node_evaluate_asset_context","node_evaluate_asset_context_inline"]};
+window.SIDEBAR_ITEMS = {"fn":["node_build_environment","node_build_environment_inline","node_evaluate_asset_context","node_evaluate_asset_context_inline"]};

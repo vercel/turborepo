@@ -133,6 +133,29 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     future::Future,
     pin::Pin,
@@ -199,21 +222,44 @@
     })
 }
 
-<span class="doccomment">/// Converts a serializable value into a valid JavaScript expression.
-</span><span class="kw">pub fn </span>stringify_js&lt;T&gt;(s: <span class="kw-2">&amp;</span>T) -&gt; String
+<span class="kw">pub struct </span>StringifyJs&lt;<span class="lifetime">&#39;a</span>, T&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T)
 <span class="kw">where
-    </span>T: Serialize + <span class="question-mark">?</span>Sized,
-{
-    serde_json::to_string(s).unwrap()
-}
+    </span>T: <span class="question-mark">?</span>Sized;
 
-<span class="doccomment">/// Converts a serializable value into a pretty-printed valid JavaScript
-/// expression.
-</span><span class="kw">pub fn </span>stringify_js_pretty&lt;T&gt;(s: <span class="kw-2">&amp;</span>T) -&gt; String
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; std::fmt::Display <span class="kw">for </span>StringifyJs&lt;<span class="lifetime">&#39;a</span>, T&gt;
 <span class="kw">where
     </span>T: Serialize + <span class="question-mark">?</span>Sized,
 {
-    serde_json::to_string_pretty(s).unwrap()
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="doccomment">/// [`std::fmt::Formatter`] does not implement [`std::io::Write`],
+        /// so we need to wrap it in a struct that does.
+        </span><span class="kw">struct </span>DisplayWriter&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt; {
+            f: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;b</span>&gt;,
+        }
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt; std::io::Write <span class="kw">for </span>DisplayWriter&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt; {
+            <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                <span class="self">self</span>.f
+                    .write_str(
+                        std::str::from_utf8(bytes)
+                            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))<span class="question-mark">?</span>,
+                    )
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(bytes.len())
+            }
+
+            <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; std::result::Result&lt;(), std::io::Error&gt; {
+                <span class="macro">unreachable!</span>()
+            }
+        }
+
+        <span class="kw">let </span>to_writer = <span class="kw">match </span>f.alternate() {
+            <span class="bool-val">true </span>=&gt; serde_json::to_writer_pretty,
+            <span class="bool-val">false </span>=&gt; serde_json::to_writer,
+        };
+
+        <span class="prelude-val">Ok</span>(to_writer(DisplayWriter { f }, <span class="self">self</span>.<span class="number">0</span>).map_err(|_err| std::fmt::Error)<span class="question-mark">?</span>)
+    }
 }
 
 <span class="kw">pub struct </span>FormatIter&lt;T: Iterator, F: Fn() -&gt; T&gt;(<span class="kw">pub </span>F);

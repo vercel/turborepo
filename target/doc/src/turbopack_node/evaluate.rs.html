@@ -445,18 +445,6 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -472,7 +460,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{dev::DevChunkingContextVc, ChunkGroupVc},
+    chunk::{ChunkGroupVc, ChunkingContext, ChunkingContextVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -505,25 +493,15 @@
 </span><span class="doccomment">/// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 </span><span class="kw">pub async fn </span>get_evaluate_pool(
-    context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     context: AssetContextVc,
-    intermediate_output_path: FileSystemPathVc,
+    chunking_context: ChunkingContextVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
-    <span class="kw">let </span>chunking_context = DevChunkingContextVc::builder(
-        context_path,
-        intermediate_output_path,
-        intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
-        intermediate_output_path.join(<span class="string">&quot;assets&quot;</span>),
-        context.compile_time_info().environment(),
-    )
-    .build();
-
     <span class="kw">let </span>runtime_asset = EcmascriptModuleAssetVc::new(
         SourceAssetVc::new(embed_file_path(<span class="string">&quot;ipc/evaluate.ts&quot;</span>)).into(),
         context,
@@ -544,7 +522,7 @@
     } <span class="kw">else </span>{
         Cow::Owned(<span class="macro">format!</span>(<span class="string">&quot;{file_name}.js&quot;</span>))
     };
-    <span class="kw">let </span>path = intermediate_output_path.join(file_name.as_ref());
+    <span class="kw">let </span>path = chunking_context.output_root().join(file_name.as_ref());
     <span class="kw">let </span>entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
             runtime_asset.ident().path().join(<span class="string">&quot;evaluate.js&quot;</span>),
@@ -599,8 +577,8 @@
             entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
         ),
     };
-    emit_package_json(intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
-    emit(bootstrap.cell().into(), intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    emit_package_json(chunking_context.output_root()).<span class="kw">await</span><span class="question-mark">?</span>;
+    emit(bootstrap.cell().into(), chunking_context.output_root()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pool = NodeJsPool::new(
         cwd,
         entrypoint,
@@ -641,25 +619,23 @@
 /// evaluated result automatically.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>evaluate(
-    context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
-    intermediate_output_path: FileSystemPathVc,
+    chunking_context: ChunkingContextVc,
     runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
     args: Vec&lt;JsonValueVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JavaScriptValueVc&gt; {
     <span class="kw">let </span>pool = get_evaluate_pool(
-        context_path,
         module_asset,
         cwd,
         env,
         context,
-        intermediate_output_path,
+        chunking_context,
         runtime_entries,
         additional_invalidation,
         debug,

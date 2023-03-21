@@ -260,6 +260,10 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::Result;
@@ -277,13 +281,14 @@
     ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 
 <span class="kw">use </span><span class="kw">super</span>::pattern_mapping::{PatternMappingVc, ResolveType::Cjs};
 <span class="kw">use crate</span>::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::{
@@ -377,7 +382,10 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>AmdDefineWithDependenciesCodeGen {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+    </span><span class="kw">async fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">let </span>resolved_elements = <span class="self">self
@@ -390,7 +398,7 @@
                             PatternMappingVc::resolve_request(
                                 <span class="kw-2">*</span>request,
                                 <span class="self">self</span>.origin,
-                                context,
+                                context.into(),
                                 cjs_resolve(<span class="self">self</span>.origin, <span class="kw-2">*</span>request),
                                 Value::new(Cjs),
                             )

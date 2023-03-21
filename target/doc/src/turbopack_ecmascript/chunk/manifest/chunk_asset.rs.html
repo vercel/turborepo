@@ -151,6 +151,9 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
 
 <span class="kw">use </span>anyhow::Result;
@@ -172,7 +175,7 @@
         EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptExports,
         EcmascriptExportsVc,
     },
-    EcmascriptChunkVc,
+    EcmascriptChunkVc, EcmascriptChunkingContextVc,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -198,7 +201,7 @@
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ManifestChunkAsset {
     <span class="kw">pub </span>asset: ChunkableAssetVc,
-    <span class="kw">pub </span>chunking_context: ChunkingContextVc,
+    <span class="kw">pub </span>chunking_context: EcmascriptChunkingContextVc,
     <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
 
@@ -207,7 +210,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
         asset: ChunkableAssetVc,
-        chunking_context: ChunkingContextVc,
+        chunking_context: EcmascriptChunkingContextVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(ManifestChunkAsset {
@@ -222,7 +225,7 @@
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ChunkGroupVc::from_asset(
             this.asset,
-            this.chunking_context,
+            this.chunking_context.into(),
             Value::new(this.availability_info),
         ))
     }
@@ -230,7 +233,10 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>manifest_chunk(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.as_chunk(this.chunking_context, Value::new(this.availability_info)))
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.as_chunk(
+            this.chunking_context.into(),
+            Value::new(this.availability_info),
+        ))
     }
 }
 
@@ -289,7 +295,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(
         self_vc: ManifestChunkAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -&gt; EcmascriptChunkItemVc {
         ManifestChunkItem {
             context,
