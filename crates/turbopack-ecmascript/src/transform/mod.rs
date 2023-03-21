@@ -16,7 +16,7 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::primitives::{OptionStringVc, StringVc};
 use turbo_tasks_fs::json::parse_json_with_source_context;
 use turbopack_core::environment::EnvironmentVc;
 
@@ -33,12 +33,26 @@ pub enum EcmascriptInputTransform {
     React {
         #[serde(default)]
         refresh: bool,
+        // swc.jsc.transform.react.importSource
+        import_source: OptionStringVc,
+        // swc.jsc.transform.react.runtime,
+        runtime: OptionStringVc,
     },
     StyledComponents,
     StyledJsx,
     // These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn't derive `Copy` so repeating values in here
     TypeScript {
+        #[serde(default)]
+        use_define_for_class_fields: bool,
+    },
+    Decorators {
+        #[serde(default)]
+        is_legacy: bool,
+        #[serde(default)]
+        is_ecma: bool,
+        #[serde(default)]
+        emit_decorators_metadata: bool,
         #[serde(default)]
         use_define_for_class_fields: bool,
     },
@@ -104,22 +118,45 @@ impl EcmascriptInputTransform {
             ..
         } = ctx;
         match self {
-            EcmascriptInputTransform::React { refresh } => {
+            EcmascriptInputTransform::React {
+                refresh,
+                import_source,
+                runtime,
+            } => {
+                use swc_core::ecma::transforms::react::{Options, Runtime};
+                let runtime = if let Some(runtime) = &*runtime.await? {
+                    match runtime.as_str() {
+                        "classic" => Runtime::Classic,
+                        "automatic" => Runtime::Automatic,
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Invalid value for swc.jsc.transform.react.runtime: {}",
+                                runtime
+                            ))
+                        }
+                    }
+                } else {
+                    Runtime::Automatic
+                };
+
+                let config = Options {
+                    runtime: Some(runtime),
+                    development: Some(true),
+                    import_source: (&*import_source.await?).clone(),
+                    refresh: if *refresh {
+                        Some(swc_core::ecma::transforms::react::RefreshOptions {
+                            ..Default::default()
+                        })
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                };
+
                 program.visit_mut_with(&mut react(
                     source_map.clone(),
                     Some(comments.clone()),
-                    swc_core::ecma::transforms::react::Options {
-                        runtime: Some(swc_core::ecma::transforms::react::Runtime::Automatic),
-                        development: Some(true),
-                        refresh: if *refresh {
-                            Some(swc_core::ecma::transforms::react::RefreshOptions {
-                                ..Default::default()
-                            })
-                        } else {
-                            None
-                        },
-                        ..Default::default()
-                    },
+                    config,
                     top_level_mark,
                 ));
             }
@@ -192,6 +229,25 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
                 program.visit_mut_with(&mut strip_with_config(config, top_level_mark));
+            }
+            EcmascriptInputTransform::Decorators {
+                is_legacy,
+                is_ecma: _,
+                emit_decorators_metadata,
+                use_define_for_class_fields,
+            } => {
+                use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
+                let config = Config {
+                    legacy: *is_legacy,
+                    emit_metadata: *emit_decorators_metadata,
+                    use_define_for_class_fields: *use_define_for_class_fields,
+                };
+
+                let p = std::mem::replace(program, Program::Module(Module::dummy()));
+                *program = p.fold_with(&mut chain!(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
+                ));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) => {
                 let transition_name = &*transition_name.await?;
