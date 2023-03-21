@@ -5,7 +5,11 @@ use std::{
 
 use anyhow::anyhow;
 use git2::{DiffFormat, DiffOptions, Repository};
-use turborepo_paths::{fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath};
+use path_slash::PathBufExt;
+use turborepo_paths::{
+    fs_util, project::ProjectRoot, project_relative_path::ProjectRelativePath,
+    AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf,
+};
 
 use crate::Error;
 
@@ -23,32 +27,32 @@ use crate::Error;
 ///
 /// returns: Result<HashSet<String, RandomState>, Error>
 pub fn changed_files(
-    repo_root: PathBuf,
-    monorepo_root: PathBuf,
+    git_repo_root: PathBuf,
+    turborepo_root: PathBuf,
     commit_range: Option<(&str, &str)>,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
-    let repo = Repository::open(&repo_root)?;
-    let repo_root = ProjectRoot::new(fs_util::canonicalize(repo_root)?)?;
+    let repo = Repository::open(&git_repo_root)?;
+    let git_repo_root = ProjectRoot::new(fs_util::canonicalize(git_repo_root)?)?;
 
-    if monorepo_root.is_relative() {
-        return Err(Error::PathError(anyhow!(
-            "monorepo_root must be an absolute path: {:?}",
-            monorepo_root
-        )));
-    }
-
-    let monorepo_root = fs_util::canonicalize(monorepo_root)?;
-    let monorepo_root = repo_root.relativize(&monorepo_root)?;
+    let turborepo_root = fs_util::canonicalize(turborepo_root)?;
+    let relative_path_to_turborepo_root = git_repo_root.relativize(&turborepo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(&repo_root, &repo, monorepo_root.as_ref(), &mut files)?;
+    add_changed_files_from_unstaged_changes(
+        &git_repo_root,
+        &repo,
+        relative_path_to_turborepo_root.as_ref(),
+        &turborepo_root,
+        &mut files,
+    )?;
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
-            &repo_root,
+            &git_repo_root,
             &repo,
-            monorepo_root.as_ref(),
+            relative_path_to_turborepo_root.as_ref(),
+            &turborepo_root,
             &mut files,
             from_commit,
             to_commit,
@@ -64,7 +68,7 @@ pub fn changed_files(
 fn get_stripped_system_file_path(
     repo_root: &ProjectRoot,
     file_path: &Path,
-    monorepo_root: &ProjectRelativePath,
+    turborepo_root: &AbsoluteNormalizedPath,
 ) -> Result<PathBuf, Error> {
     // We know the path is relative to the repo root so we can convert it to a
     // ProjectRelativePath
@@ -72,34 +76,37 @@ fn get_stripped_system_file_path(
     // Which we then resolve to an absolute path
     let absolute_file_path = repo_root.resolve(project_relative_file_path);
     // Then we call canonicalize to get a system path instead of a Unix style path
-    let path = fs_util::canonicalize(absolute_file_path)?;
-
-    // We do the same with the monorepo root
-    let absolute_monorepo_root = repo_root.resolve(monorepo_root);
-    let monorepo_root_normalized = fs_util::canonicalize(absolute_monorepo_root)?;
+    let path = {
+        let raw_path_str = absolute_file_path
+            .as_os_str()
+            .to_str()
+            .ok_or(Error::PathError(anyhow!(
+                "failed to convert path from git: {}",
+                absolute_file_path.display()
+            )))?;
+        AbsoluteNormalizedPathBuf::new(PathBuf::from_slash(raw_path_str))?
+    };
 
     // NOTE: In the original Go code, `Rel` works even if the base path is not a
     // prefix of the original path. In Rust, `strip_prefix` returns an
     // error if the base path is not a prefix of the original path.
     // However since we're passing a pathspec to `git2` we know that the
     // base path is a prefix of the original path.
-    Ok(path
-        .as_path()
-        .strip_prefix(monorepo_root_normalized)?
-        .to_path_buf())
+    Ok(path.as_path().strip_prefix(turborepo_root)?.to_path_buf())
 }
 
 fn add_changed_files_from_unstaged_changes(
-    repo_root: &ProjectRoot,
+    git_repo_root: &ProjectRoot,
     repo: &Repository,
-    monorepo_root: &ProjectRelativePath,
+    relative_path_to_turborepo_root: &ProjectRelativePath,
+    turborepo_root: &AbsoluteNormalizedPath,
     files: &mut HashSet<String>,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
     options.include_untracked(true);
     options.recurse_untracked_dirs(true);
 
-    options.pathspec(monorepo_root.to_string());
+    options.pathspec(relative_path_to_turborepo_root.to_string());
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
@@ -107,7 +114,7 @@ fn add_changed_files_from_unstaged_changes(
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
             let stripped_file_path =
-                get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
+                get_stripped_system_file_path(git_repo_root, file_path, turborepo_root)?;
 
             files.insert(
                 stripped_file_path
@@ -122,9 +129,10 @@ fn add_changed_files_from_unstaged_changes(
 }
 
 fn add_changed_files_from_commits(
-    repo_root: &ProjectRoot,
+    git_repo_root: &ProjectRoot,
     repo: &Repository,
-    monorepo_root: &ProjectRelativePath,
+    relative_path_to_turborepo_root: &ProjectRelativePath,
+    turborepo_root: &AbsoluteNormalizedPath,
     files: &mut HashSet<String>,
     from_commit: &str,
     to_commit: &str,
@@ -137,7 +145,7 @@ fn add_changed_files_from_commits(
     let to_tree = to_commit.tree()?;
 
     let mut options = DiffOptions::new();
-    options.pathspec(monorepo_root.to_string());
+    options.pathspec(relative_path_to_turborepo_root.to_string());
 
     let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
     diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
@@ -145,7 +153,8 @@ fn add_changed_files_from_commits(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
-            let stripped_path = get_stripped_system_file_path(repo_root, file_path, monorepo_root)?;
+            let stripped_path =
+                get_stripped_system_file_path(git_repo_root, file_path, turborepo_root)?;
 
             files.insert(
                 stripped_path
@@ -203,7 +212,7 @@ mod tests {
 
     use git2::{Oid, Repository};
 
-    use super::previous_content;
+    use super::{changed_files, previous_content};
     use crate::Error;
 
     fn commit_file(
@@ -231,6 +240,24 @@ mod tests {
                 .as_ref()
                 .map(std::slice::from_ref)
                 .unwrap_or_default(),
+        )?)
+    }
+
+    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Result<Oid, Error> {
+        let mut index = repo.index()?;
+        index.remove_path(path)?;
+        let tree_oid = index.write_tree()?;
+        index.write()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let previous_commit = repo.find_commit(previous_commit)?;
+
+        Ok(repo.commit(
+            Some("HEAD"),
+            &repo.signature()?,
+            &repo.signature()?,
+            "Commit",
+            &tree,
+            std::slice::from_ref(&&previous_commit),
         )?)
     }
 
@@ -454,6 +481,35 @@ mod tests {
         let revparsed_head_minus_1 = repo.revparse_single("HEAD~1")?;
         assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_deleted_files() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        let file = repo_root.path().join("foo.js");
+        let file_path = Path::new("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, &file_path, None)?;
+
+        fs::remove_file(&file)?;
+        let _second_commit_oid = commit_delete(&repo, &file_path, first_commit_oid)?;
+
+        let first_commit_sha = first_commit_oid.to_string();
+        let git_repo_root = repo_root.path().to_owned();
+        let turborepo_root = repo_root.path().to_owned();
+        let files = changed_files(
+            git_repo_root,
+            turborepo_root,
+            Some((&first_commit_sha, "HEAD")),
+        )?;
+        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
         Ok(())
     }
 }
