@@ -8,7 +8,6 @@ use std::{
 use anyhow::Result;
 use futures::{Stream as StreamTrait, StreamExt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 /// Streams allow for streaming values from source to sink.
 ///
@@ -22,7 +21,7 @@ pub struct Stream<T> {
 
 /// The StreamState actually holds the data of a Stream.
 struct StreamState<T> {
-    source: Option<Box<dyn StreamTrait<Item = T> + Send + Sync + Unpin>>,
+    source: Option<Box<dyn StreamTrait<Item = T> + Send + Unpin>>,
     pulled: Vec<T>,
 }
 
@@ -38,6 +37,19 @@ impl<T> Stream<T> {
         }
     }
 
+    /// Crates a new Stream, which will lazily pull from the source stream.
+    pub fn new_open<S: StreamTrait<Item = T> + Send + Unpin + 'static>(
+        pulled: Vec<T>,
+        source: S,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(StreamState {
+                source: Some(Box::new(source)),
+                pulled,
+            })),
+        }
+    }
+
     /// Returns a [StreamTrait] implementation to poll values out of our Stream.
     pub fn read(&self) -> StreamRead<T> {
         StreamRead {
@@ -45,34 +57,11 @@ impl<T> Stream<T> {
             index: 0,
         }
     }
-
-    /// Crates a new Stream, which will lazily pull from the source stream.
-    pub fn from_stream<S: StreamTrait<Item = T> + Send + Sync + Unpin + 'static>(
-        source: S,
-    ) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(StreamState {
-                source: Some(Box::new(source)),
-                pulled: vec![],
-            })),
-        }
-    }
 }
 
-impl<T: Send + Sync + 'static> Stream<T> {
-    /// Constructs a new Stream, and leaves it open for new values to be
-    /// written.
-    pub fn new_open(pulled: Vec<T>) -> (UnboundedSender<T>, Self) {
-        let (sender, receiver) = unbounded_channel();
-        (
-            sender,
-            Self {
-                inner: Arc::new(Mutex::new(StreamState {
-                    source: Some(Box::new(ReceiverStream { receiver })),
-                    pulled,
-                })),
-            },
-        )
+impl<T, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
+    fn from(source: S) -> Self {
+        Self::new_open(vec![], source)
     }
 }
 
@@ -193,19 +182,5 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
             // source stream will be responsible for waking the TaskContext.
             Poll::Pending => Poll::Pending,
         }
-    }
-}
-
-/// A small wrapper around a channel Receiver which allows it to be used as a
-/// source Stream.
-struct ReceiverStream<T> {
-    receiver: UnboundedReceiver<T>,
-}
-
-impl<T> StreamTrait for ReceiverStream<T> {
-    type Item = T;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
-        self.receiver.poll_recv(cx)
     }
 }

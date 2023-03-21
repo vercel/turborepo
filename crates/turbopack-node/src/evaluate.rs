@@ -1,6 +1,7 @@
 use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 use anyhow::{Context, Result};
+use async_stream::stream as generator;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
@@ -73,7 +74,7 @@ enum EvalJavaScriptIncomingMessage {
 
 type LoopResult = ControlFlow<Result<Option<String>, StructuredError>, String>;
 
-type EvaluationItem = Result<Bytes, StructuredError>;
+type EvaluationItem = Result<Bytes, String>;
 type JavaScriptStream = Stream<EvaluationItem>;
 
 #[turbo_tasks::value(shared)]
@@ -274,7 +275,7 @@ pub async fn evaluate(
     let data = match output {
         LoopResult::Continue(data) => data,
         LoopResult::Break(Err(e)) => {
-            return Ok(JavaScriptEvaluation::Single(Err(e)).cell());
+            return Ok(JavaScriptEvaluation::Single(Err(e.message)).cell());
         }
         LoopResult::Break(Ok(data)) => {
             if kill {
@@ -291,34 +292,47 @@ pub async fn evaluate(
     // The evaluation sent an initial intermediate value without completing. We'll
     // need to spawn a new thread to continually pull data out of the process,
     // and ferry that along.
-    let (sender, stream) = JavaScriptStream::new_open(vec![Ok(data.into())]);
-    tokio::spawn(async move {
-        loop {
-            let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
-
-            match output {
-                LoopResult::Continue(data) => {
-                    sender.send(Ok(data.into()))?;
-                }
-                LoopResult::Break(Ok(Some(data))) => {
-                    sender.send(Ok(data.into()))?;
-                    break;
-                }
-                LoopResult::Break(Err(e)) => {
-                    sender.send(Err(e))?;
-                    break;
-                }
-                LoopResult::Break(Ok(None)) => {
-                    break;
+    let stream = JavaScriptStream::new_open(
+        vec![Ok(data.into())],
+        Box::pin(generator! {
+            macro_rules! tri {
+                ($exp:expr) => {
+                    match $exp {
+                        Ok(v) => v,
+                        Err(e) => {
+                            yield Err(e.to_string());
+                            return;
+                        }
+                    }
                 }
             }
-        }
 
-        if kill {
-            operation.wait_or_kill().await?;
-        }
-        Result::<()>::Ok(())
-    });
+            loop {
+                let output = tri!(pull_operation(&mut operation, cwd, context_ident_for_issue).await);
+
+                match output {
+                    LoopResult::Continue(data) => {
+                        yield Ok(data.into());
+                    }
+                    LoopResult::Break(Ok(Some(data))) => {
+                        yield Ok(data.into());
+                        break;
+                    }
+                    LoopResult::Break(Err(e)) => {
+                        yield Err(e.message);
+                        break;
+                    }
+                    LoopResult::Break(Ok(None)) => {
+                        break;
+                    }
+                }
+            }
+
+            if kill {
+                tri!(operation.wait_or_kill().await);
+            }
+        }),
+    );
 
     Ok(JavaScriptEvaluation::Stream(stream).cell())
 }

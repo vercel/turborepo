@@ -269,10 +269,10 @@ impl Body {
     }
 
     pub fn from_stream<T: StreamTrait<Item = Chunk> + Send + Sync + Unpin + 'static>(
-        stream: T,
+        source: T,
     ) -> Self {
         Self {
-            chunks: Stream::from_stream(stream),
+            chunks: Stream::from(source),
         }
     }
 }
