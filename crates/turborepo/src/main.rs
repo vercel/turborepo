@@ -54,8 +54,19 @@ fn run_go_binary(args: Args) -> Result<i32> {
 
     let child_arc_clone = child_arc.clone();
     ctrlc::set_handler(move || {
+        // on windows, we can't send signals so just kill
         // we are quiting anyways so just ignore
-        child_arc_clone.kill().ok().unwrap();
+        #[cfg(target_os = "windows")]
+        child_arc_clone.kill().ok();
+
+        // on unix, we should send a SIGTERM to the child
+        // so that go can gracefully shut down process groups
+        // SAFETY: we could pull in the nix crate to handle this
+        // 'safely' but nix::sys::signal::kill just calls libc::kill
+        #[cfg(not(target_os = "windows"))]
+        unsafe {
+            libc::kill(child_arc_clone.id() as i32, libc::SIGTERM);
+        }
     })
     .expect("handler set");
 
