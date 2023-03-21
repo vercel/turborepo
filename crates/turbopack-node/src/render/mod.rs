@@ -39,7 +39,8 @@ enum RenderProxyOutgoingMessage<'a> {
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RenderProxyIncomingMessage {
     Headers { data: ResponseHeaders },
-    Body { data: Vec<u8> },
+    BodyChunk { data: Vec<u8> },
+    BodyEnd,
     Error(StructuredError),
 }
 

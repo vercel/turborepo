@@ -1,10 +1,12 @@
 use anyhow::{bail, Result};
+use async_stream::stream as genrator;
 use futures::StreamExt;
 use turbo_tasks::primitives::StringVc;
+use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, error::PrettyPrintError};
-use turbopack_dev_server::source::{BodyVc, ProxyResult, ProxyResultVc};
+use turbopack_dev_server::source::{Body, BodyError, BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use super::{
@@ -50,11 +52,12 @@ pub async fn render_proxy(
     let mut operation = match pool.operation().await {
         Ok(operation) => operation,
         Err(err) => {
-            return proxy_error(path, err, None).await;
+            let (status, body) = proxy_error(path, err, None).await?;
+            return Ok(proxy_error_result(status, body));
         }
     };
 
-    match run_proxy_operation(
+    let (status, headers) = match start_proxy_operation(
         &mut operation,
         data,
         body,
@@ -64,19 +67,70 @@ pub async fn render_proxy(
     )
     .await
     {
-        Ok(proxy_result) => Ok(proxy_result.cell()),
-        Err(err) => Ok(proxy_error(path, err, Some(operation)).await?),
+        Ok(v) => v,
+        Err(err) => {
+            let (status, body) = proxy_error(path, err, Some(operation)).await?;
+            return Ok(proxy_error_result(status, body));
+        }
+    };
+
+    let chunks = Stream::new_open(
+        vec![],
+        Box::pin(genrator! {
+            macro_rules! tri {
+                ($exp:expr) => {
+                    match $exp {
+                        Ok(v) => v,
+                        Err(e) => {
+                            yield Err(e.into());
+                            return;
+                        }
+                    }
+                }
+            }
+
+            loop {
+                match tri!(operation.recv().await) {
+                    RenderProxyIncomingMessage::BodyChunk { data } => {
+                        yield Ok(Bytes::from(data));
+                    }
+                    RenderProxyIncomingMessage::BodyEnd => break,
+                    RenderProxyIncomingMessage::Error(error) => {
+                        let trace =
+                            trace_stack(error, intermediate_asset, intermediate_output_path).await;
+                        let e = trace.map_or_else(BodyError::from, BodyError::from);
+                        yield Err(e);
+                        break;
+                    }
+                    _ => {
+                        operation.disallow_reuse();
+                        yield Err(
+                            "unexpected response from the Node.js process while reading response body"
+                                .into(),
+                        );
+                        break;
+                    }
+                }
+            }
+        }),
+    );
+
+    Ok(ProxyResult {
+        status,
+        headers,
+        body: Body::from_stream(chunks.read()),
     }
+    .cell())
 }
 
-async fn run_proxy_operation(
+async fn start_proxy_operation(
     operation: &mut NodeJsOperation,
     data: RenderDataVc,
     body: BodyVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     project_dir: FileSystemPathVc,
-) -> Result<ProxyResult> {
+) -> Result<(u16, Vec<(String, String)>)> {
     let data = data.await?;
     // First, send the render data.
     operation
@@ -93,10 +147,10 @@ async fn run_proxy_operation(
 
     operation.send(RenderProxyOutgoingMessage::BodyEnd).await?;
 
-    let (status, headers) = match operation.recv().await? {
+    match operation.recv().await? {
         RenderProxyIncomingMessage::Headers {
             data: ResponseHeaders { status, headers },
-        } => (status, headers),
+        } => Ok((status, headers)),
         RenderProxyIncomingMessage::Error(error) => {
             bail!(
                 trace_stack(
@@ -111,38 +165,14 @@ async fn run_proxy_operation(
         _ => {
             bail!("unexpected response from the Node.js process while reading response headers")
         }
-    };
-
-    let body = match operation.recv().await? {
-        RenderProxyIncomingMessage::Body { data: body } => body,
-        RenderProxyIncomingMessage::Error(error) => {
-            bail!(
-                trace_stack(
-                    error,
-                    intermediate_asset,
-                    intermediate_output_path,
-                    project_dir
-                )
-                .await?
-            )
-        }
-        _ => {
-            bail!("unexpected response from the Node.js process while reading response body")
-        }
-    };
-
-    Ok(ProxyResult {
-        status,
-        headers,
-        body: body.into(),
-    })
+    }
 }
 
 async fn proxy_error(
     path: FileSystemPathVc,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-) -> Result<ProxyResultVc> {
+) -> Result<(u16, String)> {
     let message = format!("{}", PrettyPrintError(&error));
 
     let status = match operation {
@@ -156,12 +186,13 @@ async fn proxy_error(
     }
 
     let status_code = 500;
-    let body = &*error_html(
+    let body = error_html(
         status_code,
         "An error occurred while proxying the request to Node.js".to_string(),
         format!("{message}\n\n{}", details.join("\n")),
     )
-    .await?;
+    .await?
+    .clone_value();
 
     RenderingIssue {
         context: path,
@@ -172,13 +203,17 @@ async fn proxy_error(
     .as_issue()
     .emit();
 
-    Ok(ProxyResult {
-        status: status_code,
+    Ok((status_code, body))
+}
+
+fn proxy_error_result(status: u16, body: String) -> ProxyResultVc {
+    ProxyResult {
+        status,
         headers: vec![(
             "content-type".to_string(),
             "text/html; charset=utf-8".to_string(),
         )],
         body: body.clone().into(),
     }
-    .cell())
+    .cell()
 }
