@@ -205,7 +205,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
             chunking_context,
             chunk_group,
             evaluated_entries: evaluated_entries
-                .map(|evaluated_entries| EcmascriptChunkPlaceablesVc::cell(evaluated_entries)),
+                .map(EcmascriptChunkPlaceablesVc::cell),
         }
         .cell()
         .into())

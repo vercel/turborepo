@@ -18,7 +18,7 @@ use turbopack_ecmascript::chunk::{
     EcmascriptChunkingContextVc,
 };
 
-use crate::ecmascript::runtime::{EcmascriptDevChunkRuntimeVc};
+use crate::ecmascript::runtime::EcmascriptDevChunkRuntimeVc;
 
 pub struct DevChunkingContextBuilder {
     context: DevChunkingContext,
