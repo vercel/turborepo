@@ -40,7 +40,7 @@ You can also clone a Turborepo starter repository to get a head start on your mo
 
 ## Full tutorial
 
-This tutorial will walk you through using the Turborepo [`basic` example](https://github.com/vercel/turbo/tree/main/examples/basic). By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
+This tutorial will walk you through setting up a basic example. By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
 
 <Callout type="info">
 
@@ -323,35 +323,36 @@ Let's take a look inside `turbo.json`, at the root:
 {
   "pipeline": {
     "build": {
-//   ^^^^^
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
-//   ^^^
       "cache": false
     }
   }
 }
 ```
 
-What we're seeing here is that we've _registered_ three tasks with `turbo` - `lint`, `dev` and `build`. Every task that's registered inside `turbo.json` can be run with `turbo run <task>` (or `turbo <task>` for short).
+What we're seeing here is that we've _registered_ three tasks with `turbo`: `lint`, `dev` and `build`.
+Every task registered inside `turbo.json` can be run with `turbo run <task>` (or `turbo <task>` for short).
 
-To see this in action, let's try running a script called `hello` - which doesn't yet exist in our `turbo.json`:
+<Callout type="error">
+  Before we move on, let's try running a task called `hello` that _isn't_ registered in `turbo.json`:
 
 ```bash
 turbo hello
 ```
 
-You'll see this error in the console:
+You'll see an error in the terminal. Something resembling:
 
 ```
-task `hello` not found in turbo `pipeline` in "turbo.json".
-Are you sure you added it?
+Could not find the following tasks in project: hello
 ```
 
 That's worth remembering - **in order for `turbo` to run a task, it must be in `turbo.json`**.
+
+</Callout>
 
 Let's investigate the scripts we already have in place.
 
@@ -448,7 +449,7 @@ Take a look inside `build` in `turbo.json`. There's some interesting config ther
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }
