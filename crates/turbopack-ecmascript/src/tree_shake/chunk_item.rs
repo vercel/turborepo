@@ -1,7 +1,7 @@
 use anyhow::Result;
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc, ChunkingContextVc},
+    chunk::{ChunkItem, ChunkItemVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -41,7 +41,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 }
