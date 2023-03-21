@@ -204,8 +204,7 @@ impl EcmascriptChunkRuntime for EcmascriptDevChunkRuntime {
         Ok(EcmascriptDevChunkRuntime {
             chunking_context,
             chunk_group,
-            evaluated_entries: evaluated_entries
-                .map(EcmascriptChunkPlaceablesVc::cell),
+            evaluated_entries: evaluated_entries.map(EcmascriptChunkPlaceablesVc::cell),
         }
         .cell()
         .into())
