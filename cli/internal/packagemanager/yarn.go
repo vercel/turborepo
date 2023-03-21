@@ -1,6 +1,7 @@
 package packagemanager
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,12 @@ import (
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
+
+type NoWorkspacesFoundError struct{}
+
+func (e *NoWorkspacesFoundError) Error() string {
+	return "package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json"
+}
 
 var nodejsYarn = PackageManager{
 	Name:         "nodejs-yarn",
@@ -27,7 +34,7 @@ var nodejsYarn = PackageManager{
 			return nil, fmt.Errorf("package.json: %w", err)
 		}
 		if len(pkg.Workspaces) == 0 {
-			return nil, fmt.Errorf("package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json")
+			return nil, &NoWorkspacesFoundError{}
 		}
 		return pkg.Workspaces, nil
 	},
@@ -42,6 +49,12 @@ var nodejsYarn = PackageManager{
 
 		globs, err := pm.getWorkspaceGlobs(rootpath)
 		if err != nil {
+			// In case of a non-monorepo, the workspaces field is empty and only node_modules in the root should be ignored
+			var e *NoWorkspacesFoundError
+			if errors.As(err, &e) {
+				return []string{"node_modules/**"}, nil
+			}
+
 			return nil, err
 		}
 
