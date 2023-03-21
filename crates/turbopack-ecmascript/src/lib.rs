@@ -406,7 +406,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         let parsed = parse(module.source, Value::new(module.ty), module.transforms);
 
         Ok(gen_content(
-            self.context,
+            self.context.into(),
             self.module.analyze(),
             parsed,
             self.module.ident(),
