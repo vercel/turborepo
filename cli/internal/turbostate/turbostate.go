@@ -18,7 +18,6 @@ type RepoState struct {
 // passed for the `daemon` subcommand
 type DaemonPayload struct {
 	IdleTimeout string `json:"idle_time"`
-	Command     string `json:"command"`
 	JSON        bool   `json:"json"`
 }
 

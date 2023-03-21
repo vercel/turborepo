@@ -1,11 +1,18 @@
 package ffi
 
+// ffi
+//
+// Please read the notes about safety (marked with `SAFETY`) in both this file,
+// and in turborepo-ffi/lib.rs before modifying this file.
+
 // #include "bindings.h"
 //
 // #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv
 // #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv
-// #cgo linux,arm64 LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64   -lz
-// #cgo linux,amd64 LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64   -lz
+// #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
+// #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
+// #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
+// #cgo linux,amd64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lz
 // #cgo windows,amd64 LDFLAGS: -L${SRCDIR} -lturborepo_ffi_windows_amd64 -lole32 -lbcrypt -lws2_32 -luserenv
 import "C"
 
@@ -25,7 +32,12 @@ func Unmarshal[M proto.Message](b C.Buffer, c M) error {
 		return err
 	}
 
-	b.Free()
+	// free the buffer on the rust side
+	//
+	// SAFETY: do not use `C.free_buffer` to free a buffer that has been allocated
+	// on the go side. If you happen to accidentally use the wrong one, you can
+	// expect a segfault on some platforms. This is the only valid callsite.
+	C.free_buffer(b)
 
 	return nil
 }
@@ -42,12 +54,27 @@ func Marshal[M proto.Message](c M) C.Buffer {
 	return toBuffer(bytes)
 }
 
+// Free frees a buffer that has been allocated *on the go side*.
+//
+// SAFETY: this is not the same as `C.free_buffer`, which frees a buffer that
+// has been allocated *on the rust side*. If you happen to accidentally use
+// the wrong one, you can expect a segfault on some platforms.
+//
+// EXAMPLE: it is recommended use this function via a `defer` statement, like so:
+//
+//	reqBuf := Marshal(&req)
+//	defer reqBuf.Free()
 func (c C.Buffer) Free() {
 	C.free(unsafe.Pointer(c.data))
 }
 
 // rather than use C.GoBytes, we use this function to avoid copying the bytes,
 // since it is going to be immediately Unmarshalled into a proto.Message
+//
+// SAFETY: go slices contain a pointer to an underlying buffer with a length.
+// if the buffer is known to the garbage collector, dropping the last slice will
+// cause the memory to be freed. this memory is owned by the rust side (and is
+// not known the garbage collector), so dropping the slice will do nothing
 func toBytes(b C.Buffer) []byte {
 	var out []byte
 
@@ -89,22 +116,21 @@ func stringToRef(s string) *string {
 }
 
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
-func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error) {
+func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
 	toCommitRef := stringToRef(toCommit)
-	relativeToRef := stringToRef(relativeTo)
 
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:         repoRoot,
-		FromCommit:       fromCommitRef,
-		ToCommit:         toCommitRef,
-		IncludeUntracked: includeUntracked,
-		RelativeTo:       relativeToRef,
+		RepoRoot:     repoRoot,
+		FromCommit:   fromCommitRef,
+		ToCommit:     toCommitRef,
+		MonorepoRoot: monorepoRoot,
 	}
+
 	reqBuf := Marshal(&req)
+	defer reqBuf.Free()
 
 	respBuf := C.changed_files(reqBuf)
-	reqBuf.Free()
 
 	resp := ffi_proto.ChangedFilesResp{}
 	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {
@@ -126,8 +152,9 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	}
 
 	reqBuf := Marshal(&req)
+	defer reqBuf.Free()
+
 	respBuf := C.previous_content(reqBuf)
-	reqBuf.Free()
 
 	resp := ffi_proto.PreviousContentResp{}
 	if err := Unmarshal(respBuf, resp.ProtoReflect().Interface()); err != nil {

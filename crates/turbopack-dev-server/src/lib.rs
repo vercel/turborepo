@@ -1,10 +1,12 @@
 #![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
+#![feature(iter_intersperse)]
 
 pub mod html;
 mod http;
 pub mod introspect;
+mod invalidation;
 pub mod source;
 pub mod update;
 
@@ -23,7 +25,7 @@ use hyper::{
     Request, Response, Server,
 };
 use turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
 };
 use turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
@@ -32,6 +34,7 @@ use self::{
     source::{ContentSourceResultVc, ContentSourceVc},
     update::UpdateServer,
 };
+use crate::invalidation::ServerRequest;
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
@@ -126,7 +129,11 @@ impl DevServerBuilder {
                     let get_issue_reporter = get_issue_reporter.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
-                        run_once(tt.clone(), async move {
+                        let reason = ServerRequest {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        run_once_with_reason(tt.clone(), reason, async move {
                             let issue_reporter = get_issue_reporter();
 
                             if hyper_tungstenite::is_upgrade_request(&request) {

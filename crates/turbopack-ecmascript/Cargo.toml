@@ -15,9 +15,6 @@ async-trait = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
 lazy_static = { workspace = true }
-next-font = { workspace = true }
-next-transform-dynamic = { workspace = true }
-next-transform-strip-page-exports = { workspace = true }
 num-bigint = "0.4"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
@@ -52,6 +49,7 @@ swc_core = { workspace = true, features = [
   "ecma_transforms_module",
   "ecma_transforms_react",
   "ecma_transforms_typescript",
+  "ecma_transforms_proposal",
   "ecma_quote",
   "ecma_visit",
   "ecma_visit_path",

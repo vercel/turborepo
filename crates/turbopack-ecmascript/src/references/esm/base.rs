@@ -9,8 +9,8 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc, ModuleId,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
+        ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
@@ -18,7 +18,7 @@ use turbopack_core::{
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -155,12 +155,13 @@ impl ValueToString for EsmAssetReference {
 #[turbo_tasks::value_impl]
 impl ChunkableAssetReference for EsmAssetReference {
     #[turbo_tasks::function]
-    fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
+    fn chunking_type(&self) -> Result<ChunkingTypeOptionVc> {
         Ok(ChunkingTypeOptionVc::cell(
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
                     "separate" => Some(ChunkingType::Separate),
                     "parallel" => Some(ChunkingType::Parallel),
+                    "isolatedParallel" => Some(ChunkingType::IsolatedParallel),
                     "none" => None,
                     _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
                 }
@@ -176,11 +177,11 @@ impl CodeGenerateable for EsmAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmAssetReferenceVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
-        let chunking_type = self_vc.chunking_type(context).await?;
+        let chunking_type = self_vc.chunking_type().await?;
         let resolved = self_vc.resolve_reference().await?;
 
         // Insert code that throws immediately at time of import if a request is

@@ -12,9 +12,9 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetReference,
-        ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc,
+        ChunkingType, ChunkingTypeOptionVc,
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
@@ -30,9 +30,9 @@ use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
     ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
@@ -199,8 +199,12 @@ impl ModuleCssModuleAssetVc {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for ModuleCssModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: ModuleCssModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+    fn as_chunk(
+        self_vc: ModuleCssModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 
@@ -209,7 +213,7 @@ impl EcmascriptChunkPlaceable for ModuleCssModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: ModuleCssModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ModuleChunkItem {
             context,
@@ -241,7 +245,7 @@ impl ResolveOrigin for ModuleCssModuleAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: ModuleCssModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -273,7 +277,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 
@@ -328,16 +332,16 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                             unreachable!("ModuleCssModuleAsset implements EcmascriptChunkPlaceableVc");
                         };
 
-                        let module_id =
-                            stringify_js(&*placeable.as_chunk_item(self.context).id().await?);
-                        let original_name = stringify_js(original_name);
+                        let module_id = placeable.as_chunk_item(self.context).id().await?;
+                        let module_id = StringifyJs(&*module_id);
+                        let original_name = StringifyJs(original_name);
                         exported_class_names.push(format! {
                             "__turbopack_import__({module_id})[{original_name}]"
                         });
                     }
                     ModuleCssClass::Local { name: class_name }
                     | ModuleCssClass::Global { name: class_name } => {
-                        exported_class_names.push(stringify_js(class_name));
+                        exported_class_names.push(StringifyJs(class_name).to_string());
                     }
                 }
             }
@@ -345,7 +349,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             writeln!(
                 code,
                 "  {}: {},",
-                stringify_js(export_name),
+                StringifyJs(export_name),
                 exported_class_names.join(" + \" \" + ")
             )?;
         }
@@ -398,7 +402,7 @@ impl AssetReference for CssProxyToCssAssetReference {
 #[turbo_tasks::value_impl]
 impl ChunkableAssetReference for CssProxyToCssAssetReference {
     #[turbo_tasks::function]
-    fn chunking_type(&self, _context: ChunkingContextVc) -> ChunkingTypeOptionVc {
+    fn chunking_type(&self) -> ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(Some(ChunkingType::Parallel))
     }
 }
@@ -442,8 +446,12 @@ impl Asset for CssProxyModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for CssProxyModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: CssProxyModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        CssChunkVc::new(context, self_vc.into()).into()
+    fn as_chunk(
+        self_vc: CssProxyModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        CssChunkVc::new(context, self_vc.into(), availability_info).into()
     }
 }
 

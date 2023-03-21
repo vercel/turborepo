@@ -72,19 +72,22 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - run: apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+      - run: apt-get install -y build-essential binutils-aarch64-linux-gnu
+        # Yes, I'm aware of the irony of installing Zig to compile our Go + Rust project
+      - run: |
+          mkdir ../zig
+          curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.1908+06b263825.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+          export PATH=$PATH:$(pwd)/../zig
+          echo "$(pwd)/../zig" >> $GITHUB_PATH
       - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
       - run: |
-          rustup target add x86_64-pc-windows-gnu
           rustup target add aarch64-unknown-linux-musl
+          rustup target add x86_64-pc-windows-gnu
           rustup target add x86_64-unknown-linux-musl
-      - run: |
-          # for convenience we have precompiled libraries for the various toolchains (windows and musl)
-          # these were built locally and are hosted on github releases, since we plan on stripping this
-          # out entirely asap
-          curl -L https://github.com/arlyon/turbo/releases/download/zlib/libz.a > /usr/x86_64-w64-mingw32/lib/libz.a
-          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-aarch64-linux-musl/libz.a > /usr/aarch64-linux-gnu/lib/libz.a
-          curl -L https://github.com/nicholaslyang/turbo/releases/download/zlib-x86_64-linux-musl/libz.a > /usr/lib/libz.a
+
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
         with:
@@ -96,7 +99,7 @@ jobs:
       - name: Build Artifacts
         run: cd cli && make build-go-turbo-cross
         env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

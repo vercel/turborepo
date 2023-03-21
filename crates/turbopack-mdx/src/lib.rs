@@ -6,7 +6,10 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContextVc,
+    },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
@@ -16,8 +19,8 @@ use turbopack_core::{
 use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports,
-        EcmascriptExportsVc,
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
+        EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
@@ -88,8 +91,10 @@ impl MdxModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        Ok(into_ecmascript_module_asset(&self).await?.analyze())
+    async fn failsafe_analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        Ok(into_ecmascript_module_asset(&self)
+            .await?
+            .failsafe_analyze())
     }
 }
 
@@ -107,15 +112,24 @@ impl Asset for MdxModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: MdxModuleAssetVc) -> Result<AssetReferencesVc> {
-        Ok(self_vc.analyze().await?.references)
+        Ok(self_vc.failsafe_analyze().await?.references)
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for MdxModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: MdxModuleAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
+    fn as_chunk(
+        self_vc: MdxModuleAssetVc,
+        context: ChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new(
+            context,
+            self_vc.as_ecmascript_chunk_placeable(),
+            availability_info,
+        )
+        .into()
     }
 }
 
@@ -124,7 +138,7 @@ impl EcmascriptChunkPlaceable for MdxModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: MdxModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         MdxChunkItemVc::cell(MdxChunkItem {
             module: self_vc,
@@ -155,7 +169,7 @@ impl ResolveOrigin for MdxModuleAsset {
 #[turbo_tasks::value]
 struct MdxChunkItem {
     module: MdxModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -174,7 +188,7 @@ impl ChunkItem for MdxChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for MdxChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 

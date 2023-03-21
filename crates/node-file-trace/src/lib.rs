@@ -23,7 +23,8 @@ use turbo_tasks::{
     backend::Backend,
     primitives::{OptionStringVc, StringsVc},
     util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
+    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi,
+    UpdateInfo, Value,
 };
 use turbo_tasks_fs::{
     glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc,
@@ -44,7 +45,7 @@ use turbopack_core::{
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueReporter, IssueSeverity, IssueVc},
+    issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -422,30 +423,42 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             if let Err(e) = tt.wait_task_completion(root_task, true).await {
                 println!("{}", e);
             }
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let UpdateInfo {
+                duration, tasks, ..
+            } = tt
+                .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                .await;
             println!(
                 "done in {} ({} task execution, {} tasks)",
                 FormatDuration(start.elapsed()),
-                FormatDuration(elapsed),
-                count
+                FormatDuration(duration),
+                tasks
             );
 
             loop {
-                let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
-                println!("updated {} tasks in {}", count, FormatDuration(elapsed));
+                let UpdateInfo {
+                    duration, tasks, ..
+                } = tt
+                    .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                    .await;
+                println!("updated {} tasks in {}", tasks, FormatDuration(duration));
             }
         } else {
             let result = tt.wait_task_completion(root_task, true).await;
             let dur = start.elapsed();
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let UpdateInfo {
+                duration, tasks, ..
+            } = tt
+                .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                .await;
             final_finish(tt, root_task, dur).await;
             let dur2 = start.elapsed();
             println!(
                 "done in {} ({} compilation, {} task execution, {} tasks)",
                 FormatDuration(dur2),
                 FormatDuration(dur),
-                FormatDuration(elapsed),
-                count
+                FormatDuration(duration),
+                tasks
             );
             result
         }
@@ -459,6 +472,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
     let resolve_options = TransientInstance::new(resolve_options.unwrap_or_default());
     let log_options = TransientInstance::new(LogOptions {
         current_dir: dir.clone(),
+        project_dir: dir.clone(),
         show_all,
         log_detail,
         log_level: log_level.map_or_else(|| IssueSeverity::Error, |l| l.0),
@@ -542,13 +556,9 @@ async fn main_operation(
             )
             .await?;
             for module in modules.iter() {
-                let set = all_assets(*module);
-                IssueVc::attach_context(
-                    module.ident().path(),
-                    "gathering list of assets".to_string(),
-                    set,
-                )
-                .await?;
+                let set = all_assets(*module)
+                    .issue_context(module.ident().path(), "gathering list of assets")
+                    .await?;
                 for asset in set.await?.iter() {
                     let path = asset.ident().path().await?;
                     result.insert(path.path.to_string());
@@ -629,7 +639,7 @@ async fn create_module_asset(
     let env = EnvironmentVc::new(
         Value::new(ExecutionEnvironment::NodeJsLambda(
             NodeJsEnvironment {
-                cwd: OptionStringVc::cell(process_cwd.clone()),
+                cwd: OptionStringVc::cell(process_cwd),
                 ..Default::default()
             }
             .into(),

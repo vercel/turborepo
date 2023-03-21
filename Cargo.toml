@@ -3,13 +3,6 @@ resolver = "2"
 
 members = [
   "crates/auto-hash-map",
-  "crates/next-binding",
-  "crates/next-core",
-  "crates/next-dev",
-  "crates/next-dev-tests",
-  "crates/next-font",
-  "crates/next-transform-dynamic",
-  "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
@@ -29,6 +22,7 @@ members = [
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
   "crates/turbopack-css",
+  "crates/turbopack-dev",
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
@@ -43,18 +37,12 @@ members = [
   "crates/turborepo-ffi",
   "crates/turborepo-lib",
   "crates/turborepo-scm",
+  "crates/turborepo-paths",
   "xtask",
 ]
 
 default-members = [
   "crates/auto-hash-map",
-  "crates/next-binding",
-  "crates/next-core",
-  "crates/next-dev",
-  "crates/next-dev-tests",
-  "crates/next-font",
-  "crates/next-transform-dynamic",
-  "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
@@ -73,6 +61,7 @@ default-members = [
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
   "crates/turbopack-css",
+  "crates/turbopack-dev",
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
@@ -98,22 +87,15 @@ opt-level = 3
 [workspace.dependencies]
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-mdxjs = { version = "0.1.6" }
-modularize_imports = { version = "0.26.4" }
-styled_components = { version = "0.53.4" }
-styled_jsx = { version = "0.30.4" }
-swc_core = { version = "0.59.26" }
-swc_emotion = { version = "0.29.4" }
+mdxjs = { version = "0.1.8" }
+modularize_imports = { version = "0.26.10" }
+styled_components = { version = "0.53.10" }
+styled_jsx = { version = "0.30.10" }
+swc_core = { version = "0.69.6" }
+swc_emotion = { version = "0.29.10" }
 testing = { version = "0.31.31" }
 
 auto-hash-map = { path = "crates/auto-hash-map" }
-next-binding = { path = "crates/next-binding" }
-next-core = { path = "crates/next-core" }
-next-dev = { path = "crates/next-dev" }
-next-dev-tests = { path = "crates/next-dev-tests" }
-next-font = { path = "crates/next-font" }
-next-transform-dynamic = { path = "crates/next-transform-dynamic" }
-next-transform-strip-page-exports = { path = "crates/next-transform-strip-page-exports" }
 node-file-trace = { path = "crates/node-file-trace" }
 swc-ast-explorer = { path = "crates/swc-ast-explorer" }
 turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
@@ -133,6 +115,7 @@ turbopack-cli-utils = { path = "crates/turbopack-cli-utils" }
 turbopack-core = { path = "crates/turbopack-core" }
 turbopack-create-test-app = { path = "crates/turbopack-create-test-app" }
 turbopack-css = { path = "crates/turbopack-css" }
+turbopack-dev = { path = "crates/turbopack-dev" }
 turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
 turbopack-env = { path = "crates/turbopack-env" }
@@ -205,17 +188,17 @@ regex = "1.7.0"
 rstest = "0.16.0"
 rustc-hash = "1.1.0"
 semver = "1.0.16"
-serde = "1.0.152"
+serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 serde_qs = "0.11.0"
 serde_yaml = "0.9.17"
 syn = "1.0.107"
 tempfile = "3.3.0"
-test-generator = "0.3.1"
 thiserror = "1.0.38"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 url = "2.2.2"
+urlencoding = "2.1.2"
 webbrowser = "0.8.7"

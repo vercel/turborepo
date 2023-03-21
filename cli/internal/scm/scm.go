@@ -19,8 +19,8 @@ var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual 
 
 // An SCM represents an SCM implementation that we can ask for various things.
 type SCM interface {
-	// ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.*/
-	ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error)
+	// ChangedFiles returns a list of modified files since the given commit, including untracked files
+	ChangedFiles(fromCommit string, toCommit string, relativeTo string) ([]string, error)
 	// PreviousContent Returns the content of the file at fromCommit
 	PreviousContent(fromCommit string, filePath string) ([]byte, error)
 }

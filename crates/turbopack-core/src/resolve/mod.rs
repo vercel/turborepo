@@ -22,7 +22,6 @@ use self::{
         resolve_modules_options, ImportMapResult, ResolveInPackage, ResolveIntoPackage,
         ResolveModules, ResolveModulesOptionsVc, ResolveOptionsVc,
     },
-    origin::ResolveOriginVc,
     parse::{Request, RequestVc},
     pattern::QueryMapVc,
 };
@@ -36,7 +35,6 @@ use crate::{
     reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
-        origin::ResolveOrigin,
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
         plugin::ResolvePlugin,
     },
@@ -866,7 +864,7 @@ async fn resolve_into_folder(
         match resolve_into_package {
             ResolveIntoPackage::Default(req) => {
                 let str = "./".to_string()
-                    + &normalize_path(req).ok_or_else(|| {
+                    + &*normalize_path(req).ok_or_else(|| {
                         anyhow!(
                             "ResolveIntoPackage::Default can't be used with a request that \
                              escapes the current directory"
@@ -1251,7 +1249,7 @@ impl ValueToString for AffectingResolvingAssetReference {
 pub async fn handle_resolve_error(
     result: ResolveResultVc,
     reference_type: Value<ReferenceType>,
-    origin: ResolveOriginVc,
+    origin_path: FileSystemPathVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
 ) -> Result<ResolveResultVc> {
@@ -1259,7 +1257,7 @@ pub async fn handle_resolve_error(
         Ok(unresolveable) => {
             if *unresolveable {
                 let issue: ResolvingIssueVc = ResolvingIssue {
-                    context: origin.origin_path(),
+                    context: origin_path,
                     request_type: format!("{} request", reference_type.into_value()),
                     request,
                     resolve_options,
@@ -1272,7 +1270,7 @@ pub async fn handle_resolve_error(
         }
         Err(err) => {
             let issue: ResolvingIssueVc = ResolvingIssue {
-                context: origin.origin_path(),
+                context: origin_path,
                 request_type: format!("{} request", reference_type.into_value()),
                 request,
                 resolve_options,

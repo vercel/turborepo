@@ -199,7 +199,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if fromRef != "" {
-			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd.ToStringDuringMigration())
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, cwd.ToStringDuringMigration())
 			if err != nil {
 				return nil, err
 			}

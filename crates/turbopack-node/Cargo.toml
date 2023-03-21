@@ -9,6 +9,10 @@ autobenches = false
 [lib]
 bench = false
 
+[features]
+# enable "HMR" for embedded assets
+dynamic_embed_contents = ["turbo-tasks-fs/dynamic_embed_contents"]
+
 [dependencies]
 anyhow = { workspace = true }
 futures = { workspace = true }
@@ -22,10 +26,12 @@ tokio = { workspace = true, features = ["full"] }
 turbo-tasks = { workspace = true }
 turbo-tasks-env = { workspace = true }
 turbo-tasks-fs = { workspace = true }
+turbo-tasks-hash = { workspace = true }
 turbopack-core = { workspace = true }
 turbopack-dev-server = { workspace = true }
 turbopack-ecmascript = { workspace = true }
 url = { workspace = true }
+urlencoding = { workspace = true }
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }

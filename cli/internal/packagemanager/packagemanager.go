@@ -5,12 +5,12 @@
 package packagemanager
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/lockfile"
@@ -181,7 +181,11 @@ func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemP
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
 	}
-	return pm.UnmarshalLockfile(contents)
+	lf, err := pm.UnmarshalLockfile(contents)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error in %v", pm.Lockfile)
+	}
+	return lf, nil
 }
 
 // PrunePatchedPackages will alter the provided pkgJSON to only reference the provided patches

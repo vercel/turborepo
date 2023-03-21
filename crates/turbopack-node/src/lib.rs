@@ -20,6 +20,7 @@ use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
+use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
@@ -187,6 +188,20 @@ async fn separate_assets(
     .cell())
 }
 
+/// Emit a basic package.json that sets the type of the package to commonjs.
+/// Currently code generated for Node is CommonJS, while authored code may be
+/// ESM, for example.
+pub(self) fn emit_package_json(dir: FileSystemPathVc) -> CompletionVc {
+    emit(
+        VirtualAssetVc::new(
+            dir.join("package.json"),
+            FileContent::Content(File::from("{\"type\": \"commonjs\"}")).into(),
+        )
+        .into(),
+        dir,
+    )
+}
+
 /// Creates a node.js renderer pool for an entrypoint.
 #[turbo_tasks::function]
 pub async fn get_renderer_pool(
@@ -197,25 +212,11 @@ pub async fn get_renderer_pool(
     output_root: FileSystemPathVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
-    // Emit a basic package.json that sets the type of the package to commonjs.
-    // Currently code generated for Node is CommonJS, while authored code may be
-    // ESM, for example.
-    //
-    // Note that this is placed at .next/server/package.json, while Next.js
-    // currently creates this file at .next/package.json.
-    emit(
-        VirtualAssetVc::new(
-            intermediate_output_path.join("package.json"),
-            FileContent::Content(File::from("{\"type\": \"commonjs\"}")).into(),
-        )
-        .into(),
-        intermediate_output_path,
-    )
-    .await?;
+    emit_package_json(intermediate_output_path).await?;
 
     emit(intermediate_asset, output_root).await?;
 
-    let entrypoint = intermediate_output_path.join("index.js");
+    let entrypoint = intermediate_asset.ident().path();
 
     let Some(cwd) = to_sys_path(cwd).await? else {
         bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.fs().to_string().await?);
@@ -245,8 +246,12 @@ pub async fn get_intermediate_asset(
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<AssetVc> {
     let chunk_group = ChunkGroupVc::from_chunk(entry_chunk);
+    let mut hash = encode_hex(hash_xxh3_hash64(
+        entry_chunk.ident().path().to_string().await?.as_str(),
+    ));
+    hash.push_str(".js");
     Ok(NodeJsBootstrapAsset {
-        path: intermediate_output_path.join("index.js"),
+        path: intermediate_output_path.join(&hash),
         chunk_group,
     }
     .cell()

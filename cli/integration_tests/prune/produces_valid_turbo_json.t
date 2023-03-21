@@ -29,7 +29,6 @@ Make sure we prune tasks that reference a pruned workspace
 Verify turbo can read the produced turbo.json
   $ cd out
   $ ${TURBO} build --dry=json | jq '.packages'
-   WARNING  cannot find a .git folder. Falling back to manual file hashing (which may be slower). If you are running this build in a pruned directory, you can ignore this message. Otherwise, please initialize a git repository in the root of your monorepo
   [
     "docs",
     "shared",

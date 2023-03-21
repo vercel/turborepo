@@ -1,3 +1,8 @@
+//! turborepo-ffi
+//!
+//! Please read the notes about safety (marked with `SAFETY`) in both this file,
+//! and in ffi.go before modifying this file.
+
 use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
@@ -9,6 +14,16 @@ mod proto {
 pub struct Buffer {
     len: u32,
     data: *mut u8,
+}
+
+#[no_mangle]
+pub extern "C" fn free_buffer(buffer: Buffer) {
+    // SAFETY
+    // it is important that any memory allocated in rust, is freed in rust
+    // we do this by converting the raw pointer to a Vec and letting it drop
+    // this is safe because we know that the memory was allocated by rust
+    // and that the length is correct
+    let _ = unsafe { Vec::from_raw_parts(buffer.data, buffer.len as usize, buffer.len as usize) };
 }
 
 impl<T: prost::Message> From<T> for Buffer {
@@ -59,9 +74,8 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
     let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match turborepo_scm::git::changed_files(
         req.repo_root.into(),
+        req.monorepo_root.into(),
         commit_range,
-        req.include_untracked,
-        req.relative_to.as_deref(),
     ) {
         Ok(files) => {
             let files: Vec<_> = files.into_iter().collect();

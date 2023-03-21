@@ -14,6 +14,7 @@ use turbopack_core::{
     changed::any_content_changed,
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    issue::IssueContextExt,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -118,7 +119,13 @@ impl Asset for PostCssTransformedAsset {
 
     #[turbo_tasks::function]
     async fn content(self_vc: PostCssTransformedAssetVc) -> Result<AssetContentVc> {
-        Ok(self_vc.process().await?.content)
+        let this = self_vc.await?;
+        Ok(self_vc
+            .process()
+            .issue_context(this.source.ident().path(), "PostCSS processing")
+            .await?
+            .await?
+            .content)
     }
 }
 
@@ -176,7 +183,9 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: false,
+        }]),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
@@ -201,7 +210,7 @@ impl PostCssTransformedAssetVc {
 
         let ExecutionContext {
             project_path,
-            intermediate_output_path,
+            chunking_context,
             env,
         } = *this.execution_context.await?;
         let source_content = this.source.content();
@@ -223,14 +232,14 @@ impl PostCssTransformedAssetVc {
         let postcss_executor = postcss_executor(context, config_path);
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
+
         let config_value = evaluate(
-            project_path,
             postcss_executor,
             project_path,
             env,
             this.source.ident(),
             context,
-            intermediate_output_path,
+            chunking_context,
             None,
             vec![
                 JsonValueVc::cell(content.into()),
