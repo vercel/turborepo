@@ -27,7 +27,7 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -99,13 +99,13 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> SourceMapVc {
+    fn generate_source_map(&self) -> OptionSourceMapVc {
         let map = self.source_map.build_source_map_with_config(
             &self.mappings,
             None,
             InlineSourcesContentConfig {},
         );
-        SourceMapVc::new_regular(map)
+        OptionSourceMapVc::cell(Some(SourceMapVc::new_regular(map)))
     }
 }
 
@@ -118,7 +118,9 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
             // The Custom filename surrounds the name with <>.
-            FileName::Custom(s) => format!("/{}", s),
+            FileName::Custom(s) => {
+                format!("/turbopack/{}", s)
+            }
             _ => f.to_string(),
         }
     }
@@ -136,6 +138,7 @@ pub async fn parse(
 ) -> Result<ParseResultVc> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
+    let ident = &*source.ident().to_string().await?;
     let file_path_hash = *hash_ident(source.ident().to_string()).await? as u128;
     let ty = ty.into_value();
     Ok(match &*content.await? {
@@ -147,6 +150,7 @@ pub async fn parse(
                     match parse_content(
                         string.into_owned(),
                         fs_path,
+                        ident,
                         file_path_hash,
                         source,
                         ty,
@@ -174,6 +178,7 @@ pub async fn parse(
 async fn parse_content(
     string: String,
     fs_path: &FileSystemPath,
+    ident: &str,
     file_path_hash: u128,
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
@@ -199,7 +204,7 @@ async fn parse_content(
             })
         },
         async {
-            let file_name = FileName::Custom(fs_path.path.clone());
+            let file_name = FileName::Custom(ident.to_string());
             let fm = source_map.new_source_file(file_name.clone(), string);
 
             let comments = SwcComments::default();

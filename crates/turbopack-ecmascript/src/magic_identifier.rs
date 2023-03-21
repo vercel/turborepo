@@ -39,6 +39,9 @@ pub fn encode(content: &str) -> String {
             hex_mode = false;
         }
     }
+    if hex_mode {
+        r.push('$');
+    }
     r += "__";
     r
 }

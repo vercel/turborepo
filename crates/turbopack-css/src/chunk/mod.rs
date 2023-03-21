@@ -26,7 +26,7 @@ use turbopack_core::{
     },
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::PrimaryResolveResult,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
 };
 use writer::expand_imports;
 
@@ -183,7 +183,7 @@ impl CssChunkContentVc {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for CssChunkContent {
     #[turbo_tasks::function]
-    fn generate_source_map(self_vc: CssChunkContentVc) -> SourceMapVc {
+    fn generate_source_map(self_vc: CssChunkContentVc) -> OptionSourceMapVc {
         self_vc.code().generate_source_map()
     }
 }
@@ -358,7 +358,7 @@ impl Asset for CssChunk {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for CssChunk {
     #[turbo_tasks::function]
-    fn generate_source_map(self_vc: CssChunkVc) -> SourceMapVc {
+    fn generate_source_map(self_vc: CssChunkVc) -> OptionSourceMapVc {
         self_vc.chunk_content().generate_source_map()
     }
 }

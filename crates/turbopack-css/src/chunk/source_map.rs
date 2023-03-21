@@ -4,6 +4,7 @@ use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::Chunk,
+    code_builder::empty_map,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
@@ -35,7 +36,12 @@ impl Asset for CssChunkSourceMapAsset {
 
     #[turbo_tasks::function]
     async fn content(&self) -> Result<AssetContentVc> {
-        let sm = self.chunk.generate_source_map().to_rope().await?;
+        let sm = if let Some(sm) = *self.chunk.generate_source_map().await? {
+            sm
+        } else {
+            empty_map()
+        };
+        let sm = sm.to_rope().await?;
         Ok(File::from(sm).into())
     }
 }

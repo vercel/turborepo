@@ -13,7 +13,7 @@ use crate::source_pos::SourcePos;
 #[turbo_tasks::value_trait]
 pub trait GenerateSourceMap {
     /// Generates a usable source map, capable of both tracing and stringifying.
-    fn generate_source_map(&self) -> SourceMapVc;
+    fn generate_source_map(&self) -> OptionSourceMapVc;
 
     /// Returns an individual section of the larger source map, if found.
     fn by_section(&self, _section: &str) -> OptionSourceMapVc {

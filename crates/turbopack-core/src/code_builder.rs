@@ -11,7 +11,9 @@ use turbo_tasks_fs::rope::{Rope, RopeBuilder};
 use turbo_tasks_hash::hash_xxh3_hash64;
 
 use crate::{
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapSection, SourceMapVc},
+    source_map::{
+        GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapSection, SourceMapVc,
+    },
     source_pos::SourcePos,
 };
 
@@ -146,7 +148,7 @@ impl GenerateSourceMap for Code {
     /// far the simplest way to concatenate the source maps of the multiple
     /// chunk items into a single map file.
     #[turbo_tasks::function]
-    pub async fn generate_source_map(&self) -> Result<SourceMapVc> {
+    pub async fn generate_source_map(&self) -> Result<OptionSourceMapVc> {
         let mut pos = SourcePos::new();
         let mut last_byte_pos = 0;
 
@@ -168,13 +170,18 @@ impl GenerateSourceMap for Code {
 
             let encoded = match map {
                 None => empty_map(),
-                Some(map) => map.generate_source_map(),
+                Some(map) => match *map.generate_source_map().await? {
+                    None => empty_map(),
+                    Some(map) => map,
+                },
             };
 
             sections.push(SourceMapSection::new(pos, encoded))
         }
 
-        Ok(SourceMapVc::new_sectioned(sections))
+        Ok(OptionSourceMapVc::cell(Some(SourceMapVc::new_sectioned(
+            sections,
+        ))))
     }
 }
 
@@ -194,7 +201,7 @@ impl CodeVc {
 /// Chrome that the generated code starting at a particular offset is no longer
 /// part of the previous section's mappings.
 #[turbo_tasks::function]
-fn empty_map() -> SourceMapVc {
+pub fn empty_map() -> SourceMapVc {
     let mut builder = SourceMapBuilder::new(None);
     builder.add(0, 0, 0, 0, None, None);
     SourceMapVc::new_regular(builder.into_sourcemap())
