@@ -80,6 +80,7 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 /// A context for the chunking that influences the way chunks are created
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
+    fn context_path(&self) -> FileSystemPathVc;
     fn output_root(&self) -> FileSystemPathVc;
 
     // TODO remove this, a chunking context should not be bound to a specific

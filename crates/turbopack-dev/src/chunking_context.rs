@@ -121,6 +121,11 @@ impl DevChunkingContextVc {
 #[turbo_tasks::value_impl]
 impl ChunkingContext for DevChunkingContext {
     #[turbo_tasks::function]
+    fn context_path(&self) -> FileSystemPathVc {
+        self.context_path
+    }
+
+    #[turbo_tasks::function]
     fn output_root(&self) -> FileSystemPathVc {
         self.output_root
     }

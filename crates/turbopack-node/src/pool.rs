@@ -40,6 +40,7 @@ struct SpawnedNodeJsPoolProcess {
     listener: TcpListener,
     assets_for_source_mapping: AssetsForSourceMappingVc,
     assets_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     shared_stdout: SharedOutputSet,
     shared_stderr: SharedOutputSet,
     debug: bool,
@@ -50,6 +51,7 @@ struct RunningNodeJsPoolProcess {
     connection: TcpStream,
     assets_for_source_mapping: AssetsForSourceMappingVc,
     assets_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     stdout_handler: OutputStreamHandler<ChildStdout, Stdout>,
     stderr_handler: OutputStreamHandler<ChildStderr, Stderr>,
 }
@@ -73,6 +75,7 @@ impl RunningNodeJsPoolProcess {
                     text,
                     self.assets_for_source_mapping,
                     self.assets_root,
+                    self.project_dir,
                     ansi_colors,
                 )
                 .await
@@ -82,6 +85,7 @@ impl RunningNodeJsPoolProcess {
                     text,
                     self.assets_for_source_mapping,
                     self.assets_root,
+                    self.project_dir,
                     ansi_colors,
                 )
                 .await?;
@@ -110,6 +114,7 @@ struct OutputStreamHandler<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
     shared: SharedOutputSet,
     assets_for_source_mapping: AssetsForSourceMappingVc,
     root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     final_stream: W,
 }
 
@@ -124,6 +129,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
             shared,
             assets_for_source_mapping,
             root,
+            project_dir,
             final_stream,
         } = self;
 
@@ -145,7 +151,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                     let text = decode_identifiers(text, |content| {
                         format!("{{{}}}", content).italic().to_string()
                     });
-                    match apply_source_mapping(text.as_ref(), *assets_for_source_mapping, *root, true).await {
+                    match apply_source_mapping(text.as_ref(), *assets_for_source_mapping, *root,*project_dir, true).await {
                         Err(e) => {
                             write_final!(format!("Error applying source mapping: {e}\n").as_bytes());
                             write_final!(text.as_bytes());
@@ -259,6 +265,7 @@ impl NodeJsPoolProcess {
         entrypoint: &Path,
         assets_for_source_mapping: AssetsForSourceMappingVc,
         assets_root: FileSystemPathVc,
+        project_dir: FileSystemPathVc,
         shared_stdout: SharedOutputSet,
         shared_stderr: SharedOutputSet,
         debug: bool,
@@ -298,6 +305,7 @@ impl NodeJsPoolProcess {
             debug,
             assets_for_source_mapping,
             assets_root,
+            project_dir,
             shared_stdout,
             shared_stderr,
         }))
@@ -310,6 +318,7 @@ impl NodeJsPoolProcess {
                 listener,
                 assets_for_source_mapping,
                 assets_root,
+                project_dir,
                 shared_stdout,
                 shared_stderr,
                 debug,
@@ -380,6 +389,7 @@ impl NodeJsPoolProcess {
                     shared: shared_stdout,
                     assets_for_source_mapping: assets_for_source_mapping.clone(),
                     root: assets_root.clone(),
+                    project_dir,
                     final_stream: stdout(),
                 };
                 let stderr_handler = OutputStreamHandler {
@@ -387,6 +397,7 @@ impl NodeJsPoolProcess {
                     shared: shared_stderr,
                     assets_for_source_mapping: assets_for_source_mapping.clone(),
                     root: assets_root.clone(),
+                    project_dir,
                     final_stream: stderr(),
                 };
 
@@ -395,6 +406,7 @@ impl NodeJsPoolProcess {
                     connection,
                     assets_for_source_mapping: assets_for_source_mapping.clone(),
                     assets_root: assets_root.clone(),
+                    project_dir,
                     stdout_handler,
                     stderr_handler,
                 }
@@ -465,6 +477,7 @@ pub struct NodeJsPool {
     env: HashMap<String, String>,
     pub assets_for_source_mapping: AssetsForSourceMappingVc,
     pub assets_root: FileSystemPathVc,
+    pub project_dir: FileSystemPathVc,
     #[turbo_tasks(trace_ignore, debug_ignore)]
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
     #[turbo_tasks(trace_ignore, debug_ignore)]
@@ -485,6 +498,7 @@ impl NodeJsPool {
         env: HashMap<String, String>,
         assets_for_source_mapping: AssetsForSourceMappingVc,
         assets_root: FileSystemPathVc,
+        project_dir: FileSystemPathVc,
         concurrency: usize,
         debug: bool,
     ) -> Self {
@@ -494,6 +508,7 @@ impl NodeJsPool {
             env,
             assets_for_source_mapping,
             assets_root,
+            project_dir,
             processes: Arc::new(Mutex::new(Vec::new())),
             semaphore: Arc::new(Semaphore::new(if debug { 1 } else { concurrency })),
             shared_stdout: Arc::new(Mutex::new(IndexSet::new())),
@@ -517,6 +532,7 @@ impl NodeJsPool {
                 self.entrypoint.as_path(),
                 self.assets_for_source_mapping,
                 self.assets_root,
+                self.project_dir,
                 self.shared_stdout.clone(),
                 self.shared_stderr.clone(),
                 self.debug,

@@ -15,7 +15,7 @@ use turbo_tasks::{
     primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
 };
 use turbo_tasks_fs::{
-    source_context::{get_source_context, SourceContextLine},
+    source_context::{get_source_context, SourceContextLine, SourceContextLines},
     FileLinesContent,
 };
 use turbopack_core::issue::{
@@ -80,68 +80,57 @@ fn severity_to_style(severity: IssueSeverity) -> Style {
     }
 }
 
-fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String) {
-    if let FileLinesContent::Lines(lines) = source.asset.content.lines() {
-        let start_line = source.start.line;
-        let end_line = source.end.line;
-        let start_column = source.start.column;
-        let end_column = source.end.column;
-        let lines = lines.iter().map(|l| l.content.as_str());
-        let ctx = get_source_context(lines, start_line, start_column, end_line, end_column);
-        let f = formatted_issue;
-        for line in ctx.0 {
-            match line {
-                SourceContextLine::Context { line, outside } => {
-                    writeln!(f, "{}", format_args!("{line:>6} | {outside}").dimmed()).unwrap();
-                }
-                SourceContextLine::Start {
-                    line,
-                    before,
-                    inside,
-                } => {
+pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut String) {
+    for line in &ctx.0 {
+        match line {
+            SourceContextLine::Context { line, outside } => {
+                writeln!(f, "{}", format_args!("{line:>6} | {outside}").dimmed()).unwrap();
+            }
+            SourceContextLine::Start {
+                line,
+                before,
+                inside,
+            } => {
+                writeln!(
+                    f,
+                    "       | {}{}{}",
+                    " ".repeat(before.len()),
+                    "v".bold(),
+                    "-".repeat(inside.len()).bold(),
+                )
+                .unwrap();
+                writeln!(f, "{line:>6} + {}{}", before.dimmed(), inside.bold()).unwrap();
+            }
+            SourceContextLine::End {
+                line,
+                inside,
+                after,
+            } => {
+                writeln!(f, "{line:>6} + {}{}", inside.bold(), after.dimmed()).unwrap();
+                writeln!(
+                    f,
+                    "       +{}{}",
+                    "-".repeat(inside.len()).bold(),
+                    "^".bold()
+                )
+                .unwrap();
+            }
+            SourceContextLine::StartAndEnd {
+                line,
+                before,
+                inside,
+                after,
+            } => {
+                if inside.len() >= 2 {
                     writeln!(
                         f,
-                        "       | {}{}{}",
+                        "       + {}{}{}{}",
                         " ".repeat(before.len()),
                         "v".bold(),
-                        "-".repeat(inside.len()).bold(),
+                        "-".repeat(inside.len() - 2).bold(),
+                        "v".bold(),
                     )
                     .unwrap();
-                    writeln!(f, "{line:>6} + {}{}", before.dimmed(), inside.bold()).unwrap();
-                }
-                SourceContextLine::End {
-                    line,
-                    inside,
-                    after,
-                } => {
-                    writeln!(f, "{line:>6} + {}{}", inside.bold(), after.dimmed()).unwrap();
-                    writeln!(
-                        f,
-                        "       +{}{}",
-                        "-".repeat(inside.len()).bold(),
-                        "^".bold()
-                    )
-                    .unwrap();
-                }
-                SourceContextLine::StartAndEnd {
-                    line,
-                    before,
-                    inside,
-                    after,
-                } => {
-                    if inside.len() >= 2 {
-                        writeln!(
-                            f,
-                            "       + {}{}{}{}",
-                            " ".repeat(before.len()),
-                            "v".bold(),
-                            "-".repeat(inside.len() - 2).bold(),
-                            "v".bold(),
-                        )
-                        .unwrap();
-                    } else {
-                        writeln!(f, "       | {}{}", " ".repeat(before.len()), "v".bold()).unwrap();
-                    }
                     writeln!(
                         f,
                         "{line:>6} + {}{}{}",
@@ -150,25 +139,47 @@ fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String
                         after.dimmed()
                     )
                     .unwrap();
-                    if inside.len() >= 2 {
-                        writeln!(
-                            f,
-                            "       + {}{}{}{}",
-                            " ".repeat(before.len()),
-                            "^".bold(),
-                            "-".repeat(inside.len() - 2).bold(),
-                            "^".bold(),
-                        )
-                        .unwrap();
-                    } else {
-                        writeln!(f, "       | {}{}", " ".repeat(before.len()), "^".bold()).unwrap();
-                    }
+                } else {
+                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "v".bold()).unwrap();
+                    writeln!(
+                        f,
+                        "{line:>6} + {}{}{}",
+                        before.bold(),
+                        inside.bold(),
+                        after.bold()
+                    )
+                    .unwrap();
                 }
-                SourceContextLine::Inside { line, inside } => {
-                    writeln!(f, "{:>6} + {}", line.bold(), inside.bold()).unwrap();
+                if inside.len() >= 2 {
+                    writeln!(
+                        f,
+                        "       + {}{}{}{}",
+                        " ".repeat(before.len()),
+                        "^".bold(),
+                        "-".repeat(inside.len() - 2).bold(),
+                        "^".bold(),
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "^".bold()).unwrap();
                 }
             }
+            SourceContextLine::Inside { line, inside } => {
+                writeln!(f, "{:>6} + {}", line.bold(), inside.bold()).unwrap();
+            }
         }
+    }
+}
+
+fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String) {
+    if let FileLinesContent::Lines(lines) = source.asset.content.lines() {
+        let start_line = source.start.line;
+        let end_line = source.end.line;
+        let start_column = source.start.column;
+        let end_column = source.end.column;
+        let lines = lines.iter().map(|l| l.content.as_str());
+        let ctx = get_source_context(lines, start_line, start_column, end_line, end_column);
+        format_source_context_lines(&ctx, formatted_issue);
     }
 }
 

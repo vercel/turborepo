@@ -25,6 +25,7 @@ pub async fn render_proxy(
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     data: RenderDataVc,
     body: BodyVc,
 ) -> Result<ProxyResultVc> {
@@ -39,6 +40,7 @@ pub async fn render_proxy(
         intermediate_asset,
         intermediate_output_path,
         output_root,
+        project_dir,
         /* debug */ false,
     )
     .await?;
@@ -56,6 +58,7 @@ pub async fn render_proxy(
         body,
         intermediate_asset,
         intermediate_output_path,
+        project_dir,
     )
     .await
     {
@@ -70,6 +73,7 @@ async fn run_proxy_operation(
     body: BodyVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
 ) -> Result<ProxyResult> {
     let data = data.await?;
     // First, send the render data.
@@ -94,7 +98,15 @@ async fn run_proxy_operation(
             data: ResponseHeaders { status, headers },
         } => (status, headers),
         RenderProxyIncomingMessage::Error(error) => {
-            bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+            bail!(
+                trace_stack(
+                    error,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir
+                )
+                .await?
+            )
         }
         _ => {
             bail!("unexpected response from the Node.js process while reading response headers")
@@ -104,7 +116,15 @@ async fn run_proxy_operation(
     let body = match operation.recv().await? {
         RenderProxyIncomingMessage::Body { data: body } => body,
         RenderProxyIncomingMessage::Error(error) => {
-            bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+            bail!(
+                trace_stack(
+                    error,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir
+                )
+                .await?
+            )
         }
         _ => {
             bail!("unexpected response from the Node.js process while reading response body")

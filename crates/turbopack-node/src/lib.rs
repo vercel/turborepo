@@ -231,6 +231,7 @@ pub async fn get_renderer_pool(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
     emit_package_json(intermediate_output_path).await?;
@@ -259,6 +260,7 @@ pub async fn get_renderer_pool(
             .collect(),
         assets_for_source_mapping,
         output_root,
+        project_dir,
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     )

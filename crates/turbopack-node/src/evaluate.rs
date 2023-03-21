@@ -150,6 +150,7 @@ pub async fn get_evaluate_pool(
             .collect(),
         assets_for_source_mapping,
         output_root,
+        chunking_context.context_path().root(),
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     );
@@ -237,6 +238,7 @@ pub async fn evaluate(
                     context_ident: context_ident_for_issue,
                     assets_for_source_mapping: pool.assets_for_source_mapping,
                     assets_root: pool.assets_root,
+                    project_dir: chunking_context.context_path().root(),
                 }
                 .cell()
                 .as_issue()
@@ -280,6 +282,7 @@ pub async fn evaluate(
                     severity: severity.cell(),
                     assets_for_source_mapping: pool.assets_for_source_mapping,
                     assets_root: pool.assets_root,
+                    project_dir: chunking_context.context_path().root(),
                 }
                 .cell()
                 .as_issue()
@@ -305,6 +308,7 @@ pub struct EvaluationIssue {
     pub error: StructuredError,
     pub assets_for_source_mapping: AssetsForSourceMappingVc,
     pub assets_root: FileSystemPathVc,
+    pub project_dir: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -328,7 +332,12 @@ impl Issue for EvaluationIssue {
     async fn description(&self) -> Result<StringVc> {
         Ok(StringVc::cell(
             self.error
-                .print(self.assets_for_source_mapping, self.assets_root, false)
+                .print(
+                    self.assets_for_source_mapping,
+                    self.assets_root,
+                    self.project_dir,
+                    false,
+                )
                 .await?,
         ))
     }
@@ -418,6 +427,7 @@ pub struct EvaluateEmittedErrorIssue {
     pub error: StructuredError,
     pub assets_for_source_mapping: AssetsForSourceMappingVc,
     pub assets_root: FileSystemPathVc,
+    pub project_dir: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -446,7 +456,12 @@ impl Issue for EvaluateEmittedErrorIssue {
     async fn description(&self) -> Result<StringVc> {
         Ok(StringVc::cell(
             self.error
-                .print(self.assets_for_source_mapping, self.assets_root, false)
+                .print(
+                    self.assets_for_source_mapping,
+                    self.assets_root,
+                    self.project_dir,
+                    false,
+                )
                 .await?,
         ))
     }
