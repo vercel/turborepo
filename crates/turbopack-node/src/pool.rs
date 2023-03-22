@@ -133,37 +133,51 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
             final_stream,
         } = self;
 
-        macro_rules! write_final {
-            ($($args:tt)+) => {
-                {
-                    let _lock = GLOBAL_OUTPUT_LOCK.lock().await;
-                    if final_stream.write($($args)+).await.is_err() {
-                        println!("Error writing to final stream");
-                        // Whatever happened with stdout/stderr, we can't write to it anymore.
-                        break;
-                    }
-                }
-            };
+        async fn write_final<W: AsyncWrite + Unpin>(
+            bytes: &[u8],
+            final_stream: &mut W,
+        ) -> Result<()> {
+            let _lock = GLOBAL_OUTPUT_LOCK.lock().await;
+            final_stream.write(bytes).await?;
+            Ok(())
         }
-        macro_rules! write_source_mapped_final {
-            ($bytes:expr) => {
-                if let Ok(text) = std::str::from_utf8($bytes) {
-                    let text = decode_identifiers(text, |content| {
-                        format!("{{{}}}", content).italic().to_string()
-                    });
-                    match apply_source_mapping(text.as_ref(), *assets_for_source_mapping, *root,*project_dir, true).await {
-                        Err(e) => {
-                            write_final!(format!("Error applying source mapping: {e}\n").as_bytes());
-                            write_final!(text.as_bytes());
-                        }
-                        Ok(text) => {
-                            write_final!(text.as_bytes());
-                        }
+
+        async fn write_source_mapped_final<W: AsyncWrite + Unpin>(
+            bytes: &[u8],
+            assets_for_source_mapping: AssetsForSourceMappingVc,
+            root: FileSystemPathVc,
+            project_dir: FileSystemPathVc,
+            final_stream: &mut W,
+        ) -> Result<()> {
+            if let Ok(text) = std::str::from_utf8(bytes) {
+                let text = decode_identifiers(text, |content| {
+                    format!("{{{}}}", content).italic().to_string()
+                });
+                match apply_source_mapping(
+                    text.as_ref(),
+                    assets_for_source_mapping,
+                    root,
+                    project_dir,
+                    true,
+                )
+                .await
+                {
+                    Err(e) => {
+                        write_final(
+                            format!("Error applying source mapping: {e}\n").as_bytes(),
+                            final_stream,
+                        )
+                        .await?;
+                        write_final(text.as_bytes(), final_stream).await?;
                     }
-                } else {
-                    write_final!($bytes);
+                    Ok(text) => {
+                        write_final(text.as_bytes(), final_stream).await?;
+                    }
                 }
-            };
+            } else {
+                write_final(bytes, final_stream).await?;
+            }
+            Ok(())
         }
 
         let mut buffer = Vec::new();
@@ -231,7 +245,14 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                                 // to print it again.
                                 continue;
                             }
-                            write_source_mapped_final!(&entry.data);
+                            write_source_mapped_final(
+                                &entry.data,
+                                *assets_for_source_mapping,
+                                *root,
+                                *project_dir,
+                                final_stream,
+                            )
+                            .await?;
                         }
                     }
                     Some(b'S') => {
@@ -251,7 +272,14 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                 continue;
             }
 
-            write_source_mapped_final!(&buffer);
+            write_source_mapped_final(
+                &buffer,
+                *assets_for_source_mapping,
+                *root,
+                *project_dir,
+                final_stream,
+            )
+            .await?;
             buffer.clear();
         }
         Ok(())
