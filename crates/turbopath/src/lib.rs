@@ -493,6 +493,28 @@ impl From<AbsoluteSystemPathBuf> for Rc<AbsoluteSystemPath> {
     }
 }
 
+impl<'a> From<AbsoluteSystemPathBuf> for Cow<'a, Path> {
+    /// Creates a clone-on-write pointer from an owned
+    /// instance of [`PathBuf`].
+    ///
+    /// This conversion does not clone or allocate.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Cow<'a, Path> {
+        Cow::Owned(s.0)
+    }
+}
+
+impl<'a> From<AbsoluteSystemPathBuf> for Cow<'a, AbsoluteSystemPath> {
+    /// Creates a clone-on-write pointer from an owned
+    /// instance of [`PathBuf`].
+    ///
+    /// This conversion does not clone or allocate.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Cow<'a, AbsoluteSystemPath> {
+        Cow::Owned(s)
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
@@ -503,7 +525,6 @@ impl From<AbsoluteSystemPathBuf> for Rc<AbsoluteSystemPath> {
 // impl<'a> From<&'a Path> for Cow<'a, Path> {
 // impl<'a> From<&'a PathBuf> for Cow<'a, Path> {
 // impl<'a> From<Cow<'a, Path>> for PathBuf {
-// impl<'a> From<PathBuf> for Cow<'a, Path> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
