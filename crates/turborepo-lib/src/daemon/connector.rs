@@ -95,7 +95,7 @@ impl DaemonConnector {
             match client.handshake().await {
                 Ok(_) => {
                     return {
-                        debug!("connected in {}ms", time.elapsed().as_micros());
+                        debug!("connected in {}µs", time.elapsed().as_micros());
                         Ok(client.with_connect_settings(self))
                     }
                 }
