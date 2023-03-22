@@ -525,6 +525,28 @@ impl<'a> From<Cow<'a, AbsoluteSystemPath>> for AbsoluteSystemPathBuf {
     }
 }
 
+impl<'a> From<&'a AbsoluteSystemPathBuf> for Cow<'a, Path> {
+    /// Creates a clone-on-write pointer from a reference to
+    /// [`AbsoluteSystemPathBuf`].
+    ///
+    /// This conversion does not clone or allocate.
+    #[inline]
+    fn from(p: &'a AbsoluteSystemPathBuf) -> Cow<'a, Path> {
+        Cow::Borrowed(p.as_path())
+    }
+}
+
+impl<'a> From<&'a AbsoluteSystemPathBuf> for Cow<'a, AbsoluteSystemPath> {
+    /// Creates a clone-on-write pointer from a reference to
+    /// [`AbsoluteSystemPathBuf`].
+    ///
+    /// This conversion does not clone or allocate.
+    #[inline]
+    fn from(p: &'a AbsoluteSystemPathBuf) -> Cow<'a, AbsoluteSystemPath> {
+        Cow::Borrowed(p.as_absolute_system_path())
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
@@ -533,7 +555,6 @@ impl<'a> From<Cow<'a, AbsoluteSystemPath>> for AbsoluteSystemPathBuf {
 // impl From<String> for PathBuf {
 // impl FromStr for PathBuf {
 // impl<'a> From<&'a Path> for Cow<'a, Path> {
-// impl<'a> From<&'a PathBuf> for Cow<'a, Path> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
