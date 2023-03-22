@@ -461,12 +461,21 @@ impl From<AbsoluteSystemPathBuf> for Box<AbsoluteSystemPath> {
     }
 }
 
+impl From<AbsoluteSystemPathBuf> for OsString {
+    /// Converts a [`AbsoluteSystemPathBuf`] into an [`OsString`]
+    ///
+    /// This conversion does not allocate or copy memory.
+    #[inline]
+    fn from(path_buf: AbsoluteSystemPathBuf) -> OsString {
+        path_buf.0.into_os_string()
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
 // impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
-// impl From<PathBuf> for OsString {
 // impl From<PathBuf> for Rc<Path> {
 // impl From<String> for PathBuf {
 // impl FromStr for PathBuf {
