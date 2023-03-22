@@ -28,6 +28,7 @@ use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    SOURCE_MAP_ROOT_NAME,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -123,7 +124,7 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
             FileName::Custom(s) => {
-                format!("/turbopack/{}", s)
+                format!("/{SOURCE_MAP_ROOT_NAME}/{s}")
             }
             _ => f.to_string(),
         }

@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
+use const_format::concatcp;
 pub use content_source::{NextSourceMapTraceContentSource, NextSourceMapTraceContentSourceVc};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -14,7 +15,9 @@ use turbo_tasks_fs::{
     FileSystemPathReadRef, FileSystemPathVc,
 };
 use turbopack_cli_utils::source_context::format_source_context_lines;
-use turbopack_core::{asset::AssetVc, source_map::GenerateSourceMap};
+use turbopack_core::{
+    asset::AssetVc, source_map::GenerateSourceMap, PROJECT_FILESYSTEM_NAME, SOURCE_MAP_ROOT_NAME,
+};
 use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 use crate::{internal_assets_for_source_mapping, pool::FormattingMode, AssetsForSourceMappingVc};
@@ -133,9 +136,11 @@ fn write_resolved(
                 )?;
             }
             let (line, column) = frame.get_pos().unwrap_or((0, 0));
+            let line = line.saturating_sub(1);
+            let column = column.saturating_sub(1);
             if let FileLinesContent::Lines(lines) = &*lines {
                 let lines = lines.iter().map(|l| l.content.as_str());
-                let ctx = get_source_context(lines, line - 1, column - 1, line - 1, column - 1);
+                let ctx = get_source_context(lines, line, column, line, column);
                 match formatting_mode {
                     FormattingMode::Plain => {
                         write!(writable, "\n{}", ctx)?;
@@ -199,7 +204,13 @@ async fn resolve_source_mapping(
         .await?;
     match &*trace {
         TraceResult::Found(frame) => {
-            if let Some(project_path) = frame.file.strip_prefix("/turbopack/[project]/") {
+            if let Some(project_path) = frame.file.strip_prefix(concatcp!(
+                "/",
+                SOURCE_MAP_ROOT_NAME,
+                "/[",
+                PROJECT_FILESYSTEM_NAME,
+                "]/"
+            )) {
                 let fs_path = project_dir.join(project_path);
                 let lines = fs_path.read().lines().await?;
                 return Ok(ResolvedSourceMapping::MappedProject {
