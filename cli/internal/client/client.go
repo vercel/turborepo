@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/vercel/turbo/cli/internal/ci"
 )
 
 // APIClient is the main interface for making network requests to Vercel
@@ -210,4 +212,80 @@ func (c *APIClient) addTeamParam(params *url.Values) {
 	if c.teamSlug != "" {
 		params.Add("slug", c.teamSlug)
 	}
+}
+
+// JSONPost sends a byte array (json.marshalled payload) to a given endpoint with POST
+func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
+	resp, err := c.request(endpoint, http.MethodPost, body)
+	if err != nil {
+		return nil, err
+	}
+
+	rawResponse, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %v", err)
+	}
+
+	// For non 200/201 status codes, return the response body as an error
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("%s", string(rawResponse))
+	}
+
+	return rawResponse, nil
+}
+
+func (c *APIClient) request(endpoint string, method string, body []byte) (*http.Response, error) {
+	if err := c.okToRequest(); err != nil {
+		return nil, err
+	}
+
+	params := url.Values{}
+	c.addTeamParam(&params)
+	encoded := params.Encode()
+	if encoded != "" {
+		encoded = "?" + encoded
+	}
+
+	requestURL := c.makeURL(endpoint + encoded)
+
+	allowAuth := false
+	if c.usePreflight {
+		resp, latestRequestURL, err := c.doPreflight(requestURL, method, "Authorization, User-Agent")
+		if err != nil {
+			return nil, fmt.Errorf("pre-flight request failed before trying to fetch files in HTTP cache: %w", err)
+		}
+
+		requestURL = latestRequestURL
+		headers := resp.Header.Get("Access-Control-Allow-Headers")
+		allowAuth = strings.Contains(strings.ToLower(headers), strings.ToLower("Authorization"))
+	}
+
+	req, err := retryablehttp.NewRequest(method, requestURL, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", c.userAgent())
+
+	if allowAuth {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	if ci.IsCi() {
+		req.Header.Set("x-artifact-client-ci", ci.Constant())
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// If there isn't a response, something else probably went wrong
+	if resp == nil {
+		return nil, fmt.Errorf("response from %s is nil, something went wrong", requestURL)
+	}
+
+	return resp, nil
 }
