@@ -7,7 +7,7 @@ use swc_core::{
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, SourceMap, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
@@ -27,7 +27,7 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -52,7 +52,7 @@ pub enum ParseResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         globals: Globals,
         #[turbo_tasks(debug_ignore, trace_ignore)]
-        source_map: Arc<SourceMap>,
+        source_map: Arc<swc_core::common::SourceMap>,
     },
     Unparseable,
     NotFound,
@@ -73,7 +73,7 @@ pub struct ParseResultSourceMap {
     /// to source locations. I don't know what it is, really, but it's not
     /// that.
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    source_map: Arc<SourceMap>,
+    source_map: Arc<swc_core::common::SourceMap>,
 
     /// The position mappings that can generate a real source map given a (SWC)
     /// SourceMap.
@@ -88,7 +88,10 @@ impl PartialEq for ParseResultSourceMap {
 }
 
 impl ParseResultSourceMap {
-    pub fn new(source_map: Arc<SourceMap>, mappings: Vec<(BytePos, LineCol)>) -> Self {
+    pub fn new(
+        source_map: Arc<swc_core::common::SourceMap>,
+        mappings: Vec<(BytePos, LineCol)>,
+    ) -> Self {
         ParseResultSourceMap {
             source_map,
             mappings,
@@ -105,7 +108,9 @@ impl GenerateSourceMap for ParseResultSourceMap {
             None,
             InlineSourcesContentConfig {},
         );
-        OptionSourceMapVc::cell(Some(SourceMapVc::new_regular(map)))
+        OptionSourceMapVc::cell(Some(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
     }
 }
 
@@ -117,7 +122,6 @@ struct InlineSourcesContentConfig {}
 impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
-            // The Custom filename surrounds the name with <>.
             FileName::Custom(s) => {
                 format!("/turbopack/{}", s)
             }
@@ -184,7 +188,7 @@ async fn parse_content(
     ty: EcmascriptModuleAssetType,
     transforms: &[EcmascriptInputTransform],
 ) -> Result<ParseResultVc> {
-    let source_map: Arc<SourceMap> = Default::default();
+    let source_map: Arc<swc_core::common::SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
         false,

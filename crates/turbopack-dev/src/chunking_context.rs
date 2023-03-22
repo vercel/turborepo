@@ -40,13 +40,13 @@ impl DevChunkingContextBuilder {
         self
     }
 
-    pub fn chunk_source_maps(mut self, source_maps: bool) -> Self {
-        self.context.chunk_source_maps = source_maps;
+    pub fn reference_chunk_source_maps(mut self, source_maps: bool) -> Self {
+        self.context.reference_chunk_source_maps = source_maps;
         self
     }
 
-    pub fn css_chunk_source_maps(mut self, source_maps: bool) -> Self {
-        self.context.css_chunk_source_maps = source_maps;
+    pub fn reference_css_chunk_source_maps(mut self, source_maps: bool) -> Self {
+        self.context.reference_css_chunk_source_maps = source_maps;
         self
     }
 
@@ -70,11 +70,11 @@ pub struct DevChunkingContext {
     /// Chunks are placed at this path
     chunk_root_path: FileSystemPathVc,
     /// Chunks reference source maps assets
-    chunk_source_maps: bool,
+    reference_chunk_source_maps: bool,
     /// Css Chunks are placed at this path
     css_chunk_root_path: Option<FileSystemPathVc>,
     /// Css chunks reference source maps assets
-    css_chunk_source_maps: bool,
+    reference_css_chunk_source_maps: bool,
     /// Static assets are placed at this path
     asset_root_path: FileSystemPathVc,
     /// Layer name within this context
@@ -98,9 +98,9 @@ impl DevChunkingContextVc {
                 context_path,
                 output_root,
                 chunk_root_path,
-                chunk_source_maps: true,
+                reference_chunk_source_maps: true,
                 css_chunk_root_path: None,
-                css_chunk_source_maps: true,
+                reference_css_chunk_source_maps: true,
                 asset_root_path,
                 layer: None,
                 enable_hot_module_replacement: false,
@@ -249,14 +249,14 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn chunk_source_maps(&self, chunk: ChunkVc) -> Result<BoolVc> {
-        let mut source_maps = self.chunk_source_maps;
+    async fn reference_chunk_source_maps(&self, chunk: ChunkVc) -> Result<BoolVc> {
+        let mut source_maps = self.reference_chunk_source_maps;
         let path = chunk.path().await?;
         let extension = path.extension().unwrap_or_default();
         #[allow(clippy::single_match, reason = "future extensions")]
         match extension {
             ".css" => {
-                source_maps = self.css_chunk_source_maps;
+                source_maps = self.reference_css_chunk_source_maps;
             }
             _ => {}
         }

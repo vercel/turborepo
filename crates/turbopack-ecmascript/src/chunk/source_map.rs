@@ -4,11 +4,10 @@ use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::Chunk,
-    code_builder::empty_map,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
-    source_map::GenerateSourceMap,
+    source_map::{GenerateSourceMap, SourceMapVc},
 };
 
 use super::EcmascriptChunkVc;
@@ -41,7 +40,7 @@ impl Asset for EcmascriptChunkSourceMapAsset {
         let sm = if let Some(sm) = *self.chunk.runtime_content().generate_source_map().await? {
             sm
         } else {
-            empty_map()
+            SourceMapVc::empty()
         };
         let sm = sm.to_rope().await?;
         Ok(File::from(sm).into())

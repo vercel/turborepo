@@ -160,7 +160,12 @@ impl CssChunkContentVc {
 
         code.push_code(&body.build());
 
-        if *this.context.chunk_source_maps(this.chunk.into()).await? && code.has_source_map() {
+        if *this
+            .context
+            .reference_chunk_source_maps(this.chunk.into())
+            .await?
+            && code.has_source_map()
+        {
             let chunk_path = this.chunk.path().await?;
             write!(
                 code,
@@ -348,7 +353,11 @@ impl Asset for CssChunk {
         for chunk_group in content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(*chunk_group).into());
         }
-        if *this.context.chunk_source_maps(self_vc.into()).await? {
+        if *this
+            .context
+            .reference_chunk_source_maps(self_vc.into())
+            .await?
+        {
             references.push(CssChunkSourceMapAssetReferenceVc::new(self_vc).into());
         }
         Ok(AssetReferencesVc::cell(references))

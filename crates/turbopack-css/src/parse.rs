@@ -19,7 +19,7 @@ use turbo_tasks::{Value, ValueToString};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -91,7 +91,9 @@ impl GenerateSourceMap for ParseResultSourceMap {
             None,
             InlineSourcesContentConfig {},
         );
-        OptionSourceMapVc::cell(Some(SourceMapVc::new_regular(map)))
+        OptionSourceMapVc::cell(Some(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
     }
 }
 
@@ -103,7 +105,6 @@ struct InlineSourcesContentConfig {}
 impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
-            // The Custom filename surrounds the name with <>.
             FileName::Custom(s) => format!("/turbopack/{}", s),
             _ => f.to_string(),
         }
