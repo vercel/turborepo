@@ -413,12 +413,33 @@ impl From<Box<AbsoluteSystemPath>> for AbsoluteSystemPathBuf {
     }
 }
 
+impl From<AbsoluteSystemPathBuf> for Arc<Path> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into an <code>[Arc]<[Path]></code>
+    /// by moving the [`AbsoluteSystemPathBuf`] data into a new [`Arc`]
+    /// buffer.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Arc<Path> {
+        let arc: Arc<OsStr> = Arc::from(s.into_os_string());
+        unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Path) }
+    }
+}
+
+impl From<AbsoluteSystemPathBuf> for Arc<AbsoluteSystemPath> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into an
+    /// <code>[Arc]<[AbsoluteSystemPath]></code> by moving the
+    /// [`AbsoluteSystemPathBuf`] data into a new [`Arc`] buffer.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Arc<AbsoluteSystemPath> {
+        let arc: Arc<OsStr> = Arc::from(s.into_os_string());
+        unsafe { Arc::from_raw(Arc::into_raw(arc) as *const AbsoluteSystemPath) }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
 // impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
-// impl From<PathBuf> for Arc<Path> {
 // impl From<PathBuf> for Box<Path> {
 // impl From<PathBuf> for OsString {
 // impl From<PathBuf> for Rc<Path> {
