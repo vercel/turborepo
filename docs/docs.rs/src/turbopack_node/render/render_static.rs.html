@@ -184,6 +184,8 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -191,6 +193,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ChunkingContextVc,
+    error::PrettyPrintError,
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
@@ -333,7 +336,8 @@
     operation: <span class="prelude-ty">Option</span>&lt;NodeJsOperation&gt;,
     fallback_page: DevHtmlAssetVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
-    <span class="kw">let </span>message = <span class="macro">format!</span>(<span class="string">&quot;{error:?}&quot;</span>)
+    <span class="kw">let </span>error = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>error));
+    <span class="kw">let </span>message = error
         <span class="comment">// TODO this is pretty inefficient
         </span>.replace(<span class="string">&#39;&amp;&#39;</span>, <span class="string">&quot;&amp;amp;&quot;</span>)
         .replace(<span class="string">&#39;&gt;&#39;</span>, <span class="string">&quot;&amp;gt;&quot;</span>)
@@ -360,7 +364,7 @@
 
     <span class="kw">let </span>issue = RenderingIssue {
         context: path,
-        message: StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;{error:?}&quot;</span>)),
+        message: StringVc::cell(error),
         status: status.and_then(|status| status.code()),
     };
 

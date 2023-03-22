@@ -236,6 +236,9 @@
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -266,7 +269,10 @@
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
 };
-<span class="kw">use </span>turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
+<span class="kw">use </span>turbopack_core::{
+    error::PrettyPrintError,
+    issue::{IssueReporter, IssueReporterVc, IssueVc},
+};
 
 <span class="kw">use </span><span class="self">self</span>::{
     source::{ContentSourceResultVc, ContentSourceVc},
@@ -440,13 +446,13 @@
                             <span class="prelude-val">Ok</span>(r) =&gt; <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, hyper::http::Error&gt;(r),
                             <span class="prelude-val">Err</span>(e) =&gt; {
                                 <span class="macro">println!</span>(
-                                    <span class="string">&quot;[500] error: {:?} ({})&quot;</span>,
-                                    e,
-                                    FormatDuration(start.elapsed())
+                                    <span class="string">&quot;[500] error ({}): {}&quot;</span>,
+                                    FormatDuration(start.elapsed()),
+                                    PrettyPrintError(<span class="kw-2">&amp;</span>e),
                                 );
                                 <span class="prelude-val">Ok</span>(Response::builder()
                                     .status(<span class="number">500</span>)
-                                    .body(hyper::Body::from(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e,)))<span class="question-mark">?</span>)
+                                    .body(hyper::Body::from(<span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>e))))<span class="question-mark">?</span>)
                             }
                         }
                     }
