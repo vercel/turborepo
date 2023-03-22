@@ -11,6 +11,7 @@ use std::{
     ops::Deref,
     path::{Components, Display, Iter, Path, PathBuf, StripPrefixError},
     result::Result as StdResult,
+    sync::Arc,
 };
 
 use delegate::delegate;
@@ -326,10 +327,30 @@ impl Clone for Box<AbsoluteSystemPath> {
 }
 
 // From<AbsoluteSystemPath(Buf)> for T
+
+impl From<&AbsoluteSystemPath> for Arc<Path> {
+    /// Converts a [`AbsoluteSystemPath`] into an [`Arc`] by copying the
+    /// [`AbsoluteSystemPath`] data into a new [`Arc`] buffer.
+    #[inline]
+    fn from(s: &AbsoluteSystemPath) -> Arc<Path> {
+        let arc: Arc<OsStr> = Arc::from(s.as_os_str());
+        unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Path) }
+    }
+}
+
+impl From<&AbsoluteSystemPath> for Arc<AbsoluteSystemPath> {
+    /// Converts a [`AbsoluteSystemPath`] into an [`Arc`] by copying the
+    /// [`AbsoluteSystemPath`] data into a new [`Arc`] buffer.
+    #[inline]
+    fn from(s: &AbsoluteSystemPath) -> Arc<AbsoluteSystemPath> {
+        let arc: Arc<OsStr> = Arc::from(s.as_os_str());
+        unsafe { Arc::from_raw(Arc::into_raw(arc) as *const AbsoluteSystemPath) }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
-// impl From<&Path> for Arc<Path> {
 // impl From<&Path> for Box<Path> {
 // impl From<&Path> for Rc<Path> {
 // impl From<Box<Path>> for PathBuf {
