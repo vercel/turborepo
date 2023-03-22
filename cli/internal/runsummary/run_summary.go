@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/mitchellh/cli"
@@ -150,6 +151,7 @@ func (rsm *Meta) record() []error {
 	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
 	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
+	// TODO: post a much slimmer version of RunSummary here
 	if startPayload, err := json.Marshal(rsm.RunSummary); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
 			errs = append(errs, err)
@@ -164,14 +166,7 @@ func (rsm *Meta) record() []error {
 	}
 
 	if runID != "" {
-		taskURL := fmt.Sprintf(tasksEndpoint, rsm.spaceID, runID)
-		for _, task := range rsm.RunSummary.Tasks {
-			if taskPayload, err := json.Marshal(task); err == nil {
-				if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
-					errs = append(errs, err)
-				}
-			}
-		}
+		rsm.postTaskSummaries(runID)
 
 		done := struct{ Status string }{Status: "completed"}
 		if donePayload, err := json.Marshal(done); err == nil {
@@ -186,6 +181,43 @@ func (rsm *Meta) record() []error {
 	}
 
 	return nil
+}
+
+func (rsm *Meta) postTaskSummaries(runID string) {
+	// We make at most 8 requests at a time.
+	maxParallelRequests := 8
+	taskSummaries := rsm.RunSummary.Tasks
+	taskCount := len(taskSummaries)
+	taskURL := fmt.Sprintf(tasksEndpoint, rsm.spaceID, runID)
+
+	parallelRequestCount := maxParallelRequests
+	if taskCount < maxParallelRequests {
+		parallelRequestCount = taskCount
+	}
+
+	queue := make(chan int, taskCount)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < parallelRequestCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range queue {
+				task := taskSummaries[index]
+				if taskPayload, err := json.Marshal(task); err == nil {
+					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
+						rsm.ui.Warn(fmt.Sprintf("Eror uploading summary of %s", task.TaskID))
+					}
+				}
+			}
+		}()
+	}
+
+	for index := range taskSummaries {
+		queue <- index
+	}
+	close(queue)
+	wg.Wait()
 }
 
 func (summary *RunSummary) normalize() {
