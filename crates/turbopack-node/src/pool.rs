@@ -218,13 +218,13 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                                 data: line,
                                 stack_trace,
                             };
-                            let occurance_number = *own_output
+                            let occurrence_number = *own_output
                                 .entry(entry.clone())
                                 .and_modify(|c| *c += 1)
                                 .or_insert(0);
                             let new_entry = {
                                 let mut shared = shared.lock().unwrap();
-                                shared.insert((entry.clone(), occurance_number))
+                                shared.insert((entry.clone(), occurrence_number))
                             };
                             if !new_entry {
                                 // This line has been printed by another process, so we don't need
