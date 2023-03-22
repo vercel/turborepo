@@ -7035,6 +7035,8 @@ dependencies = [
  "directories",
  "prost",
  "prost-build",
+ "thiserror",
+ "turborepo-lockfiles",
  "turborepo-scm",
 ]
 
@@ -7097,6 +7099,15 @@ dependencies = [
  "uds_windows",
  "url",
  "webbrowser",
+]
+
+[[package]]
+name = "turborepo-lockfiles"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
