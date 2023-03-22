@@ -26,11 +26,6 @@ pub struct AbsoluteSystemPathBuf(PathBuf);
 
 impl AbsoluteSystemPathBuf {
     #[must_use]
-    pub fn new() -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(PathBuf::new())
-    }
-
-    #[must_use]
     pub fn as_absolute_system_path(&self) -> &AbsoluteSystemPath {
         unsafe { AbsoluteSystemPath::coerce_absolute_system_path(&self.0) }
     }
@@ -62,10 +57,11 @@ impl AbsoluteSystemPathBuf {
         to self.0 {
             pub fn as_path(&self) -> &Path;
             pub fn capacity(&self) -> usize;
-            pub fn clear(&mut self);
+            // INVALID pub fn clear(&mut self);
             pub fn into_boxed_path(self) -> Box<Path>;
             pub fn into_os_string(self) -> OsString;
             pub fn pop(&mut self) -> bool;
+            // FIXME: this must accept only system components.
             pub fn push<P: AsRef<Path>>(&mut self, path: P);
             pub fn reserve(&mut self, additional: usize);
             pub fn reserve_exact(&mut self, additional: usize);
@@ -84,9 +80,13 @@ impl AbsoluteSystemPathBuf {
 pub struct AbsoluteSystemPath(Path);
 
 impl AbsoluteSystemPath {
-    pub fn new(s: &(impl AsRef<OsStr> + ?Sized)) -> &AbsoluteSystemPath {
+    pub fn new(s: &(impl AsRef<OsStr> + ?Sized)) -> StdResult<&AbsoluteSystemPath, FromError> {
         let path = Path::new(s.as_ref());
-        unsafe { AbsoluteSystemPath::coerce_absolute_system_path(path) }
+        if path.is_absolute() {
+            Ok(unsafe { AbsoluteSystemPath::coerce_absolute_system_path(path) })
+        } else {
+            Err(FromError(()))
+        }
     }
 
     // MANUAL IMPLEMENTATIONS
@@ -105,11 +105,7 @@ impl AbsoluteSystemPath {
 
     #[must_use]
     pub fn from_path(path: &Path) -> StdResult<&AbsoluteSystemPath, FromError> {
-        if path.is_absolute() {
-            Ok(AbsoluteSystemPath::new(path.as_os_str()))
-        } else {
-            Err(FromError(()))
-        }
+        AbsoluteSystemPath::new(path.as_os_str())
     }
 
     #[must_use]
@@ -140,6 +136,7 @@ impl AbsoluteSystemPath {
         boxed_path.into_path_buf()
     }
 
+    // FIXME: this must accept only system components.
     #[must_use]
     pub fn join<P: AsRef<Path>>(&self, path: P) -> AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(&path.as_ref()))
