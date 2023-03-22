@@ -14,14 +14,13 @@ use owo_colors::{OwoColorize as _, Style};
 use turbo_tasks::{
     primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
 };
-use turbo_tasks_fs::{
-    source_context::{get_source_context, SourceContextLine, SourceContextLines},
-    FileLinesContent,
-};
+use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
     CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
     PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
 };
+
+use crate::source_context::format_source_context_lines;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct IssueSeverityCliOption(pub IssueSeverity);
@@ -77,97 +76,6 @@ fn severity_to_style(severity: IssueSeverity) -> Style {
         IssueSeverity::Note => Style::new().bold(),
         IssueSeverity::Suggestion => Style::new().bright_green().underline(),
         IssueSeverity::Info => Style::new().bright_green(),
-    }
-}
-
-pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut String) {
-    for line in &ctx.0 {
-        match line {
-            SourceContextLine::Context { line, outside } => {
-                writeln!(f, "{}", format_args!("{line:>6} | {outside}").dimmed()).unwrap();
-            }
-            SourceContextLine::Start {
-                line,
-                before,
-                inside,
-            } => {
-                writeln!(
-                    f,
-                    "       | {}{}{}",
-                    " ".repeat(before.len()),
-                    "v".bold(),
-                    "-".repeat(inside.len()).bold(),
-                )
-                .unwrap();
-                writeln!(f, "{line:>6} + {}{}", before.dimmed(), inside.bold()).unwrap();
-            }
-            SourceContextLine::End {
-                line,
-                inside,
-                after,
-            } => {
-                writeln!(f, "{line:>6} + {}{}", inside.bold(), after.dimmed()).unwrap();
-                writeln!(
-                    f,
-                    "       +{}{}",
-                    "-".repeat(inside.len()).bold(),
-                    "^".bold()
-                )
-                .unwrap();
-            }
-            SourceContextLine::StartAndEnd {
-                line,
-                before,
-                inside,
-                after,
-            } => {
-                if inside.len() >= 2 {
-                    writeln!(
-                        f,
-                        "       + {}{}{}{}",
-                        " ".repeat(before.len()),
-                        "v".bold(),
-                        "-".repeat(inside.len() - 2).bold(),
-                        "v".bold(),
-                    )
-                    .unwrap();
-                    writeln!(
-                        f,
-                        "{line:>6} + {}{}{}",
-                        before.dimmed(),
-                        inside.bold(),
-                        after.dimmed()
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "v".bold()).unwrap();
-                    writeln!(
-                        f,
-                        "{line:>6} + {}{}{}",
-                        before.bold(),
-                        inside.bold(),
-                        after.bold()
-                    )
-                    .unwrap();
-                }
-                if inside.len() >= 2 {
-                    writeln!(
-                        f,
-                        "       + {}{}{}{}",
-                        " ".repeat(before.len()),
-                        "^".bold(),
-                        "-".repeat(inside.len() - 2).bold(),
-                        "^".bold(),
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "^".bold()).unwrap();
-                }
-            }
-            SourceContextLine::Inside { line, inside } => {
-                writeln!(f, "{:>6} + {}", line.bold(), inside.bold()).unwrap();
-            }
-        }
     }
 }
 

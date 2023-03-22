@@ -7,14 +7,13 @@ use std::{
 use anyhow::Result;
 pub use content_source::{NextSourceMapTraceContentSource, NextSourceMapTraceContentSourceVc};
 use once_cell::sync::Lazy;
-use owo_colors::OwoColorize;
 use regex::Regex;
 pub use trace::{SourceMapTrace, SourceMapTraceVc, StackFrame, TraceResult, TraceResultVc};
 use turbo_tasks_fs::{
-    source_context::{get_source_context, SourceContextLine, SourceContextLines},
-    to_sys_path, FileLinesContent, FileLinesContentReadRef, FileSystemPathReadRef,
-    FileSystemPathVc,
+    source_context::get_source_context, to_sys_path, FileLinesContent, FileLinesContentReadRef,
+    FileSystemPathReadRef, FileSystemPathVc,
 };
+use turbopack_cli_utils::source_context::format_source_context_lines;
 use turbopack_core::{asset::AssetVc, source_map::GenerateSourceMap};
 use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
@@ -149,97 +148,6 @@ fn write_resolved(
         }
     }
     Ok(())
-}
-
-fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write) {
-    for line in &ctx.0 {
-        match line {
-            SourceContextLine::Context { line, outside } => {
-                writeln!(f, "{}", format_args!("{line:>6} | {outside}").dimmed()).unwrap();
-            }
-            SourceContextLine::Start {
-                line,
-                before,
-                inside,
-            } => {
-                writeln!(
-                    f,
-                    "       | {}{}{}",
-                    " ".repeat(before.len()),
-                    "v".bold(),
-                    "-".repeat(inside.len()).bold(),
-                )
-                .unwrap();
-                writeln!(f, "{line:>6} + {}{}", before.dimmed(), inside.bold()).unwrap();
-            }
-            SourceContextLine::End {
-                line,
-                inside,
-                after,
-            } => {
-                writeln!(f, "{line:>6} + {}{}", inside.bold(), after.dimmed()).unwrap();
-                writeln!(
-                    f,
-                    "       +{}{}",
-                    "-".repeat(inside.len()).bold(),
-                    "^".bold()
-                )
-                .unwrap();
-            }
-            SourceContextLine::StartAndEnd {
-                line,
-                before,
-                inside,
-                after,
-            } => {
-                if inside.len() >= 2 {
-                    writeln!(
-                        f,
-                        "       + {}{}{}{}",
-                        " ".repeat(before.len()),
-                        "v".bold(),
-                        "-".repeat(inside.len() - 2).bold(),
-                        "v".bold(),
-                    )
-                    .unwrap();
-                    writeln!(
-                        f,
-                        "{line:>6} + {}{}{}",
-                        before.dimmed(),
-                        inside.bold(),
-                        after.dimmed()
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "v".bold()).unwrap();
-                    writeln!(
-                        f,
-                        "{line:>6} + {}{}{}",
-                        before.bold(),
-                        inside.bold(),
-                        after.bold()
-                    )
-                    .unwrap();
-                }
-                if inside.len() >= 2 {
-                    writeln!(
-                        f,
-                        "       + {}{}{}{}",
-                        " ".repeat(before.len()),
-                        "^".bold(),
-                        "-".repeat(inside.len() - 2).bold(),
-                        "^".bold(),
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(f, "       | {}{}", " ".repeat(before.len()), "^".bold()).unwrap();
-                }
-            }
-            SourceContextLine::Inside { line, inside } => {
-                writeln!(f, "{:>6} + {}", line.bold(), inside.bold()).unwrap();
-            }
-        }
-    }
 }
 
 enum ResolvedSourceMapping {
