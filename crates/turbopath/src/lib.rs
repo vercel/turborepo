@@ -515,6 +515,16 @@ impl<'a> From<AbsoluteSystemPathBuf> for Cow<'a, AbsoluteSystemPath> {
     }
 }
 
+impl<'a> From<Cow<'a, AbsoluteSystemPath>> for AbsoluteSystemPathBuf {
+    /// Converts a clone-on-write pointer to an owned path.
+    ///
+    /// Converting from a `Cow::Owned` does not clone or allocate.
+    #[inline]
+    fn from(p: Cow<'a, AbsoluteSystemPath>) -> Self {
+        p.into_owned()
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
@@ -524,7 +534,6 @@ impl<'a> From<AbsoluteSystemPathBuf> for Cow<'a, AbsoluteSystemPath> {
 // impl FromStr for PathBuf {
 // impl<'a> From<&'a Path> for Cow<'a, Path> {
 // impl<'a> From<&'a PathBuf> for Cow<'a, Path> {
-// impl<'a> From<Cow<'a, Path>> for PathBuf {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
