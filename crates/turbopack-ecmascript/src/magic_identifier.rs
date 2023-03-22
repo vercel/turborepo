@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt::Write};
 use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 
-pub fn encode(content: &str) -> String {
+pub fn mangle(content: &str) -> String {
     let mut r = "__TURBOPACK__".to_string();
     let mut hex_mode = false;
     for c in content.chars() {
@@ -47,7 +47,7 @@ pub fn encode(content: &str) -> String {
 }
 
 /// Decodes a magic identifier into a string.
-pub fn decode(identifier: &str) -> String {
+pub fn unmangle(identifier: &str) -> String {
     static DECODE_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"^__TURBOPACK__([a-zA-Z0-9_$]+)__$").unwrap());
 
@@ -136,7 +136,7 @@ pub fn decode_identifiers<T: AsRef<str>>(text: &str, magic: impl Fn(String) -> T
         Lazy::new(|| Regex::new(r"__TURBOPACK__[a-zA-Z0-9_$]+__").unwrap());
 
     IDENTIFIER_REGEX.replace_all(text, |captures: &Captures| {
-        magic(decode(captures.get(0).unwrap().as_str()))
+        magic(unmangle(captures.get(0).unwrap().as_str()))
     })
 }
 
@@ -146,42 +146,48 @@ mod tests {
 
     #[test]
     fn test_encode() {
-        assert_eq!(encode("Hello World"), "__TURBOPACK__Hello__World__");
-        assert_eq!(encode("Hello_World"), "__TURBOPACK__Hello_World__");
-        assert_eq!(encode("Hello__World"), "__TURBOPACK__Hello_$5f$World__");
-        assert_eq!(encode("Hello___World"), "__TURBOPACK__Hello_$5f$_World__");
-        assert_eq!(encode("Hello/World"), "__TURBOPACK__Hello$2f$World__");
-        assert_eq!(encode("Hello///World"), "__TURBOPACK__Hello$2f2f2f$World__");
-        assert_eq!(encode("Hello/_World"), "__TURBOPACK__Hello$2f$_World__");
-        assert_eq!(encode("Hello_/_World"), "__TURBOPACK__Hello_$2f$_World__");
-        assert_eq!(encode("Hello😀World"), "__TURBOPACK__Hello$_1f600$World__");
+        assert_eq!(mangle("Hello World"), "__TURBOPACK__Hello__World__");
+        assert_eq!(mangle("Hello_World"), "__TURBOPACK__Hello_World__");
+        assert_eq!(mangle("Hello__World"), "__TURBOPACK__Hello_$5f$World__");
+        assert_eq!(mangle("Hello___World"), "__TURBOPACK__Hello_$5f$_World__");
+        assert_eq!(mangle("Hello/World"), "__TURBOPACK__Hello$2f$World__");
+        assert_eq!(mangle("Hello///World"), "__TURBOPACK__Hello$2f2f2f$World__");
+        assert_eq!(mangle("Hello/_World"), "__TURBOPACK__Hello$2f$_World__");
+        assert_eq!(mangle("Hello_/_World"), "__TURBOPACK__Hello_$2f$_World__");
+        assert_eq!(mangle("Hello😀World"), "__TURBOPACK__Hello$_1f600$World__");
         assert_eq!(
-            encode("Hello/😀/World"),
+            mangle("Hello/😀/World"),
             "__TURBOPACK__Hello$2f_1f600$$2f$World__"
         );
         assert_eq!(
-            encode("Hello😀😀World"),
+            mangle("Hello😀😀World"),
             "__TURBOPACK__Hello$_1f600$$_1f600$World__"
         );
     }
 
     #[test]
     fn test_decode() {
-        assert_eq!(decode("__TURBOPACK__Hello__World__"), "Hello World");
-        assert_eq!(decode("__TURBOPACK__Hello_World__"), "Hello_World");
-        assert_eq!(decode("__TURBOPACK__Hello_$5f$World__"), "Hello__World");
-        assert_eq!(decode("__TURBOPACK__Hello_$5f$_World__"), "Hello___World");
-        assert_eq!(decode("__TURBOPACK__Hello$2f$World__"), "Hello/World");
-        assert_eq!(decode("__TURBOPACK__Hello$2f2f2f$World__"), "Hello///World");
-        assert_eq!(decode("__TURBOPACK__Hello$2f$_World__"), "Hello/_World");
-        assert_eq!(decode("__TURBOPACK__Hello_$2f$_World__"), "Hello_/_World");
-        assert_eq!(decode("__TURBOPACK__Hello$_1f600$World__"), "Hello😀World");
+        assert_eq!(unmangle("__TURBOPACK__Hello__World__"), "Hello World");
+        assert_eq!(unmangle("__TURBOPACK__Hello_World__"), "Hello_World");
+        assert_eq!(unmangle("__TURBOPACK__Hello_$5f$World__"), "Hello__World");
+        assert_eq!(unmangle("__TURBOPACK__Hello_$5f$_World__"), "Hello___World");
+        assert_eq!(unmangle("__TURBOPACK__Hello$2f$World__"), "Hello/World");
         assert_eq!(
-            decode("__TURBOPACK__Hello$2f_1f600$$2f$World__"),
+            unmangle("__TURBOPACK__Hello$2f2f2f$World__"),
+            "Hello///World"
+        );
+        assert_eq!(unmangle("__TURBOPACK__Hello$2f$_World__"), "Hello/_World");
+        assert_eq!(unmangle("__TURBOPACK__Hello_$2f$_World__"), "Hello_/_World");
+        assert_eq!(
+            unmangle("__TURBOPACK__Hello$_1f600$World__"),
+            "Hello😀World"
+        );
+        assert_eq!(
+            unmangle("__TURBOPACK__Hello$2f_1f600$$2f$World__"),
             "Hello/😀/World"
         );
         assert_eq!(
-            decode("__TURBOPACK__Hello$_1f600$$_1f600$World__"),
+            unmangle("__TURBOPACK__Hello$_1f600$$_1f600$World__"),
             "Hello😀😀World"
         );
     }
