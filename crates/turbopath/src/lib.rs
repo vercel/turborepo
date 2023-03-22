@@ -587,7 +587,6 @@ impl From<Cow<'_, AbsoluteSystemPath>> for Box<AbsoluteSystemPath> {
 // TODO
 // impl From<OsString> for PathBuf {
 // impl From<String> for PathBuf {
-// impl FromStr for PathBuf {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
