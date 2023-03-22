@@ -67,7 +67,6 @@ async fn emit(
 #[turbo_tasks::value]
 struct SeparatedAssets {
     internal_assets: AssetsSetVc,
-    internal_assets_for_source_mapping: AssetsForSourceMappingVc,
     external_asset_entrypoints: AssetsSetVc,
 }
 
@@ -97,12 +96,20 @@ async fn internal_assets_for_source_mapping(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<AssetsForSourceMappingVc> {
-    Ok(
-        separate_assets(intermediate_asset, intermediate_output_path)
-            .strongly_consistent()
-            .await?
-            .internal_assets_for_source_mapping,
-    )
+    let internal_assets = internal_assets(intermediate_asset, intermediate_output_path).await?;
+    let intermediate_output_path = &*intermediate_output_path.await?;
+    let mut internal_assets_for_source_mapping = HashMap::new();
+    for asset in internal_assets.iter() {
+        if let Some(generate_source_map) = GenerateSourceMapVc::resolve_from(asset).await? {
+            if let Some(path) = intermediate_output_path.get_path_to(&*asset.ident().path().await?)
+            {
+                internal_assets_for_source_mapping.insert(path.to_string(), generate_source_map);
+            }
+        }
+    }
+    Ok(AssetsForSourceMappingVc::cell(
+        internal_assets_for_source_mapping,
+    ))
 }
 
 /// Returns a set of "external" assets on the boundary of the "internal"
@@ -177,21 +184,12 @@ async fn separate_assets(
     .into_inner();
 
     let mut internal_assets = IndexSet::new();
-    let mut internal_assets_for_source_mapping = HashMap::new();
     let mut external_asset_entrypoints = IndexSet::new();
 
     for item in graph {
         match item {
             Type::Internal(asset) => {
                 internal_assets.insert(asset);
-                if let Some(generate_source_map) = GenerateSourceMapVc::resolve_from(asset).await? {
-                    if let Some(path) =
-                        intermediate_output_path.get_path_to(&*asset.ident().path().await?)
-                    {
-                        internal_assets_for_source_mapping
-                            .insert(path.to_string(), generate_source_map);
-                    }
-                }
             }
             Type::External(asset) => {
                 external_asset_entrypoints.insert(asset);
@@ -201,9 +199,6 @@ async fn separate_assets(
 
     Ok(SeparatedAssets {
         internal_assets: AssetsSetVc::cell(internal_assets),
-        internal_assets_for_source_mapping: AssetsForSourceMappingVc::cell(
-            internal_assets_for_source_mapping,
-        ),
         external_asset_entrypoints: AssetsSetVc::cell(external_asset_entrypoints),
     }
     .cell())
