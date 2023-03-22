@@ -25,13 +25,7 @@ pub struct StackFrame<'a> {
 }
 
 impl<'a> StackFrame<'a> {
-    pub fn unmangle_identifiers<'b, T: Display>(
-        &'a self,
-        magic: impl Fn(String) -> T,
-    ) -> StackFrame<'b>
-    where
-        'a: 'b,
-    {
+    pub fn unmangle_identifiers<T: Display>(&self, magic: impl Fn(String) -> T) -> StackFrame<'_> {
         StackFrame {
             file: Cow::Borrowed(self.file.as_ref()),
             line: self.line,
