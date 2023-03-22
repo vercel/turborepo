@@ -27,15 +27,15 @@ impl Display for MarkerRange {
 }
 
 pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write) {
-    let padding = 6;
-    let space = ' ';
+    const PADDING: usize = 6;
+    const SPACE: char = ' ';
     for line in &ctx.0 {
         match line {
             SourceContextLine::Context { line, outside } => {
                 writeln!(
                     f,
                     "{}",
-                    format_args!("{line:>padding$} | {outside}").dimmed()
+                    format_args!("{line:>PADDING$} | {outside}").dimmed()
                 )
                 .unwrap();
             }
@@ -46,7 +46,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
             } => {
                 writeln!(
                     f,
-                    "{space:padding$} | {}",
+                    "{SPACE:PADDING$} | {}",
                     MarkerRange {
                         start: 'v',
                         end: '-',
@@ -56,17 +56,17 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
                     .bold(),
                 )
                 .unwrap();
-                writeln!(f, "{line:>padding$} + {}{}", before.dimmed(), inside.bold()).unwrap();
+                writeln!(f, "{line:>PADDING$} + {}{}", before.dimmed(), inside.bold()).unwrap();
             }
             SourceContextLine::End {
                 line,
                 inside,
                 after,
             } => {
-                writeln!(f, "{line:>padding$} + {}{}", inside.bold(), after.dimmed()).unwrap();
+                writeln!(f, "{line:>PADDING$} + {}{}", inside.bold(), after.dimmed()).unwrap();
                 writeln!(
                     f,
-                    "{space:padding$} +{}",
+                    "{SPACE:PADDING$} +{}",
                     MarkerRange {
                         start: '-',
                         end: '^',
@@ -85,7 +85,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
             } => {
                 writeln!(
                     f,
-                    "{space:padding$} + {}",
+                    "{SPACE:PADDING$} + {}",
                     MarkerRange {
                         start: 'v',
                         end: 'v',
@@ -98,7 +98,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
                 if inside.len() >= 2 {
                     writeln!(
                         f,
-                        "{line:>padding$} + {}{}{}",
+                        "{line:>PADDING$} + {}{}{}",
                         before.dimmed(),
                         inside.bold(),
                         after.dimmed()
@@ -107,7 +107,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
                 } else {
                     writeln!(
                         f,
-                        "{line:>padding$} + {}{}{}",
+                        "{line:>PADDING$} + {}{}{}",
                         before.bold(),
                         inside.bold(),
                         after.bold()
@@ -116,7 +116,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
                 }
                 writeln!(
                     f,
-                    "{space:padding$} + {}",
+                    "{SPACE:PADDING$} + {}",
                     MarkerRange {
                         start: '^',
                         end: '^',
@@ -128,7 +128,7 @@ pub fn format_source_context_lines(ctx: &SourceContextLines, f: &mut impl Write)
                 .unwrap();
             }
             SourceContextLine::Inside { line, inside } => {
-                writeln!(f, "{:>padding$} + {}", line.bold(), inside.bold()).unwrap();
+                writeln!(f, "{:>PADDING$} + {}", line.bold(), inside.bold()).unwrap();
             }
         }
     }

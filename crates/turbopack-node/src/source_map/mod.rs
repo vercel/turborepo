@@ -78,22 +78,23 @@ fn write_resolved(
     first_error: &mut bool,
     formatting_mode: FormattingMode,
 ) -> Result<()> {
+    const PADDING: &str = "\n    ";
     match resolved {
         Err(err) => {
             // There was an error resolving the source map
-            write!(writable, "\n    at {}", original_frame)?;
+            write!(writable, "{PADDING}at {}", original_frame)?;
             if *first_error {
-                write!(writable, "\n    (error resolving source map: {})", err)?;
+                write!(writable, "{PADDING}(error resolving source map: {})", err)?;
                 *first_error = false;
             } else {
-                write!(writable, "    (error resolving source map)")?;
+                write!(writable, "{PADDING}(error resolving source map)")?;
             }
         }
         Ok(ResolvedSourceMapping::NoSourceMap) | Ok(ResolvedSourceMapping::Unmapped) => {
             // There is no source map for this file or no mapping for the line
             write!(
                 writable,
-                "\n    {}",
+                "{PADDING}{}",
                 formatting_mode.lowlight(&format_args!("[at {}]", original_frame))
             )?;
         }
@@ -102,7 +103,7 @@ fn write_resolved(
             // internal code)
             write!(
                 writable,
-                "\n    {}",
+                "{PADDING}{}",
                 formatting_mode.lowlight(&format_args!(
                     "at {} [{}]",
                     frame,
@@ -119,14 +120,14 @@ fn write_resolved(
             if let Some(name) = frame.name.as_ref() {
                 write!(
                     writable,
-                    "\n    at {name} ({}) {}",
+                    "{PADDING}at {name} ({}) {}",
                     formatting_mode.highlight(&frame.with_name(None).with_path(&project_path.path)),
                     formatting_mode.lowlight(&format_args!("[{}]", original_frame.with_name(None)))
                 )?;
             } else {
                 write!(
                     writable,
-                    "\n    at {} {}",
+                    "{PADDING}at {} {}",
                     formatting_mode.highlight(&frame.with_path(&project_path.path)),
                     formatting_mode.lowlight(&format_args!("[{}]", original_frame.with_name(None)))
                 )?;
