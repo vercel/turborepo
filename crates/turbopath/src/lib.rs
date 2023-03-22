@@ -340,6 +340,18 @@ impl Clone for Box<AbsoluteSystemPath> {
 
 // From<AbsoluteSystemPath(Buf)> for T
 
+impl<T: ?Sized + AsRef<AbsoluteSystemPath>> From<&T> for AbsoluteSystemPathBuf {
+    fn from(s: &T) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::from(s.as_ref().to_owned())
+    }
+}
+
+impl From<AbsoluteSystemPathBuf> for PathBuf {
+    fn from(path: AbsoluteSystemPathBuf) -> PathBuf {
+        path.0
+    }
+}
+
 impl From<&AbsoluteSystemPath> for Arc<Path> {
     /// Converts a [`AbsoluteSystemPath`] into an [`Arc`] by copying the
     /// [`AbsoluteSystemPath`] data into a new [`Arc`] buffer.
