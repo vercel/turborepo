@@ -94,6 +94,24 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         let watcher = server.watcher.clone();
         let watcher_fut = watcher.watch(repo_root.to_path_buf(), stop.token());
 
+        #[cfg(feature = "http")]
+        let server_fut = {
+            // set up grpc reflection
+            let efd = include_bytes!("file_descriptor_set.bin");
+            let reflection = tonic_reflection::server::Builder::configure()
+                .register_encoded_file_descriptor_set(efd)
+                .build()
+                .unwrap();
+
+            Server::builder()
+                .add_service(reflection)
+                .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(
+                    server,
+                ))
+                .serve_with_shutdown("127.0.0.1:5000".parse().unwrap(), shutdown_fut)
+        };
+
+        #[cfg(not(feature = "http"))]
         let (_lock, server_fut) = {
             let (lock, stream) = crate::daemon::endpoint::open_socket(server.daemon_root.clone())
                 .await
