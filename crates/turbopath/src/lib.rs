@@ -435,12 +435,37 @@ impl From<AbsoluteSystemPathBuf> for Arc<AbsoluteSystemPath> {
     }
 }
 
+impl From<AbsoluteSystemPathBuf> for Box<Path> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into a
+    /// <code>[Box]&lt;[Path]&gt;</code>.
+    ///
+    /// This conversion currently should not allocate memory,
+    /// but this behavior is not guaranteed on all platforms or in all future
+    /// versions.
+    #[inline]
+    fn from(p: AbsoluteSystemPathBuf) -> Box<Path> {
+        p.into_boxed_path()
+    }
+}
+
+impl From<AbsoluteSystemPathBuf> for Box<AbsoluteSystemPath> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into a
+    /// <code>[Box]&lt;[AbsoluteSystemPath]&gt;</code>.
+    ///
+    /// This conversion currently should not allocate memory,
+    /// but this behavior is not guaranteed on all platforms or in all future
+    /// versions.
+    #[inline]
+    fn from(p: AbsoluteSystemPathBuf) -> Box<AbsoluteSystemPath> {
+        p.into_boxed_absolute_system_path()
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
 // impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
-// impl From<PathBuf> for Box<Path> {
 // impl From<PathBuf> for OsString {
 // impl From<PathBuf> for Rc<Path> {
 // impl From<String> for PathBuf {
