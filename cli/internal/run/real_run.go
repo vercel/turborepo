@@ -143,14 +143,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	runSummary.Close()
-
-	// Write Run Summary if we wanted to
-	if rs.Opts.runOpts.summarize {
-		if err := runSummary.Save(base.RepoRoot); err != nil {
-			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
-		}
-	}
+	runSummary.Close(base.RepoRoot)
 
 	if exitCode != 0 {
 		return &process.ChildExit{

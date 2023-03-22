@@ -27,6 +27,7 @@ type Meta struct {
 	RunSummary    *RunSummary
 	ui            cli.Ui
 	singlePackage bool
+	shouldSave    bool
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -56,6 +57,7 @@ func NewRunSummary(
 	turboVersion string,
 	packages []string,
 	globalHashSummary *GlobalHashSummary,
+	shouldSave bool,
 ) Meta {
 	executionSummary := newExecutionSummary(startAt, profile)
 
@@ -71,17 +73,24 @@ func NewRunSummary(
 		},
 		ui:            terminal,
 		singlePackage: singlePackage,
+		shouldSave:    shouldSave,
 	}
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close() {
+func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
 	summary := rsm.RunSummary
 	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, rsm.ui); err != nil {
 		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	rsm.printExecutionSummary()
+
+	if rsm.shouldSave {
+		if err := rsm.save(dir); err != nil {
+			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+		}
+	}
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
@@ -90,7 +99,7 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 }
 
 // Save saves the run summary to a file
-func (rsm *Meta) Save(dir turbopath.AbsoluteSystemPath) error {
+func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
 	json, err := rsm.FormatJSON()
 	if err != nil {
 		return err

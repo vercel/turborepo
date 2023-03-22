@@ -365,6 +365,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
+		rs.Opts.runOpts.summarize,
 	)
 
 	// Dry Run
