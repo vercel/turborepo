@@ -8,7 +8,7 @@ use std::{
     hash::Hash,
     io::{self, Result},
     iter::{self, FusedIterator},
-    ops::Deref,
+    ops::{Deref, DerefMut},
     path::{Components, Display, Iter, Path, PathBuf, StripPrefixError},
     rc::Rc,
     result::Result as StdResult,
@@ -115,6 +115,10 @@ impl AbsoluteSystemPath {
     #[must_use]
     unsafe fn coerce_absolute_system_path(path: &Path) -> &AbsoluteSystemPath {
         &*(path as *const Path as *const AbsoluteSystemPath)
+    }
+
+    unsafe fn coerce_absolute_system_path_mut(path: &mut Path) -> &mut AbsoluteSystemPath {
+        &mut *(path as *mut Path as *mut AbsoluteSystemPath)
     }
 
     // API OVERRIDES
@@ -298,6 +302,13 @@ impl Deref for AbsoluteSystemPathBuf {
     #[inline]
     fn deref(&self) -> &AbsoluteSystemPath {
         self.as_absolute_system_path()
+    }
+}
+
+impl DerefMut for AbsoluteSystemPathBuf {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut AbsoluteSystemPath {
+        unsafe { AbsoluteSystemPath::coerce_absolute_system_path_mut(&mut self.0) }
     }
 }
 
