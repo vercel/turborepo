@@ -36,15 +36,18 @@ config = "0.13"
 console = { workspace = true }
 ctrlc = { version = "3.2.5", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
+directories = "4.0.1"
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 env_logger = "0.10.0"
 futures = "0.3.26"
 glob-match = "0.2.1"
+globwatch = { path = "../globwatch" }
 hex = "0.4.3"
 hostname = "0.3.1"
 humantime = "2.1.0"
 indicatif = { workspace = true }
+itertools = "0.10.5"
 lazy_static = { workspace = true }
 libc = "0.2.140"
 log = { workspace = true }
@@ -65,7 +68,7 @@ sysinfo = "0.27.7"
 thiserror = "1.0.38"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
-tokio-stream = "0.1.12"
+tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.8.3", features = ["transport"] }
 tower = "0.4.13"
@@ -73,6 +76,7 @@ uds_windows = "1.0.2"
 url = "2.3.1"
 
 const_format = "0.2.30"
+go-parse-duration = "0.1.1"
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }

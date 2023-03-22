@@ -1,10 +1,22 @@
 use std::{path::PathBuf, time::Duration};
 
 use super::CommandBase;
-use crate::{cli::DaemonCommand, daemon::DaemonConnector};
+use crate::{
+    cli::DaemonCommand,
+    daemon::{DaemonConnector, DaemonError},
+};
 
 /// Runs the daemon command.
-pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result<()> {
+pub async fn main(
+    command: &Option<DaemonCommand>,
+    base: &CommandBase,
+    idle_time: &Option<String>,
+) -> anyhow::Result<()> {
+    let command = match command {
+        Some(command) => command,
+        None => return run_daemon(base, idle_time).await.map_err(Into::into),
+    };
+
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
@@ -55,6 +67,40 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
             }
         }
     };
+
+    Ok(())
+}
+
+pub async fn run_daemon(base: &CommandBase, idle_time: &Option<String>) -> Result<(), DaemonError> {
+    let log_file = {
+        let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
+            .expect("user has a home dir");
+
+        let folder =
+            turborepo_paths::AbsoluteNormalizedPath::new(directories.data_dir()).expect("absolute");
+
+        let hash = format!("{}-turbo.log", base.repo_hash());
+
+        let logs = turborepo_paths::ForwardRelativePath::new("logs").expect("forward relative");
+        let file = turborepo_paths::ForwardRelativePath::new(&hash).expect("forward relative");
+
+        folder.join(logs).join(file)
+    };
+
+    let repo_root =
+        turborepo_paths::AbsoluteNormalizedPathBuf::new(base.repo_root.clone()).expect("absolute");
+
+    let timeout = idle_time
+        .as_ref()
+        .map(|s| {
+            go_parse_duration::parse_duration(s).map_err(|_| DaemonError::InvalidTimeout(s.clone()))
+        })
+        .transpose()?
+        .map(|d| Duration::from_nanos(d as u64))
+        .unwrap_or_else(|| Duration::from_secs(60 * 60 * 4));
+
+    let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
+    server.serve(repo_root).await;
 
     Ok(())
 }

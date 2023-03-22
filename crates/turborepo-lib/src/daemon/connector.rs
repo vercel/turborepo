@@ -67,6 +67,7 @@ impl DaemonConnector {
     const CONNECT_RETRY_MAX: usize = 3;
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
     const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
+    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
 
     /// Attempt, with retries, to:
     /// 1. find (or start) the daemon process
@@ -86,7 +87,13 @@ impl DaemonConnector {
             debug!("got daemon with pid: {}", pid);
 
             let conn = match self.get_connection(self.sock_file.clone()).await {
-                Err(DaemonConnectorError::Watcher(_) | DaemonConnectorError::Socket(_)) => continue,
+                Err(DaemonConnectorError::Watcher(_)) => continue,
+                Err(DaemonConnectorError::Socket(e)) => {
+                    // assume the server is not yet ready
+                    debug!("socket error: {}", e);
+                    tokio::time::sleep(DaemonConnector::SOCKET_ERROR_WAIT).await;
+                    continue;
+                }
                 rest => rest?,
             };
 
