@@ -302,9 +302,9 @@
                     }
                 };
                 input_extraction.push(<span class="macro">quote! </span>{
-                    <span class="kw">let </span>__self = __iter
-                        .next()
-                        .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;{}() self argument missing&quot;</span>, #name_code))<span class="question-mark">?</span>;
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(__self) = __iter.next() <span class="kw">else </span>{
+                        <span class="macro">anyhow::bail!</span>(<span class="string">&quot;{}() self argument missing&quot;</span>, #name_code);
+                    };
                 });
                 input_convert.push(<span class="macro">quote! </span>{
                     <span class="kw">let </span>__self: #self_ref_ident = turbo_tasks::FromTaskInput::try_from(__self)<span class="question-mark">?</span>;
@@ -341,9 +341,9 @@
             }
             FnArg::Typed(PatType { pat, ty, .. }) =&gt; {
                 input_extraction.push(<span class="macro">quote! </span>{
-                    <span class="kw">let </span>#pat = __iter
-                        .next()
-                        .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="macro">concat!</span>(<span class="string">&quot;{}() argument &quot;</span>, <span class="macro">stringify!</span>(#index), <span class="string">&quot; (&quot;</span>, <span class="macro">stringify!</span>(#pat), <span class="string">&quot;) missing&quot;</span>), #name_code))<span class="question-mark">?</span>;
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(#pat) = __iter.next() <span class="kw">else </span>{
+                        <span class="macro">anyhow::bail!</span>(<span class="macro">concat!</span>(<span class="string">&quot;{}() argument &quot;</span>, <span class="macro">stringify!</span>(#index), <span class="string">&quot; (&quot;</span>, <span class="macro">stringify!</span>(#pat), <span class="string">&quot;) missing&quot;</span>), #name_code);
+                    };
                 });
                 input_final.push(<span class="macro">quote! </span>{});
                 <span class="kw">if let </span>Type::Reference(TypeReference {
@@ -422,7 +422,7 @@
             <span class="attr">#[doc(hidden)]
             </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>#function_ident: turbo_tasks::macro_helpers::Lazy&lt;turbo_tasks::NativeFunction&gt; =
                 turbo_tasks::macro_helpers::Lazy::new(|| {
-                    turbo_tasks::NativeFunction::new(#name_code.to_owned(), |inputs| {
+                    turbo_tasks::NativeFunction::new(#name_code.to_owned(), Box::new(|inputs| {
                         <span class="kw">let </span><span class="kw-2">mut </span>__iter = inputs.iter();
                         #(#input_extraction)*
                         <span class="kw">if </span>__iter.next().is_some() {
@@ -436,7 +436,7 @@
                                 #original_call_code
                             })
                         }))
-                    })
+                    }))
                 });
 
             <span class="attr">#[doc(hidden)]
