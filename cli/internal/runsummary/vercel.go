@@ -37,7 +37,7 @@ func newVercelRunCreatePayload(runsummary *RunSummary) *vercelRunPayload {
 	}
 }
 
-func newVercelDonePayload(runsummary *RunSummary) *vercelRunPayload {
+func newVercelDonePayload() *vercelRunPayload {
 	// TODO: add in the endTime here.
 	return &vercelRunPayload{
 		Status: "completed",
