@@ -1,7 +1,10 @@
-use std::{borrow::Cow, fmt::Write};
+use std::{
+    borrow::Cow,
+    fmt::{Display, Write},
+};
 
 use once_cell::sync::Lazy;
-use regex::{Captures, Regex};
+use regex::{Captures, Regex, Replacer};
 
 pub fn mangle(content: &str) -> String {
     let mut r = "__TURBOPACK__".to_string();
@@ -131,13 +134,19 @@ pub fn unmangle(identifier: &str) -> String {
 }
 
 /// Decode all magic identifiers in a string.
-pub fn decode_identifiers<T: AsRef<str>>(text: &str, magic: impl Fn(String) -> T) -> Cow<'_, str> {
+pub fn unmangle_identifiers<T: Display>(text: &str, magic: impl Fn(String) -> T) -> Cow<'_, str> {
     static IDENTIFIER_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"__TURBOPACK__[a-zA-Z0-9_$]+__").unwrap());
 
-    IDENTIFIER_REGEX.replace_all(text, |captures: &Captures| {
-        magic(unmangle(captures.get(0).unwrap().as_str()))
-    })
+    struct Rep<T: Fn(String) -> O, O: Display>(T);
+
+    impl<T: Fn(String) -> O, O: Display> Replacer for Rep<T, O> {
+        fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+            write!(dst, "{}", self.0(unmangle(caps.get(0).unwrap().as_str()))).unwrap();
+        }
+    }
+
+    IDENTIFIER_REGEX.replace_all(text, Rep(magic))
 }
 
 #[cfg(test)]
@@ -193,9 +202,9 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_identifiers() {
+    fn test_unmangle_identifiers() {
         assert_eq!(
-            decode_identifiers(
+            unmangle_identifiers(
                 "Hello __TURBOPACK__Hello__World__ __TURBOPACK__Hello_World__",
                 |s| format!("{{{s}}}")
             ),

@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    fmt::Display,
     future::Future,
     mem::take,
     path::{Path, PathBuf},
@@ -12,7 +13,7 @@ use std::{
 use anyhow::{bail, Context, Result};
 use futures::join;
 use indexmap::IndexSet;
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::{
     io::{
@@ -26,9 +27,42 @@ use tokio::{
     time::{sleep, timeout},
 };
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_ecmascript::magic_identifier::decode_identifiers;
+use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 use crate::{source_map::apply_source_mapping, AssetsForSourceMappingVc};
+
+#[derive(Clone, Copy)]
+pub enum FormattingMode {
+    /// No formatting, just print the output
+    Plain,
+    /// Use ansi colors to format the output
+    AnsiColors,
+}
+
+impl FormattingMode {
+    pub fn magic_identifier<'a>(&self, content: impl Display + 'a) -> impl Display + 'a {
+        match self {
+            FormattingMode::Plain => format!("{{{}}}", content),
+            FormattingMode::AnsiColors => format!("{{{}}}", content).italic().to_string(),
+        }
+    }
+
+    pub fn lowlight<'a>(&self, content: impl Display + 'a) -> impl Display + 'a {
+        match self {
+            FormattingMode::Plain => Style::new(),
+            FormattingMode::AnsiColors => Style::new().dimmed(),
+        }
+        .style(content)
+    }
+
+    pub fn highlight<'a>(&self, content: impl Display + 'a) -> impl Display + 'a {
+        match self {
+            FormattingMode::Plain => Style::new(),
+            FormattingMode::AnsiColors => Style::new().bold().underline(),
+        }
+        .style(content)
+    }
+}
 
 enum NodeJsPoolProcess {
     Spawned(SpawnedNodeJsPoolProcess),
@@ -60,15 +94,9 @@ impl RunningNodeJsPoolProcess {
     pub async fn apply_source_mapping<'a>(
         &self,
         text: &'a str,
-        ansi_colors: bool,
+        formatting_mode: FormattingMode,
     ) -> Result<Cow<'a, str>> {
-        let text = decode_identifiers(text, |content| {
-            if ansi_colors {
-                format!("{{{}}}", content).italic().to_string()
-            } else {
-                format!("{{{}}}", content)
-            }
-        });
+        let text = unmangle_identifiers(text, |content| formatting_mode.magic_identifier(content));
         match text {
             Cow::Borrowed(text) => {
                 apply_source_mapping(
@@ -76,7 +104,7 @@ impl RunningNodeJsPoolProcess {
                     self.assets_for_source_mapping,
                     self.assets_root,
                     self.project_dir,
-                    ansi_colors,
+                    formatting_mode,
                 )
                 .await
             }
@@ -86,7 +114,7 @@ impl RunningNodeJsPoolProcess {
                     self.assets_for_source_mapping,
                     self.assets_root,
                     self.project_dir,
-                    ansi_colors,
+                    formatting_mode,
                 )
                 .await?;
                 Ok(Cow::Owned(cow.into_owned()))
@@ -150,7 +178,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
             final_stream: &mut W,
         ) -> Result<()> {
             if let Ok(text) = std::str::from_utf8(bytes) {
-                let text = decode_identifiers(text, |content| {
+                let text = unmangle_identifiers(text, |content| {
                     format!("{{{}}}", content).italic().to_string()
                 });
                 match apply_source_mapping(
@@ -158,7 +186,7 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
                     assets_for_source_mapping,
                     root,
                     project_dir,
-                    true,
+                    FormattingMode::AnsiColors,
                 )
                 .await
                 {
@@ -671,10 +699,10 @@ impl NodeJsOperation {
     pub async fn apply_source_mapping<'a>(
         &self,
         text: &'a str,
-        ansi_colors: bool,
+        formatting_mode: FormattingMode,
     ) -> Result<Cow<'a, str>> {
         if let Some(process) = self.process.as_ref() {
-            process.apply_source_mapping(text, ansi_colors).await
+            process.apply_source_mapping(text, formatting_mode).await
         } else {
             Ok(Cow::Borrowed(text))
         }

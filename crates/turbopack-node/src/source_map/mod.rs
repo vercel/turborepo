@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 pub use content_source::{NextSourceMapTraceContentSource, NextSourceMapTraceContentSourceVc};
 use once_cell::sync::Lazy;
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
 use regex::Regex;
 pub use trace::{SourceMapTrace, SourceMapTraceVc, StackFrame, TraceResult, TraceResultVc};
 use turbo_tasks_fs::{
@@ -16,9 +16,9 @@ use turbo_tasks_fs::{
     FileSystemPathVc,
 };
 use turbopack_core::{asset::AssetVc, source_map::GenerateSourceMap};
-use turbopack_ecmascript::magic_identifier::decode_identifiers;
+use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
-use crate::{internal_assets_for_source_mapping, AssetsForSourceMappingVc};
+use crate::{internal_assets_for_source_mapping, pool::FormattingMode, AssetsForSourceMappingVc};
 
 pub mod content_source;
 pub mod trace;
@@ -28,7 +28,7 @@ pub async fn apply_source_mapping<'a>(
     assets_for_source_mapping: AssetsForSourceMappingVc,
     root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
-    ansi_colors: bool,
+    formatting_mode: FormattingMode,
 ) -> Result<Cow<'a, str>> {
     static STACK_TRACE_LINE: Lazy<Regex> =
         Lazy::new(|| Regex::new("\n    at (?:(.+) \\()?(.+):(\\d+):(\\d+)\\)?").unwrap());
@@ -59,7 +59,13 @@ pub async fn apply_source_mapping<'a>(
         let resolved =
             resolve_source_mapping(assets_for_source_mapping, root, project_dir.root(), &frame)
                 .await;
-        write_resolved(&mut new, resolved, &frame, &mut first_error, ansi_colors)?;
+        write_resolved(
+            &mut new,
+            resolved,
+            &frame,
+            &mut first_error,
+            formatting_mode,
+        )?;
         last_match = m.end();
     }
     new.push_str(&text[last_match..]);
@@ -71,18 +77,8 @@ fn write_resolved(
     resolved: Result<ResolvedSourceMapping>,
     original_frame: &StackFrame<'_>,
     first_error: &mut bool,
-    ansi_colors: bool,
+    formatting_mode: FormattingMode,
 ) -> Result<()> {
-    let lowlight = if ansi_colors {
-        Style::new().dimmed()
-    } else {
-        Style::new()
-    };
-    let highlight = if ansi_colors {
-        Style::new().bold().underline()
-    } else {
-        Style::new()
-    };
     match resolved {
         Err(err) => {
             // There was an error resolving the source map
@@ -99,7 +95,7 @@ fn write_resolved(
             write!(
                 writable,
                 "\n    {}",
-                format_args!("[at {}]", original_frame).style(lowlight)
+                formatting_mode.lowlight(&format_args!("[at {}]", original_frame))
             )?;
         }
         Ok(ResolvedSourceMapping::Mapped { frame }) => {
@@ -108,7 +104,11 @@ fn write_resolved(
             write!(
                 writable,
                 "\n    {}",
-                format_args!("at {} [{}]", frame, original_frame.with_name(None)).style(lowlight)
+                formatting_mode.lowlight(&format_args!(
+                    "at {} [{}]",
+                    frame,
+                    original_frame.with_name(None)
+                ))
             )?;
         }
         Ok(ResolvedSourceMapping::MappedProject {
@@ -121,29 +121,29 @@ fn write_resolved(
                 write!(
                     writable,
                     "\n    at {name} ({}) {}",
-                    frame
-                        .with_name(None)
-                        .with_path(&project_path.path)
-                        .style(highlight),
-                    format_args!("[{}]", original_frame.with_name(None)).style(lowlight)
+                    formatting_mode.highlight(&frame.with_name(None).with_path(&project_path.path)),
+                    formatting_mode.lowlight(&format_args!("[{}]", original_frame.with_name(None)))
                 )?;
             } else {
                 write!(
                     writable,
                     "\n    at {} {}",
-                    frame.with_path(&project_path.path).style(highlight),
-                    format_args!("[{}]", original_frame.with_name(None)).style(lowlight)
+                    formatting_mode.highlight(&frame.with_path(&project_path.path)),
+                    formatting_mode.lowlight(&format_args!("[{}]", original_frame.with_name(None)))
                 )?;
             }
             let (line, column) = frame.get_pos().unwrap_or((0, 0));
             if let FileLinesContent::Lines(lines) = &*lines {
                 let lines = lines.iter().map(|l| l.content.as_str());
                 let ctx = get_source_context(lines, line - 1, column - 1, line - 1, column - 1);
-                if ansi_colors {
-                    writable.write_char('\n')?;
-                    format_source_context_lines(&ctx, writable);
-                } else {
-                    write!(writable, "\n{}", ctx)?;
+                match formatting_mode {
+                    FormattingMode::Plain => {
+                        write!(writable, "\n{}", ctx)?;
+                    }
+                    FormattingMode::AnsiColors => {
+                        writable.write_char('\n')?;
+                        format_source_context_lines(&ctx, writable);
+                    }
                 }
             }
         }
@@ -321,29 +321,23 @@ impl StructuredError {
         assets_for_source_mapping: AssetsForSourceMappingVc,
         root: FileSystemPathVc,
         project_dir: FileSystemPathVc,
-        ansi_colors: bool,
+        formatting_mode: FormattingMode,
     ) -> Result<String> {
         let mut message = String::new();
 
-        let magic = |content| {
-            if ansi_colors {
-                format!("{{{}}}", content).italic().to_string()
-            } else {
-                format!("{{{}}}", content)
-            }
-        };
+        let magic = |content| formatting_mode.magic_identifier(content);
 
         write!(
             message,
             "{}: {}",
             self.name,
-            decode_identifiers(&self.message, magic)
+            unmangle_identifiers(&self.message, magic)
         )?;
 
         let mut first_error = true;
 
         for frame in &self.stack {
-            let frame = frame.decode_identifiers(magic);
+            let frame = frame.unmangle_identifiers(magic);
             let resolved =
                 resolve_source_mapping(assets_for_source_mapping, root, project_dir.root(), &frame)
                     .await;
@@ -352,7 +346,7 @@ impl StructuredError {
                 resolved,
                 &frame,
                 &mut first_error,
-                ansi_colors,
+                formatting_mode,
             )?;
         }
         Ok(message)
@@ -368,6 +362,11 @@ pub async fn trace_stack(
     let assets_for_source_mapping = internal_assets_for_source_mapping(root_asset, output_path);
 
     error
-        .print(assets_for_source_mapping, output_path, project_dir, false)
+        .print(
+            assets_for_source_mapping,
+            output_path,
+            project_dir,
+            FormattingMode::Plain,
+        )
         .await
 }

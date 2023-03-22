@@ -9,7 +9,7 @@ use turbopack_core::{
     asset::AssetContentVc,
     source_map::{SourceMapVc, Token},
 };
-use turbopack_ecmascript::magic_identifier::decode_identifiers;
+use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 /// An individual stack frame, as parsed by the stacktrace-parser npm module.
 ///
@@ -25,7 +25,7 @@ pub struct StackFrame<'a> {
 }
 
 impl<'a> StackFrame<'a> {
-    pub fn decode_identifiers<'b, T: AsRef<str>>(
+    pub fn unmangle_identifiers<'b, T: Display>(
         &'a self,
         magic: impl Fn(String) -> T,
     ) -> StackFrame<'b>
@@ -39,7 +39,7 @@ impl<'a> StackFrame<'a> {
             name: self
                 .name
                 .as_ref()
-                .map(|n| decode_identifiers(n.as_ref(), magic)),
+                .map(|n| unmangle_identifiers(n.as_ref(), magic)),
         }
     }
 

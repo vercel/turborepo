@@ -29,7 +29,7 @@ use crate::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
     emit, emit_package_json, internal_assets_for_source_mapping,
-    pool::{NodeJsPool, NodeJsPoolVc},
+    pool::{FormattingMode, NodeJsPool, NodeJsPoolVc},
     source_map::StructuredError,
     AssetsForSourceMappingVc, EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage,
 };
@@ -336,7 +336,7 @@ impl Issue for EvaluationIssue {
                     self.assets_for_source_mapping,
                     self.assets_root,
                     self.project_dir,
-                    false,
+                    FormattingMode::Plain,
                 )
                 .await?,
         ))
@@ -460,7 +460,7 @@ impl Issue for EvaluateEmittedErrorIssue {
                     self.assets_for_source_mapping,
                     self.assets_root,
                     self.project_dir,
-                    false,
+                    FormattingMode::Plain,
                 )
                 .await?,
         ))
