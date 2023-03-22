@@ -569,10 +569,22 @@ impl<'a> From<&'a AbsoluteSystemPath> for Cow<'a, Path> {
     }
 }
 
+impl From<Cow<'_, AbsoluteSystemPath>> for Box<AbsoluteSystemPath> {
+    /// Creates a boxed [`AbsoluteSystemPath`] from a clone-on-write pointer.
+    ///
+    /// Converting from a `Cow::Owned` does not clone or allocate.
+    #[inline]
+    fn from(cow: Cow<'_, AbsoluteSystemPath>) -> Box<AbsoluteSystemPath> {
+        match cow {
+            Cow::Borrowed(path) => Box::from(path),
+            Cow::Owned(path) => Box::from(path),
+        }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
-// impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
 // impl From<String> for PathBuf {
 // impl FromStr for PathBuf {
