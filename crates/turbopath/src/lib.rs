@@ -10,6 +10,7 @@ use std::{
     iter::{self, FusedIterator},
     ops::Deref,
     path::{Components, Display, Iter, Path, PathBuf, StripPrefixError},
+    rc::Rc,
     result::Result as StdResult,
     sync::Arc,
 };
@@ -370,10 +371,29 @@ impl From<&AbsoluteSystemPath> for Box<AbsoluteSystemPath> {
     }
 }
 
+impl From<&AbsoluteSystemPath> for Rc<Path> {
+    /// Converts a [`AbsoluteSystemPath`] into an [`Rc`] by copying the
+    /// [`AbsoluteSystemPath`] data into a new [`Rc`] buffer.
+    #[inline]
+    fn from(s: &AbsoluteSystemPath) -> Rc<Path> {
+        let rc: Rc<OsStr> = Rc::from(s.as_os_str());
+        unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Path) }
+    }
+}
+
+impl From<&AbsoluteSystemPath> for Rc<AbsoluteSystemPath> {
+    /// Converts a [`AbsoluteSystemPath`] into an [`Rc`] by copying the
+    /// [`AbsoluteSystemPath`] data into a new [`Rc`] buffer.
+    #[inline]
+    fn from(s: &AbsoluteSystemPath) -> Rc<AbsoluteSystemPath> {
+        let rc: Rc<OsStr> = Rc::from(s.as_os_str());
+        unsafe { Rc::from_raw(Rc::into_raw(rc) as *const AbsoluteSystemPath) }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
-// impl From<&Path> for Rc<Path> {
 // impl From<Box<Path>> for PathBuf {
 // impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
