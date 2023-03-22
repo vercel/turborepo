@@ -9,12 +9,18 @@ use std::{
 use log::warn;
 
 /// Errors that may occur during the `Pidlock` lifetime.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, thiserror::Error)]
 pub enum PidlockError {
-    #[doc = "A lock already exists"]
-    LockExists,
-    #[doc = "An operation was attempted in the wrong state, e.g. releasing before acquiring."]
+    /// A lock already exists
+    #[error("lock exists at {0}")]
+    LockExists(PathBuf),
+    /// An operation was attempted in the wrong state, e.g. releasing before
+    /// acquiring.
+    #[error("invalid state")]
     InvalidState,
+    /// The lock is already owned by a running process
+    #[error("already owned")]
+    AlreadyOwned,
 }
 
 /// A result from a Pidlock operation
@@ -23,11 +29,11 @@ type PidlockResult = Result<(), PidlockError>;
 /// States a Pidlock can be in during its lifetime.
 #[derive(Debug, PartialEq)]
 enum PidlockState {
-    #[doc = "A new pidlock, unacquired"]
+    /// A new pidlock, unacquired
     New,
-    #[doc = "A lock is acquired"]
+    /// A lock is acquired
     Acquired,
-    #[doc = "A lock is released"]
+    /// A lock is released
     Released,
 }
 
@@ -86,12 +92,6 @@ impl Pidlock {
         }
     }
 
-    /// Check whether a lock file already exists, and if it does, whether the
-    /// specified pid is still a valid process id on the system.
-    fn check_stale(&self) {
-        self.get_owner();
-    }
-
     /// Acquire a lock.
     pub fn acquire(&mut self) -> PidlockResult {
         match self.state {
@@ -100,7 +100,16 @@ impl Pidlock {
                 return Err(PidlockError::InvalidState);
             }
         }
-        self.check_stale();
+
+        // acquiring something with a valid owner is an error
+        if self.get_owner().is_some() {
+            return Err(PidlockError::AlreadyOwned);
+        }
+
+        if let Some(p) = self.path.parent() {
+            // even if this fails, the next call might not
+            std::fs::create_dir_all(p).ok();
+        }
 
         let mut file = match fs::OpenOptions::new()
             .create_new(true)
@@ -109,7 +118,7 @@ impl Pidlock {
         {
             Ok(file) => file,
             Err(_) => {
-                return Err(PidlockError::LockExists);
+                return Err(PidlockError::LockExists(self.path.clone()));
             }
         };
         file.write_all(&format!("{}", self.pid).into_bytes()[..])
@@ -125,7 +134,7 @@ impl Pidlock {
     }
 
     /// Release the lock.
-    pub fn release(&mut self) -> PidlockResult {
+    fn release(&mut self) -> PidlockResult {
         match self.state {
             PidlockState::Acquired => {}
             _ => {
@@ -168,6 +177,14 @@ impl Pidlock {
                 warn!("nonnumeric pid file at {:?}", self.path);
                 None
             }
+        }
+    }
+}
+
+impl Drop for Pidlock {
+    fn drop(&mut self) {
+        if self.locked() {
+            self.release().ok();
         }
     }
 }
