@@ -1382,6 +1382,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
+name = "delegate"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d358e0ec5c59a5e1603b933def447096886121660fc680dc1e64a0753981fe3c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7006,6 +7017,13 @@ dependencies = [
  "turbopack-core",
  "turbopack-env",
  "turbopack-test-utils",
+]
+
+[[package]]
+name = "turbopath"
+version = "0.1.0"
+dependencies = [
+ "delegate",
 ]
 
 [[package]]
