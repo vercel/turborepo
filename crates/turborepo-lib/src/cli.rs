@@ -371,7 +371,7 @@ pub struct RunArgs {
     pub pass_through_args: Vec<String>,
 
     // Pass a string to enable posting Run Summaries to Vercel
-    #[clap(long)]
+    #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
 }
 
