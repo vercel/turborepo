@@ -42,7 +42,11 @@ mod io_counters;
 pub mod project;
 pub mod project_relative_path;
 
+pub use absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf};
+pub use absolute_path::{AbsolutePath, AbsolutePathBuf};
+pub use forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf};
 pub use into_filename_buf_iterator::*;
+pub use project_relative_path::{ProjectRelativePath, ProjectRelativePathBuf};
 pub use relative_path::{RelativePath, RelativePathBuf};
 
 #[cfg(test)]
@@ -116,10 +120,16 @@ mod tests {
     fn absolute_path_display_is_readable() -> anyhow::Result<()> {
         let buf = AbsoluteNormalizedPathBuf::from("C:/foo/bar".into())?;
         assert_eq!("C:/foo/bar", format!("{}", buf));
-        assert_eq!("AbsNormPathBuf(\"C:/foo/bar\")", format!("{:?}", buf));
+        assert_eq!(
+            "AbsoluteNormalizedPathBuf(\"C:/foo/bar\")",
+            format!("{:?}", buf)
+        );
         let refpath: &AbsoluteNormalizedPath = &buf;
         assert_eq!("C:/foo/bar", format!("{}", refpath));
-        assert_eq!("AbsNormPath(\"C:/foo/bar\")", format!("{:?}", refpath));
+        assert_eq!(
+            "AbsoluteNormalizedPath(\"C:/foo/bar\")",
+            format!("{:?}", refpath)
+        );
 
         Ok(())
     }

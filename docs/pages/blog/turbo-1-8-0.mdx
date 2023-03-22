@@ -66,7 +66,7 @@ For example, imagine your monorepo has a Next.js app and a SvelteKit app, and yo
 	"pipeline": {
 		"build": {
 			// dependsOn is inherited from root
-			"outputs": [".next/**"]
+			"outputs": [".next/**", "!.next/cache/**"]
 		}
 	}
 }

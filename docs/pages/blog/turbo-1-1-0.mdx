@@ -103,7 +103,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/repo/docs
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID",
       ],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
@@ -113,7 +113,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/repo/docs
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID",
       ],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     }
   },
   "globalDependencies": [

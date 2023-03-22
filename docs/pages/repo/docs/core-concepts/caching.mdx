@@ -216,7 +216,7 @@ the values of environment variables:
         "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
         "NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }
@@ -250,7 +250,7 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
         "NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
         "NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
   },
 +  "globalEnv": [
@@ -376,7 +376,7 @@ invoking `turbo`!
     "build": {
       "dependsOn": ["^build"],
       "env": ["SOME_ENV_VAR"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
   }
 }
@@ -401,7 +401,7 @@ To ensure you end up with the correct caching behavior for your task, add these 
     "build": {
       "dependsOn": ["^build"],
       "env": ["SOME_ENV_VAR"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
   }
 }

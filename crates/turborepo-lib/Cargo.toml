@@ -13,10 +13,12 @@ rustls-tls = ["reqwest/rustls-tls", "turbo-updater/rustls-tls"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 assert_cmd = { workspace = true }
+async-stream = "0.3.4"
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
+test-case = "3.0.0"
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -26,26 +28,52 @@ axum-server = "0.4.4"
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+command-group = { version = "2.1.0", features = ["with-tokio"] }
 config = "0.13"
 console = { workspace = true }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 env_logger = "0.10.0"
+futures = "0.3.26"
 glob-match = "0.2.1"
+hex = "0.4.3"
 hostname = "0.3.1"
+humantime = "2.1.0"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-predicates = { workspace = true }
+notify = { version = "5.1.0", default-features = false, features = [
+  "macos_kqueue",
+] }
+pidlock = { path = "../pidlock" }
+prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+sha2 = "0.10.6"
+sysinfo = "0.27.7"
+thiserror = "1.0.38"
 tiny-gradient = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "time"] }
+tokio-stream = "0.1.12"
+tokio-util = { version = "0.7.7", features = ["compat"] }
+tonic = { version = "0.8.3", features = ["transport"] }
+tower = "0.4.13"
+uds_windows = "1.0.2"
+url = "2.3.1"
 webbrowser = { workspace = true }
 
+const_format = "0.2.30"
 turbo-updater = { workspace = true }
+turborepo-paths = { version = "0.1.0", path = "../turborepo-paths" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+uds_windows = "1.0.2"
+async-io = "1.12.0"
+
+[build-dependencies]
+tonic-build = "0.8.4"

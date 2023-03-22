@@ -213,7 +213,7 @@ type CmdBase struct {
 	UI           cli.Ui
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
-	APIClient    *client.ApiClient
+	APIClient    *client.APIClient
 	RepoConfig   *config.RepoConfig
 	UserConfig   *config.UserConfig
 	RemoteConfig client.RemoteConfig

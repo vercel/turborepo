@@ -116,16 +116,15 @@ func stringToRef(s string) *string {
 }
 
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
-func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string, includeUntracked bool) ([]string, error) {
+func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
 	toCommitRef := stringToRef(toCommit)
 
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:         repoRoot,
-		FromCommit:       fromCommitRef,
-		ToCommit:         toCommitRef,
-		IncludeUntracked: includeUntracked,
-		MonorepoRoot:     monorepoRoot,
+		RepoRoot:     repoRoot,
+		FromCommit:   fromCommitRef,
+		ToCommit:     toCommitRef,
+		MonorepoRoot: monorepoRoot,
 	}
 
 	reqBuf := Marshal(&req)
@@ -167,4 +166,59 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	}
 
 	return []byte(content), nil
+}
+
+// NpmTransitiveDeps returns the transitive external deps of a given package based on the deps and specifiers given
+func NpmTransitiveDeps(content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
+	return transitiveDeps(npmTransitiveDeps, content, pkgDir, unresolvedDeps)
+}
+
+func npmTransitiveDeps(buf C.Buffer) C.Buffer {
+	return C.npm_transitive_closure(buf)
+}
+
+func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
+	req := ffi_proto.TransitiveDepsRequest{
+		Contents:       content,
+		WorkspaceDir:   pkgDir,
+		UnresolvedDeps: unresolvedDeps,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := cFunc(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.TransitiveDepsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	list := resp.GetPackages()
+	return list.GetList(), nil
+}
+
+// NpmSubgraph returns the contents of a npm lockfile subgraph
+func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte, error) {
+	req := ffi_proto.SubgraphRequest{
+		Contents:   content,
+		Workspaces: workspaces,
+		Packages:   packages,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.npm_subgraph(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.SubgraphResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	return resp.GetContents(), nil
 }

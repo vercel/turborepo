@@ -10,7 +10,7 @@ const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 const REPETITIONS = 5;
 
 const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
-const TURBO_BIN = path.resolve(path.join("..", "cli", "turbo"));
+const TURBO_BIN = path.resolve(path.join("..", "target", "release", "turbo"));
 const DEFAULT_CACHE_PATH = path.join(
   REPO_PATH,
   "node_modules",

@@ -17,6 +17,15 @@ Setup
     "rootExternalDepsHash": "ccab0b28617f1f56",
     "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
     "pipeline": {
+      "//#something": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
       "build": {
         "outputs": [],
         "cache": true,
@@ -39,6 +48,15 @@ Setup
         "outputMode": "full",
         "env": [],
         "persistent": false
+      },
+      "something": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
       }
     }
   }
@@ -49,12 +67,13 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "e8ca4fc486de5b37",
+    "hash": "45ec4e15c3dcf5c2",
     "cacheState": {
       "local": false,
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": [
       "apple.json",
       "banana.txt"
@@ -88,7 +107,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 # Validate output of util#build task
@@ -97,12 +117,13 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "1a3651e1149bfaf7",
+    "hash": "c36e55f947cd2d28",
     "cacheState": {
       "local": false,
       "remote": false
     },
     "command": "echo 'building'",
+    "commandArguments": [],
     "outputs": null,
     "excludedOutputs": null,
     "logFile": "packages/util/.turbo/turbo-build.log",
@@ -134,7 +155,8 @@ Setup
         "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       ]
-    }
+    },
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

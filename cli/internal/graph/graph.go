@@ -5,6 +5,7 @@ import (
 	gocontext "context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,6 +61,16 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
 
+		// Check for root task
+		var command string
+		if cmd, ok := pkg.Scripts[taskName]; ok {
+			command = cmd
+		}
+
+		if packageName == util.RootPkgName && commandLooksLikeTurbo(command) {
+			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", taskName, command)
+		}
+
 		taskDefinition, ok := g.TaskDefinitions[taskID]
 		if !ok {
 			return fmt.Errorf("Could not find definition for task")
@@ -77,11 +88,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
+		passThruArgs := getArgs(taskName)
 		hash, err := g.TaskHashTracker.CalculateTaskHash(
 			packageTask,
 			taskGraph.DownEdges(taskID),
 			logger,
-			getArgs(taskName),
+			passThruArgs,
 		)
 
 		// Not being able to construct the task hash is a hard error
@@ -94,12 +106,6 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		envVars := g.TaskHashTracker.GetEnvVars(taskID)
 		expandedInputs := g.TaskHashTracker.GetExpandedInputs(packageTask)
 		framework := g.TaskHashTracker.GetFramework(taskID)
-
-		// Assign remaining fields to packageTask
-		var command string
-		if cmd, ok := pkg.Scripts[taskName]; ok {
-			command = cmd
-		}
 
 		logFile := repoRelativeLogFile(pkgDir, taskName)
 		packageTask.LogFile = logFile
@@ -118,11 +124,13 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			ExpandedInputs:         expandedInputs,
 			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
 			Command:                command,
+			CommandArguments:       passThruArgs,
 			Framework:              framework,
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Configured: envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:   envVars.BySource.Matching.ToSecretHashable(),
 			},
+			ExternalDepsHash: pkg.ExternalDepsHash,
 		}
 
 		if ancestors, err := g.getTaskGraphAncestors(taskGraph, packageTask.TaskID); err == nil {
@@ -227,4 +235,10 @@ func (g *CompleteGraph) getTaskGraphDescendants(taskGraph *dag.AcyclicGraph, tas
 	}
 	sort.Strings(stringDescendents)
 	return stringDescendents, nil
+}
+
+var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+
+func commandLooksLikeTurbo(command string) bool {
+	return _isTurbo.MatchString(command)
 }

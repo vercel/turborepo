@@ -40,6 +40,7 @@ Check
           "remote": false
         },
         "command": "echo 'building'",
+        "commandArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
@@ -67,7 +68,8 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           ]
-        }
+        },
+        "hashOfExternalDependencies": ""
       }
     ]
   }

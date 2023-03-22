@@ -64,7 +64,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -201,7 +201,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -277,7 +277,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -437,7 +437,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -522,7 +522,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
