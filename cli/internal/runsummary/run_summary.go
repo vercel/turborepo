@@ -2,12 +2,14 @@
 package runsummary
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
+	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -20,6 +22,8 @@ const MissingTaskLabel = "<NONEXISTENT>"
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 const runSummarySchemaVersion = "0"
+const runsEndpoint = "/v0/spaces/%s/runs"
+const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
@@ -28,6 +32,8 @@ type Meta struct {
 	ui            cli.Ui
 	singlePackage bool
 	shouldSave    bool
+	apiClient     *client.APIClient
+	spaceID       string
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -58,6 +64,8 @@ func NewRunSummary(
 	packages []string,
 	globalHashSummary *GlobalHashSummary,
 	shouldSave bool,
+	apiClient *client.APIClient,
+	spaceID string,
 ) Meta {
 	executionSummary := newExecutionSummary(startAt, profile)
 
@@ -74,6 +82,8 @@ func NewRunSummary(
 		ui:            terminal,
 		singlePackage: singlePackage,
 		shouldSave:    shouldSave,
+		apiClient:     apiClient,
+		spaceID:       spaceID,
 	}
 }
 
@@ -84,11 +94,21 @@ func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
 		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
+	// TODO: printing summary to local, writing to disk, and sending to API
+	// are all the same thng, we should use a strategy similar to cache save/upload to
+	// do this in parallel.
+
 	rsm.printExecutionSummary()
 
 	if rsm.shouldSave {
 		if err := rsm.save(dir); err != nil {
 			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+		}
+
+		if rsm.spaceID != "" {
+			if err := rsm.record(); err != nil {
+				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
+			}
 		}
 	}
 }
@@ -117,6 +137,55 @@ func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
 	}
 
 	return summaryPath.WriteFile(json, 0644)
+}
+
+// record sends the summary to the API
+// TODO: make this async using a channel
+// TODO: make this work for single package tasks
+func (rsm *Meta) record() []error {
+	errs := []error{}
+
+	// Right now we'll send the POST to create the Run and the subsequent task payloads
+	// when everything after all execution is done, but in the future, this first POST request
+	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
+	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
+	var runID string
+	if startPayload, err := json.Marshal(rsm.RunSummary); err == nil {
+		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
+			errs = append(errs, err)
+		} else {
+			vercelRun := &vercelRun{}
+			if err := json.Unmarshal(resp, vercelRun); err != nil {
+				errs = append(errs, err)
+			} else {
+				runID = vercelRun.ID
+			}
+		}
+	}
+
+	if runID != "" {
+		taskURL := fmt.Sprintf(tasksEndpoint, rsm.spaceID, runID)
+		for _, task := range rsm.RunSummary.Tasks {
+			if taskPayload, err := json.Marshal(task); err == nil {
+				if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+
+		done := struct{ Status string }{Status: "completed"}
+		if donePayload, err := json.Marshal(done); err == nil {
+			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
 }
 
 func (summary *RunSummary) normalize() {

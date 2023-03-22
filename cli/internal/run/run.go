@@ -81,6 +81,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
 	opts.runOpts.logPrefix = runPayload.LogPrefix
+	opts.runOpts.experimentalSpaceID = runPayload.ExperimentalSpaceID
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -366,6 +367,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.pipeline,
 		),
 		rs.Opts.runOpts.summarize,
+		r.base.APIClient,
+		rs.Opts.runOpts.experimentalSpaceID,
 	)
 
 	// Dry Run

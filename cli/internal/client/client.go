@@ -214,6 +214,24 @@ func (c *APIClient) addTeamParam(params *url.Values) {
 	}
 }
 
+// JSONPatch sends a byte array (json.marshalled payload) to a given endpoint with PATCH
+func (c *APIClient) JSONPatch(endpoint string, body []byte) ([]byte, error) {
+	resp, err := c.request(endpoint, http.MethodPatch, body)
+	if err != nil {
+		return nil, err
+	}
+
+	rawResponse, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s", string(rawResponse))
+	}
+
+	return rawResponse, nil
+}
+
 // JSONPost sends a byte array (json.marshalled payload) to a given endpoint with POST
 func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
 	resp, err := c.request(endpoint, http.MethodPost, body)
