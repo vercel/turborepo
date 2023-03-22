@@ -584,10 +584,6 @@ impl From<Cow<'_, AbsoluteSystemPath>> for Box<AbsoluteSystemPath> {
 
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
-// TODO
-// impl From<OsString> for PathBuf {
-// impl From<String> for PathBuf {
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
 
@@ -629,6 +625,30 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 
     fn try_from(path: &'a Path) -> StdResult<&'a AbsoluteSystemPath, Self::Error> {
         AbsoluteSystemPath::from_path(path)
+    }
+}
+
+impl TryFrom<OsString> for AbsoluteSystemPathBuf {
+    type Error = FromError;
+
+    fn try_from(path: OsString) -> StdResult<AbsoluteSystemPathBuf, Self::Error> {
+        AbsoluteSystemPathBuf::from_path_buf(path.into())
+    }
+}
+
+impl TryFrom<String> for AbsoluteSystemPathBuf {
+    type Error = FromError;
+
+    fn try_from(path: String) -> StdResult<AbsoluteSystemPathBuf, Self::Error> {
+        AbsoluteSystemPathBuf::from_path_buf(path.into())
+    }
+}
+
+impl TryFrom<&str> for AbsoluteSystemPathBuf {
+    type Error = FromError;
+
+    fn try_from(path: &str) -> StdResult<AbsoluteSystemPathBuf, Self::Error> {
+        AbsoluteSystemPathBuf::from_path_buf(path.into())
     }
 }
 
