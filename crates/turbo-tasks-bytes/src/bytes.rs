@@ -1,4 +1,7 @@
-use std::{ops::Deref, str::Utf8Error};
+use std::{
+    ops::Deref,
+    str::{from_utf8, Utf8Error},
+};
 
 use anyhow::Result;
 use bytes::Bytes as CBytes;
@@ -12,14 +15,13 @@ pub struct Bytes(#[turbo_tasks(trace_ignore)] CBytes);
 
 impl Bytes {
     pub fn to_str(&self) -> Result<&'_ str, Utf8Error> {
-        let utf8 = std::str::from_utf8(&self.0);
-        utf8
+        from_utf8(&self.0)
     }
 }
 
 impl Serialize for Bytes {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(&self.0)
+        serde_bytes::Bytes::new(&self.0).serialize(serializer)
     }
 }
 
@@ -40,7 +42,7 @@ impl Deref for Bytes {
 /// Types that implement From<X> for Bytes {}
 /// Unfortunately, we cannot just use the more generic `Into<Bytes>` without
 /// running afoul of the `From<X> for X` base case, causing conflicting impls.
-trait IntoBytes: Into<CBytes> {}
+pub trait IntoBytes: Into<CBytes> {}
 impl IntoBytes for &'static [u8] {}
 impl IntoBytes for &'static str {}
 impl IntoBytes for Vec<u8> {}
