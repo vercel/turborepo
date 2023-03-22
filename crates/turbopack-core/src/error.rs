@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter, Result};
 
+/// Implements [Display] to print the error message in a friendly way.
+/// Puts a summary first and details after that.
 pub struct PrettyPrintError<'a>(pub &'a anyhow::Error);
 
 impl<'a> Display for PrettyPrintError<'a> {
@@ -14,6 +16,7 @@ impl<'a> Display for PrettyPrintError<'a> {
             .collect::<Vec<_>>();
 
         for description in &descriptions {
+            // see turbo-tasks-memory/src/task.rs for the error message
             let hidden = description.starts_with("Execution of ");
             if !hidden {
                 let header =
@@ -34,7 +37,7 @@ impl<'a> Display for PrettyPrintError<'a> {
             }
         }
         if has_details {
-            write!(f, "\n\nDeveloper details:")?;
+            write!(f, "\n\nDebug info:")?;
             for description in descriptions {
                 f.write_str("\n");
                 WithDash(&description).fmt(f)?;
@@ -44,6 +47,7 @@ impl<'a> Display for PrettyPrintError<'a> {
     }
 }
 
+/// Indents all lines after the first one. Puts a dash before the first line.
 struct WithDash<'a>(&'a str);
 
 impl<'a> Display for WithDash<'a> {
