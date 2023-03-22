@@ -471,12 +471,33 @@ impl From<AbsoluteSystemPathBuf> for OsString {
     }
 }
 
+impl From<AbsoluteSystemPathBuf> for Rc<Path> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into an <code>[Rc]<[Path]></code>
+    /// by moving the [`AbsoluteSystemPathBuf`] data into a new [`Rc`]
+    /// buffer.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Rc<Path> {
+        let rc: Rc<OsStr> = Rc::from(s.into_os_string());
+        unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Path) }
+    }
+}
+
+impl From<AbsoluteSystemPathBuf> for Rc<AbsoluteSystemPath> {
+    /// Converts a [`AbsoluteSystemPathBuf`] into an
+    /// <code>[Rc]<[AbsoluteSystemPath]></code> by moving the
+    /// [`AbsoluteSystemPathBuf`] data into a new [`Rc`] buffer.
+    #[inline]
+    fn from(s: AbsoluteSystemPathBuf) -> Rc<AbsoluteSystemPath> {
+        let rc: Rc<OsStr> = Rc::from(s.into_os_string());
+        unsafe { Rc::from_raw(Rc::into_raw(rc) as *const AbsoluteSystemPath) }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
 // impl From<Cow<'_, Path>> for Box<Path> {
 // impl From<OsString> for PathBuf {
-// impl From<PathBuf> for Rc<Path> {
 // impl From<String> for PathBuf {
 // impl FromStr for PathBuf {
 // impl<'a> From<&'a Path> for Cow<'a, Path> {
