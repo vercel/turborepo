@@ -1,5 +1,5 @@
-mod bytes;
-mod stream;
+pub mod bytes;
+pub mod stream;
 
 pub use crate::{
     bytes::{Bytes, BytesVc},

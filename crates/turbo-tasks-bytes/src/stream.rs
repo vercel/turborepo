@@ -14,8 +14,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// A Stream implements both a reader (which implements the Stream trait), and a
 /// writer (which can be sent to another thread). As new values are written, any
 /// pending readers will be woken up to receive the new value.
-#[derive(Debug)]
-pub struct Stream<T> {
+#[derive(Clone, Debug)]
+pub struct Stream<T: Clone> {
     inner: Arc<Mutex<StreamState<T>>>,
 }
 
@@ -25,7 +25,7 @@ struct StreamState<T> {
     pulled: Vec<T>,
 }
 
-impl<T> Stream<T> {
+impl<T: Clone> Stream<T> {
     /// Constructs a new Stream, and immediately closes it with only the passed
     /// values.
     pub fn new_closed(pulled: Vec<T>) -> Self {
@@ -57,31 +57,45 @@ impl<T> Stream<T> {
             index: 0,
         }
     }
+
+    pub async fn into_single(&self) -> SingleValue<T> {
+        let mut stream = self.read();
+        let Some(first) = stream.next().await else {
+            return SingleValue::None;
+        };
+
+        if stream.next().await.is_some() {
+            return SingleValue::Multiple;
+        }
+
+        SingleValue::Single(first)
+    }
 }
 
-impl<T, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
+pub enum SingleValue<T> {
+    /// The Stream did not hold a value.
+    None,
+
+    /// The Stream held multiple values.
+    Multiple,
+
+    /// The held only a single value.
+    Single(T),
+}
+
+impl<T: Clone, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
     fn from(source: S) -> Self {
         Self::new_open(vec![], source)
     }
 }
 
-impl<T> Clone for Stream<T> {
-    // The derived Clone impl will only work if `T: Clone`, which is wrong because
-    // we just need to clone the Arc, not the internal data.
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T> Default for Stream<T> {
+impl<T: Clone> Default for Stream<T> {
     fn default() -> Self {
         Self::new_closed(vec![])
     }
 }
 
-impl<T: PartialEq> PartialEq for Stream<T> {
+impl<T: Clone + PartialEq> PartialEq for Stream<T> {
     // A Stream is equal if it's the same internal pointer, or both streams are
     // closed with equivalent values.
     fn eq(&self, other: &Self) -> bool {
@@ -105,9 +119,9 @@ impl<T: PartialEq> PartialEq for Stream<T> {
         }
     }
 }
-impl<T: Eq> Eq for Stream<T> {}
+impl<T: Clone + Eq> Eq for Stream<T> {}
 
-impl<T: Serialize> Serialize for Stream<T> {
+impl<T: Clone + Serialize> Serialize for Stream<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         let lock = self.inner.lock().map_err(Error::custom)?;
@@ -121,14 +135,14 @@ impl<T: Serialize> Serialize for Stream<T> {
     }
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for Stream<T> {
+impl<'de, T: Clone + Deserialize<'de>> Deserialize<'de> for Stream<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let data = <Vec<T>>::deserialize(deserializer)?;
         Ok(Stream::new_closed(data))
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
+impl<T: Clone + fmt::Debug> fmt::Debug for StreamState<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StreamState")
             .field("pulled", &self.pulled)
@@ -138,7 +152,7 @@ impl<T: fmt::Debug> fmt::Debug for StreamState<T> {
 
 /// Implements [StreamTrait] over our Stream.
 #[derive(Debug)]
-pub struct StreamRead<T> {
+pub struct StreamRead<T: Clone> {
     index: usize,
     source: Stream<T>,
 }

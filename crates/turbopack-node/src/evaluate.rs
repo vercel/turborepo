@@ -77,19 +77,9 @@ type LoopResult = ControlFlow<Result<Option<String>, StructuredError>, String>;
 type EvaluationItem = Result<Bytes, String>;
 type JavaScriptStream = Stream<EvaluationItem>;
 
-#[turbo_tasks::value(shared)]
+#[turbo_tasks::value(transparent)]
 #[derive(Clone, Debug)]
-pub enum JavaScriptEvaluation {
-    /// An Empty is only possible if the evaluation completed successfully, but
-    /// didn't send an error nor value.
-    Empty,
-    /// A Single is only possible if the evaluation returns either an error or
-    /// value, and never sends an intermediate value.
-    Single(EvaluationItem),
-    /// A Stream represents a series of intermediate values followed by
-    /// either an error or a ending value. A stream is never empty.
-    Stream(#[turbo_tasks(trace_ignore, debug_ignore)] JavaScriptStream),
-}
+pub struct JavaScriptEvaluation(#[turbo_tasks(trace_ignore)] JavaScriptStream);
 
 #[turbo_tasks::function]
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
@@ -269,31 +259,11 @@ pub async fn evaluate(
     .await
     .map_err(|(e, _)| e)?;
 
-    // If we reach an End or Error value immediately, then we can return an easy
-    // Single response. If not, we need to stream multiple responses out.
-    let output = pull_operation(&mut operation, cwd, context_ident_for_issue).await?;
-    let data = match output {
-        LoopResult::Continue(data) => data,
-        LoopResult::Break(Err(e)) => {
-            return Ok(JavaScriptEvaluation::Single(Err(e.message)).cell());
-        }
-        LoopResult::Break(Ok(data)) => {
-            if kill {
-                operation.wait_or_kill().await?;
-            }
-            let data = data.map_or_else(
-                || JavaScriptEvaluation::Empty,
-                |data| JavaScriptEvaluation::Single(Ok(data.into())),
-            );
-            return Ok(data.cell());
-        }
-    };
-
     // The evaluation sent an initial intermediate value without completing. We'll
     // need to spawn a new thread to continually pull data out of the process,
     // and ferry that along.
     let stream = JavaScriptStream::new_open(
-        vec![Ok(data.into())],
+        vec![],
         Box::pin(generator! {
             macro_rules! tri {
                 ($exp:expr) => {
@@ -334,7 +304,7 @@ pub async fn evaluate(
         }),
     );
 
-    Ok(JavaScriptEvaluation::Stream(stream).cell())
+    Ok(JavaScriptEvaluation(stream).cell())
 }
 
 /// Repeatedly pulls from the NodeJsOperation until we receive a
