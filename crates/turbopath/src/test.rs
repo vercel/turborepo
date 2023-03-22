@@ -9,6 +9,16 @@ use std::{
 
 use crate::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
+#[cfg(windows)]
+const VALID: &'static str = "C:\\absolute\\path";
+#[cfg(windows)]
+const INVALID: &'static str = "relative\\path";
+
+#[cfg(not(windows))]
+const VALID: &'static str = "/absolute/path";
+#[cfg(not(windows))]
+const INVALID: &'static str = "relative/path";
+
 macro_rules! all_into {
     ($t:ty, $x:ident) => {
         test_into::<$t, AbsoluteSystemPathBuf>($x.clone());
@@ -26,13 +36,13 @@ macro_rules! all_into {
 
 #[test]
 fn test_borrowed_into() {
-    let absolute_system_path = AbsoluteSystemPath::new("/test/path").unwrap();
+    let absolute_system_path = AbsoluteSystemPath::new(VALID).unwrap();
     all_into!(&AbsoluteSystemPath, absolute_system_path);
 }
 
 #[test]
 fn test_owned_into() {
-    let absolute_system_path_buf = AbsoluteSystemPathBuf::try_from("/test/path").unwrap();
+    let absolute_system_path_buf = AbsoluteSystemPathBuf::try_from(VALID).unwrap();
     all_into!(AbsoluteSystemPathBuf, absolute_system_path_buf);
 }
 
@@ -45,6 +55,12 @@ where
 
 #[test]
 fn test_deref_mut() {
-    let mut path_buf = AbsoluteSystemPathBuf::try_from("/foobar").unwrap();
+    let mut path_buf = AbsoluteSystemPathBuf::try_from(VALID).unwrap();
     let _: &mut AbsoluteSystemPath = &mut path_buf;
+}
+
+#[test]
+fn test_new() {
+    assert!(AbsoluteSystemPath::new(VALID).is_ok());
+    assert!(AbsoluteSystemPath::new(INVALID).is_err());
 }
