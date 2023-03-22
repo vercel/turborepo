@@ -504,7 +504,6 @@ impl From<AbsoluteSystemPathBuf> for Rc<AbsoluteSystemPath> {
 // impl<'a> From<&'a PathBuf> for Cow<'a, Path> {
 // impl<'a> From<Cow<'a, Path>> for PathBuf {
 // impl<'a> From<PathBuf> for Cow<'a, Path> {
-// impl<T: ?Sized + AsRef<OsStr>> From<&T> for PathBuf {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FromError(());
