@@ -42,7 +42,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
-	runSummary *runsummary.RunSummary,
+	runSummary runsummary.Meta,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 ) error {
@@ -129,7 +129,7 @@ func RealRun(
 	exitCodeErr := &process.ChildExit{}
 
 	// Assign tasks after execution
-	runSummary.Tasks = taskSummaries
+	runSummary.RunSummary.Tasks = taskSummaries
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
@@ -143,11 +143,11 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	runSummary.Close(base.UI)
+	runSummary.Close()
 
 	// Write Run Summary if we wanted to
 	if rs.Opts.runOpts.summarize {
-		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
+		if err := runSummary.Save(base.RepoRoot); err != nil {
 			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
 		}
 	}
@@ -162,7 +162,7 @@ func RealRun(
 
 type execContext struct {
 	colorCache      *colorcache.ColorCache
-	runSummary      *runsummary.RunSummary
+	runSummary      runsummary.Meta
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
@@ -191,7 +191,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer, taskExecutionSummary := ec.runSummary.TrackTask(packageTask.TaskID)
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash

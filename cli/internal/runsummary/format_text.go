@@ -8,16 +8,18 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // FormatAndPrintText prints a Run Summary to the Terminal UI
-func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
+func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
+	ui := rsm.ui
+	summary := rsm.RunSummary
+
 	summary.normalize() // normalize data
 
-	if !isSinglePackage {
+	if !rsm.singlePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
@@ -53,7 +55,7 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 	for _, task := range summary.Tasks {
 		taskName := task.TaskID
 
-		if isSinglePackage {
+		if rsm.singlePackage {
 			taskName = util.RootTaskTaskName(taskName)
 		}
 
@@ -64,7 +66,7 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 		var dependencies []string
 		var dependents []string
 
-		if !isSinglePackage {
+		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
 			dependencies = task.Dependencies
 			dependents = task.Dependents
@@ -83,7 +85,7 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
 
-		if !isSinglePackage {
+		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 		}
 

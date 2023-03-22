@@ -353,6 +353,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
 		startAt,
+		r.base.UI,
+		rs.Opts.runOpts.singlePackage,
 		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,
 		packagesInScope,
