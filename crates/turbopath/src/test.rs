@@ -26,13 +26,13 @@ macro_rules! all_into {
 
 #[test]
 fn test_borrowed_into() {
-    let absolute_system_path = AbsoluteSystemPath::new("/test/path");
+    let absolute_system_path = AbsoluteSystemPath::new("/test/path").unwrap();
     all_into!(&AbsoluteSystemPath, absolute_system_path);
 }
 
 #[test]
 fn test_owned_into() {
-    let absolute_system_path_buf = AbsoluteSystemPathBuf::from("/test/path");
+    let absolute_system_path_buf = AbsoluteSystemPathBuf::try_from("/test/path").unwrap();
     all_into!(AbsoluteSystemPathBuf, absolute_system_path_buf);
 }
 
@@ -43,23 +43,8 @@ where
     let _ = orig.into();
 }
 
-#[cfg(path_buf_deref_mut)]
 #[test]
 fn test_deref_mut() {
-    // This test is mostly for miri.
-    let mut path_buf = AbsoluteSystemPathBuf::from("foobar");
+    let mut path_buf = AbsoluteSystemPathBuf::try_from("/foobar").unwrap();
     let _: &mut AbsoluteSystemPath = &mut path_buf;
 }
-
-// fn main() {
-//     let thing = AbsoluteSystemPath::new("/asdf").join("asdf").join("asdf");
-//     let thing2 = AbsoluteSystemPath::new("/asdf").join("asdf").join("asdf");
-
-//     let conversion: &AbsoluteSystemPath =
-// Path::new("/asdf").try_into().unwrap();     let iterator:
-// Vec<&AbsoluteSystemPath> = thing.ancestors().map(|path| path).collect();
-
-//     println!("{}", thing.display());
-//     println!("{}", thing == thing2);
-//     println!("{:?}", iterator);
-// }
