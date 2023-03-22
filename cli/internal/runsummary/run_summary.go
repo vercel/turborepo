@@ -151,16 +151,16 @@ func (rsm *Meta) record() []error {
 	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
 	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
-	// TODO: post a much slimmer version of RunSummary here
-	if startPayload, err := json.Marshal(rsm.RunSummary); err == nil {
+	payload := newVercelRunCreatePayload(rsm.RunSummary)
+	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
 			errs = append(errs, err)
 		} else {
-			vercelRun := &vercelRun{}
-			if err := json.Unmarshal(resp, vercelRun); err != nil {
+			vercelRunResponse := &vercelRunResponse{}
+			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
 				errs = append(errs, err)
 			} else {
-				runID = vercelRun.ID
+				runID = vercelRunResponse.ID
 			}
 		}
 	}
@@ -168,8 +168,8 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		done := struct{ Status string }{Status: "completed"}
-		if donePayload, err := json.Marshal(done); err == nil {
+		payload := newVercelDonePayload(rsm.RunSummary)
+		if donePayload, err := json.Marshal(payload); err == nil {
 			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
 				errs = append(errs, err)
 			}
