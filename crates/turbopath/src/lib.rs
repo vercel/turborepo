@@ -348,10 +348,31 @@ impl From<&AbsoluteSystemPath> for Arc<AbsoluteSystemPath> {
     }
 }
 
+impl From<&AbsoluteSystemPath> for Box<Path> {
+    /// Creates a boxed [`Path`] from a reference.
+    ///
+    /// This will allocate and clone `path` to it.
+    fn from(path: &AbsoluteSystemPath) -> Box<Path> {
+        let boxed: Box<OsStr> = path.as_os_str().into();
+        let rw = Box::into_raw(boxed) as *mut Path;
+        unsafe { Box::from_raw(rw) }
+    }
+}
+
+impl From<&AbsoluteSystemPath> for Box<AbsoluteSystemPath> {
+    /// Creates a boxed [`AbsoluteSystemPath`] from a reference.
+    ///
+    /// This will allocate and clone `path` to it.
+    fn from(path: &AbsoluteSystemPath) -> Box<AbsoluteSystemPath> {
+        let boxed: Box<OsStr> = path.as_os_str().into();
+        let rw = Box::into_raw(boxed) as *mut AbsoluteSystemPath;
+        unsafe { Box::from_raw(rw) }
+    }
+}
+
 // TryFrom<T> for AbsoluteSystemPath(Buf)
 
 // TODO
-// impl From<&Path> for Box<Path> {
 // impl From<&Path> for Rc<Path> {
 // impl From<Box<Path>> for PathBuf {
 // impl From<Cow<'_, Path>> for Box<Path> {
