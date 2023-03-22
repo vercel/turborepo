@@ -57,7 +57,8 @@ pub async fn apply_source_mapping<'a>(
             column: Some(column),
         };
         let resolved =
-            resolve_source_mapping(assets_for_source_mapping, root, project_dir, &frame).await;
+            resolve_source_mapping(assets_for_source_mapping, root, project_dir.root(), &frame)
+                .await;
         write_resolved(&mut new, resolved, &frame, &mut first_error, ansi_colors)?;
         last_match = m.end();
     }
@@ -344,7 +345,8 @@ impl StructuredError {
         for frame in &self.stack {
             let frame = frame.decode_identifiers(magic);
             let resolved =
-                resolve_source_mapping(assets_for_source_mapping, root, project_dir, &frame).await;
+                resolve_source_mapping(assets_for_source_mapping, root, project_dir.root(), &frame)
+                    .await;
             write_resolved(
                 &mut message,
                 resolved,
