@@ -289,7 +289,7 @@ pub async fn evaluate(
             }
 
             loop {
-                let output = tri!(pull_operation(&mut operation, cwd, &*pool, context_ident_for_issue, chunking_context).await);
+                let output = tri!(pull_operation(&mut operation, cwd, &pool, context_ident_for_issue, chunking_context).await);
 
                 match output {
                     LoopResult::Continue(data) => {

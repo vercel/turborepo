@@ -25,13 +25,13 @@ use crate::{internal_assets_for_source_mapping, pool::FormattingMode, AssetsForS
 pub mod content_source;
 pub mod trace;
 
-pub async fn apply_source_mapping<'a>(
-    text: &'a str,
+pub async fn apply_source_mapping(
+    text: &'_ str,
     assets_for_source_mapping: AssetsForSourceMappingVc,
     root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
     formatting_mode: FormattingMode,
-) -> Result<Cow<'a, str>> {
+) -> Result<Cow<'_, str>> {
     static STACK_TRACE_LINE: Lazy<Regex> =
         Lazy::new(|| Regex::new("\n    at (?:(.+) \\()?(.+):(\\d+):(\\d+)\\)?").unwrap());
 

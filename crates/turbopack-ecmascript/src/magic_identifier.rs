@@ -100,11 +100,11 @@ pub fn unmangle(identifier: &str) -> String {
                 }
                 match char {
                     '_' => {
-                        debug_assert!(buffer.len() == 0);
+                        debug_assert!(buffer.is_empty());
                         mode = Mode::LongHex;
                     }
                     '$' => {
-                        debug_assert!(buffer.len() == 0);
+                        debug_assert!(buffer.is_empty());
                         mode = Mode::Text;
                     }
                     c => {

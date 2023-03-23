@@ -162,11 +162,17 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
         } = self;
 
         async fn write_final<W: AsyncWrite + Unpin>(
-            bytes: &[u8],
+            mut bytes: &[u8],
             final_stream: &mut W,
         ) -> Result<()> {
             let _lock = GLOBAL_OUTPUT_LOCK.lock().await;
-            final_stream.write(bytes).await?;
+            while !bytes.is_empty() {
+                let count = final_stream.write(bytes).await?;
+                if count == 0 {
+                    bail!("Failed to write to final stream as it was closed");
+                }
+                bytes = &bytes[count..];
+            }
             Ok(())
         }
 
@@ -443,16 +449,16 @@ impl NodeJsPoolProcess {
                 let stdout_handler = OutputStreamHandler {
                     stream: child_stdout,
                     shared: shared_stdout,
-                    assets_for_source_mapping: assets_for_source_mapping.clone(),
-                    root: assets_root.clone(),
+                    assets_for_source_mapping,
+                    root: assets_root,
                     project_dir,
                     final_stream: stdout(),
                 };
                 let stderr_handler = OutputStreamHandler {
                     stream: child_stderr,
                     shared: shared_stderr,
-                    assets_for_source_mapping: assets_for_source_mapping.clone(),
-                    root: assets_root.clone(),
+                    assets_for_source_mapping,
+                    root: assets_root,
                     project_dir,
                     final_stream: stderr(),
                 };
@@ -460,8 +466,8 @@ impl NodeJsPoolProcess {
                 RunningNodeJsPoolProcess {
                     child: Some(child),
                     connection,
-                    assets_for_source_mapping: assets_for_source_mapping.clone(),
-                    assets_root: assets_root.clone(),
+                    assets_for_source_mapping,
+                    assets_root,
                     project_dir,
                     stdout_handler,
                     stderr_handler,

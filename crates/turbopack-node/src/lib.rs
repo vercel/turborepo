@@ -149,7 +149,7 @@ async fn separate_assets(
         let Type::Internal(asset) = asset else {
             return Ok(Vec::new());
         };
-        Ok(primary_referenced_assets(asset)
+        primary_referenced_assets(asset)
             .await?
             .iter()
             .map(|asset| async {
@@ -169,7 +169,7 @@ async fn separate_assets(
                 }
             })
             .try_join()
-            .await?)
+            .await
     };
 
     let graph = GraphTraversal::<SkipDuplicates<ReverseTopological<Type>, _>>::visit(
