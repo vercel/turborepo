@@ -1,17 +1,15 @@
 use anyhow::{bail, Result};
-use async_stream::stream as genrator;
 use futures::StreamExt;
 use turbo_tasks::primitives::StringVc;
-use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, error::PrettyPrintError};
-use turbopack_dev_server::source::{Body, BodyError, BodyVc, ProxyResult, ProxyResultVc};
+use turbopack_dev_server::source::{BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use super::{
-    issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
-    ResponseHeaders,
+    issue::RenderingIssue, stream_body_chunks, RenderDataVc, RenderProxyIncomingMessage,
+    RenderProxyOutgoingMessage, ResponseHeaders,
 };
 use crate::{
     get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
@@ -74,51 +72,10 @@ pub async fn render_proxy(
         }
     };
 
-    let chunks = Stream::new_open(
-        vec![],
-        Box::pin(genrator! {
-            macro_rules! tri {
-                ($exp:expr) => {
-                    match $exp {
-                        Ok(v) => v,
-                        Err(e) => {
-                            yield Err(e.into());
-                            return;
-                        }
-                    }
-                }
-            }
-
-            loop {
-                match tri!(operation.recv().await) {
-                    RenderProxyIncomingMessage::BodyChunk { data } => {
-                        yield Ok(Bytes::from(data));
-                    }
-                    RenderProxyIncomingMessage::BodyEnd => break,
-                    RenderProxyIncomingMessage::Error(error) => {
-                        let trace =
-                            trace_stack(error, intermediate_asset, intermediate_output_path).await;
-                        let e = trace.map_or_else(BodyError::from, BodyError::from);
-                        yield Err(e);
-                        break;
-                    }
-                    _ => {
-                        operation.disallow_reuse();
-                        yield Err(
-                            "unexpected response from the Node.js process while reading response body"
-                                .into(),
-                        );
-                        break;
-                    }
-                }
-            }
-        }),
-    );
-
     Ok(ProxyResult {
         status,
         headers,
-        body: Body::from_stream(chunks.read()),
+        body: stream_body_chunks(operation, intermediate_asset, intermediate_output_path),
     }
     .cell())
 }
@@ -161,9 +118,6 @@ async fn start_proxy_operation(
                 )
                 .await?
             )
-        }
-        _ => {
-            bail!("unexpected response from the Node.js process while reading response headers")
         }
     }
 }
