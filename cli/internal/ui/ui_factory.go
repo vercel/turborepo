@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/fatih/color"
@@ -87,5 +88,25 @@ func (factory *PrefixedUiFactory) Build(in io.Reader, out io.Writer, err io.Writ
 		InfoPrefix:      factory.InfoPrefix,
 		ErrorPrefix:     factory.ErrorPrefix,
 		WarnPrefix:      factory.WarnPrefix,
+		Ui:              factory.Base.Build(in, out, err),
+	}
+}
+
+type QueuedUiFactory struct {
+	Base UiFactory
+}
+
+func (factory *QueuedUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) *QueuedUi {
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+
+	return &QueuedUi{
+		out: out,
+		err: err,
+		in:  in,
+
+		OutBuffer: outBuf,
+		ErrBuffer: errBuf,
+		ui:        factory.Base.Build(in, io.Writer(outBuf), io.Writer(errBuf)),
 	}
 }
