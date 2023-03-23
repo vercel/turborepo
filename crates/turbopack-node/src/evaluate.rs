@@ -1,6 +1,6 @@
 use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_stream::stream as generator;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
+    util::SharedError,
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
@@ -75,10 +76,10 @@ enum EvalJavaScriptIncomingMessage {
 
 type LoopResult = ControlFlow<Result<Option<String>, StructuredError>, String>;
 
-type EvaluationItem = Result<Bytes, String>;
+type EvaluationItem = Result<Bytes, SharedError>;
 type JavaScriptStream = Stream<EvaluationItem>;
 
-#[turbo_tasks::value(transparent)]
+#[turbo_tasks::value(transparent, eq = "manual", cell = "new", serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct JavaScriptEvaluation(#[turbo_tasks(trace_ignore)] JavaScriptStream);
 
@@ -276,31 +277,20 @@ pub async fn evaluate(
     let stream = JavaScriptStream::new_open(
         vec![],
         Box::pin(generator! {
-            macro_rules! tri {
-                ($exp:expr) => {
-                    match $exp {
-                        Ok(v) => v,
-                        Err(e) => {
-                            yield Err(e.to_string());
-                            return;
-                        }
-                    }
-                }
-            }
-
             loop {
-                let output = tri!(pull_operation(&mut operation, cwd, &pool, context_ident_for_issue, chunking_context).await);
+                let output = pull_operation(&mut operation, cwd, &pool, context_ident_for_issue, chunking_context).await?;
 
                 match output {
                     LoopResult::Continue(data) => {
-                        yield Ok(data.into());
+                        yield Ok::<_, SharedError>(data.into());
                     }
                     LoopResult::Break(Ok(Some(data))) => {
                         yield Ok(data.into());
                         break;
                     }
                     LoopResult::Break(Err(e)) => {
-                        yield Err(e.message);
+                        let error = e.print(pool.assets_for_source_mapping, pool.assets_root, chunking_context.context_path().root(), FormattingMode::Plain).await?;
+                        yield Err(SharedError::new(anyhow!("Node.js evaluation failed: {}", error)));
                         break;
                     }
                     LoopResult::Break(Ok(None)) => {
@@ -310,7 +300,7 @@ pub async fn evaluate(
             }
 
             if kill {
-                tri!(operation.wait_or_kill().await);
+                operation.wait_or_kill().await?;
             }
         }),
     );
@@ -345,7 +335,8 @@ async fn pull_operation(
                 .emit();
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
-                break ControlFlow::Break(Err(error));
+                // Issue emitted, we want to break but don't want to return an error
+                break ControlFlow::Break(Ok(None));
             }
             EvalJavaScriptIncomingMessage::Value { data } => break ControlFlow::Continue(data),
             EvalJavaScriptIncomingMessage::End { data } => break ControlFlow::Break(Ok(data)),

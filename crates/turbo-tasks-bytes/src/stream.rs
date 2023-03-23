@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
-use futures::{Stream as StreamTrait, StreamExt};
+use futures::{Stream as StreamTrait, StreamExt, TryStreamExt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Streams allow for streaming values from source to sink.
@@ -69,6 +69,21 @@ impl<T: Clone> Stream<T> {
         }
 
         SingleValue::Single(first)
+    }
+}
+
+impl<T: Clone, E: Clone> Stream<Result<T, E>> {
+    pub async fn try_into_single(&self) -> Result<SingleValue<T>, E> {
+        let mut stream = self.read();
+        let Some(first) = stream.try_next().await? else {
+            return Ok(SingleValue::None);
+        };
+
+        if stream.try_next().await?.is_some() {
+            return Ok(SingleValue::Multiple);
+        }
+
+        Ok(SingleValue::Single(first))
     }
 }
 
