@@ -13,6 +13,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+// NoWorkspacesFoundError is a custom error used so that upstream implementations can switch on it
 type NoWorkspacesFoundError struct{}
 
 func (e *NoWorkspacesFoundError) Error() string {
