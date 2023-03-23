@@ -2,8 +2,11 @@
 //!
 //! Please read the notes about safety (marked with `SAFETY`) in both this file,
 //! and in ffi.go before modifying this file.
+mod lockfile;
 
 use std::{mem::ManuallyDrop, path::PathBuf};
+
+pub use lockfile::{npm_subgraph, npm_transitive_closure};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));

@@ -1,8 +1,9 @@
 use anyhow::{bail, Result};
+use futures::StreamExt;
 use turbo_tasks::primitives::StringVc;
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc};
+use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, error::PrettyPrintError};
 use turbopack_dev_server::source::{BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
@@ -10,7 +11,9 @@ use super::{
     issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
     ResponseHeaders,
 };
-use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+use crate::{
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+};
 
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]
@@ -23,6 +26,7 @@ pub async fn render_proxy(
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     data: RenderDataVc,
     body: BodyVc,
 ) -> Result<ProxyResultVc> {
@@ -37,6 +41,7 @@ pub async fn render_proxy(
         intermediate_asset,
         intermediate_output_path,
         output_root,
+        project_dir,
         /* debug */ false,
     )
     .await?;
@@ -54,6 +59,7 @@ pub async fn render_proxy(
         body,
         intermediate_asset,
         intermediate_output_path,
+        project_dir,
     )
     .await
     {
@@ -68,6 +74,7 @@ async fn run_proxy_operation(
     body: BodyVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
 ) -> Result<ProxyResult> {
     let data = data.await?;
     // First, send the render data.
@@ -75,13 +82,11 @@ async fn run_proxy_operation(
         .send(RenderProxyOutgoingMessage::Headers { data: &data })
         .await?;
 
-    let body = body.await?;
+    let mut body = body.await?.read();
     // Then, send the binary body in chunks.
-    for chunk in body.chunks() {
+    while let Some(data) = body.next().await {
         operation
-            .send(RenderProxyOutgoingMessage::BodyChunk {
-                data: chunk.as_bytes(),
-            })
+            .send(RenderProxyOutgoingMessage::BodyChunk { data: &data? })
             .await?;
     }
 
@@ -92,7 +97,15 @@ async fn run_proxy_operation(
             data: ResponseHeaders { status, headers },
         } => (status, headers),
         RenderProxyIncomingMessage::Error(error) => {
-            bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+            bail!(
+                trace_stack(
+                    error,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir
+                )
+                .await?
+            )
         }
         _ => {
             bail!("unexpected response from the Node.js process while reading response headers")
@@ -102,7 +115,15 @@ async fn run_proxy_operation(
     let body = match operation.recv().await? {
         RenderProxyIncomingMessage::Body { data: body } => body,
         RenderProxyIncomingMessage::Error(error) => {
-            bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+            bail!(
+                trace_stack(
+                    error,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir
+                )
+                .await?
+            )
         }
         _ => {
             bail!("unexpected response from the Node.js process while reading response body")
@@ -121,7 +142,7 @@ async fn proxy_error(
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
 ) -> Result<ProxyResultVc> {
-    let message = format!("{error:?}");
+    let message = format!("{}", PrettyPrintError(&error));
 
     let status = match operation {
         Some(operation) => Some(operation.wait_or_kill().await?),

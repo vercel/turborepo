@@ -80,6 +80,10 @@ let BACKEND;
       }
       runnersForChunk.add(runner);
     }
+    // When all chunks are already registered, we can instantiate the runtime module
+    if (runner.requiredChunks.size === 0) {
+      instantiateRuntimeModules(runner.runtimeModuleIds, runner.chunkPath);
+    }
   }
 
   /**
@@ -91,7 +95,7 @@ let BACKEND;
   function instantiateDependentChunks(chunkPath) {
     // Run any chunk runners that were waiting for this chunk to be
     // registered.
-    let runnersForChunk = runners.get(chunkPath);
+    const runnersForChunk = runners.get(chunkPath);
     if (runnersForChunk != null) {
       for (const runner of runnersForChunk) {
         runner.requiredChunks.delete(chunkPath);
@@ -112,15 +116,7 @@ let BACKEND;
    */
   function instantiateRuntimeModules(runtimeModuleIds, chunkPath) {
     for (const moduleId of runtimeModuleIds) {
-      try {
-        getOrInstantiateRuntimeModule(moduleId, chunkPath);
-      } catch (err) {
-        console.error(
-          `The following error occurred while evaluating runtime entries of ${chunkPath}:`
-        );
-        console.error(err);
-        return;
-      }
+      getOrInstantiateRuntimeModule(moduleId, chunkPath);
     }
   }
 })();

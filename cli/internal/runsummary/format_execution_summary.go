@@ -5,13 +5,15 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/mitchellh/cli"
 	internalUI "github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-func (summary *RunSummary) printExecutionSummary(ui cli.Ui) {
+func (rsm *Meta) printExecutionSummary() {
 	maybeFullTurbo := ""
+	summary := rsm.RunSummary
+	ui := rsm.ui
+
 	if summary.ExecutionSummary.Cached == summary.ExecutionSummary.Attempted && summary.ExecutionSummary.Attempted > 0 {
 		terminalProgram := os.Getenv("TERM_PROGRAM")
 		// On the macOS Terminal, the rainbow colors show up as a magenta background

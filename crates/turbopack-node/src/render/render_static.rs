@@ -5,6 +5,7 @@ use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ChunkingContextVc,
+    error::PrettyPrintError,
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
@@ -15,7 +16,9 @@ use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleA
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
-use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+use crate::{
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+};
 
 #[turbo_tasks::value]
 pub enum StaticResult {
@@ -57,6 +60,7 @@ pub async fn render_static(
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     data: RenderDataVc,
 ) -> Result<StaticResultVc> {
     let intermediate_asset = get_intermediate_asset(
@@ -69,6 +73,7 @@ pub async fn render_static(
         intermediate_asset,
         intermediate_output_path,
         output_root,
+        project_dir,
         /* debug */ false,
     );
     // Read this strongly consistent, since we don't want to run inconsistent
@@ -91,6 +96,7 @@ pub async fn render_static(
             data,
             intermediate_asset,
             intermediate_output_path,
+            project_dir,
         )
         .await
         {
@@ -109,6 +115,7 @@ async fn run_static_operation(
     data: RenderDataVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
 ) -> Result<StaticResultVc> {
     let data = data.await?;
 
@@ -135,7 +142,15 @@ async fn run_static_operation(
                 HeaderListVc::cell(headers),
             ),
             RenderStaticIncomingMessage::Error(error) => {
-                bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+                bail!(
+                    trace_stack(
+                        error,
+                        intermediate_asset,
+                        intermediate_output_path,
+                        project_dir
+                    )
+                    .await?
+                )
             }
         },
     )
@@ -147,7 +162,8 @@ async fn static_error(
     operation: Option<NodeJsOperation>,
     fallback_page: DevHtmlAssetVc,
 ) -> Result<AssetContentVc> {
-    let message = format!("{error:?}")
+    let error = format!("{}", PrettyPrintError(&error));
+    let message = error
         // TODO this is pretty inefficient
         .replace('&', "&amp;")
         .replace('>', "&gt;")
@@ -174,7 +190,7 @@ async fn static_error(
 
     let issue = RenderingIssue {
         context: path,
-        message: StringVc::cell(format!("{error:?}")),
+        message: StringVc::cell(error),
         status: status.and_then(|status| status.code()),
     };
 

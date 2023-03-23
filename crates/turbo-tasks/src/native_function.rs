@@ -42,14 +42,13 @@ impl Debug for NativeFunction {
     }
 }
 
+type BindFn = Box<dyn (Fn(&Vec<TaskInput>) -> Result<NativeTaskFn>) + Send + Sync + 'static>;
+
 impl NativeFunction {
-    pub fn new(
-        name: String,
-        bind_fn: impl (Fn(&Vec<TaskInput>) -> Result<NativeTaskFn>) + Send + Sync + 'static,
-    ) -> Self {
+    pub fn new(name: String, bind_fn: BindFn) -> Self {
         Self {
             name,
-            bind_fn: Box::new(bind_fn),
+            bind_fn,
             executed_count: AtomicUsize::new(0),
         }
     }
