@@ -12,6 +12,7 @@ use std::{
     path::{Components, Display, Iter, Path, PathBuf, StripPrefixError},
     rc::Rc,
     result::Result as StdResult,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -668,6 +669,15 @@ impl TryFrom<&str> for AbsoluteSystemPathBuf {
     type Error = FromError;
 
     fn try_from(path: &str) -> StdResult<AbsoluteSystemPathBuf, Self::Error> {
+        AbsoluteSystemPathBuf::from_path_buf(path.into())
+    }
+}
+
+impl FromStr for AbsoluteSystemPathBuf {
+    type Err = FromError;
+
+    #[inline]
+    fn from_str(path: &str) -> StdResult<AbsoluteSystemPathBuf, Self::Err> {
         AbsoluteSystemPathBuf::from_path_buf(path.into())
     }
 }
