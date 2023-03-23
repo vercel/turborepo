@@ -13,7 +13,7 @@ Check
   build: yarn run v1.22.17
   build: warning package.json: No license field
   build: $ echo 'building' > foo
-  build: Done in 0.02s.
+  build: Done in \s*[\.0-9]+m?s\. (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -27,7 +27,7 @@ Check
   build: yarn run v1.22.17
   build: warning package.json: No license field
   build: $ echo 'building' > foo
-  build: Done in 0.02s.
+  build: Done in \s*[\.0-9]+m?s\. (re)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
