@@ -10,11 +10,6 @@ EXAMPLE_DIR="../examples/$exampleName"
 TARGET_DIR="$(pwd)"
 cp -a "${SCRIPT_DIR}/$EXAMPLE_DIR/." "${TARGET_DIR}/"
 
-# cleanup lockfiles so we can install from scratch
-[ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
-[ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
-[ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
-
 # $TESTDIR is set by prysk to be the directory the test script is in
 # (not this setup.sh script, but it happens to be the same.
 SOURCE_TURBO_DIR="$TESTDIR/../cli"
@@ -46,4 +41,4 @@ fi
 
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
-"${SCRIPT_DIR}/../cli/integration_tests/setup_git.sh" "${TARGET_DIR}"
+"${SCRIPT_DIR}/../cli/integration_tests/setup_git.sh" "${TARGET_DIR}" --skip-install
