@@ -24,7 +24,7 @@ import (
 )
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
-type LogReplayer = func(logger hclog.Logger, output cli.Ui, logFile turbopath.AbsoluteSystemPath)
+type LogReplayer = func(logger hclog.Logger, output *cli.PrefixedUi, logFile turbopath.AbsoluteSystemPath)
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
@@ -106,27 +106,9 @@ type TaskCache struct {
 	LogFileName       turbopath.AbsoluteSystemPath
 }
 
-// IsCacheHit returns true if we have a cache hit, false if we have a cache miss
-func (tc TaskCache) IsCacheHit(ctx context.Context) bool {
-	if tc.cachingDisabled || tc.rc.readsDisabled {
-		return false
-	}
-	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
-	if err != nil {
-		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
-	}
-
-	hasChangedOutputs := len(changedOutputGlobs) > 0
-	if hasChangedOutputs {
-		hitStatus := tc.rc.cache.Exists(tc.hash)
-		return hitStatus.Local || hitStatus.Remote
-	}
-
-	return true
-}
-
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI cli.Ui, progressLogger hclog.Logger, logStatusOnly bool) (bool, error) {
+// Returns true if successful.
+func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -145,19 +127,10 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI cli.Ui, progr
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		hit := false
-		if logStatusOnly {
-			cacheStatus := tc.rc.cache.Exists(tc.hash)
-			hit = cacheStatus.Local || cacheStatus.Remote
-		} else {
-			fetchHit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
-			if err != nil {
-				return false, err
-			}
-			hit = fetchHit
-		}
-
-		if !hit {
+		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
+		if err != nil {
+			return false, err
+		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
@@ -181,9 +154,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI cli.Ui, progr
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		if !logStatusOnly {
-			tc.ReplayLogFile(prefixedUI, progressLogger)
-		}
+		tc.ReplayLogFile(prefixedUI, progressLogger)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
 	default:
@@ -194,7 +165,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI cli.Ui, progr
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal
-func (tc TaskCache) ReplayLogFile(prefixedUI cli.Ui, progressLogger hclog.Logger) {
+func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
 	if tc.LogFileName.FileExists() {
 		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
 	}
@@ -202,7 +173,7 @@ func (tc TaskCache) ReplayLogFile(prefixedUI cli.Ui, progressLogger hclog.Logger
 
 // OnError replays the logfile if --output-mode=errors-only.
 // This is called if the task exited with an non-zero error code.
-func (tc TaskCache) OnError(terminal cli.Ui, logger hclog.Logger) {
+func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
 	if tc.taskOutputMode == util.ErrorTaskOutput {
 		tc.ReplayLogFile(terminal, logger)
 	}
@@ -336,7 +307,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopath.AbsoluteSystemPath) {
+func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName turbopath.AbsoluteSystemPath) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {
@@ -353,7 +324,7 @@ func defaultLogReplayer(logger hclog.Logger, output cli.Ui, logFileName turbopat
 		if str == "" {
 			// Just output the prefix if the current line is a blank string
 			// Note: output.OutputPrefix is also a colored prefix already
-			output.Output("")
+			output.Ui.Output(output.OutputPrefix)
 		} else {
 			// Writing to Stdout
 			output.Output(str)

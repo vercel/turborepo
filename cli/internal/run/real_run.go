@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -77,39 +76,11 @@ func RealRun(
 		Base: base.UIFactory,
 	}
 
-	grouped := rs.Opts.runOpts.logOrder == "grouped"
-
-	var uiFactory ui.UiFactory
-	outBuf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-
-	var outWriter io.Writer
-	var errWriter io.Writer
-
-	if grouped {
-		queuedUiFactory := ui.QueuedUiFactory{
-			OutBuf: outBuf,
-			ErrBuf: errBuf,
-			Base:   &concurrentUIFactory,
-		}
-
-		uiFactory = &queuedUiFactory
-
-		outWriter = outBuf
-		errWriter = errBuf
-	} else {
-		uiFactory = &concurrentUIFactory
-
-		outWriter = os.Stdout
-		errWriter = os.Stderr
-	}
-
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
 		rs:              rs,
-		ui:              uiFactory.Build(os.Stdin, os.Stdout, os.Stderr),
-		uiFactory:       uiFactory,
+		ui:              base.UI,
 		runCache:        runCache,
 		logger:          base.Logger,
 		packageManager:  packageManager,
@@ -117,8 +88,6 @@ func RealRun(
 		taskHashTracker: taskHashTracker,
 		repoRoot:        base.RepoRoot,
 		isSinglePackage: singlePackage,
-		outWriter:       outWriter,
-		errWriter:       errWriter,
 	}
 
 	// run the thing
@@ -127,17 +96,45 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
-	var logMutex sync.Mutex
-
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
+
+		grouped := rs.Opts.runOpts.logOrder == "grouped"
+
+		var uiFactory ui.UiFactory
+		outBuf := &bytes.Buffer{}
+		errBuf := &bytes.Buffer{}
+
+		var outWriter io.Writer
+		var errWriter io.Writer
+
+		if grouped {
+			queuedUiFactory := ui.QueuedUiFactory{
+				OutBuf: outBuf,
+				ErrBuf: errBuf,
+				Base:   &concurrentUIFactory,
+			}
+
+			uiFactory = &queuedUiFactory
+
+			outWriter = outBuf
+			errWriter = errBuf
+		} else {
+			uiFactory = &concurrentUIFactory
+
+			outWriter = os.Stdout
+			errWriter = os.Stderr
+		}
+
+		ui := uiFactory.Build(os.Stdin, os.Stdout, os.Stderr)
+
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
-		err := ec.exec(ctx, packageTask, deps, &logMutex)
+		err := ec.exec(ctx, packageTask, deps, ui, outWriter, errWriter)
 
 		os.Stdout.Write(outBuf.Bytes())
-		os.Stdout.Write(errBuf.Bytes())
+		os.Stderr.Write(errBuf.Bytes())
 
 		return err
 	}
@@ -192,7 +189,6 @@ type execContext struct {
 	runState        *RunState
 	rs              *runSpec
 	ui              cli.Ui
-	uiFactory       ui.UiFactory
 	runCache        *runcache.RunCache
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
@@ -200,8 +196,6 @@ type execContext struct {
 	taskHashTracker *taskhash.Tracker
 	repoRoot        turbopath.AbsoluteSystemPath
 	isSinglePackage bool
-	outWriter       io.Writer
-	errWriter       io.Writer
 }
 
 func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -214,7 +208,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set, logMutex *sync.Mutex) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set, ui cli.Ui, outWriter io.Writer, errWriter io.Writer) error {
 	cmdTime := time.Now()
 
 	progressLogger := ec.logger.Named("")
@@ -251,32 +245,18 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
 	// Create a logger for replaying
 	prefixedUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
+		Ui:           ui,
 		OutputPrefix: prettyPrefix,
 		InfoPrefix:   prettyPrefix,
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
-
-	cacheHit := taskCache.IsCacheHit(ctx)
-	outputtedCacheStatusLogs := false
-
-	// If we want grouped log ordering we want to either:
-	// - restore
-	// - not display any logs and do this when we have finished execution if we have a cache mis all output and display logs if we have a cache hit.s.
-	if cacheHit || !grouped {
-		outputtedCacheStatusLogs = true
-		logMutex.Lock()
-		hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, false)
-		if err != nil {
-			prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-		} else if hit {
-			tracer(TargetCached, nil)
-			logMutex.Unlock()
-			return nil
-		}
-
-		logMutex.Unlock()
+	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+	if err != nil {
+		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
+	} else if hit {
+		tracer(TargetCached, nil)
+		return nil
 	}
 
 	// Setup command execution
@@ -295,7 +275,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix, ec.outWriter)
+	writer, err := taskCache.OutputWriter(prettyPrefix, outWriter)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		ec.logError(progressLogger, prettyPrefix, err)
@@ -317,16 +297,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	logStreamerOut.FlushRecord()
 
 	closeOutputs := func() error {
-		logMutex.Lock()
-		if !outputtedCacheStatusLogs {
-			hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger, true)
-			if err != nil {
-				prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-			} else if hit {
-				return fmt.Errorf("Hit cache while expecting cache miss")
-			}
-		}
-
 		var closeErrors []error
 
 		if err := logStreamerOut.Close(); err != nil {
@@ -344,10 +314,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			for i, err := range closeErrors {
 				msgs[i] = err.Error()
 			}
-			logMutex.Unlock()
 			return fmt.Errorf("could not flush log output: %v", strings.Join(msgs, ", "))
 		}
-		logMutex.Unlock()
 		return nil
 	}
 

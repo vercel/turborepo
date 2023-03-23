@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/mitchellh/cli"
@@ -11,9 +10,6 @@ type QueuedUi struct {
 	out io.Writer
 	err io.Writer
 	in  io.Reader
-
-	OutBuffer *bytes.Buffer
-	ErrBuffer *bytes.Buffer
 
 	ui cli.Ui
 }

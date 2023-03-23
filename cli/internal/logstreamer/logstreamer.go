@@ -27,11 +27,9 @@ type Logstreamer struct {
 	colorOkay  string
 	colorFail  string
 	colorReset string
-
-	grouped bool
 }
 
-func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool) *Logstreamer {
+func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
 		buf:        bytes.NewBuffer([]byte("")),
@@ -41,7 +39,6 @@ func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool
 		colorOkay:  "",
 		colorFail:  "",
 		colorReset: "",
-		grouped:    grouped,
 	}
 
 	if strings.HasPrefix(os.Getenv("TERM"), "xterm") {
@@ -55,11 +52,6 @@ func NewLogstreamer(logger *log.Logger, prefix string, record bool, grouped bool
 
 func (l *Logstreamer) Write(p []byte) (n int, err error) {
 	if n, err = l.buf.Write(p); err != nil {
-		return
-	}
-
-	// If we want logs to be grouped, do not output them when we receive them, only when they are flushed
-	if l.grouped {
 		return
 	}
 
@@ -143,24 +135,24 @@ func (l *Logstreamer) out(str string) {
 	l.Logger.Print(str)
 }
 
-// PrettyIoWriter wraps an ioWriter so it can add string
+// PrettyStdoutWriter wraps an ioWriter so it can add string
 // prefixes to every message it writes to stdout.
-type PrettyIoWriter struct {
+type PrettyStdoutWriter struct {
 	w      io.Writer
 	Prefix string
 }
 
-var _ io.Writer = (*PrettyIoWriter)(nil)
+var _ io.Writer = (*PrettyStdoutWriter)(nil)
 
-// NewPrettyIoWriter returns an instance of PrettyStdoutWriter
-func NewPrettyIoWriter(prefix string, ioWriter io.Writer) *PrettyIoWriter {
-	return &PrettyIoWriter{
+// NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
+func NewPrettyIoWriter(prefix string, ioWriter io.Writer) *PrettyStdoutWriter {
+	return &PrettyStdoutWriter{
 		w:      ioWriter,
 		Prefix: prefix,
 	}
 }
 
-func (psw *PrettyIoWriter) Write(p []byte) (int, error) {
+func (psw *PrettyStdoutWriter) Write(p []byte) (int, error) {
 	str := psw.Prefix + string(p)
 	n, err := psw.w.Write([]byte(str))
 
