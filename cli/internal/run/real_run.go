@@ -133,8 +133,15 @@ func RealRun(
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
-			if exitCodeErr.ExitCode > exitCode {
-				exitCode = exitCodeErr.ExitCode
+			// If a process gets killed via a signal, Go reports it's exit code as -1.
+			// We take the absolute value of the exit code so we don't select '0' as
+			// the greatest exit code.
+			childExit := exitCodeErr.ExitCode
+			if childExit < 0 {
+				childExit = -childExit
+			}
+			if childExit > exitCode {
+				exitCode = childExit
 			}
 		} else if exitCode == 0 {
 			// We hit some error, it shouldn't be exit code 0
