@@ -25,7 +25,7 @@ function set_package_manager() {
 }
 
 # Set the packageManger version
-NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
+NPM_PACKAGE_MANAGER_VALUE="npm@8.12.1"
 PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
 YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
 if [ "$pkgManager" == "npm" ]; then
