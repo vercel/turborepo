@@ -206,6 +206,7 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
@@ -352,6 +353,7 @@
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
+            entry.project_dir,
             RenderData {
                 params: params.clone(),
                 method: method.clone(),

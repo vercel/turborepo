@@ -2058,7 +2058,7 @@
     </span><span class="kw">fn </span>restore_if_watching(<span class="kw-2">&amp;</span><span class="self">self</span>, dir_path: <span class="kw-2">&amp;</span>Path, root_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.watching.contains(dir_path) {
             <span class="kw">let </span><span class="kw-2">mut </span>watcher = <span class="self">self</span>.watcher.lock().unwrap();
-            <span class="self">self</span>.start_watching(<span class="kw-2">&amp;mut </span>watcher, dir_path, <span class="kw-2">&amp;</span>root_path)<span class="question-mark">?</span>;
+            <span class="self">self</span>.start_watching(<span class="kw-2">&amp;mut </span>watcher, dir_path, root_path)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }

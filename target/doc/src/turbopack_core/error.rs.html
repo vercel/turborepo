@@ -103,7 +103,7 @@
         <span class="kw">if </span>has_details {
             <span class="macro">write!</span>(f, <span class="string">&quot;\n\nDebug info:&quot;</span>)<span class="question-mark">?</span>;
             <span class="kw">for </span>description <span class="kw">in </span>descriptions {
-                f.write_str(<span class="string">&quot;\n&quot;</span>);
+                f.write_str(<span class="string">&quot;\n&quot;</span>)<span class="question-mark">?</span>;
                 WithDash(<span class="kw-2">&amp;</span>description).fmt(f)<span class="question-mark">?</span>;
             }
         }

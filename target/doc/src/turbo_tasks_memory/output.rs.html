@@ -117,11 +117,6 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Debug, Display},
@@ -142,18 +137,13 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: AutoSet&lt;TaskId, BuildNoHashHasher&lt;TaskId&gt;&gt;,
 }
 
-<span class="attr">#[derive(Clone, Debug)]
+<span class="attr">#[derive(Clone, Debug, Default)]
 </span><span class="kw">pub enum </span>OutputContent {
-    Empty,
+    <span class="attr">#[default]
+    </span>Empty,
     Link(RawVc),
     Error(SharedError),
     Panic(<span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;),
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>OutputContent {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        OutputContent::Empty
-    }
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>OutputContent {

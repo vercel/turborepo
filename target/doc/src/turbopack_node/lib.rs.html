@@ -292,89 +292,29 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
 
-</span><span class="kw">use </span>std::{
-    collections::{HashMap, HashSet},
-    fmt::Write <span class="kw">as _</span>,
-    path::PathBuf,
-    thread::available_parallelism,
-};
+</span><span class="kw">use </span>std::{collections::HashMap, iter::once, thread::available_parallelism};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>futures::{stream::FuturesUnordered, TryStreamExt};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">pub use </span>node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
-<span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
+<span class="kw">use </span>turbo_tasks::{
+    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
+};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
-    reference::AssetReference,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    reference::primary_referenced_assets,
+    source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
@@ -382,8 +322,8 @@
 <span class="kw">use </span><span class="self">self</span>::{
     bootstrap::NodeJsBootstrapAsset,
     pool::{NodeJsPool, NodeJsPoolVc},
+    source_map::StructuredError,
 };
-<span class="kw">use </span><span class="kw">crate</span>::source_map::{SourceMapTraceVc, StackFrame, TraceResult};
 
 <span class="kw">pub mod </span>bootstrap;
 <span class="kw">mod </span>embed_js;
@@ -406,17 +346,7 @@
             .strongly_consistent()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.iter()
-            .map(|a| <span class="kw">async </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">if </span><span class="kw-2">*</span>a.ident().path().extension().<span class="kw">await</span><span class="question-mark">? </span>!= <span class="string">&quot;map&quot; </span>{
-                    <span class="prelude-val">Some</span>(a.content().write(a.ident().path()))
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">None
-                </span>})
-            })
-            .try_join()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .flatten()
+            .map(|a| a.content().write(a.ident().path()))
             .collect(),
     )
     .completed())
@@ -445,6 +375,32 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.internal_assets,
     )
+}
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>AssetsForSourceMapping(HashMap&lt;String, GenerateSourceMapVc&gt;);
+
+<span class="doccomment">/// Extracts a map of &quot;internal&quot; assets ([`internal_assets`]) which implement
+/// the [GenerateSourceMap] trait.
+</span><span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>internal_assets_for_source_mapping(
+    intermediate_asset: AssetVc,
+    intermediate_output_path: FileSystemPathVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsForSourceMappingVc&gt; {
+    <span class="kw">let </span>internal_assets = internal_assets(intermediate_asset, intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>intermediate_output_path = <span class="kw-2">&amp;*</span>intermediate_output_path.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>internal_assets_for_source_mapping = HashMap::new();
+    <span class="kw">for </span>asset <span class="kw">in </span>internal_assets.iter() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(generate_source_map) = GenerateSourceMapVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = intermediate_output_path.get_path_to(<span class="kw-2">&amp;*</span>asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>)
+            {
+                internal_assets_for_source_mapping.insert(path.to_string(), generate_source_map);
+            }
+        }
+    }
+    <span class="prelude-val">Ok</span>(AssetsForSourceMappingVc::cell(
+        internal_assets_for_source_mapping,
+    ))
 }
 
 <span class="doccomment">/// Returns a set of &quot;external&quot; assets on the boundary of the &quot;internal&quot;
@@ -477,58 +433,61 @@
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;SeparatedAssetsVc&gt; {
-    <span class="kw">enum </span>Type {
-        Internal(AssetVc, Vec&lt;AssetVc&gt;),
+    <span class="kw">let </span>intermediate_output_path = <span class="kw-2">&amp;*</span>intermediate_output_path.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="attr">#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+    </span><span class="kw">enum </span>Type {
+        Internal(AssetVc),
         External(AssetVc),
     }
-    <span class="kw">let </span>intermediate_output_path = intermediate_output_path.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>queue = FuturesUnordered::new();
-    <span class="kw">let </span>process_asset = |asset: AssetVc| {
-        <span class="kw">let </span>intermediate_output_path = <span class="kw-2">&amp;</span>intermediate_output_path;
-        <span class="kw">async move </span>{
-            <span class="comment">// Assets within the output directory are considered as &quot;internal&quot; and all
-            // others as &quot;external&quot;. We follow references on &quot;internal&quot; assets, but do not
-            // look into references of &quot;external&quot; assets, since there are no &quot;internal&quot;
-            // assets behind &quot;externals&quot;
-            </span><span class="kw">if </span>asset
-                .ident()
-                .path()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.is_inside(intermediate_output_path)
-            {
-                <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
-                <span class="kw">for </span>reference <span class="kw">in </span>asset.references().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                    <span class="kw">for </span>asset <span class="kw">in </span>reference.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                        assets.push(<span class="kw-2">*</span>asset);
-                    }
+    <span class="kw">let </span>get_asset_children = |asset| <span class="kw">async move </span>{
+        <span class="kw">let </span>Type::Internal(asset) = asset <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(Vec::new());
+        };
+        primary_referenced_assets(asset)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|asset| <span class="kw">async </span>{
+                <span class="comment">// Assets within the output directory are considered as &quot;internal&quot; and all
+                // others as &quot;external&quot;. We follow references on &quot;internal&quot; assets, but do not
+                // look into references of &quot;external&quot; assets, since there are no &quot;internal&quot;
+                // assets behind &quot;externals&quot;
+                </span><span class="kw">if </span>asset
+                    .ident()
+                    .path()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.is_inside(intermediate_output_path)
+                {
+                    <span class="prelude-val">Ok</span>(Type::Internal(<span class="kw-2">*</span>asset))
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Ok</span>(Type::External(<span class="kw-2">*</span>asset))
                 }
-                <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(Type::Internal(asset, assets))
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Ok</span>(Type::External(asset))
-            }
-        }
-    };
-    queue.push(process_asset(intermediate_asset));
-    <span class="kw">let </span><span class="kw-2">mut </span>processed = HashSet::new();
+            })
+            .try_join()
+            .<span class="kw">await
+    </span>};
+
+    <span class="kw">let </span>graph = GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;Type&gt;, <span class="kw">_</span>&gt;&gt;::visit(
+        once(Type::Internal(intermediate_asset)),
+        get_asset_children,
+    )
+    .<span class="kw">await
+    </span>.completed()<span class="question-mark">?
+    </span>.into_inner();
+
     <span class="kw">let </span><span class="kw-2">mut </span>internal_assets = IndexSet::new();
     <span class="kw">let </span><span class="kw-2">mut </span>external_asset_entrypoints = IndexSet::new();
-    <span class="comment">// TODO(sokra) This is not deterministic, since it&#39;s using FuturesUnordered.
-    // This need to be fixed!
-    </span><span class="kw">while let </span><span class="prelude-val">Some</span>(item) = queue.try_next().<span class="kw">await</span><span class="question-mark">? </span>{
+
+    <span class="kw">for </span>item <span class="kw">in </span>graph {
         <span class="kw">match </span>item {
-            Type::Internal(asset, assets) =&gt; {
+            Type::Internal(asset) =&gt; {
                 internal_assets.insert(asset);
-                <span class="kw">for </span>asset <span class="kw">in </span>assets {
-                    <span class="kw">if </span>processed.insert(asset) {
-                        queue.push(process_asset(asset));
-                    }
-                }
             }
             Type::External(asset) =&gt; {
                 external_asset_entrypoints.insert(asset);
             }
         }
     }
+
     <span class="prelude-val">Ok</span>(SeparatedAssets {
         internal_assets: AssetsSetVc::cell(internal_assets),
         external_asset_entrypoints: AssetsSetVc::cell(external_asset_entrypoints),
@@ -558,21 +517,25 @@
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
     emit_package_json(intermediate_output_path).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    emit(intermediate_asset, output_root).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>emit = emit(intermediate_asset, output_root);
+    <span class="kw">let </span>assets_for_source_mapping =
+        internal_assets_for_source_mapping(intermediate_asset, output_root);
 
     <span class="kw">let </span>entrypoint = intermediate_asset.ident().path();
 
     <span class="kw">let </span><span class="prelude-val">Some</span>(cwd) = to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `cwd = {}`&quot;</span>, cwd.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `cwd = {}`&quot;</span>, cwd.to_string().<span class="kw">await</span><span class="question-mark">?</span>);
     };
     <span class="kw">let </span><span class="prelude-val">Some</span>(entrypoint) = to_sys_path(entrypoint).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `entrypoint = {}`&quot;</span>, entrypoint.fs().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="macro">bail!</span>(<span class="string">&quot;can only render from a disk filesystem, but `entrypoint = {}`&quot;</span>, entrypoint.to_string().<span class="kw">await</span><span class="question-mark">?</span>);
     };
 
+    emit.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(NodeJsPool::new(
         cwd,
         entrypoint,
@@ -581,6 +544,9 @@
             </span>.iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        assets_for_source_mapping,
+        output_root,
+        project_dir,
         available_parallelism().map_or(<span class="number">1</span>, |v| v.get()),
         debug,
     )
@@ -611,86 +577,6 @@
     <span class="kw">pub </span>status: u16,
     <span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
 }
-
-<span class="attr">#[derive(Clone, Debug)]
-#[turbo_tasks::value(shared)]
-</span><span class="kw">pub struct </span>StructuredError {
-    <span class="kw">pub </span>name: String,
-    <span class="kw">pub </span>message: String,
-    stack: Vec&lt;StackFrame&gt;,
-}
-
-<span class="kw">impl </span>StructuredError {
-    <span class="kw">async fn </span>print(<span class="kw-2">&amp;</span><span class="self">self</span>, assets: HashMap&lt;String, SourceMapVc&gt;, root: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>message = String::new();
-
-        <span class="macro">writeln!</span>(message, <span class="string">&quot;{}: {}&quot;</span>, <span class="self">self</span>.name, <span class="self">self</span>.message)<span class="question-mark">?</span>;
-
-        <span class="kw">for </span>frame <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.stack {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((line, column)) = frame.get_pos() {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = frame.file.strip_prefix(
-                    <span class="comment">// Add a trailing slash so paths don&#39;t lead with `/`.
-                    </span><span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, root, std::path::MAIN_SEPARATOR),
-                ) {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(map) = assets.get(path) {
-                        <span class="kw">let </span>trace = SourceMapTraceVc::new(<span class="kw-2">*</span>map, line, column, frame.name.clone())
-                            .trace()
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if let </span>TraceResult::Found(f) = <span class="kw-2">&amp;*</span>trace {
-                            <span class="macro">writeln!</span>(message, <span class="string">&quot;  at {} [{}]&quot;</span>, f, frame.with_path(path))<span class="question-mark">?</span>;
-                            <span class="kw">continue</span>;
-                        }
-                    }
-
-                    <span class="macro">writeln!</span>(message, <span class="string">&quot;  at {}&quot;</span>, frame.with_path(path))<span class="question-mark">?</span>;
-                    <span class="kw">continue</span>;
-                }
-            }
-
-            <span class="macro">writeln!</span>(message, <span class="string">&quot;  at {}&quot;</span>, frame)<span class="question-mark">?</span>;
-        }
-        <span class="prelude-val">Ok</span>(message)
-    }
-}
-
-<span class="kw">pub async fn </span>trace_stack(
-    error: StructuredError,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-    <span class="kw">let </span>root = <span class="kw">match </span>to_sys_path(intermediate_output_path.root()).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Some</span>(r) =&gt; r.to_string_lossy().to_string(),
-        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;couldn&#39;t extract disk fs from path&quot;</span>),
-    };
-
-    <span class="kw">let </span>assets = internal_assets(intermediate_asset, intermediate_output_path.root())
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.iter()
-        .map(|a| <span class="kw">async </span>{
-            <span class="kw">let </span>gen = <span class="kw">match </span>GenerateSourceMapVc::resolve_from(<span class="kw-2">*</span>a).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Some</span>(gen) =&gt; gen,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-            };
-
-            <span class="kw">let </span>path = <span class="kw">match </span>to_sys_path(a.ident().path()).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Some</span>(p) =&gt; p,
-                <span class="prelude-val">None </span>=&gt; PathBuf::from(<span class="kw-2">&amp;</span>a.ident().path().<span class="kw">await</span><span class="question-mark">?</span>.path),
-            };
-
-            <span class="kw">let </span>p = path.strip_prefix(<span class="kw-2">&amp;</span>root).unwrap();
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((
-                p.to_str().unwrap().to_string(),
-                gen.generate_source_map(),
-            )))
-        })
-        .try_join()
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .flatten()
-        .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-
-    error.print(assets, <span class="kw-2">&amp;</span>root).<span class="kw">await
-</span>}
 
 <span class="kw">pub fn </span>register() {
     turbo_tasks::register();

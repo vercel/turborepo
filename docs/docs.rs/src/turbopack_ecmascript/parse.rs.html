@@ -325,6 +325,16 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -334,7 +344,7 @@
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, SourceMap, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
@@ -354,7 +364,8 @@
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    SOURCE_MAP_ROOT_NAME,
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -379,7 +390,7 @@
         <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
         </span>globals: Globals,
         <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-        </span>source_map: Arc&lt;SourceMap&gt;,
+        </span>source_map: Arc&lt;swc_core::common::SourceMap&gt;,
     },
     Unparseable,
     NotFound,
@@ -400,7 +411,7 @@
     /// to source locations. I don&#39;t know what it is, really, but it&#39;s not
     /// that.
     </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-    </span>source_map: Arc&lt;SourceMap&gt;,
+    </span>source_map: Arc&lt;swc_core::common::SourceMap&gt;,
 
     <span class="doccomment">/// The position mappings that can generate a real source map given a (SWC)
     /// SourceMap.
@@ -415,7 +426,10 @@
 }
 
 <span class="kw">impl </span>ParseResultSourceMap {
-    <span class="kw">pub fn </span>new(source_map: Arc&lt;SourceMap&gt;, mappings: Vec&lt;(BytePos, LineCol)&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(
+        source_map: Arc&lt;swc_core::common::SourceMap&gt;,
+        mappings: Vec&lt;(BytePos, LineCol)&gt;,
+    ) -&gt; <span class="self">Self </span>{
         ParseResultSourceMap {
             source_map,
             mappings,
@@ -426,13 +440,15 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ParseResultSourceMap {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionSourceMapVc {
         <span class="kw">let </span>map = <span class="self">self</span>.source_map.build_source_map_with_config(
             <span class="kw-2">&amp;</span><span class="self">self</span>.mappings,
             <span class="prelude-val">None</span>,
             InlineSourcesContentConfig {},
         );
-        SourceMapVc::new_regular(map)
+        OptionSourceMapVc::cell(<span class="prelude-val">Some</span>(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
     }
 }
 
@@ -444,8 +460,9 @@
 <span class="kw">impl </span>SourceMapGenConfig <span class="kw">for </span>InlineSourcesContentConfig {
     <span class="kw">fn </span>file_name_to_source(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;</span>FileName) -&gt; String {
         <span class="kw">match </span>f {
-            <span class="comment">// The Custom filename surrounds the name with &lt;&gt;.
-            </span>FileName::Custom(s) =&gt; <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, s),
+            FileName::Custom(s) =&gt; {
+                <span class="macro">format!</span>(<span class="string">&quot;/{SOURCE_MAP_ROOT_NAME}/{s}&quot;</span>)
+            }
             <span class="kw">_ </span>=&gt; f.to_string(),
         }
     }
@@ -463,6 +480,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
     <span class="kw">let </span>content = source.content();
     <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>source.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_ident(source.ident().to_string()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
     <span class="kw">let </span>ty = ty.into_value();
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -474,6 +492,7 @@
                     <span class="kw">match </span>parse_content(
                         string.into_owned(),
                         fs_path,
+                        ident,
                         file_path_hash,
                         source,
                         ty,
@@ -501,12 +520,13 @@
 <span class="kw">async fn </span>parse_content(
     string: String,
     fs_path: <span class="kw-2">&amp;</span>FileSystemPath,
+    ident: <span class="kw-2">&amp;</span>str,
     file_path_hash: u128,
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
     transforms: <span class="kw-2">&amp;</span>[EcmascriptInputTransform],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
-    <span class="kw">let </span>source_map: Arc&lt;SourceMap&gt; = Default::default();
+    <span class="kw">let </span>source_map: Arc&lt;swc_core::common::SourceMap&gt; = Default::default();
     <span class="kw">let </span>handler = Handler::with_emitter(
         <span class="bool-val">true</span>,
         <span class="bool-val">false</span>,
@@ -526,7 +546,7 @@
             })
         },
         <span class="kw">async </span>{
-            <span class="kw">let </span>file_name = FileName::Custom(fs_path.path.clone());
+            <span class="kw">let </span>file_name = FileName::Custom(ident.to_string());
             <span class="kw">let </span>fm = source_map.new_source_file(file_name.clone(), string);
 
             <span class="kw">let </span>comments = SwcComments::default();

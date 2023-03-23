@@ -435,7 +435,7 @@
                 <span class="kw">let </span>config = Options {
                     runtime: <span class="prelude-val">Some</span>(runtime),
                     development: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
-                    import_source: (<span class="kw-2">&amp;*</span>import_source.<span class="kw">await</span><span class="question-mark">?</span>).clone(),
+                    import_source: import_source.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                     refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
                         <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
                             ..Default::default()

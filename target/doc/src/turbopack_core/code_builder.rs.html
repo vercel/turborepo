@@ -195,10 +195,6 @@
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     io::{BufRead, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
@@ -206,13 +202,15 @@
 };
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>sourcemap::SourceMapBuilder;
 <span class="kw">use </span>turbo_tasks::primitives::U64Vc;
 <span class="kw">use </span>turbo_tasks_fs::rope::{Rope, RopeBuilder};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 
 <span class="kw">use crate</span>::{
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapSection, SourceMapVc},
+    source_map::{
+        GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMap, SourceMapSection,
+        SourceMapVc,
+    },
     source_pos::SourcePos,
 };
 
@@ -347,7 +345,7 @@
     /// far the simplest way to concatenate the source maps of the multiple
     /// chunk items into a single map file.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;SourceMapVc&gt; {
+    </span><span class="kw">pub async fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OptionSourceMapVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>pos = SourcePos::new();
         <span class="kw">let </span><span class="kw-2">mut </span>last_byte_pos = <span class="number">0</span>;
 
@@ -368,14 +366,19 @@
             last_byte_pos = <span class="kw-2">*</span>byte_pos;
 
             <span class="kw">let </span>encoded = <span class="kw">match </span>map {
-                <span class="prelude-val">None </span>=&gt; empty_map(),
-                <span class="prelude-val">Some</span>(map) =&gt; map.generate_source_map(),
+                <span class="prelude-val">None </span>=&gt; SourceMapVc::empty(),
+                <span class="prelude-val">Some</span>(map) =&gt; <span class="kw">match </span><span class="kw-2">*</span>map.generate_source_map().<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="prelude-val">None </span>=&gt; SourceMapVc::empty(),
+                    <span class="prelude-val">Some</span>(map) =&gt; map,
+                },
             };
 
             sections.push(SourceMapSection::new(pos, encoded))
         }
 
-        <span class="prelude-val">Ok</span>(SourceMapVc::new_sectioned(sections))
+        <span class="prelude-val">Ok</span>(OptionSourceMapVc::cell(<span class="prelude-val">Some</span>(
+            SourceMap::new_sectioned(sections).cell(),
+        )))
     }
 }
 
@@ -388,17 +391,6 @@
         <span class="kw">let </span>hash = hash_xxh3_hash64(code.source_code());
         <span class="prelude-val">Ok</span>(U64Vc::cell(hash))
     }
-}
-
-<span class="doccomment">/// A source map that contains no actual source location information (no
-/// `sources`, no mappings that point into a source). This is used to tell
-/// Chrome that the generated code starting at a particular offset is no longer
-/// part of the previous section&#39;s mappings.
-</span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>empty_map() -&gt; SourceMapVc {
-    <span class="kw">let </span><span class="kw-2">mut </span>builder = SourceMapBuilder::new(<span class="prelude-val">None</span>);
-    builder.add(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
-    SourceMapVc::new_regular(builder.into_sourcemap())
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbopack_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

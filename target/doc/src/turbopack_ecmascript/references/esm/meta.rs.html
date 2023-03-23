@@ -313,7 +313,7 @@
 }
 
 <span class="kw">fn </span>meta_ident() -&gt; Ident {
-    Ident::new(magic_identifier::encode(<span class="string">&quot;import.meta&quot;</span>).into(), DUMMY_SP)
+    Ident::new(magic_identifier::mangle(<span class="string">&quot;import.meta&quot;</span>).into(), DUMMY_SP)
 }
 
 <span class="attr">#[cfg(test)]

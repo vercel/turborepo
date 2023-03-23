@@ -464,6 +464,12 @@
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>item;
@@ -496,7 +502,7 @@
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::AssetReferencesVc,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     version::{VersionedContent, VersionedContentVc},
 };
 
@@ -857,7 +863,13 @@
             references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
         }
         references.extend(this.runtime.references(self_vc).<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
-        references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        <span class="kw">if </span><span class="kw-2">*</span>this
+            .context
+            .reference_chunk_source_maps(self_vc.into())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        }
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
@@ -926,7 +938,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(self_vc: EcmascriptChunkVc) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(self_vc: EcmascriptChunkVc) -&gt; OptionSourceMapVc {
         self_vc.runtime_content().generate_source_map()
     }
 }

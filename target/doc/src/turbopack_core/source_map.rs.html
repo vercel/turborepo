@@ -313,12 +313,26 @@
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{io::Write, ops::Deref, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<span class="kw">use </span>sourcemap::SourceMap <span class="kw">as </span>CrateMap;
+<span class="kw">use </span>sourcemap::{SourceMap <span class="kw">as </span>CrateMap, SourceMapBuilder};
 <span class="kw">use </span>turbo_tasks::TryJoinIterExt;
 <span class="kw">use </span>turbo_tasks_fs::rope::{Rope, RopeBuilder, RopeVc};
 
@@ -328,7 +342,7 @@
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>GenerateSourceMap {
     <span class="doccomment">/// Generates a usable source map, capable of both tracing and stringifying.
-    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceMapVc;
+    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionSourceMapVc;
 
     <span class="doccomment">/// Returns an individual section of the larger source map, if found.
     </span><span class="kw">fn </span>by_section(<span class="kw-2">&amp;</span><span class="self">self</span>, _section: <span class="kw-2">&amp;</span>str) -&gt; OptionSourceMapVc {
@@ -339,7 +353,7 @@
 <span class="doccomment">/// The source map spec lists 2 formats, a regular format where a single map
 /// covers the entire file, and an &quot;index&quot; sectioned format where multiple maps
 /// cover different regions of the file.
-</span><span class="attr">#[turbo_tasks::value]
+</span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub enum </span>SourceMap {
     <span class="doccomment">/// A regular source map covers an entire file.
     </span>Regular(<span class="attr">#[turbo_tasks(trace_ignore)] </span>RegularSourceMap),
@@ -410,17 +424,31 @@
     }
 }
 
-<span class="kw">impl </span>SourceMapVc {
+<span class="kw">impl </span>SourceMap {
     <span class="doccomment">/// Creates a new SourceMap::Regular Vc out of a sourcemap::SourceMap
     /// (&quot;CrateMap&quot;) instance.
     </span><span class="kw">pub fn </span>new_regular(map: CrateMap) -&gt; <span class="self">Self </span>{
-        SourceMap::Regular(RegularSourceMap::new(map)).cell()
+        SourceMap::Regular(RegularSourceMap::new(map))
     }
 
     <span class="doccomment">/// Creates a new SourceMap::Sectioned Vc out of a collection of source map
     /// sections.
     </span><span class="kw">pub fn </span>new_sectioned(sections: Vec&lt;SourceMapSection&gt;) -&gt; <span class="self">Self </span>{
-        SourceMap::Sectioned(SectionedSourceMap::new(sections)).cell()
+        SourceMap::Sectioned(SectionedSourceMap::new(sections))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>SourceMapVc {
+    <span class="doccomment">/// A source map that contains no actual source location information (no
+    /// `sources`, no mappings that point into a source). This is used to tell
+    /// Chrome that the generated code starting at a particular offset is no
+    /// longer part of the previous section&#39;s mappings.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = SourceMapBuilder::new(<span class="prelude-val">None</span>);
+        builder.add(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+        SourceMap::new_regular(builder.into_sourcemap()).cell()
     }
 }
 

@@ -135,6 +135,18 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 
@@ -148,6 +160,7 @@
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::AssetReferencesVc,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     version::VersionedContentVc,
 };
 
@@ -211,6 +224,17 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>versioned_content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VersionedContentVc {
         <span class="self">self</span>.inner.versioned_content()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ChunkInGroup {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OptionSourceMapVc&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = GenerateSourceMapVc::resolve_from(<span class="self">self</span>.inner).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(OptionSourceMapVc::cell(<span class="prelude-val">None</span>))
+        };
+        <span class="prelude-val">Ok</span>(inner.generate_source_map())
     }
 }
 

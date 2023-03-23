@@ -310,13 +310,13 @@
         };
 
         <span class="kw">let </span>sm = <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = <span class="kw-2">&amp;</span><span class="self">self</span>.id {
-            <span class="kw">let </span>section = gen.by_section(id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>section {
-                <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
-            }
-        } <span class="kw">else </span>{
-            gen.generate_source_map()
+            gen.by_section(id).<span class="kw">await</span><span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            gen.generate_source_map().<span class="kw">await</span><span class="question-mark">?
+        </span>};
+        <span class="kw">let </span>sm = <span class="kw">match </span><span class="kw-2">&amp;*</span>sm {
+            <span class="prelude-val">Some</span>(sm) =&gt; <span class="kw-2">*</span>sm,
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
 
         <span class="kw">let </span>content = sm.to_rope().<span class="kw">await</span><span class="question-mark">?</span>;

@@ -24,6 +24,7 @@
 <a href="#24" id="24">24</a>
 <a href="#25" id="25">25</a>
 <a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -37,6 +38,7 @@
     <span class="kw">pub </span>chunking_context: ChunkingContextVc,
     <span class="kw">pub </span>intermediate_output_path: FileSystemPathVc,
     <span class="kw">pub </span>output_root: FileSystemPathVc,
+    <span class="kw">pub </span>project_dir: FileSystemPathVc,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]

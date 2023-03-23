@@ -1909,11 +1909,6 @@
 <a href="#1909" id="1909">1909</a>
 <a href="#1910" id="1910">1910</a>
 <a href="#1911" id="1911">1911</a>
-<a href="#1912" id="1912">1912</a>
-<a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -1969,17 +1964,12 @@
 
 <span class="comment">// dirty+active+scheduled -&gt; clean+active+done -&gt; dirty+active+done+scheduled
 
-</span><span class="attr">#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+</span><span class="attr">#[derive(PartialEq, Eq, Copy, Clone, Debug, Default)]
 </span><span class="kw">enum </span>TaskFreshness {
-    NeverExecuted,
+    <span class="attr">#[default]
+    </span>NeverExecuted,
     Dirty,
     Done,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>TaskFreshness {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        TaskFreshness::NeverExecuted
-    }
 }
 
 <span class="attr">#[derive(Debug)]

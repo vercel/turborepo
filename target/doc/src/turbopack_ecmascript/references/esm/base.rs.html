@@ -340,7 +340,7 @@
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
             ReferencedAsset::Some(asset) =&gt; <span class="prelude-val">Some</span>(<span class="self">Self</span>::get_ident_from_placeable(asset).<span class="kw">await</span><span class="question-mark">?</span>),
             ReferencedAsset::OriginalReferenceTypeExternal(request) =&gt; {
-                <span class="prelude-val">Some</span>(magic_identifier::encode(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;external {}&quot;</span>, request)))
+                <span class="prelude-val">Some</span>(magic_identifier::mangle(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;external {}&quot;</span>, request)))
             }
             ReferencedAsset::None =&gt; <span class="prelude-val">None</span>,
         })
@@ -350,7 +350,7 @@
         asset: <span class="kw-2">&amp;</span>EcmascriptChunkPlaceableVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>path = asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(magic_identifier::encode(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+        <span class="prelude-val">Ok</span>(magic_identifier::mangle(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
             <span class="string">&quot;imported module {}&quot;</span>,
             path
         )))
@@ -545,7 +545,7 @@
 }
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">static </span><span class="kw-2">ref </span>ESM_HOISTING_LOCATION: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = Box::leak(Box::new(magic_identifier::encode(
+    <span class="kw">static </span><span class="kw-2">ref </span>ESM_HOISTING_LOCATION: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = Box::leak(Box::new(magic_identifier::mangle(
         <span class="string">&quot;ecmascript hoisting location&quot;
     </span>)));
 }

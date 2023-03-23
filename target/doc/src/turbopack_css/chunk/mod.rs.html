@@ -488,6 +488,16 @@
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
 <a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -497,7 +507,7 @@
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString};
-<span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -516,7 +526,7 @@
     },
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::PrimaryResolveResult,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
 };
 <span class="kw">use </span>writer::expand_imports;
 
@@ -593,11 +603,10 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>chunk_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkContentVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_path = <span class="self">self</span>.path();
         <span class="prelude-val">Ok</span>(CssChunkContentVc::new(
             this.main_entries,
             this.context,
-            chunk_path,
+            <span class="self">self</span>,
         ))
     }
 }
@@ -606,7 +615,7 @@
 </span><span class="kw">struct </span>CssChunkContent {
     main_entries: CssChunkPlaceablesVc,
     context: ChunkingContextVc,
-    chunk_path: FileSystemPathVc,
+    chunk: CssChunkVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -615,12 +624,12 @@
     </span><span class="kw">async fn </span>new(
         main_entries: CssChunkPlaceablesVc,
         context: ChunkingContextVc,
-        chunk_path: FileSystemPathVc,
+        chunk: CssChunkVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(CssChunkContent {
             main_entries,
             context,
-            chunk_path,
+            chunk,
         }
         .cell())
     }
@@ -630,7 +639,7 @@
         <span class="kw">use </span>std::io::Write;
 
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_name = this.chunk_path.to_string();
+        <span class="kw">let </span>chunk_name = this.chunk.path().to_string();
 
         <span class="kw">let </span><span class="kw-2">mut </span>body = CodeBuilder::default();
         <span class="kw">let </span><span class="kw-2">mut </span>external_imports = IndexSet::new();
@@ -651,8 +660,13 @@
 
         code.push_code(<span class="kw-2">&amp;</span>body.build());
 
-        <span class="kw">if </span>code.has_source_map() {
-            <span class="kw">let </span>chunk_path = this.chunk_path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span><span class="kw-2">*</span>this
+            .context
+            .reference_chunk_source_maps(this.chunk.into())
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>&amp;&amp; code.has_source_map()
+        {
+            <span class="kw">let </span>chunk_path = this.chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">write!</span>(
                 code,
                 <span class="string">&quot;\n/*# sourceMappingURL={}.map*/&quot;</span>,
@@ -674,7 +688,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>CssChunkContent {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkContentVc) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkContentVc) -&gt; OptionSourceMapVc {
         self_vc.code().generate_source_map()
     }
 }
@@ -839,7 +853,13 @@
         <span class="kw">for </span>chunk_group <span class="kw">in </span>content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
         }
-        references.push(CssChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        <span class="kw">if </span><span class="kw-2">*</span>this
+            .context
+            .reference_chunk_source_maps(self_vc.into())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            references.push(CssChunkSourceMapAssetReferenceVc::new(self_vc).into());
+        }
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
 }
@@ -847,7 +867,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>CssChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkVc) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkVc) -&gt; OptionSourceMapVc {
         self_vc.chunk_content().generate_source_map()
     }
 }

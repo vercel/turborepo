@@ -137,40 +137,91 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, fmt::Display};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>mime::APPLICATION_JSON;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContentVc,
     source_map::{SourceMapVc, Token},
 };
+<span class="kw">use </span>turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 <span class="doccomment">/// An individual stack frame, as parsed by the stacktrace-parser npm module.
 ///
 /// Line and column can be None if the frame is anonymous.
-</span><span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>StackFrame {
-    <span class="kw">pub </span>file: String,
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+</span><span class="kw">pub struct </span>StackFrame&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">pub </span>file: Cow&lt;<span class="lifetime">&#39;a</span>, str&gt;,
     <span class="attr">#[serde(rename = <span class="string">&quot;lineNumber&quot;</span>)]
     </span><span class="kw">pub </span>line: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     <span class="kw">pub </span>column: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     <span class="attr">#[serde(rename = <span class="string">&quot;methodName&quot;</span>)]
-    </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;a</span>, str&gt;&gt;,
 }
 
-<span class="kw">impl </span>Display <span class="kw">for </span>StackFrame {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="self">self</span>.with_path(<span class="kw-2">&amp;</span><span class="self">self</span>.file).fmt(f)
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; StackFrame&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">pub fn </span>unmangle_identifiers&lt;T: Display&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, magic: <span class="kw">impl </span>Fn(String) -&gt; T) -&gt; StackFrame&lt;<span class="lifetime">&#39;_</span>&gt; {
+        StackFrame {
+            file: Cow::Borrowed(<span class="self">self</span>.file.as_ref()),
+            line: <span class="self">self</span>.line,
+            column: <span class="self">self</span>.column,
+            name: <span class="self">self
+                </span>.name
+                .as_ref()
+                .map(|n| unmangle_identifiers(n.as_ref(), magic)),
+        }
     }
-}
 
-<span class="kw">impl </span>StackFrame {
-    <span class="kw">pub fn </span>with_path&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str) -&gt; StackFrameWithPath&lt;<span class="lifetime">&#39;a</span>&gt; {
-        StackFrameWithPath { frame: <span class="self">self</span>, path }
+    <span class="kw">pub fn </span>with_path&lt;<span class="lifetime">&#39;b</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str) -&gt; StackFrame&lt;<span class="lifetime">&#39;b</span>&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>,
+    {
+        StackFrame {
+            file: Cow::Borrowed(path),
+            line: <span class="self">self</span>.line,
+            column: <span class="self">self</span>.column,
+            name: <span class="self">self</span>.name.as_ref().map(|n| Cow::Borrowed(n.as_ref())),
+        }
+    }
+
+    <span class="kw">pub fn </span>with_name&lt;<span class="lifetime">&#39;b</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, name: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>str&gt;) -&gt; StackFrame&lt;<span class="lifetime">&#39;b</span>&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>,
+    {
+        StackFrame {
+            file: Cow::Borrowed(<span class="self">self</span>.file.as_ref()),
+            line: <span class="self">self</span>.line,
+            column: <span class="self">self</span>.column,
+            name: name.map(Cow::Borrowed),
+        }
     }
 
     <span class="kw">pub fn </span>get_pos(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, usize)&gt; {
@@ -178,19 +229,16 @@
     }
 }
 
-<span class="kw">pub struct </span>StackFrameWithPath&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">pub </span>frame: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StackFrame,
-    <span class="kw">pub </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Display <span class="kw">for </span>StackFrameWithPath&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Display <span class="kw">for </span>StackFrame&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="kw">match </span><span class="self">self</span>.frame.get_pos() {
-            <span class="prelude-val">Some</span>((l, c)) =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.frame.name {
-                <span class="prelude-val">Some</span>(n) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{} ({}:{}:{})&quot;</span>, n, <span class="self">self</span>.path, l, c),
-                <span class="prelude-val">None </span>=&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}:{}:{}&quot;</span>, <span class="self">self</span>.path, l, c),
+        <span class="kw">match </span><span class="self">self</span>.get_pos() {
+            <span class="prelude-val">Some</span>((l, c)) =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.name.as_deref() {
+                <span class="prelude-val">None </span>| <span class="prelude-val">Some</span>(<span class="string">&quot;&lt;unknown&gt;&quot;</span>) | <span class="prelude-val">Some</span>(<span class="string">&quot;(anonymous)&quot;</span>) =&gt; {
+                    <span class="macro">write!</span>(f, <span class="string">&quot;{}:{}:{}&quot;</span>, <span class="self">self</span>.file, l, c)
+                }
+                <span class="prelude-val">Some</span>(n) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{} ({}:{}:{})&quot;</span>, n, <span class="self">self</span>.file, l, c),
             },
-            <span class="prelude-val">None </span>=&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.path),
+            <span class="prelude-val">None </span>=&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.file),
         }
     }
 }
@@ -210,7 +258,7 @@
 #[derive(Debug)]
 </span><span class="kw">pub enum </span>TraceResult {
     NotFound,
-    Found(StackFrame),
+    Found(<span class="attr">#[turbo_tasks(trace_ignore)] </span>StackFrame&lt;<span class="lifetime">&#39;static</span>&gt;),
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -246,10 +294,10 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = <span class="kw">match </span><span class="kw-2">&amp;*</span>token {
             <span class="prelude-val">Some</span>(Token::Original(t)) =&gt; TraceResult::Found(StackFrame {
-                file: t.original_file.clone(),
+                file: t.original_file.clone().into(),
                 line: <span class="prelude-val">Some</span>(t.original_line.saturating_add(<span class="number">1</span>)),
                 column: <span class="prelude-val">Some</span>(t.original_column.saturating_add(<span class="number">1</span>)),
-                name: t.name.clone().or_else(|| this.name.clone()),
+                name: t.name.clone().or_else(|| this.name.clone()).map(Into::into),
             }),
             <span class="kw">_ </span>=&gt; TraceResult::NotFound,
         };

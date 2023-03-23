@@ -791,6 +791,10 @@
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub mod </span>chunk_in_group;
@@ -873,6 +877,7 @@
 <span class="doccomment">/// A context for the chunking that influences the way chunks are created
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ChunkingContext {
+    <span class="kw">fn </span>context_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
     <span class="kw">fn </span>output_root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
 
     <span class="comment">// TODO remove this, a chunking context should not be bound to a specific
@@ -884,6 +889,9 @@
     <span class="doccomment">/// Returns the path to the chunk list file for the given unoptimized entry
     /// chunk path.
     </span><span class="kw">fn </span>chunk_list_path(<span class="kw-2">&amp;</span><span class="self">self</span>, entry_chunk_path: FileSystemPathVc) -&gt; FileSystemPathVc;
+
+    <span class="doccomment">/// Reference Source Map Assets for chunks
+    </span><span class="kw">fn </span>reference_chunk_source_maps(<span class="kw-2">&amp;</span><span class="self">self</span>, chunk: ChunkVc) -&gt; BoolVc;
 
     <span class="kw">fn </span>can_be_in_same_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>, asset_a: AssetVc, asset_b: AssetVc) -&gt; BoolVc;
 

@@ -65,9 +65,162 @@
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    borrow::Cow,
+    fmt::{Display, Write},
+};
 
-<span class="kw">pub fn </span>encode(content: <span class="kw-2">&amp;</span>str) -&gt; String {
+<span class="kw">use </span>once_cell::sync::Lazy;
+<span class="kw">use </span>regex::{Captures, Regex, Replacer};
+
+<span class="kw">pub fn </span>mangle(content: <span class="kw-2">&amp;</span>str) -&gt; String {
     <span class="kw">let </span><span class="kw-2">mut </span>r = <span class="string">&quot;__TURBOPACK__&quot;</span>.to_string();
     <span class="kw">let </span><span class="kw-2">mut </span>hex_mode = <span class="bool-val">false</span>;
     <span class="kw">for </span>c <span class="kw">in </span>content.chars() {
@@ -103,32 +256,173 @@
             hex_mode = <span class="bool-val">false</span>;
         }
     }
+    <span class="kw">if </span>hex_mode {
+        r.push(<span class="string">&#39;$&#39;</span>);
+    }
     r += <span class="string">&quot;__&quot;</span>;
     r
 }
 
+<span class="doccomment">/// Decodes a magic identifier into a string.
+</span><span class="kw">pub fn </span>unmangle(identifier: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="kw">static </span>DECODE_REGEX: Lazy&lt;Regex&gt; =
+        Lazy::new(|| Regex::new(<span class="string">r&quot;^__TURBOPACK__([a-zA-Z0-9_$]+)__$&quot;</span>).unwrap());
+
+    <span class="kw">let </span><span class="prelude-val">Some</span>(captures) = DECODE_REGEX.captures(identifier) <span class="kw">else </span>{
+        <span class="kw">return </span>identifier.to_string();
+    };
+
+    <span class="kw">let </span>content = captures.get(<span class="number">1</span>).unwrap().as_str();
+
+    <span class="kw">enum </span>Mode {
+        Text,
+        Underscore,
+        Hex,
+        LongHex,
+    }
+    <span class="kw">let </span><span class="kw-2">mut </span>mode = Mode::Text;
+    <span class="kw">let </span><span class="kw-2">mut </span>output = String::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = String::with_capacity(<span class="number">2</span>);
+    <span class="kw">for </span>char <span class="kw">in </span>content.chars() {
+        <span class="kw">match </span>mode {
+            Mode::Text =&gt; <span class="kw">match </span>char {
+                <span class="string">&#39;_&#39; </span>=&gt; mode = Mode::Underscore,
+                <span class="string">&#39;$&#39; </span>=&gt; mode = Mode::Hex,
+                c =&gt; output.push(c),
+            },
+            Mode::Underscore =&gt; <span class="kw">match </span>char {
+                <span class="string">&#39;_&#39; </span>=&gt; {
+                    output.push(<span class="string">&#39; &#39;</span>);
+                    mode = Mode::Text;
+                }
+                <span class="string">&#39;$&#39; </span>=&gt; {
+                    output.push(<span class="string">&#39;_&#39;</span>);
+                    mode = Mode::Hex;
+                }
+                c =&gt; {
+                    output.push(<span class="string">&#39;_&#39;</span>);
+                    output.push(c);
+                    mode = Mode::Text;
+                }
+            },
+            Mode::Hex =&gt; {
+                <span class="kw">if </span>buffer.len() == <span class="number">2 </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(byte) = u8::from_str_radix(<span class="kw-2">&amp;</span>buffer, <span class="number">16</span>) {
+                        output.push(byte <span class="kw">as </span>char);
+                    }
+                    buffer.clear();
+                }
+                <span class="kw">match </span>char {
+                    <span class="string">&#39;_&#39; </span>=&gt; {
+                        <span class="macro">debug_assert!</span>(buffer.is_empty());
+                        mode = Mode::LongHex;
+                    }
+                    <span class="string">&#39;$&#39; </span>=&gt; {
+                        <span class="macro">debug_assert!</span>(buffer.is_empty());
+                        mode = Mode::Text;
+                    }
+                    c =&gt; {
+                        buffer.push(c);
+                    }
+                }
+            }
+            Mode::LongHex =&gt; {
+                <span class="macro">debug_assert!</span>(char != <span class="string">&#39;_&#39;</span>);
+                <span class="kw">match </span>char {
+                    <span class="string">&#39;$&#39; </span>=&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(code) = u32::from_str_radix(<span class="kw-2">&amp;</span>buffer, <span class="number">16</span>) {
+                            output.push(std::char::from_u32(code).unwrap());
+                        }
+                        buffer.clear();
+                        mode = Mode::Text;
+                    }
+                    c =&gt; {
+                        buffer.push(c);
+                    }
+                }
+            }
+        }
+    }
+    <span class="macro">debug_assert!</span>(<span class="macro">matches!</span>(mode, Mode::Text));
+    output
+}
+
+<span class="doccomment">/// Decode all magic identifiers in a string.
+</span><span class="kw">pub fn </span>unmangle_identifiers&lt;T: Display&gt;(text: <span class="kw-2">&amp;</span>str, magic: <span class="kw">impl </span>Fn(String) -&gt; T) -&gt; Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; {
+    <span class="kw">static </span>IDENTIFIER_REGEX: Lazy&lt;Regex&gt; =
+        Lazy::new(|| Regex::new(<span class="string">r&quot;__TURBOPACK__[a-zA-Z0-9_$]+__&quot;</span>).unwrap());
+
+    <span class="kw">struct </span>Rep&lt;T: Fn(String) -&gt; O, O: Display&gt;(T);
+
+    <span class="kw">impl</span>&lt;T: Fn(String) -&gt; O, O: Display&gt; Replacer <span class="kw">for </span>Rep&lt;T, O&gt; {
+        <span class="kw">fn </span>replace_append(<span class="kw-2">&amp;mut </span><span class="self">self</span>, caps: <span class="kw-2">&amp;</span>Captures&lt;<span class="lifetime">&#39;_</span>&gt;, dst: <span class="kw-2">&amp;mut </span>String) {
+            <span class="macro">write!</span>(dst, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>(unmangle(caps.get(<span class="number">0</span>).unwrap().as_str()))).unwrap();
+        }
+    }
+
+    IDENTIFIER_REGEX.replace_all(text, Rep(magic))
+}
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">super</span>::encode;
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_encode() {
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello__World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello__World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello___World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$_World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello///World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f2f2f$World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$_World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello_/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$2f$_World__&quot;</span>);
-        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello😀World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$_1f600$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello__World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello__World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello___World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello/World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello///World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f2f2f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello_/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$2f$_World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(mangle(<span class="string">&quot;Hello😀World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$_1f600$World__&quot;</span>);
         <span class="macro">assert_eq!</span>(
-            encode(<span class="string">&quot;Hello/😀/World&quot;</span>),
+            mangle(<span class="string">&quot;Hello/😀/World&quot;</span>),
             <span class="string">&quot;__TURBOPACK__Hello$2f_1f600$$2f$World__&quot;
         </span>);
         <span class="macro">assert_eq!</span>(
-            encode(<span class="string">&quot;Hello😀😀World&quot;</span>),
+            mangle(<span class="string">&quot;Hello😀😀World&quot;</span>),
             <span class="string">&quot;__TURBOPACK__Hello$_1f600$$_1f600$World__&quot;
+        </span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_decode() {
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello__World__&quot;</span>), <span class="string">&quot;Hello World&quot;</span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello_World__&quot;</span>), <span class="string">&quot;Hello_World&quot;</span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello_$5f$World__&quot;</span>), <span class="string">&quot;Hello__World&quot;</span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello_$5f$_World__&quot;</span>), <span class="string">&quot;Hello___World&quot;</span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello$2f$World__&quot;</span>), <span class="string">&quot;Hello/World&quot;</span>);
+        <span class="macro">assert_eq!</span>(
+            unmangle(<span class="string">&quot;__TURBOPACK__Hello$2f2f2f$World__&quot;</span>),
+            <span class="string">&quot;Hello///World&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello$2f$_World__&quot;</span>), <span class="string">&quot;Hello/_World&quot;</span>);
+        <span class="macro">assert_eq!</span>(unmangle(<span class="string">&quot;__TURBOPACK__Hello_$2f$_World__&quot;</span>), <span class="string">&quot;Hello_/_World&quot;</span>);
+        <span class="macro">assert_eq!</span>(
+            unmangle(<span class="string">&quot;__TURBOPACK__Hello$_1f600$World__&quot;</span>),
+            <span class="string">&quot;Hello😀World&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            unmangle(<span class="string">&quot;__TURBOPACK__Hello$2f_1f600$$2f$World__&quot;</span>),
+            <span class="string">&quot;Hello/😀/World&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            unmangle(<span class="string">&quot;__TURBOPACK__Hello$_1f600$$_1f600$World__&quot;</span>),
+            <span class="string">&quot;Hello😀😀World&quot;
+        </span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_unmangle_identifiers() {
+        <span class="macro">assert_eq!</span>(
+            unmangle_identifiers(
+                <span class="string">&quot;Hello __TURBOPACK__Hello__World__ __TURBOPACK__Hello_World__&quot;</span>,
+                |s| <span class="macro">format!</span>(<span class="string">&quot;{{{s}}}&quot;</span>)
+            ),
+            <span class="string">&quot;Hello {Hello World} {Hello_World}&quot;
         </span>);
     }
 }

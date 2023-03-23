@@ -155,7 +155,7 @@
                     <span class="kw">match </span>module_decl {
                         ModuleDecl::ExportDefaultExpr(ExportDefaultExpr { <span class="kw">box </span>expr, .. }) =&gt; {
                             <span class="kw">let </span>stmt = <span class="macro">quote!</span>(<span class="string">&quot;const $name = $expr;&quot; </span><span class="kw">as </span>Stmt,
-                                name = Ident::new(magic_identifier::encode(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP),
+                                name = Ident::new(magic_identifier::mangle(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP),
                                 expr: Expr = expr
                             );
                             <span class="kw-2">*</span>module_item = ModuleItem::Stmt(stmt);
@@ -164,14 +164,14 @@
                             <span class="kw">match </span>decl {
                                 DefaultDecl::Class(class) =&gt; {
                                     <span class="kw-2">*</span>module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
-                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP)),
+                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP)),
                                         declare: <span class="bool-val">false</span>,
                                         class: class.class
                                     })))
                                 }
                                 DefaultDecl::Fn(fn_expr) =&gt; {
                                     <span class="kw-2">*</span>module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl {
-                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP)),
+                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle(<span class="string">&quot;default export&quot;</span>).into(), DUMMY_SP)),
                                         declare: <span class="bool-val">false</span>,
                                         function: fn_expr.function
                                     })))

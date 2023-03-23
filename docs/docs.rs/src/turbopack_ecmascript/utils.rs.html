@@ -258,7 +258,7 @@
             <span class="bool-val">false </span>=&gt; serde_json::to_writer,
         };
 
-        <span class="prelude-val">Ok</span>(to_writer(DisplayWriter { f }, <span class="self">self</span>.<span class="number">0</span>).map_err(|_err| std::fmt::Error)<span class="question-mark">?</span>)
+        to_writer(DisplayWriter { f }, <span class="self">self</span>.<span class="number">0</span>).map_err(|_err| std::fmt::Error)
     }
 }
 

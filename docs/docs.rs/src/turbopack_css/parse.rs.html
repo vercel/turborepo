@@ -247,6 +247,8 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -268,7 +270,8 @@
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    SOURCE_MAP_ROOT_NAME,
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -334,13 +337,15 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ParseResultSourceMap {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionSourceMapVc {
         <span class="kw">let </span>map = <span class="self">self</span>.source_map.build_source_map_with_config(
             <span class="kw-2">&amp;</span><span class="self">self</span>.mappings,
             <span class="prelude-val">None</span>,
             InlineSourcesContentConfig {},
         );
-        SourceMapVc::new_regular(map)
+        OptionSourceMapVc::cell(<span class="prelude-val">Some</span>(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
     }
 }
 
@@ -352,8 +357,7 @@
 <span class="kw">impl </span>SourceMapGenConfig <span class="kw">for </span>InlineSourcesContentConfig {
     <span class="kw">fn </span>file_name_to_source(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;</span>FileName) -&gt; String {
         <span class="kw">match </span>f {
-            <span class="comment">// The Custom filename surrounds the name with &lt;&gt;.
-            </span>FileName::Custom(s) =&gt; <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, s),
+            FileName::Custom(s) =&gt; <span class="macro">format!</span>(<span class="string">&quot;/{SOURCE_MAP_ROOT_NAME}/{s}&quot;</span>),
             <span class="kw">_ </span>=&gt; f.to_string(),
         }
     }
@@ -415,7 +419,7 @@
         },
     );
 
-    <span class="kw">let </span>fm = source_map.new_source_file(FileName::Custom(fs_path.path.clone()), string);
+    <span class="kw">let </span>fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), string);
 
     <span class="kw">let </span>config = ParserConfig {
         css_modules: <span class="macro">matches!</span>(ty, CssModuleAssetType::Module),

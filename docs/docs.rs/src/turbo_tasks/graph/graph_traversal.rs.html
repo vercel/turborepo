@@ -182,13 +182,6 @@
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -255,13 +248,17 @@
     state: GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;,
 }
 
-<span class="kw">enum </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+<span class="attr">#[derive(Default)]
+</span><span class="kw">enum </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
     </span>Store: GraphStore&lt;Node&gt;,
     VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
 {
-    Completed,
-    Aborted { abort: Abort },
+    <span class="attr">#[default]
+    </span>Completed,
+    Aborted {
+        abort: Abort,
+    },
     Running(GraphTraversalRunningState&lt;Node, Store, VisitImpl, Abort, Impl&gt;),
 }
 
@@ -273,17 +270,6 @@
     store: Store,
     futures: FuturesUnordered&lt;With&lt;VisitImpl::EdgesFuture, Store::Handle&gt;&gt;,
     visit: VisitImpl,
-}
-
-<span class="kw">impl</span>&lt;Node, Store, VisitImpl, Abort, Impl&gt; Default
-    <span class="kw">for </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
-<span class="kw">where
-    </span>Store: GraphStore&lt;Node&gt;,
-    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
-{
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        GraphTraversalState::Completed
-    }
 }
 
 <span class="kw">pub enum </span>GraphTraversalResult&lt;Completed, Aborted&gt; {

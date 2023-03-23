@@ -3250,10 +3250,10 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Analyzer&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>add_conditional_effect&lt;<span class="lifetime">&#39;r</span>&gt;(
+    <span class="kw">fn </span>add_conditional_effect(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         test: <span class="kw-2">&amp;</span>Expr,
-        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;,
         ast_kind: AstParentKind,
         span: Span,
         <span class="kw-2">mut </span>cond_kind: ConditionalKind,

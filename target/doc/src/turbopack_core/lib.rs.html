@@ -34,6 +34,9 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(option_get_or_insert_default)]
@@ -64,6 +67,9 @@
 <span class="kw">mod </span>utils;
 <span class="kw">pub mod </span>version;
 <span class="kw">pub mod </span>virtual_asset;
+
+<span class="kw">pub const </span>PROJECT_FILESYSTEM_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;project&quot;</span>;
+<span class="kw">pub const </span>SOURCE_MAP_ROOT_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;turbopack&quot;</span>;
 
 <span class="kw">pub fn </span>register() {
     turbo_tasks::register();

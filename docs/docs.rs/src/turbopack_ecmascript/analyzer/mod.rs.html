@@ -3313,11 +3313,6 @@
 <a href="#3313" id="3313">3313</a>
 <a href="#3314" id="3314">3314</a>
 <a href="#3315" id="3315">3315</a>
-<a href="#3316" id="3316">3316</a>
-<a href="#3317" id="3317">3317</a>
-<a href="#3318" id="3318">3318</a>
-<a href="#3319" id="3319">3319</a>
-<a href="#3320" id="3320">3320</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::Ordering,
@@ -3470,9 +3465,10 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+<span class="attr">#[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
 </span><span class="kw">pub enum </span>ConstantValue {
-    Undefined,
+    <span class="attr">#[default]
+    </span>Undefined,
     Str(ConstantString),
     Num(ConstantNumber),
     True,
@@ -3521,12 +3517,6 @@
 
     <span class="kw">pub fn </span>is_value_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         !<span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Regex(..))
-    }
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>ConstantValue {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        ConstantValue::Undefined
     }
 }
 

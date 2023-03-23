@@ -113,7 +113,6 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     future::Future,
@@ -158,11 +157,10 @@
     }
 }
 
+<span class="kw">type </span>BindFn = Box&lt;<span class="kw">dyn </span>(Fn(<span class="kw-2">&amp;</span>Vec&lt;TaskInput&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NativeTaskFn&gt;) + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
+
 <span class="kw">impl </span>NativeFunction {
-    <span class="kw">pub fn </span>new(
-        name: String,
-        bind_fn: Box&lt;<span class="kw">dyn </span>(Fn(<span class="kw-2">&amp;</span>Vec&lt;TaskInput&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NativeTaskFn&gt;) + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
-    ) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(name: String, bind_fn: BindFn) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name,
             bind_fn,

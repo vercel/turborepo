@@ -328,7 +328,7 @@
     chunk::{Chunk, ChunkGroupVc, ChunkingContext, ModuleId, ModuleIdReadRef},
     code_builder::{CodeBuilder, CodeVc},
     environment::ChunkLoading,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     version::{
         MergeableVersionedContent, MergeableVersionedContentVc, UpdateVc, VersionVc,
         VersionedContent, VersionedContentMergerVc, VersionedContentVc,
@@ -596,7 +596,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>EcmascriptDevChunkContent {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>generate_source_map(self_vc: EcmascriptDevChunkContentVc) -&gt; SourceMapVc {
+    </span><span class="kw">fn </span>generate_source_map(self_vc: EcmascriptDevChunkContentVc) -&gt; OptionSourceMapVc {
         self_vc.code().generate_source_map()
     }
 
@@ -608,7 +608,7 @@
             <span class="kw">for </span>(entry_id, entry) <span class="kw">in </span><span class="self">self</span>.entries.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">if </span>id == <span class="kw-2">**</span>entry_id {
                     <span class="kw">let </span>sm = entry.code.generate_source_map();
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(OptionSourceMapVc::cell(<span class="prelude-val">Some</span>(sm)));
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(sm);
                 }
             }
         }
