@@ -228,9 +228,10 @@ async fn resolve_source_mapping(
 }
 
 #[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
 pub struct StructuredError {
-    name: String,
-    message: String,
+    pub name: String,
+    pub message: String,
     #[turbo_tasks(trace_ignore)]
     stack: Vec<StackFrame<'static>>,
 }

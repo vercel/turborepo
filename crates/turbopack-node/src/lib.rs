@@ -9,8 +9,6 @@ use indexmap::IndexSet;
 pub use node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use turbo_tasks::{
     graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
     CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
@@ -21,7 +19,6 @@ use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
-    issue::IssueSeverity,
     reference::primary_referenced_assets,
     source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
@@ -287,38 +284,9 @@ pub struct ResponseHeaders {
     pub headers: Vec<(String, String)>,
 }
 
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum EvalJavaScriptOutgoingMessage<'a> {
-    #[serde(rename_all = "camelCase")]
-    Evaluate { args: Vec<&'a JsonValue> },
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum EvalJavaScriptIncomingMessage {
-    FileDependency {
-        path: String,
-    },
-    BuildDependency {
-        path: String,
-    },
-    DirDependency {
-        path: String,
-        glob: String,
-    },
-    JsonValue {
-        data: String,
-    },
-    EmittedError {
-        severity: IssueSeverity,
-        error: StructuredError,
-    },
-    Error(StructuredError),
-}
-
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_bytes::register();
     turbo_tasks_fs::register();
     turbopack_dev_server::register();
     turbopack_ecmascript::register();
