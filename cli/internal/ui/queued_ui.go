@@ -41,8 +41,3 @@ func (u *QueuedUi) Output(message string) {
 func (u *QueuedUi) Warn(message string) {
 	u.ui.Warn(message)
 }
-
-func (u *QueuedUi) WriteOutput() {
-	u.out.Write(u.OutBuffer.Bytes())
-	u.err.Write(u.ErrBuffer.Bytes())
-}

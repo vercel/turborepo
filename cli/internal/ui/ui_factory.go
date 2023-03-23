@@ -93,20 +93,17 @@ func (factory *PrefixedUiFactory) Build(in io.Reader, out io.Writer, err io.Writ
 }
 
 type QueuedUiFactory struct {
-	Base UiFactory
+	Base   UiFactory
+	OutBuf *bytes.Buffer
+	ErrBuf *bytes.Buffer
 }
 
-func (factory *QueuedUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) *QueuedUi {
-	outBuf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-
+func (factory *QueuedUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
 	return &QueuedUi{
 		out: out,
 		err: err,
 		in:  in,
 
-		OutBuffer: outBuf,
-		ErrBuffer: errBuf,
-		ui:        factory.Base.Build(in, io.Writer(outBuf), io.Writer(errBuf)),
+		ui: factory.Base.Build(in, io.Writer(factory.OutBuf), io.Writer(factory.ErrBuf)),
 	}
 }

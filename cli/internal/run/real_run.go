@@ -1,8 +1,10 @@
 package run
 
 import (
+	"bytes"
 	gocontext "context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -75,12 +77,39 @@ func RealRun(
 		Base: base.UIFactory,
 	}
 
+	grouped := rs.Opts.runOpts.logOrder == "grouped"
+
+	var uiFactory ui.UiFactory
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+
+	var outWriter io.Writer
+	var errWriter io.Writer
+
+	if grouped {
+		queuedUiFactory := ui.QueuedUiFactory{
+			OutBuf: outBuf,
+			ErrBuf: errBuf,
+			Base:   &concurrentUIFactory,
+		}
+
+		uiFactory = &queuedUiFactory
+
+		outWriter = outBuf
+		errWriter = errBuf
+	} else {
+		uiFactory = &concurrentUIFactory
+
+		outWriter = os.Stdout
+		errWriter = os.Stderr
+	}
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runState:        runState,
 		rs:              rs,
-		ui:              concurrentUIFactory.Build(os.Stdin, os.Stdin, os.Stderr),
-		uiFactory:       &concurrentUIFactory,
+		ui:              uiFactory.Build(os.Stdin, os.Stdout, os.Stderr),
+		uiFactory:       uiFactory,
 		runCache:        runCache,
 		logger:          base.Logger,
 		packageManager:  packageManager,
@@ -88,6 +117,8 @@ func RealRun(
 		taskHashTracker: taskHashTracker,
 		repoRoot:        base.RepoRoot,
 		isSinglePackage: singlePackage,
+		outWriter:       outWriter,
+		errWriter:       errWriter,
 	}
 
 	// run the thing
@@ -103,7 +134,12 @@ func RealRun(
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps, &logMutex)
+		err := ec.exec(ctx, packageTask, deps, &logMutex)
+
+		os.Stdout.Write(outBuf.Bytes())
+		os.Stdout.Write(errBuf.Bytes())
+
+		return err
 	}
 
 	getArgs := func(taskID string) []string {
@@ -164,6 +200,8 @@ type execContext struct {
 	taskHashTracker *taskhash.Tracker
 	repoRoot        turbopath.AbsoluteSystemPath
 	isSinglePackage bool
+	outWriter       io.Writer
+	errWriter       io.Writer
 }
 
 func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
@@ -184,8 +222,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
-
-	grouped := ec.rs.Opts.runOpts.logOrder == "grouped"
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
@@ -259,7 +295,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix, ec.outWriter)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		ec.logError(progressLogger, prettyPrefix, err)
@@ -271,9 +307,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, grouped)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded

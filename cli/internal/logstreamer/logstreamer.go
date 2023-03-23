@@ -143,24 +143,24 @@ func (l *Logstreamer) out(str string) {
 	l.Logger.Print(str)
 }
 
-// PrettyStdoutWriter wraps an ioWriter so it can add string
+// PrettyIoWriter wraps an ioWriter so it can add string
 // prefixes to every message it writes to stdout.
-type PrettyStdoutWriter struct {
+type PrettyIoWriter struct {
 	w      io.Writer
 	Prefix string
 }
 
-var _ io.Writer = (*PrettyStdoutWriter)(nil)
+var _ io.Writer = (*PrettyIoWriter)(nil)
 
-// NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
-func NewPrettyStdoutWriter(prefix string) *PrettyStdoutWriter {
-	return &PrettyStdoutWriter{
-		w:      os.Stdout,
+// NewPrettyIoWriter returns an instance of PrettyStdoutWriter
+func NewPrettyIoWriter(prefix string, ioWriter io.Writer) *PrettyIoWriter {
+	return &PrettyIoWriter{
+		w:      ioWriter,
 		Prefix: prefix,
 	}
 }
 
-func (psw *PrettyStdoutWriter) Write(p []byte) (int, error) {
+func (psw *PrettyIoWriter) Write(p []byte) (int, error) {
 	str := psw.Prefix + string(p)
 	n, err := psw.w.Write([]byte(str))
 
