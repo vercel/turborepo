@@ -141,7 +141,6 @@ func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
 }
 
 // record sends the summary to the API
-// TODO: make this async using a channel
 // TODO: make this work for single package tasks
 func (rsm *Meta) record() []error {
 	errs := []error{}
