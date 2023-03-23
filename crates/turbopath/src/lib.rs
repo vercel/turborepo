@@ -1,5 +1,6 @@
 use std::{
     borrow::{Borrow, Cow},
+    cmp::Ordering,
     collections::TryReserveError,
     error,
     ffi::{OsStr, OsString},
@@ -683,24 +684,128 @@ impl FromStr for AbsoluteSystemPathBuf {
 }
 
 // Comparison
+macro_rules! impl_cmp {
+    (<$($life:lifetime),*> $lhs:ty, $rhs: ty) => {
+        impl<$($life),*> PartialEq<$rhs> for $lhs {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool {
+                <AbsoluteSystemPath as PartialEq>::eq(self, other)
+            }
+        }
 
-// TODO
-// impl_cmp!(PathBuf, Path);
-// impl_cmp!(PathBuf, &'a Path);
-// impl_cmp!(Cow<'a, Path>, Path);
-// impl_cmp!(Cow<'a, Path>, &'b Path);
-// impl_cmp!(Cow<'a, Path>, PathBuf);
-// impl_cmp_os_str!(PathBuf, OsStr);
-// impl_cmp_os_str!(PathBuf, &'a OsStr);
-// impl_cmp_os_str!(PathBuf, Cow<'a, OsStr>);
-// impl_cmp_os_str!(PathBuf, OsString);
-// impl_cmp_os_str!(Path, OsStr);
-// impl_cmp_os_str!(Path, &'a OsStr);
-// impl_cmp_os_str!(Path, Cow<'a, OsStr>);
-// impl_cmp_os_str!(Path, OsString);
-// impl_cmp_os_str!(&'a Path, OsStr);
-// impl_cmp_os_str!(&'a Path, Cow<'b, OsStr>);
-// impl_cmp_os_str!(&'a Path, OsString);
-// impl_cmp_os_str!(Cow<'a, Path>, OsStr);
-// impl_cmp_os_str!(Cow<'a, Path>, &'b OsStr);
-// impl_cmp_os_str!(Cow<'a, Path>, OsString);
+        impl<$($life),*> PartialEq<$lhs> for $rhs {
+            #[inline]
+            fn eq(&self, other: &$lhs) -> bool {
+                <AbsoluteSystemPath as PartialEq>::eq(self, other)
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$rhs> for $lhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$rhs) -> Option<Ordering> {
+                <AbsoluteSystemPath as PartialOrd>::partial_cmp(self, other)
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$lhs> for $rhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$lhs) -> Option<Ordering> {
+                <AbsoluteSystemPath as PartialOrd>::partial_cmp(self, other)
+            }
+        }
+    };
+}
+
+impl_cmp!(<> AbsoluteSystemPathBuf, AbsoluteSystemPath);
+impl_cmp!(<'a> AbsoluteSystemPathBuf, &'a AbsoluteSystemPath);
+impl_cmp!(<'a> Cow<'a, AbsoluteSystemPath>, AbsoluteSystemPath);
+impl_cmp!(<'a, 'b> Cow<'a, AbsoluteSystemPath>, &'b AbsoluteSystemPath);
+impl_cmp!(<'a> Cow<'a, AbsoluteSystemPath>, AbsoluteSystemPathBuf);
+
+macro_rules! impl_cmp_std_path {
+    (<$($life:lifetime),*> $lhs:ty, $rhs: ty) => {
+        impl<$($life),*> PartialEq<$rhs> for $lhs {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool {
+                <Path as PartialEq>::eq(self.as_ref(), other)
+            }
+        }
+
+        impl<$($life),*> PartialEq<$lhs> for $rhs {
+            #[inline]
+            fn eq(&self, other: &$lhs) -> bool {
+                <Path as PartialEq>::eq(self, other.as_ref())
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$rhs> for $lhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$rhs) -> Option<Ordering> {
+                <Path as PartialOrd>::partial_cmp(self.as_ref(), other)
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$lhs> for $rhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$lhs) -> Option<Ordering> {
+                <Path as PartialOrd>::partial_cmp(self, other.as_ref())
+            }
+        }
+    };
+}
+
+impl_cmp_std_path!(<> AbsoluteSystemPathBuf, Path);
+impl_cmp_std_path!(<'a> AbsoluteSystemPathBuf, &'a Path);
+impl_cmp_std_path!(<'a> AbsoluteSystemPathBuf, Cow<'a, Path>);
+impl_cmp_std_path!(<> AbsoluteSystemPathBuf, PathBuf);
+impl_cmp_std_path!(<> AbsoluteSystemPath, Path);
+impl_cmp_std_path!(<'a> AbsoluteSystemPath, &'a Path);
+impl_cmp_std_path!(<'a> AbsoluteSystemPath, Cow<'a, Path>);
+impl_cmp_std_path!(<> AbsoluteSystemPath, PathBuf);
+impl_cmp_std_path!(<'a> &'a AbsoluteSystemPath, Path);
+impl_cmp_std_path!(<'a, 'b> &'a AbsoluteSystemPath, Cow<'b, Path>);
+impl_cmp_std_path!(<'a> &'a AbsoluteSystemPath, PathBuf);
+
+macro_rules! impl_cmp_os_str {
+    (<$($life:lifetime),*> $lhs:ty, $rhs: ty) => {
+        impl<$($life),*> PartialEq<$rhs> for $lhs {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool {
+                <Path as PartialEq>::eq(self.as_ref(), other.as_ref())
+            }
+        }
+
+        impl<$($life),*> PartialEq<$lhs> for $rhs {
+            #[inline]
+            fn eq(&self, other: &$lhs) -> bool {
+                <Path as PartialEq>::eq(self.as_ref(), other.as_ref())
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$rhs> for $lhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$rhs) -> Option<Ordering> {
+                <Path as PartialOrd>::partial_cmp(self.as_ref(), other.as_ref())
+            }
+        }
+
+        impl<$($life),*> PartialOrd<$lhs> for $rhs {
+            #[inline]
+            fn partial_cmp(&self, other: &$lhs) -> Option<Ordering> {
+                <Path as PartialOrd>::partial_cmp(self.as_ref(), other.as_ref())
+            }
+        }
+    };
+}
+
+impl_cmp_os_str!(<> AbsoluteSystemPathBuf, OsStr);
+impl_cmp_os_str!(<'a> AbsoluteSystemPathBuf, &'a OsStr);
+impl_cmp_os_str!(<'a> AbsoluteSystemPathBuf, Cow<'a, OsStr>);
+impl_cmp_os_str!(<> AbsoluteSystemPathBuf, OsString);
+impl_cmp_os_str!(<> AbsoluteSystemPath, OsStr);
+impl_cmp_os_str!(<'a> AbsoluteSystemPath, &'a OsStr);
+impl_cmp_os_str!(<'a> AbsoluteSystemPath, Cow<'a, OsStr>);
+impl_cmp_os_str!(<> AbsoluteSystemPath, OsString);
+impl_cmp_os_str!(<'a> &'a AbsoluteSystemPath, OsStr);
+impl_cmp_os_str!(<'a, 'b> &'a AbsoluteSystemPath, Cow<'b, OsStr>);
+impl_cmp_os_str!(<'a> &'a AbsoluteSystemPath, OsString);
