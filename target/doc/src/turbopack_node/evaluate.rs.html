@@ -445,18 +445,116 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, thread::available_parallelism, time::Duration};
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>async_stream::stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
 <span class="kw">use </span>indexmap::indexmap;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
 };
+<span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{
-    glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
+    glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
@@ -476,18 +574,53 @@
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
     emit, emit_package_json,
-    pool::{NodeJsPool, NodeJsPoolVc},
-    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, StructuredError,
+    pool::{NodeJsOperation, NodeJsPool, NodeJsPoolVc},
+    StructuredError,
 };
 
-<span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
-</span><span class="kw">pub enum </span>JavaScriptValue {
-    Error,
-    Value(Rope),
-    <span class="comment">// TODO, support stream in the future
-    </span>Stream(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Vec&lt;u8&gt;),
+<span class="attr">#[derive(Serialize)]
+#[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+</span><span class="kw">enum </span>EvalJavaScriptOutgoingMessage&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="attr">#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+    </span>Evaluate { args: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>JsonValue&gt; },
 }
+
+<span class="attr">#[derive(Deserialize)]
+#[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+</span><span class="kw">enum </span>EvalJavaScriptIncomingMessage {
+    FileDependency {
+        path: String,
+    },
+    BuildDependency {
+        path: String,
+    },
+    DirDependency {
+        path: String,
+        glob: String,
+    },
+    EmittedError {
+        severity: IssueSeverity,
+        error: StructuredError,
+    },
+    Value {
+        <span class="comment">// TODO(WEB-735): There is like 3 levels of JSON string encoding that goes into returning a
+        // value, making it really inefficient.
+        </span>data: String,
+    },
+    End {
+        data: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    },
+    Error(StructuredError),
+}
+
+<span class="kw">type </span>LoopResult = ControlFlow&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;, StructuredError&gt;, String&gt;;
+
+<span class="kw">type </span>EvaluationItem = <span class="prelude-ty">Result</span>&lt;Bytes, String&gt;;
+<span class="kw">type </span>JavaScriptStream = Stream&lt;EvaluationItem&gt;;
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>JavaScriptEvaluation(<span class="attr">#[turbo_tasks(trace_ignore)] </span>JavaScriptStream);
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="doccomment">/// Pass the file you cared as `runtime_entries` to invalidate and reload the
@@ -629,7 +762,7 @@
     args: Vec&lt;JsonValueVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
-) -&gt; <span class="prelude-ty">Result</span>&lt;JavaScriptValueVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;JavaScriptEvaluationVc&gt; {
     <span class="kw">let </span>pool = get_evaluate_pool(
         module_asset,
         cwd,
@@ -643,6 +776,9 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>args = args.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// Assume this is a one-off operation, so we can kill the process
+    // TODO use a better way to decide that.
+    </span><span class="kw">let </span>kill = args.is_empty();
 
     <span class="comment">// Workers in the pool could be in a bad state that we didn&#39;t detect yet.
     // The bad state might even be unnoticable until we actually send the job to the
@@ -664,13 +800,69 @@
     .<span class="kw">await
     </span>.map_err(|(e, <span class="kw">_</span>)| e)<span class="question-mark">?</span>;
 
+    <span class="comment">// The evaluation sent an initial intermediate value without completing. We&#39;ll
+    // need to spawn a new thread to continually pull data out of the process,
+    // and ferry that along.
+    </span><span class="kw">let </span>stream = JavaScriptStream::new_open(
+        <span class="macro">vec!</span>[],
+        Box::pin(<span class="macro">generator! </span>{
+            <span class="macro">macro_rules! </span>tri {
+                (<span class="macro-nonterminal">$exp</span>:expr) =&gt; {
+                    <span class="kw">match </span><span class="macro-nonterminal">$exp </span>{
+                        <span class="prelude-val">Ok</span>(v) =&gt; v,
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="kw">yield </span><span class="prelude-val">Err</span>(e.to_string());
+                            <span class="kw">return</span>;
+                        }
+                    }
+                }
+            }
+
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>output = <span class="macro">tri!</span>(pull_operation(<span class="kw-2">&amp;mut </span>operation, cwd, context_ident_for_issue).<span class="kw">await</span>);
+
+                <span class="kw">match </span>output {
+                    LoopResult::Continue(data) =&gt; {
+                        <span class="kw">yield </span><span class="prelude-val">Ok</span>(data.into());
+                    }
+                    LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(data))) =&gt; {
+                        <span class="kw">yield </span><span class="prelude-val">Ok</span>(data.into());
+                        <span class="kw">break</span>;
+                    }
+                    LoopResult::Break(<span class="prelude-val">Err</span>(e)) =&gt; {
+                        <span class="kw">yield </span><span class="prelude-val">Err</span>(e.message);
+                        <span class="kw">break</span>;
+                    }
+                    LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)) =&gt; {
+                        <span class="kw">break</span>;
+                    }
+                }
+            }
+
+            <span class="kw">if </span>kill {
+                <span class="macro">tri!</span>(operation.wait_or_kill().<span class="kw">await</span>);
+            }
+        }),
+    );
+
+    <span class="prelude-val">Ok</span>(JavaScriptEvaluation(stream).cell())
+}
+
+<span class="doccomment">/// Repeatedly pulls from the NodeJsOperation until we receive a
+/// value/error/end.
+</span><span class="kw">async fn </span>pull_operation(
+    operation: <span class="kw-2">&amp;mut </span>NodeJsOperation,
+    cwd: FileSystemPathVc,
+    context_ident_for_issue: AssetIdentVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;LoopResult&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>file_dependencies = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>dir_dependencies = Vec::new();
+
     <span class="kw">let </span>output = <span class="kw">loop </span>{
         <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
             EvalJavaScriptIncomingMessage::Error(error) =&gt; {
                 EvaluationIssue {
-                    error,
+                    error: error.clone(),
                     context_ident: context_ident_for_issue,
                     cwd,
                 }
@@ -679,16 +871,10 @@
                 .emit();
                 <span class="comment">// Do not reuse the process in case of error
                 </span>operation.disallow_reuse();
-                <span class="kw">break </span>JavaScriptValue::Error;
+                <span class="kw">break </span>ControlFlow::Break(<span class="prelude-val">Err</span>(error));
             }
-            EvalJavaScriptIncomingMessage::JsonValue { data } =&gt; {
-                <span class="kw">if </span>args.is_empty() {
-                    <span class="comment">// Assume this is a one-off operation, so we can kill the process
-                    // TODO use a better way to decide that.
-                    </span>operation.wait_or_kill().<span class="kw">await</span><span class="question-mark">?</span>;
-                }
-                <span class="kw">break </span>JavaScriptValue::Value(data.into());
-            }
+            EvalJavaScriptIncomingMessage::Value { data } =&gt; <span class="kw">break </span>ControlFlow::Continue(data),
+            EvalJavaScriptIncomingMessage::End { data } =&gt; <span class="kw">break </span>ControlFlow::Break(<span class="prelude-val">Ok</span>(data)),
             EvalJavaScriptIncomingMessage::FileDependency { path } =&gt; {
                 <span class="comment">// TODO We might miss some changes that happened during execution
                 </span>file_dependencies.push(cwd.join(<span class="kw-2">&amp;</span>path).read());
@@ -722,6 +908,7 @@
             }
         }
     };
+
     <span class="comment">// Read dependencies to make them a dependencies of this task. This task will
     // execute again when they change.
     </span><span class="kw">for </span>dep <span class="kw">in </span>file_dependencies {
@@ -730,7 +917,8 @@
     <span class="kw">for </span>dep <span class="kw">in </span>dir_dependencies {
         dep.<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="prelude-val">Ok</span>(output.cell())
+
+    <span class="prelude-val">Ok</span>(output)
 }
 
 <span class="doccomment">/// An issue that occurred while evaluating node code.

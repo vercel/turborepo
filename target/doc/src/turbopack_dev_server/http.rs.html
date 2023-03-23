@@ -205,6 +205,16 @@
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
 <span class="kw">use </span>anyhow::Result;
@@ -218,13 +228,14 @@
 <span class="kw">use </span>mime_guess::mime;
 <span class="kw">use </span>tokio_util::io::{ReaderStream, StreamReader};
 <span class="kw">use </span>turbo_tasks::TransientInstance;
+<span class="kw">use </span>turbo_tasks_bytes::Bytes;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef};
 <span class="kw">use </span>turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 
 <span class="kw">use </span><span class="kw">crate</span>::source::{
     request::SourceRequest,
     resolve::{resolve_source_request, ResolveSourceRequestResult},
-    Body, Bytes, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
+    Body, BodyError, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
@@ -400,8 +411,17 @@
 <span class="kw">async fn </span>http_request_to_source_request(request: Request&lt;hyper::Body&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;SourceRequest&gt; {
     <span class="kw">let </span>(parts, body) = request.into_parts();
 
-    <span class="kw">let </span>bytes: Vec&lt;<span class="kw">_</span>&gt; = body
-        .map(|bytes| bytes.map(Bytes::from))
+    <span class="comment">// For simplicity, we fully consume the body now and early return if there were
+    // any errors.
+    </span><span class="kw">let </span>bytes: Vec&lt;<span class="kw">_</span>&gt; = body
+        .map(|bytes| {
+            bytes.map_or_else(
+                |e| <span class="prelude-val">Err</span>(BodyError::new(e.to_string())),
+                <span class="comment">// The outer Ok is consumed by try_collect, but the Body type requires a Result, so
+                // we need to double wrap.
+                </span>|b| <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(Bytes::from(b))),
+            )
+        })
         .try_collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         .<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -189,11 +189,17 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
-<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_rope_with_source_context, File, FileContent};
+<span class="kw">use </span>turbo_tasks_bytes::stream::SingleValue;
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
@@ -210,7 +216,7 @@
 <span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 <span class="kw">use crate</span>::{
     embed_js::embed_file_path,
-    evaluate::{evaluate, JavaScriptValue},
+    evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
 
@@ -364,15 +370,19 @@
             <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>JavaScriptValue::Value(val) = <span class="kw-2">&amp;*</span>config_value <span class="kw">else </span>{
+
+        <span class="kw">let </span>SingleValue::Single(<span class="prelude-val">Ok</span>(val)) = config_value.into_single().<span class="kw">await else </span>{
             <span class="comment">// An error happened, which has already been converted into an issue.
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new()
             }.cell());
         };
-        <span class="kw">let </span>processed: WebpackLoadersProcessingResult = parse_json_rope_with_source_context(val)
-            .context(<span class="string">&quot;Unable to deserializate response from webpack loaders transform operation&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>processed: WebpackLoadersProcessingResult = parse_json_with_source_context(
+            val.to_str()<span class="question-mark">?</span>,
+        )
+        .context(<span class="string">&quot;Unable to deserializate response from webpack loaders transform operation&quot;</span>)<span class="question-mark">?</span>;
+
         <span class="comment">// TODO handle SourceMap
         </span><span class="kw">let </span>file = File::from(processed.source);
         <span class="kw">let </span>assets = emitted_assets_to_virtual_assets(processed.assets);

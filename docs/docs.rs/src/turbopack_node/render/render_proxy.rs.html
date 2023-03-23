@@ -156,8 +156,8 @@
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -234,13 +234,11 @@
         .send(RenderProxyOutgoingMessage::Headers { data: <span class="kw-2">&amp;</span>data })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>body = body.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>body = body.<span class="kw">await</span><span class="question-mark">?</span>.read();
     <span class="comment">// Then, send the binary body in chunks.
-    </span><span class="kw">for </span>chunk <span class="kw">in </span>body.chunks() {
+    </span><span class="kw">while let </span><span class="prelude-val">Some</span>(data) = body.next().<span class="kw">await </span>{
         operation
-            .send(RenderProxyOutgoingMessage::BodyChunk {
-                data: chunk.as_bytes(),
-            })
+            .send(RenderProxyOutgoingMessage::BodyChunk { data: <span class="kw-2">&amp;</span>data<span class="question-mark">? </span>})
             .<span class="kw">await</span><span class="question-mark">?</span>;
     }
 

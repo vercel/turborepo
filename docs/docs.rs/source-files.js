@@ -5,6 +5,7 @@ var sourcesIndex = JSON.parse('{\
 "turbo_malloc":["",[],["counter.rs","lib.rs"]],\
 "turbo_tasks":["",[["debug",[],["internal.rs","mod.rs"]],["graph",[],["control_flow.rs","graph_store.rs","graph_traversal.rs","mod.rs","non_deterministic.rs","reverse_topological.rs","visit.rs","with_future.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","event.rs","id.rs","id_factory.rs","invalidation.rs","join_iter_ext.rs","lib.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","trait_ref.rs","util.rs","value.rs","value_type.rs"]],\
 "turbo_tasks_build":["",[],["lib.rs"]],\
+"turbo_tasks_bytes":["",[],["bytes.rs","lib.rs","stream.rs"]],\
 "turbo_tasks_env":["",[],["command_line.rs","custom.rs","dotenv.rs","filter.rs","lib.rs"]],\
 "turbo_tasks_fetch":["",[],["lib.rs"]],\
 "turbo_tasks_fs":["",[["embed",[],["dir.rs","file.rs","fs.rs","mod.rs"]]],["attach.rs","glob.rs","invalidation.rs","invalidator_map.rs","json.rs","lib.rs","mutex_map.rs","read_glob.rs","retry.rs","rope.rs","source_context.rs","util.rs"]],\

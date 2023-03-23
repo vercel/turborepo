@@ -1843,7 +1843,7 @@
         <span class="kw">let </span>shared = Rope::from(<span class="string">&quot;def&quot;</span>);
         <span class="kw">let </span>rope = Rope::new(<span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>.into(), shared.into(), <span class="string">&quot;ghi&quot;</span>.into()]);
 
-        <span class="kw">let </span>chunks = rope.read().into_iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>chunks = rope.read().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="macro">assert_eq!</span>(chunks, <span class="macro">vec!</span>[<span class="string">&quot;abc&quot;</span>, <span class="string">&quot;def&quot;</span>, <span class="string">&quot;ghi&quot;</span>]);
     }

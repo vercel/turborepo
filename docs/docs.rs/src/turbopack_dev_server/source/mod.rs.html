@@ -550,7 +550,6 @@
 <a href="#550" id="550">550</a>
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -566,12 +565,15 @@
 <span class="kw">pub mod </span>static_assets;
 <span class="kw">pub mod </span>wrapping_source;
 
-<span class="kw">use </span>std::{collections::BTreeSet, sync::Arc};
+<span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>serde::{Deserialize, Serialize, Serializer};
+<span class="kw">use </span>futures::stream::Stream <span class="kw">as </span>StreamTrait;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, Value};
-<span class="kw">use </span>turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream, StreamRead};
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::version::VersionedContentVc;
 
 <span class="kw">use </span><span class="self">self</span>::{
@@ -587,7 +589,19 @@
     <span class="doccomment">/// Headers arranged as contiguous (name, value) pairs.
     </span><span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
     <span class="doccomment">/// The body to return.
-    </span><span class="kw">pub </span>body: Rope,
+    </span><span class="kw">pub </span>body: Body,
+}
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Error)]
+#[error(<span class="string">&quot;{err}&quot;</span>)]
+</span><span class="kw">pub struct </span>BodyError {
+    err: String,
+}
+
+<span class="kw">impl </span>BodyError {
+    <span class="kw">pub fn </span>new(err: String) -&gt; <span class="self">Self </span>{
+        BodyError { err }
+    }
 }
 
 <span class="doccomment">/// The return value of a content source when getting a path. A specificity is
@@ -784,56 +798,40 @@
     </span><span class="kw">pub </span>cache_buster: u64,
 }
 
+<span class="kw">type </span>Chunk = <span class="prelude-ty">Result</span>&lt;Bytes, BodyError&gt;;
 <span class="doccomment">/// A request body.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>Body {
-    <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-    </span>chunks: Arc&lt;Vec&lt;Bytes&gt;&gt;,
+    <span class="attr">#[turbo_tasks(trace_ignore)]
+    </span>chunks: Stream&lt;Chunk&gt;,
 }
 
 <span class="kw">impl </span>Body {
     <span class="doccomment">/// Creates a new body from a list of chunks.
-    </span><span class="kw">pub fn </span>new(chunks: Vec&lt;Bytes&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(chunks: Vec&lt;Chunk&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            chunks: Arc::new(chunks),
+            chunks: Stream::new_closed(chunks),
         }
     }
 
     <span class="doccomment">/// Returns an iterator over the body&#39;s chunks.
-    </span><span class="kw">pub fn </span>chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Bytes&gt; {
-        <span class="self">self</span>.chunks.iter()
+    </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StreamRead&lt;Chunk&gt; {
+        <span class="self">self</span>.chunks.read()
+    }
+
+    <span class="kw">pub fn </span>from_stream&lt;T: StreamTrait&lt;Item = Chunk&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;(
+        source: T,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            chunks: Stream::from(source),
+        }
     }
 }
 
-<span class="doccomment">/// A wrapper around [hyper::body::Bytes] that implements [Serialize] and
-/// [Deserialize].
-</span><span class="attr">#[derive(Clone, Eq, PartialEq, Debug)]
-</span><span class="kw">pub struct </span>Bytes(hyper::body::Bytes);
-
-<span class="kw">impl </span>Bytes {
-    <span class="doccomment">/// Returns the bytes as a slice.
-    </span><span class="kw">pub fn </span>as_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
-        <span class="self">self</span>.<span class="number">0</span>.as_ref()
-    }
-}
-
-<span class="kw">impl </span>From&lt;hyper::body::Bytes&gt; <span class="kw">for </span>Bytes {
-    <span class="kw">fn </span>from(bytes: hyper::body::Bytes) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(bytes)
-    }
-}
-
-<span class="kw">impl </span>Serialize <span class="kw">for </span>Bytes {
-    <span class="kw">fn </span>serialize&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-        serializer.serialize_bytes(<span class="self">self</span>.<span class="number">0</span>.as_ref())
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>Bytes {
-    <span class="kw">fn </span>deserialize&lt;D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(Bytes(hyper::body::Bytes::from(bytes)))
+<span class="kw">impl</span>&lt;T: Into&lt;Bytes&gt;&gt; From&lt;T&gt; <span class="kw">for </span>Body {
+    <span class="kw">fn </span>from(value: T) -&gt; <span class="self">Self </span>{
+        Body::new(<span class="macro">vec!</span>[<span class="prelude-val">Ok</span>(value.into())])
     }
 }
 

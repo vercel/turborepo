@@ -90,9 +90,6 @@
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 
 <span class="kw">use </span>anyhow::Result;
@@ -141,9 +138,6 @@
         <span class="self">Self</span>::cell(Vec::new())
     }
 }
-
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>Bytes(Vec&lt;u8&gt;);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>Bool(bool);

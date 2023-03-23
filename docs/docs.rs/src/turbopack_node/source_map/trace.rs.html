@@ -152,7 +152,7 @@
 ///
 /// Line and column can be None if the frame is anonymous.
 </span><span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>StackFrame {
     <span class="kw">pub </span>file: String,
     <span class="attr">#[serde(rename = <span class="string">&quot;lineNumber&quot;</span>)]
