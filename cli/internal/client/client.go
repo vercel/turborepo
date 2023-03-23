@@ -266,7 +266,7 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 
 	requestURL := c.makeURL(endpoint + encoded)
 
-	allowAuth := false
+	allowAuth := true
 	if c.usePreflight {
 		resp, latestRequestURL, err := c.doPreflight(requestURL, method, "Authorization, User-Agent")
 		if err != nil {
