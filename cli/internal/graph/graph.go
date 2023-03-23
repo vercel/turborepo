@@ -215,7 +215,8 @@ func (g *CompleteGraph) getTaskGraphAncestors(taskGraph *dag.AcyclicGraph, taskI
 			stringAncestors = append(stringAncestors, dep.(string))
 		}
 	}
-	// TODO(mehulkar): Why are ancestors not sorted, but getTaskGraphDescendants sorts?
+
+	sort.Strings(stringAncestors)
 	return stringAncestors, nil
 }
 
