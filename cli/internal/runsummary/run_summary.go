@@ -106,7 +106,7 @@ func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
 			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
 		}
 
-		if rsm.spaceID != "" {
+		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
 			if err := rsm.record(); err != nil {
 				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
 			}
