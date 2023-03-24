@@ -501,8 +501,8 @@ impl RunningNodeJsPoolProcess {
             self.stderr_handler.handle_operation(),
         );
         let result = result?;
-        stdout.context("unable to handle stdout from the node.js process in a structured way")?;
-        stderr.context("unable to handle stderr from the node.js process in a structured way")?;
+        stdout.context("unable to handle stdout from the Node.js process in a structured way")?;
+        stderr.context("unable to handle stderr from the Node.js process in a structured way")?;
         Ok(result)
     }
 

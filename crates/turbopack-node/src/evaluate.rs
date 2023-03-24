@@ -325,7 +325,7 @@ async fn compute_evaluate_stream(
         let kill = args.is_empty();
 
         // Workers in the pool could be in a bad state that we didn't detect yet.
-        // The bad state might even be unnoticable until we actually send the job to the
+        // The bad state might even be unnoticeable until we actually send the job to the
         // worker. So we retry picking workers from the pools until we succeed
         // sending the job.
 
