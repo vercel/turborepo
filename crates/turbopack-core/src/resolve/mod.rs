@@ -1148,7 +1148,7 @@ async fn resolved(
 
     if let Some(resolved_map) = resolved_map {
         let result = resolved_map
-            .lookup(original_context, *path, original_request)
+            .lookup(*path, original_context, original_request)
             .await?;
         let resolved_result = resolve_import_map_result(
             &result,
