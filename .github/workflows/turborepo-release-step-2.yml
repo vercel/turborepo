@@ -64,7 +64,7 @@ jobs:
           echo "$(pwd)/../zig" >> $GITHUB_PATH
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2023-03-20
           override: true
       - run: |
           rustup target add aarch64-unknown-linux-musl
