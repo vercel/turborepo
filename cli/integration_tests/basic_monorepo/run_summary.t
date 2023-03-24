@@ -17,8 +17,8 @@ Setup
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
   {
-    "start": "[0-9-:\.TZ]+", (re)
-    "duration": [0-9]+, (re)
+    "startTime": [0-9]+, (re)
+    "endTime": [0-9]+, (re)
     "status": "built",
     "error": null
   }
@@ -29,8 +29,8 @@ Setup
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "util#build")) | .[0].execution'
   {
-    "start": "[0-9-:\.TZ]+", (re)
-    "duration": [0-9]+, (re)
+    "startTime": [0-9]+, (re)
+    "endTime": [0-9]+, (re)
     "status": "built",
     "error": null
   }
