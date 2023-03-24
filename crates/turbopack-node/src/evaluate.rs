@@ -380,6 +380,9 @@ async fn compute_evaluate_stream(
         if sender.send(value).await.is_err() {
             return;
         }
+        if sender.flush().await.is_err() {
+            return;
+        }
     }
 }
 
