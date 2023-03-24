@@ -291,6 +291,16 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::Write,
@@ -318,6 +328,8 @@
 <span class="kw">pub mod </span>content_source;
 <span class="kw">pub mod </span>trace;
 
+<span class="kw">const </span>MAX_CODE_FRAMES: usize = <span class="number">3</span>;
+
 <span class="kw">pub async fn </span>apply_source_mapping(
     text: <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>str,
     assets_for_source_mapping: AssetsForSourceMappingVc,
@@ -333,6 +345,7 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(Cow::Borrowed(text));
     }
     <span class="kw">let </span><span class="kw-2">mut </span>first_error = <span class="bool-val">true</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>visible_code_frames = <span class="number">0</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>new = String::with_capacity(text.len() * <span class="number">2</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>last_match = <span class="number">0</span>;
     <span class="kw">for </span>cap <span class="kw">in </span>it {
@@ -359,6 +372,7 @@
             resolved,
             <span class="kw-2">&amp;</span>frame,
             <span class="kw-2">&amp;mut </span>first_error,
+            <span class="kw-2">&amp;mut </span>visible_code_frames,
             formatting_mode,
         )<span class="question-mark">?</span>;
         last_match = m.end();
@@ -372,6 +386,7 @@
     resolved: <span class="prelude-ty">Result</span>&lt;ResolvedSourceMapping&gt;,
     original_frame: <span class="kw-2">&amp;</span>StackFrame&lt;<span class="lifetime">&#39;_</span>&gt;,
     first_error: <span class="kw-2">&amp;mut </span>bool,
+    visible_code_frames: <span class="kw-2">&amp;mut </span>usize,
     formatting_mode: FormattingMode,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">const </span>PADDING: <span class="kw-2">&amp;</span>str = <span class="string">&quot;\n    &quot;</span>;
@@ -432,16 +447,19 @@
             <span class="kw">let </span>line = line.saturating_sub(<span class="number">1</span>);
             <span class="kw">let </span>column = column.saturating_sub(<span class="number">1</span>);
             <span class="kw">if let </span>FileLinesContent::Lines(lines) = <span class="kw-2">&amp;*</span>lines {
-                <span class="kw">let </span>lines = lines.iter().map(|l| l.content.as_str());
-                <span class="kw">let </span>ctx = get_source_context(lines, line, column, line, column);
-                <span class="kw">match </span>formatting_mode {
-                    FormattingMode::Plain =&gt; {
-                        <span class="macro">write!</span>(writable, <span class="string">&quot;\n{}&quot;</span>, ctx)<span class="question-mark">?</span>;
+                <span class="kw">if </span><span class="kw-2">*</span>visible_code_frames &lt; MAX_CODE_FRAMES {
+                    <span class="kw">let </span>lines = lines.iter().map(|l| l.content.as_str());
+                    <span class="kw">let </span>ctx = get_source_context(lines, line, column, line, column);
+                    <span class="kw">match </span>formatting_mode {
+                        FormattingMode::Plain =&gt; {
+                            <span class="macro">write!</span>(writable, <span class="string">&quot;\n{}&quot;</span>, ctx)<span class="question-mark">?</span>;
+                        }
+                        FormattingMode::AnsiColors =&gt; {
+                            writable.write_char(<span class="string">&#39;\n&#39;</span>)<span class="question-mark">?</span>;
+                            format_source_context_lines(<span class="kw-2">&amp;</span>ctx, writable);
+                        }
                     }
-                    FormattingMode::AnsiColors =&gt; {
-                        writable.write_char(<span class="string">&#39;\n&#39;</span>)<span class="question-mark">?</span>;
-                        format_source_context_lines(<span class="kw-2">&amp;</span>ctx, writable);
-                    }
+                    <span class="kw-2">*</span>visible_code_frames += <span class="number">1</span>;
                 }
             }
         }
@@ -549,6 +567,7 @@
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>first_error = <span class="bool-val">true</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>visible_code_frames = <span class="number">0</span>;
 
         <span class="kw">for </span>frame <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.stack {
             <span class="kw">let </span>frame = frame.unmangle_identifiers(magic);
@@ -560,6 +579,7 @@
                 resolved,
                 <span class="kw-2">&amp;</span>frame,
                 <span class="kw-2">&amp;mut </span>first_error,
+                <span class="kw-2">&amp;mut </span>visible_code_frames,
                 formatting_mode,
             )<span class="question-mark">?</span>;
         }
