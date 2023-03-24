@@ -223,7 +223,6 @@ stage-release: cmd/turbo/version.go
 	cat $(CLI_DIR)/../version.txt
 	git diff -- $(CLI_DIR)/../version.txt
 	git status
-	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Stop if versions are not updated.
