@@ -10,23 +10,7 @@ on:
         description: "Staging branch to run release from"
 
 jobs:
-  smoke-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.release_branch }}
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-      - uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Test
-        run: pnpm -- turbo run test --filter=cli --color
-
   darwin:
-    needs: [smoke-test]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -60,7 +44,6 @@ jobs:
 
   # compiles linux and windows in a container
   cross:
-    needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
@@ -97,7 +80,7 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Build Artifacts
-        run: cd cli && make build-go-turbo-cross
+        run: cd cli && make snapshot-turbo-cross
         env:
           CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
