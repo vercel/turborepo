@@ -841,8 +841,8 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>lookup(
         <span class="self">self</span>,
-        context: FileSystemPathVc,
         resolved: FileSystemPathVc,
+        context: FileSystemPathVc,
         request: RequestVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapResultVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;

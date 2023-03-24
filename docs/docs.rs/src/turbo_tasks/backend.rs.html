@@ -424,6 +424,14 @@
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -763,6 +771,14 @@
         parent_task: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
     );
+
+    <span class="kw">fn </span>mark_own_task_as_finished(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _task: TaskId,
+        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi&lt;<span class="self">Self</span>&gt;,
+    ) {
+        <span class="comment">// Do nothing by default
+    </span>}
 
     <span class="kw">fn </span>create_transient_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

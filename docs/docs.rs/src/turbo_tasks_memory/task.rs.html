@@ -2915,6 +2915,58 @@
 <a href="#2915" id="2915">2915</a>
 <a href="#2916" id="2916">2916</a>
 <a href="#2917" id="2917">2917</a>
+<a href="#2918" id="2918">2918</a>
+<a href="#2919" id="2919">2919</a>
+<a href="#2920" id="2920">2920</a>
+<a href="#2921" id="2921">2921</a>
+<a href="#2922" id="2922">2922</a>
+<a href="#2923" id="2923">2923</a>
+<a href="#2924" id="2924">2924</a>
+<a href="#2925" id="2925">2925</a>
+<a href="#2926" id="2926">2926</a>
+<a href="#2927" id="2927">2927</a>
+<a href="#2928" id="2928">2928</a>
+<a href="#2929" id="2929">2929</a>
+<a href="#2930" id="2930">2930</a>
+<a href="#2931" id="2931">2931</a>
+<a href="#2932" id="2932">2932</a>
+<a href="#2933" id="2933">2933</a>
+<a href="#2934" id="2934">2934</a>
+<a href="#2935" id="2935">2935</a>
+<a href="#2936" id="2936">2936</a>
+<a href="#2937" id="2937">2937</a>
+<a href="#2938" id="2938">2938</a>
+<a href="#2939" id="2939">2939</a>
+<a href="#2940" id="2940">2940</a>
+<a href="#2941" id="2941">2941</a>
+<a href="#2942" id="2942">2942</a>
+<a href="#2943" id="2943">2943</a>
+<a href="#2944" id="2944">2944</a>
+<a href="#2945" id="2945">2945</a>
+<a href="#2946" id="2946">2946</a>
+<a href="#2947" id="2947">2947</a>
+<a href="#2948" id="2948">2948</a>
+<a href="#2949" id="2949">2949</a>
+<a href="#2950" id="2950">2950</a>
+<a href="#2951" id="2951">2951</a>
+<a href="#2952" id="2952">2952</a>
+<a href="#2953" id="2953">2953</a>
+<a href="#2954" id="2954">2954</a>
+<a href="#2955" id="2955">2955</a>
+<a href="#2956" id="2956">2956</a>
+<a href="#2957" id="2957">2957</a>
+<a href="#2958" id="2958">2958</a>
+<a href="#2959" id="2959">2959</a>
+<a href="#2960" id="2960">2960</a>
+<a href="#2961" id="2961">2961</a>
+<a href="#2962" id="2962">2962</a>
+<a href="#2963" id="2963">2963</a>
+<a href="#2964" id="2964">2964</a>
+<a href="#2965" id="2965">2965</a>
+<a href="#2966" id="2966">2966</a>
+<a href="#2967" id="2967">2967</a>
+<a href="#2968" id="2968">2968</a>
+<a href="#2969" id="2969">2969</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -3399,7 +3451,10 @@
     /// on finish this will move to Done
     ///
     /// on invalidation this will move to InProgressDirty
-    </span>InProgress { event: Event },
+    </span>InProgress {
+        event: Event,
+        count_as_finished: bool,
+    },
 
     <span class="doccomment">/// Invalid execution is happening
     ///
@@ -3713,6 +3768,7 @@
             Scheduled { <span class="kw-2">ref mut </span>event } =&gt; {
                 state.state_type = InProgress {
                     event: event.take(),
+                    count_as_finished: <span class="bool-val">false</span>,
                 };
                 state.stats.increment_executions();
                 <span class="comment">// TODO we need to reconsider the approach of doing scope changes in background
@@ -3829,6 +3885,24 @@
         }
     }
 
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>mark_as_finished(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
+        <span class="kw">let </span>TaskMetaStateWriteGuard::Full(<span class="kw-2">mut </span>state) = <span class="self">self</span>.state_mut() <span class="kw">else </span>{
+            <span class="kw">return</span>;
+        };
+        <span class="kw">let </span>TaskStateType::InProgress { <span class="kw-2">ref mut </span>count_as_finished, .. } = state.state_type <span class="kw">else </span>{
+            <span class="kw">return</span>;
+        };
+        <span class="kw">if </span><span class="kw-2">*</span>count_as_finished {
+            <span class="kw">return</span>;
+        }
+        <span class="kw-2">*</span>count_as_finished = <span class="bool-val">true</span>;
+        <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
+            backend.with_scope(scope, |scope| {
+                scope.decrement_unfinished_tasks(backend);
+            })
+        }
+    }
+
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         result: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc&gt;, <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;&gt;,
@@ -3896,7 +3970,10 @@
                 .stats
                 .register_execution(duration, turbo_tasks.program_duration_until(instant));
             <span class="kw">match </span>state.state_type {
-                InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
+                InProgress {
+                    <span class="kw-2">ref mut </span>event,
+                    count_as_finished,
+                } =&gt; {
                     <span class="kw">let </span>event = event.take();
                     <span class="kw">let </span><span class="kw-2">mut </span>dependencies = take(<span class="kw-2">&amp;mut </span>dependencies);
                     <span class="comment">// This will stay here for longer, so make sure to not consume too much memory
@@ -3907,10 +3984,12 @@
                     state.cells.shrink_to_fit();
                     state.stateful = stateful;
                     state.state_type = Done { dependencies };
-                    <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
-                        backend.with_scope(scope, |scope| {
-                            scope.decrement_unfinished_tasks(backend);
-                        })
+                    <span class="kw">if </span>!count_as_finished {
+                        <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
+                            backend.with_scope(scope, |scope| {
+                                scope.decrement_unfinished_tasks(backend);
+                            })
+                        }
                     }
                     event.notify(usize::MAX);
                 }
@@ -4070,10 +4149,19 @@
                         drop(state);
                     }
                 }
-                InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
-                    state.state_type = InProgressDirty {
-                        event: event.take(),
-                    };
+                InProgress {
+                    <span class="kw-2">ref mut </span>event,
+                    count_as_finished,
+                } =&gt; {
+                    <span class="kw">let </span>event = event.take();
+                    <span class="kw">if </span>count_as_finished {
+                        <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
+                            backend.with_scope(scope, |scope| {
+                                scope.increment_unfinished_tasks(backend);
+                            })
+                        }
+                    }
+                    state.state_type = InProgressDirty { event };
                     drop(state);
                 }
             }
@@ -4208,7 +4296,15 @@
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
             <span class="kw">if </span>!<span class="macro">matches!</span>(state.state_type, TaskStateType::Done { .. }) {
-                scope.increment_unfinished_tasks(backend);
+                <span class="kw">if </span>!<span class="macro">matches!</span>(
+                    state.state_type,
+                    TaskStateType::InProgress {
+                        count_as_finished: <span class="bool-val">true</span>,
+                        ..
+                    }
+                ) {
+                    scope.increment_unfinished_tasks(backend);
+                }
                 <span class="macro">log_scope_update!</span>(<span class="string">&quot;add unfinished task (added): {} -&gt; {}&quot;</span>, <span class="kw-2">*</span>scope.id, <span class="kw-2">*</span><span class="self">self</span>.id);
                 <span class="kw">if let </span>TaskStateType::Dirty { <span class="kw-2">ref mut </span>event } = state.state_type {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
@@ -4286,6 +4382,12 @@
                     <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
                     scope.remove_dirty_task(<span class="self">self</span>.id);
                 }
+                InProgress {
+                    count_as_finished: <span class="bool-val">true</span>,
+                    ..
+                } =&gt; {
+                    <span class="comment">// no need to decrement unfinished tasks
+                </span>}
                 <span class="kw">_ </span>=&gt; {
                     scope.decrement_unfinished_tasks(backend);
                 }
@@ -5042,7 +5144,9 @@
                 drop(state);
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
             }
-            Scheduled { <span class="kw-2">ref </span>event } | InProgress { <span class="kw-2">ref </span>event } | InProgressDirty { <span class="kw-2">ref </span>event } =&gt; {
+            Scheduled { <span class="kw-2">ref </span>event }
+            | InProgress { <span class="kw-2">ref </span>event, .. }
+            | InProgressDirty { <span class="kw-2">ref </span>event } =&gt; {
                 <span class="kw">let </span>listener = event.listen_with_note(note);
                 drop(state);
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))

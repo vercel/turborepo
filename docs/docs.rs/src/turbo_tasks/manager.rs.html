@@ -1488,6 +1488,19 @@
 <a href="#1488" id="1488">1488</a>
 <a href="#1489" id="1489">1489</a>
 <a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1605,6 +1618,7 @@
 
     <span class="kw">fn </span>read_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
     <span class="kw">fn </span>update_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId, content: CellContent);
+    <span class="kw">fn </span>mark_own_task_as_finished(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId);
 
     <span class="kw">fn </span>connect_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId);
 }
@@ -2464,6 +2478,10 @@
         <span class="self">self</span>.backend
             .connect_task(task, current_task(<span class="string">&quot;connecting task&quot;</span>), <span class="self">self</span>);
     }
+
+    <span class="kw">fn </span>mark_own_task_as_finished(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
+        <span class="self">self</span>.backend.mark_own_task_as_finished(task, <span class="self">self</span>);
+    }
 }
 
 <span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasksBackendApi&lt;B&gt; <span class="kw">for </span>TurboTasks&lt;B&gt; {
@@ -2798,6 +2816,14 @@
         turbo_tasks: weak_turbo_tasks(),
         handle,
     }
+}
+
+<span class="doccomment">/// Marks the current task as finished. This excludes it from waiting for
+/// strongly consistency.
+</span><span class="kw">pub fn </span>mark_finished() {
+    with_turbo_tasks(|tt| {
+        tt.mark_own_task_as_finished(current_task(<span class="string">&quot;turbo_tasks::mark_finished()&quot;</span>))
+    });
 }
 
 <span class="doccomment">/// Marks the current task as stateful. This prevents the tasks from being

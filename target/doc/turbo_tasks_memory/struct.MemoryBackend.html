@@ -6,7 +6,7 @@
     &amp;self,
     idle: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     turbo_tasks: &amp;dyn TurboTasksBackendApi&lt;<a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a>&gt;
-)</h4></section></div></details></div><h2 id="trait-implementations" class="small-section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Backend-for-MemoryBackend" class="impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#394-719">source</a><a href="#impl-Backend-for-MemoryBackend" class="anchor">§</a><h3 class="code-header">impl Backend for <a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.run_backend_job" class="method trait-impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#629-646">source</a><a href="#method.run_backend_job" class="anchor">§</a><h4 class="code-header">fn <a class="fn">run_backend_job</a>&lt;'a&gt;(
+)</h4></section></div></details></div><h2 id="trait-implementations" class="small-section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Backend-for-MemoryBackend" class="impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#394-727">source</a><a href="#impl-Backend-for-MemoryBackend" class="anchor">§</a><h3 class="code-header">impl Backend for <a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.run_backend_job" class="method trait-impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#629-646">source</a><a href="#method.run_backend_job" class="anchor">§</a><h4 class="code-header">fn <a class="fn">run_backend_job</a>&lt;'a&gt;(
     &amp;'a self,
     id: BackendJobId,
     turbo_tasks: &amp;'a dyn TurboTasksBackendApi&lt;<a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a>&gt;
@@ -103,7 +103,11 @@ using it could break cache invalidation.</div></details><section id="method.read
     task: TaskId,
     parent_task: TaskId,
     turbo_tasks: &amp;dyn TurboTasksBackendApi&lt;<a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a>&gt;
-)</h4></section><section id="method.create_transient_task" class="method trait-impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#694-718">source</a><a href="#method.create_transient_task" class="anchor">§</a><h4 class="code-header">fn <a class="fn">create_transient_task</a>(
+)</h4></section><section id="method.mark_own_task_as_finished" class="method trait-impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#694-700">source</a><a href="#method.mark_own_task_as_finished" class="anchor">§</a><h4 class="code-header">fn <a class="fn">mark_own_task_as_finished</a>(
+    &amp;self,
+    task: TaskId,
+    _turbo_tasks: &amp;dyn TurboTasksBackendApi&lt;<a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a>&gt;
+)</h4></section><section id="method.create_transient_task" class="method trait-impl"><a class="srclink rightside" href="../src/turbo_tasks_memory/memory_backend.rs.html#702-726">source</a><a href="#method.create_transient_task" class="anchor">§</a><h4 class="code-header">fn <a class="fn">create_transient_task</a>(
     &amp;self,
     task_type: TransientTaskType,
     turbo_tasks: &amp;dyn TurboTasksBackendApi&lt;<a class="struct" href="struct.MemoryBackend.html" title="struct turbo_tasks_memory::MemoryBackend">MemoryBackend</a>&gt;

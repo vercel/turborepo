@@ -628,6 +628,11 @@
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
 <a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -642,6 +647,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
+    mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
     CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
@@ -941,6 +947,7 @@
     args: Vec&lt;JsonValueVc&gt;,
     sender: JavaScriptStreamSenderVc,
 ) {
+    mark_finished();
     <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
         <span class="comment">// Impossible to handle the error in a good way.
         </span><span class="kw">return</span>;
@@ -1008,6 +1015,9 @@
     <span class="macro">pin_mut!</span>(stream);
     <span class="kw">while let </span><span class="prelude-val">Some</span>(value) = stream.next().<span class="kw">await </span>{
         <span class="kw">if </span>sender.send(value).<span class="kw">await</span>.is_err() {
+            <span class="kw">return</span>;
+        }
+        <span class="kw">if </span>sender.flush().<span class="kw">await</span>.is_err() {
             <span class="kw">return</span>;
         }
     }
