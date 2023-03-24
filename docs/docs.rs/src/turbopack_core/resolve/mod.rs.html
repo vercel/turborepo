@@ -1282,6 +1282,8 @@
 <a href="#1282" id="1282">1282</a>
 <a href="#1283" id="1283">1283</a>
 <a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1973,7 +1975,7 @@
 
     <span class="comment">// Apply import mappings if provided
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(import_map) = <span class="kw-2">&amp;</span>options_value.import_map {
-        <span class="kw">let </span>result_ref = import_map.lookup(request).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>result_ref = import_map.lookup(context, request).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>result_ref;
         <span class="kw">if </span>!<span class="macro">matches!</span>(result, ImportMapResult::NoEntry) {
             <span class="kw">let </span>resolved_result =
@@ -2124,7 +2126,7 @@
     <span class="comment">// Apply fallback import mappings if provided
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(import_map) = <span class="kw-2">&amp;</span>options_value.fallback_import_map {
         <span class="kw">if </span><span class="kw-2">*</span>result.is_unresolveable().<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">let </span>result_ref = import_map.lookup(request).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>result_ref = import_map.lookup(context, request).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>result = <span class="kw-2">&amp;*</span>result_ref;
             <span class="kw">let </span>resolved_result =
                 resolve_import_map_result(result, context, context, request, options).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2431,7 +2433,9 @@
     }
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(resolved_map) = resolved_map {
-        <span class="kw">let </span>result = resolved_map.lookup(<span class="kw-2">*</span>path, original_request).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>result = resolved_map
+            .lookup(<span class="kw-2">*</span>path, original_context, original_request)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resolved_result = resolve_import_map_result(
             <span class="kw-2">&amp;</span>result,
             path.parent(),

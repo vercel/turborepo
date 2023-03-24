@@ -456,6 +456,18 @@
 <a href="#456" id="456">456</a>
 <a href="#457" id="457">457</a>
 <a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -714,6 +726,7 @@
 
 <span class="kw">async fn </span>import_mapping_to_result(
     mapping: ImportMappingVc,
+    context: FileSystemPathVc,
     request: RequestVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapResult&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>mapping.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -741,11 +754,13 @@
         }
         ImportMapping::Alternatives(list) =&gt; ImportMapResult::Alternatives(
             list.iter()
-                .map(|mapping| import_mapping_to_result_boxed(<span class="kw-2">*</span>mapping, request))
+                .map(|mapping| import_mapping_to_result_boxed(<span class="kw-2">*</span>mapping, context, request))
                 .try_join()
                 .<span class="kw">await</span><span class="question-mark">?</span>,
         ),
-        ImportMapping::Dynamic(replacement) =&gt; (<span class="kw-2">*</span>replacement.result(request).<span class="kw">await</span><span class="question-mark">?</span>).clone(),
+        ImportMapping::Dynamic(replacement) =&gt; {
+            (<span class="kw-2">*</span>replacement.result(context, request).<span class="kw">await</span><span class="question-mark">?</span>).clone()
+        }
     })
 }
 
@@ -790,21 +805,27 @@
 //     `resolve::options::import_mapping_to_result::{opaque#0}`
 </span><span class="kw">fn </span>import_mapping_to_result_boxed(
     mapping: ImportMappingVc,
+    context: FileSystemPathVc,
     request: RequestVc,
 ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ImportMapResult&gt;&gt; + Send&gt;&gt; {
-    Box::pin(<span class="kw">async move </span>{ import_mapping_to_result(mapping, request).<span class="kw">await </span>})
+    Box::pin(<span class="kw">async move </span>{ import_mapping_to_result(mapping, context, request).<span class="kw">await </span>})
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ImportMapVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>lookup(<span class="self">self</span>, request: RequestVc) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapResultVc&gt; {
+    </span><span class="kw">pub async fn </span>lookup(
+        <span class="self">self</span>,
+        context: FileSystemPathVc,
+        request: RequestVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapResultVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// TODO lookup pattern
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(request_string) = request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = this.map.lookup(<span class="kw-2">&amp;</span>request_string).next() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(import_mapping_to_result(
                     result.try_join_into_self().<span class="kw">await</span><span class="question-mark">?</span>.into_owned(),
+                    context,
                     request,
                 )
                 .<span class="kw">await</span><span class="question-mark">?
@@ -820,6 +841,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>lookup(
         <span class="self">self</span>,
+        context: FileSystemPathVc,
         resolved: FileSystemPathVc,
         request: RequestVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapResultVc&gt; {
@@ -829,7 +851,9 @@
             <span class="kw">let </span>root = root.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = root.get_path_to(<span class="kw-2">&amp;</span>resolved) {
                 <span class="kw">if </span>glob.<span class="kw">await</span><span class="question-mark">?</span>.execute(path) {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(import_mapping_to_result(<span class="kw-2">*</span>mapping, request).<span class="kw">await</span><span class="question-mark">?</span>.into());
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(import_mapping_to_result(<span class="kw-2">*</span>mapping, context, request)
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.into());
                 }
             }
         }
@@ -912,7 +936,7 @@
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ImportMappingReplacement {
     <span class="kw">fn </span>replace(<span class="kw-2">&amp;</span><span class="self">self</span>, capture: <span class="kw-2">&amp;</span>str) -&gt; ImportMappingVc;
-    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, request: RequestVc) -&gt; ImportMapResultVc;
+    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: FileSystemPathVc, request: RequestVc) -&gt; ImportMapResultVc;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
