@@ -460,9 +460,9 @@ impl InnerRope {
     /// Returns a slice of all bytes.
     pub fn to_bytes(&self) -> Result<Cow<'_, [u8]>> {
         match &self[..] {
-            [] => Ok(Cow::Owned(vec![])),
+            [] => Ok(Cow::Borrowed(EMPTY_BUF)),
             [Shared(inner)] => inner.to_bytes(),
-            [Local(bytes)] => Ok(Cow::Owned(bytes.to_vec())),
+            [Local(bytes)] => Ok(Cow::Borrowed(bytes)),
             _ => {
                 let mut read = RopeReader::new(self, 0);
                 let mut buf = Vec::with_capacity(self.len());
