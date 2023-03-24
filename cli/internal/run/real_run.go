@@ -185,7 +185,8 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 }
 
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
-	// Setup tracer
+	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
+	// So make sure to call it before returning.
 	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 
 	progressLogger := ec.logger.Named("")
