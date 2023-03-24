@@ -20,7 +20,7 @@ use turbo_tasks::{
     event::{Event, EventListener},
     primitives::RawVcSetVc,
     registry,
-    test_helpers::{current_task_for_testing, with_turbo_tasks_for_testing},
+    test_helpers::with_turbo_tasks_for_testing,
     util::StaticOrArc,
     CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
@@ -175,10 +175,10 @@ impl TurboTasksApi for VcStorage {
 
     fn try_read_own_task_cell_untracked(
         &self,
-        _current_task: TaskId,
+        current_task: TaskId,
         index: CellId,
     ) -> Result<CellContent> {
-        self.read_own_task_cell(index)
+        self.read_own_task_cell(current_task, index)
     }
 
     fn emit_collectible(&self, _trait_type: turbo_tasks::TraitTypeId, _collectible: RawVc) {
