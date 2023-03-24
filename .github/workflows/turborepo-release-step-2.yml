@@ -80,9 +80,6 @@ jobs:
           export PATH=$PATH:$(pwd)/../zig
           echo "$(pwd)/../zig" >> $GITHUB_PATH
       - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
       - run: |
           rustup target add aarch64-unknown-linux-musl
           rustup target add x86_64-pc-windows-gnu
