@@ -198,6 +198,22 @@
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt,
     pin::Pin,
@@ -206,7 +222,7 @@
 };
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>futures::{Stream <span class="kw">as </span>StreamTrait, StreamExt};
+<span class="kw">use </span>futures::{Stream <span class="kw">as </span>StreamTrait, StreamExt, TryStreamExt};
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 <span class="doccomment">/// Streams allow for streaming values from source to sink.
@@ -221,7 +237,7 @@
 
 <span class="doccomment">/// The StreamState actually holds the data of a Stream.
 </span><span class="kw">struct </span>StreamState&lt;T&gt; {
-    source: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>StreamTrait&lt;Item = T&gt; + Send + Unpin&gt;&gt;,
+    source: <span class="prelude-ty">Option</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>StreamTrait&lt;Item = T&gt; + Send&gt;&gt;&gt;,
     pulled: Vec&lt;T&gt;,
 }
 
@@ -237,14 +253,14 @@
         }
     }
 
-    <span class="doccomment">/// Crates a new Stream, which will lazily pull from the source stream.
-    </span><span class="kw">pub fn </span>new_open&lt;S: StreamTrait&lt;Item = T&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;(
+    <span class="doccomment">/// Creates a new Stream, which will lazily pull from the source stream.
+    </span><span class="kw">pub fn </span>new_open(
         pulled: Vec&lt;T&gt;,
-        source: S,
+        source: Box&lt;<span class="kw">dyn </span>StreamTrait&lt;Item = T&gt; + Send + <span class="lifetime">&#39;static</span>&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             inner: Arc::new(Mutex::new(StreamState {
-                source: <span class="prelude-val">Some</span>(Box::new(source)),
+                source: <span class="prelude-val">Some</span>(Box::into_pin(source)),
                 pulled,
             })),
         }
@@ -272,6 +288,22 @@
     }
 }
 
+<span class="kw">impl</span>&lt;T: Clone, E: Clone&gt; Stream&lt;<span class="prelude-ty">Result</span>&lt;T, E&gt;&gt; {
+    <span class="doccomment">/// Converts a TryStream into a single value when possible.
+    </span><span class="kw">pub async fn </span>try_into_single(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;SingleValue&lt;T&gt;, E&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.read();
+        <span class="kw">let </span><span class="prelude-val">Some</span>(first) = stream.try_next().<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(SingleValue::None);
+        };
+
+        <span class="kw">if </span>stream.try_next().<span class="kw">await</span><span class="question-mark">?</span>.is_some() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(SingleValue::Multiple);
+        }
+
+        <span class="prelude-val">Ok</span>(SingleValue::Single(first))
+    }
+}
+
 <span class="kw">pub enum </span>SingleValue&lt;T&gt; {
     <span class="doccomment">/// The Stream did not hold a value.
     </span><span class="prelude-val">None</span>,
@@ -285,7 +317,7 @@
 
 <span class="kw">impl</span>&lt;T: Clone, S: StreamTrait&lt;Item = T&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt; From&lt;S&gt; <span class="kw">for </span>Stream&lt;T&gt; {
     <span class="kw">fn </span>from(source: S) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_open(<span class="macro">vec!</span>[], source)
+        <span class="self">Self</span>::new_open(<span class="macro">vec!</span>[], Box::new(source))
     }
 }
 

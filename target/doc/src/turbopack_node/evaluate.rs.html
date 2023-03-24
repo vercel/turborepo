@@ -562,17 +562,89 @@
 <a href="#562" id="562">562</a>
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
-<span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>async_stream::stream <span class="kw">as </span>generator;
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
+<span class="kw">use </span>futures::{
+    channel::mpsc::{unbounded, UnboundedSender},
+    pin_mut, SinkExt, StreamExt,
+};
 <span class="kw">use </span>futures_retry::{FutureRetry, RetryPolicy};
 <span class="kw">use </span>indexmap::indexmap;
+<span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
-    CompletionVc, TryJoinIterExt, Value, ValueToString,
+    util::SharedError,
+    CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -639,10 +711,16 @@
 
 <span class="kw">type </span>LoopResult = ControlFlow&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;, StructuredError&gt;, String&gt;;
 
-<span class="kw">type </span>EvaluationItem = <span class="prelude-ty">Result</span>&lt;Bytes, String&gt;;
+<span class="kw">type </span>EvaluationItem = <span class="prelude-ty">Result</span>&lt;Bytes, SharedError&gt;;
 <span class="kw">type </span>JavaScriptStream = Stream&lt;EvaluationItem&gt;;
 
-<span class="attr">#[turbo_tasks::value(transparent)]
+<span class="attr">#[turbo_tasks::value(eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
+</span><span class="kw">struct </span>JavaScriptStreamSender {
+    <span class="attr">#[turbo_tasks(trace_ignore, debug_ignore)]
+    </span>get: Box&lt;<span class="kw">dyn </span>Fn() -&gt; UnboundedSender&lt;<span class="prelude-ty">Result</span>&lt;Bytes, SharedError&gt;&gt; + Send + Sync&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value(transparent, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
 #[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>JavaScriptEvaluation(<span class="attr">#[turbo_tasks(trace_ignore)] </span>JavaScriptStream);
 
@@ -785,7 +863,7 @@
 <span class="doccomment">/// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 </span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>evaluate(
+</span><span class="kw">pub fn </span>evaluate(
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -796,7 +874,7 @@
     args: Vec&lt;JsonValueVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
-) -&gt; <span class="prelude-ty">Result</span>&lt;JavaScriptEvaluationVc&gt; {
+) -&gt; JavaScriptEvaluationVc {
     <span class="kw">let </span>pool = get_evaluate_pool(
         module_asset,
         cwd,
@@ -806,80 +884,133 @@
         runtime_entries,
         additional_invalidation,
         debug,
-    )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">let </span>args = args.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="comment">// Assume this is a one-off operation, so we can kill the process
-    // TODO use a better way to decide that.
-    </span><span class="kw">let </span>kill = args.is_empty();
-
-    <span class="comment">// Workers in the pool could be in a bad state that we didn&#39;t detect yet.
-    // The bad state might even be unnoticable until we actually send the job to the
-    // worker. So we retry picking workers from the pools until we succeed
-    // sending the job.
-
-    </span><span class="kw">let </span>(<span class="kw-2">mut </span>operation, <span class="kw">_</span>) = FutureRetry::new(
-        || <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>operation = pool.operation().<span class="kw">await</span><span class="question-mark">?</span>;
-            operation
-                .send(EvalJavaScriptOutgoingMessage::Evaluate {
-                    args: args.iter().map(|v| <span class="kw-2">&amp;**</span>v).collect(),
-                })
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(operation)
-        },
-        PoolErrorHandler,
-    )
-    .<span class="kw">await
-    </span>.map_err(|(e, <span class="kw">_</span>)| e)<span class="question-mark">?</span>;
-
-    <span class="comment">// The evaluation sent an initial intermediate value without completing. We&#39;ll
-    // need to spawn a new thread to continually pull data out of the process,
-    // and ferry that along.
-    </span><span class="kw">let </span>stream = JavaScriptStream::new_open(
-        <span class="macro">vec!</span>[],
-        Box::pin(<span class="macro">generator! </span>{
-            <span class="macro">macro_rules! </span>tri {
-                (<span class="macro-nonterminal">$exp</span>:expr) =&gt; {
-                    <span class="kw">match </span><span class="macro-nonterminal">$exp </span>{
-                        <span class="prelude-val">Ok</span>(v) =&gt; v,
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="kw">yield </span><span class="prelude-val">Err</span>(e.to_string());
-                            <span class="kw">return</span>;
-                        }
-                    }
-                }
-            }
-
-            <span class="kw">loop </span>{
-                <span class="kw">let </span>output = <span class="macro">tri!</span>(pull_operation(<span class="kw-2">&amp;mut </span>operation, cwd, <span class="kw-2">&amp;</span>pool, context_ident_for_issue, chunking_context).<span class="kw">await</span>);
-
-                <span class="kw">match </span>output {
-                    LoopResult::Continue(data) =&gt; {
-                        <span class="kw">yield </span><span class="prelude-val">Ok</span>(data.into());
-                    }
-                    LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(data))) =&gt; {
-                        <span class="kw">yield </span><span class="prelude-val">Ok</span>(data.into());
-                        <span class="kw">break</span>;
-                    }
-                    LoopResult::Break(<span class="prelude-val">Err</span>(e)) =&gt; {
-                        <span class="kw">yield </span><span class="prelude-val">Err</span>(e.message);
-                        <span class="kw">break</span>;
-                    }
-                    LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)) =&gt; {
-                        <span class="kw">break</span>;
-                    }
-                }
-            }
-
-            <span class="kw">if </span>kill {
-                <span class="macro">tri!</span>(operation.wait_or_kill().<span class="kw">await</span>);
-            }
-        }),
     );
 
-    <span class="prelude-val">Ok</span>(JavaScriptEvaluation(stream).cell())
+    <span class="comment">// Note the following code uses some hacks to create a child task that produces
+    // a stream that is returned by this task.
+
+    // We create a new cell in this task, which will be updated from the
+    // [compute_evaluate_stream] task.
+    </span><span class="kw">let </span>cell = turbo_tasks::macro_helpers::find_cell_by_type(<span class="kw-2">*</span>JAVASCRIPTEVALUATION_VALUE_TYPE_ID);
+
+    <span class="comment">// We initialize the cell with a stream that is open, but has no values.
+    // The first [compute_evaluate_stream] pipe call will pick up that stream.
+    </span><span class="kw">let </span>(sender, receiver) = unbounded();
+    cell.update_shared(JavaScriptEvaluation(JavaScriptStream::new_open(
+        <span class="macro">vec!</span>[],
+        Box::new(receiver),
+    )));
+    <span class="kw">let </span>initial = Mutex::new(<span class="prelude-val">Some</span>(sender));
+
+    <span class="comment">// run the evaluation as side effect
+    </span>compute_evaluate_stream(
+        pool,
+        cwd,
+        context_ident_for_issue,
+        chunking_context,
+        args,
+        JavaScriptStreamSender {
+            get: Box::new(<span class="kw">move </span>|| {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = initial.lock().take() {
+                    sender
+                } <span class="kw">else </span>{
+                    <span class="comment">// In cases when only [compute_evaluate_stream] is (re)executed, we need to
+                    // update the old stream with a new value.
+                    </span><span class="kw">let </span>(sender, receiver) = unbounded();
+                    cell.update_shared(JavaScriptEvaluation(JavaScriptStream::new_open(
+                        <span class="macro">vec!</span>[],
+                        Box::new(receiver),
+                    )));
+                    sender
+                }
+            }),
+        }
+        .cell(),
+    );
+
+    <span class="kw">let </span>raw: RawVc = cell.into();
+    raw.into()
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>compute_evaluate_stream(
+    pool: NodeJsPoolVc,
+    cwd: FileSystemPathVc,
+    context_ident_for_issue: AssetIdentVc,
+    chunking_context: ChunkingContextVc,
+    args: Vec&lt;JsonValueVc&gt;,
+    sender: JavaScriptStreamSenderVc,
+) {
+    <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
+        <span class="comment">// Impossible to handle the error in a good way.
+        </span><span class="kw">return</span>;
+    };
+
+    <span class="kw">let </span>stream = <span class="macro">generator! </span>{
+        <span class="kw">let </span>pool = pool.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>args = args.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Assume this is a one-off operation, so we can kill the process
+        // TODO use a better way to decide that.
+        </span><span class="kw">let </span>kill = args.is_empty();
+
+        <span class="comment">// Workers in the pool could be in a bad state that we didn&#39;t detect yet.
+        // The bad state might even be unnoticeable until we actually send the job to the
+        // worker. So we retry picking workers from the pools until we succeed
+        // sending the job.
+
+        </span><span class="kw">let </span>(<span class="kw-2">mut </span>operation, <span class="kw">_</span>) = FutureRetry::new(
+            || <span class="kw">async </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>operation = pool.operation().<span class="kw">await</span><span class="question-mark">?</span>;
+                operation
+                    .send(EvalJavaScriptOutgoingMessage::Evaluate {
+                        args: args.iter().map(|v| <span class="kw-2">&amp;**</span>v).collect(),
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(operation)
+            },
+            PoolErrorHandler,
+        )
+        .<span class="kw">await
+        </span>.map_err(|(e, <span class="kw">_</span>)| e)<span class="question-mark">?</span>;
+
+        <span class="comment">// The evaluation sent an initial intermediate value without completing. We&#39;ll
+        // need to spawn a new thread to continually pull data out of the process,
+        // and ferry that along.
+        </span><span class="kw">loop </span>{
+            <span class="kw">let </span>output = pull_operation(<span class="kw-2">&amp;mut </span>operation, cwd, <span class="kw-2">&amp;</span>pool, context_ident_for_issue, chunking_context).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span>output {
+                LoopResult::Continue(data) =&gt; {
+                    <span class="kw">yield </span>data.into();
+                }
+                LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(data))) =&gt; {
+                    <span class="kw">yield </span>data.into();
+                    <span class="kw">break</span>;
+                }
+                LoopResult::Break(<span class="prelude-val">Err</span>(e)) =&gt; {
+                    <span class="kw">let </span>error = e.print(pool.assets_for_source_mapping, pool.assets_root, chunking_context.context_path().root(), FormattingMode::Plain).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Node.js evaluation failed: {}&quot;</span>, error))<span class="question-mark">?</span>;
+                    <span class="kw">break</span>;
+                }
+                LoopResult::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)) =&gt; {
+                    <span class="kw">break</span>;
+                }
+            }
+        }
+
+        <span class="kw">if </span>kill {
+            operation.wait_or_kill().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+    };
+
+    <span class="kw">let </span><span class="kw-2">mut </span>sender = (sender.get)();
+    <span class="macro">pin_mut!</span>(stream);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(value) = stream.next().<span class="kw">await </span>{
+        <span class="kw">if </span>sender.send(value).<span class="kw">await</span>.is_err() {
+            <span class="kw">return</span>;
+        }
+    }
 }
 
 <span class="doccomment">/// Repeatedly pulls from the NodeJsOperation until we receive a
@@ -909,7 +1040,8 @@
                 .emit();
                 <span class="comment">// Do not reuse the process in case of error
                 </span>operation.disallow_reuse();
-                <span class="kw">break </span>ControlFlow::Break(<span class="prelude-val">Err</span>(error));
+                <span class="comment">// Issue emitted, we want to break but don&#39;t want to return an error
+                </span><span class="kw">break </span>ControlFlow::Break(<span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>));
             }
             EvalJavaScriptIncomingMessage::Value { data } =&gt; <span class="kw">break </span>ControlFlow::Continue(data),
             EvalJavaScriptIncomingMessage::End { data } =&gt; <span class="kw">break </span>ControlFlow::Break(<span class="prelude-val">Ok</span>(data)),

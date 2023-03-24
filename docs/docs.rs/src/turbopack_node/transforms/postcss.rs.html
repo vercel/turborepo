@@ -519,7 +519,7 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>SingleValue::Single(<span class="prelude-val">Ok</span>(val)) = config_value.into_single().<span class="kw">await else </span>{
+        <span class="kw">let </span>SingleValue::Single(val) = config_value.try_into_single().<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="comment">// An error happened, which has already been converted into an issue.
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),

@@ -2900,6 +2900,21 @@
 <a href="#2900" id="2900">2900</a>
 <a href="#2901" id="2901">2901</a>
 <a href="#2902" id="2902">2902</a>
+<a href="#2903" id="2903">2903</a>
+<a href="#2904" id="2904">2904</a>
+<a href="#2905" id="2905">2905</a>
+<a href="#2906" id="2906">2906</a>
+<a href="#2907" id="2907">2907</a>
+<a href="#2908" id="2908">2908</a>
+<a href="#2909" id="2909">2909</a>
+<a href="#2910" id="2910">2910</a>
+<a href="#2911" id="2911">2911</a>
+<a href="#2912" id="2912">2912</a>
+<a href="#2913" id="2913">2913</a>
+<a href="#2914" id="2914">2914</a>
+<a href="#2915" id="2915">2915</a>
+<a href="#2916" id="2916">2916</a>
+<a href="#2917" id="2917">2917</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -4007,9 +4022,24 @@
             <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = AutoSet::default();
 
             <span class="kw">match </span>state.state_type {
-                Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } =&gt; {
+                Scheduled { .. } | InProgressDirty { .. } =&gt; {
                     <span class="comment">// already dirty
                     </span>drop(state);
+                }
+                Dirty { .. } =&gt; {
+                    <span class="kw">if </span>force_schedule {
+                        <span class="kw">let </span>description = <span class="self">self</span>.get_event_description();
+                        state.state_type = Scheduled {
+                            event: Event::new(<span class="kw">move </span>|| {
+                                <span class="macro">format!</span>(<span class="string">&quot;TaskState({})::event&quot;</span>, description())
+                            }),
+                        };
+                        drop(state);
+                        turbo_tasks.schedule(<span class="self">self</span>.id);
+                    } <span class="kw">else </span>{
+                        <span class="comment">// already dirty
+                        </span>drop(state);
+                    }
                 }
                 Done {
                     <span class="kw-2">ref mut </span>dependencies,

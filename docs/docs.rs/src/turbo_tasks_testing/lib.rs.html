@@ -233,8 +233,6 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Testing utilities and macros for turbo-tasks and applications based on it.
 
 </span><span class="attr">#![feature(box_syntax)]
@@ -257,7 +255,7 @@
     event::{Event, EventListener},
     primitives::RawVcSetVc,
     registry,
-    test_helpers::{current_task_for_testing, with_turbo_tasks_for_testing},
+    test_helpers::with_turbo_tasks_for_testing,
     util::StaticOrArc,
     CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
@@ -412,10 +410,10 @@
 
     <span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _current_task: TaskId,
+        current_task: TaskId,
         index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
-        <span class="self">self</span>.read_current_task_cell(index)
+        <span class="self">self</span>.read_own_task_cell(current_task, index)
     }
 
     <span class="kw">fn </span>emit_collectible(<span class="kw-2">&amp;</span><span class="self">self</span>, _trait_type: turbo_tasks::TraitTypeId, _collectible: RawVc) {
@@ -438,8 +436,7 @@
         <span class="macro">unimplemented!</span>()
     }
 
-    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
-        <span class="kw">let </span>task = current_task_for_testing();
+    <span class="kw">fn </span>read_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="kw">let </span>map = <span class="self">self</span>.cells.lock().unwrap();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(cell) = map.get(<span class="kw-2">&amp;</span>(task, index)) {
             <span class="prelude-val">Ok</span>(cell.clone())
@@ -448,8 +445,7 @@
         }
     }
 
-    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent) {
-        <span class="kw">let </span>task = current_task_for_testing();
+    <span class="kw">fn </span>update_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId, content: CellContent) {
         <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="self">self</span>.cells.lock().unwrap();
         <span class="kw">let </span>cell = map.entry((task, index)).or_default();
         <span class="kw-2">*</span>cell = content;

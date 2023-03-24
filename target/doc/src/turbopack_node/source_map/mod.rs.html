@@ -293,14 +293,6 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::Write,
@@ -321,7 +313,6 @@
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc, source_map::GenerateSourceMap, PROJECT_FILESYSTEM_NAME, SOURCE_MAP_ROOT_NAME,
 };
-<span class="kw">use </span>turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 <span class="kw">use crate</span>::{internal_assets_for_source_mapping, pool::FormattingMode, AssetsForSourceMappingVc};
 
@@ -558,13 +549,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>message = String::new();
 
         <span class="kw">let </span>magic = |content| formatting_mode.magic_identifier(content);
-
-        <span class="macro">write!</span>(
-            message,
-            <span class="string">&quot;{}: {}&quot;</span>,
-            <span class="self">self</span>.name,
-            unmangle_identifiers(<span class="kw-2">&amp;</span><span class="self">self</span>.message, magic)
-        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>first_error = <span class="bool-val">true</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>visible_code_frames = <span class="number">0</span>;

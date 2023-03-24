@@ -1488,8 +1488,6 @@
 <a href="#1488" id="1488">1488</a>
 <a href="#1489" id="1489">1489</a>
 <a href="#1490" id="1490">1490</a>
-<a href="#1491" id="1491">1491</a>
-<a href="#1492" id="1492">1492</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1605,8 +1603,8 @@
         index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
 
-    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
-    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent);
+    <span class="kw">fn </span>read_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
+    <span class="kw">fn </span>update_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId, content: CellContent);
 
     <span class="kw">fn </span>connect_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId);
 }
@@ -2453,18 +2451,13 @@
         }
     }
 
-    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
+    <span class="kw">fn </span>read_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="comment">// INVALIDATION: don&#39;t need to track a dependency to itself
-        </span><span class="self">self</span>.try_read_own_task_cell_untracked(current_task(<span class="string">&quot;reading Vcs&quot;</span>), index)
+        </span><span class="self">self</span>.try_read_own_task_cell_untracked(task, index)
     }
 
-    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent) {
-        <span class="self">self</span>.backend.update_task_cell(
-            current_task(<span class="string">&quot;cellting turbo_tasks values&quot;</span>),
-            index,
-            content,
-            <span class="self">self</span>,
-        );
+    <span class="kw">fn </span>update_own_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, index: CellId, content: CellContent) {
+        <span class="self">self</span>.backend.update_task_cell(task, index, content, <span class="self">self</span>);
     }
 
     <span class="kw">fn </span>connect_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
@@ -2897,7 +2890,8 @@
     }
 }
 
-<span class="kw">pub struct </span>CurrentCellRef {
+<span class="attr">#[derive(Clone, Copy)]
+</span><span class="kw">pub struct </span>CurrentCellRef {
     current_task: TaskId,
     index: CellId,
 }
@@ -2912,12 +2906,13 @@
     ) {
         <span class="kw">let </span>tt = turbo_tasks();
         <span class="kw">let </span>content = tt
-            .read_current_task_cell(<span class="self">self</span>.index)
+            .read_own_task_cell(<span class="self">self</span>.current_task, <span class="self">self</span>.index)
             .ok()
             .and_then(|v| v.try_cast::&lt;T&gt;());
         <span class="kw">let </span>update = functor(content.as_deref());
         <span class="kw">if let </span><span class="prelude-val">Some</span>(update) = update {
-            tt.update_current_task_cell(
+            tt.update_own_task_cell(
+                <span class="self">self</span>.current_task,
                 <span class="self">self</span>.index,
                 CellContent(<span class="prelude-val">Some</span>(SharedReference(
                     <span class="prelude-val">Some</span>(<span class="self">self</span>.index.type_id),
@@ -2940,7 +2935,8 @@
 
     <span class="kw">pub fn </span>update_shared&lt;T: Send + Sync + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, new_content: T) {
         <span class="kw">let </span>tt = turbo_tasks();
-        tt.update_current_task_cell(
+        tt.update_own_task_cell(
+            <span class="self">self</span>.current_task,
             <span class="self">self</span>.index,
             CellContent(<span class="prelude-val">Some</span>(SharedReference(
                 <span class="prelude-val">Some</span>(<span class="self">self</span>.index.type_id),
@@ -2951,14 +2947,14 @@
 
     <span class="kw">pub fn </span>update_shared_reference(<span class="kw-2">&amp;</span><span class="self">self</span>, shared_ref: SharedReference) {
         <span class="kw">let </span>tt = turbo_tasks();
-        <span class="kw">let </span>content = tt.read_current_task_cell(<span class="self">self</span>.index).ok();
+        <span class="kw">let </span>content = tt.read_own_task_cell(<span class="self">self</span>.current_task, <span class="self">self</span>.index).ok();
         <span class="kw">let </span>update = <span class="kw">if let </span><span class="prelude-val">Some</span>(CellContent(<span class="prelude-val">Some</span>(content))) = content {
             content != shared_ref
         } <span class="kw">else </span>{
             <span class="bool-val">true
         </span>};
         <span class="kw">if </span>update {
-            tt.update_current_task_cell(<span class="self">self</span>.index, CellContent(<span class="prelude-val">Some</span>(shared_ref)))
+            tt.update_own_task_cell(<span class="self">self</span>.current_task, <span class="self">self</span>.index, CellContent(<span class="prelude-val">Some</span>(shared_ref)))
         }
     }
 }
