@@ -21,7 +21,7 @@ pub struct Stream<T: Clone> {
 
 /// The StreamState actually holds the data of a Stream.
 struct StreamState<T> {
-    source: Option<Box<dyn StreamTrait<Item = T> + Send + Unpin>>,
+    source: Option<Pin<Box<dyn StreamTrait<Item = T> + Send>>>,
     pulled: Vec<T>,
 }
 
@@ -38,13 +38,13 @@ impl<T: Clone> Stream<T> {
     }
 
     /// Crates a new Stream, which will lazily pull from the source stream.
-    pub fn new_open<S: StreamTrait<Item = T> + Send + Unpin + 'static>(
+    pub fn new_open(
         pulled: Vec<T>,
-        source: S,
+        source: Box<dyn StreamTrait<Item = T> + Send + 'static>,
     ) -> Self {
         Self {
             inner: Arc::new(Mutex::new(StreamState {
-                source: Some(Box::new(source)),
+                source: Some(Box::into_pin(source)),
                 pulled,
             })),
         }
@@ -100,7 +100,7 @@ pub enum SingleValue<T> {
 
 impl<T: Clone, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
     fn from(source: S) -> Self {
-        Self::new_open(vec![], source)
+        Self::new_open(vec![], Box::new(source))
     }
 }
 
