@@ -117,7 +117,7 @@ func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
-func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error, exitCode *int), *TaskExecutionSummary) {
 	return summary.ExecutionSummary.run(taskID)
 }
 
