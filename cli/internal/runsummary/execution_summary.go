@@ -63,7 +63,7 @@ type TaskExecutionSummary struct {
 	startAt  time.Time          // set once
 	status   executionEventName // current status, updated during execution
 	err      error              // only populated for failure statuses
-	duration time.Duration      // updated during the task execution
+	Duration time.Duration      // updated during the task execution
 }
 
 // MarshalJSON munges the TaskExecutionSummary into a format we want
@@ -76,7 +76,7 @@ func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 		Err    error  `json:"error"`
 	}{
 		Start:  ts.startAt.UnixMilli(),
-		End:    ts.startAt.Add(ts.duration).UnixMilli(),
+		End:    ts.startAt.Add(ts.Duration).UnixMilli(),
 		Status: ts.status.toString(),
 		Err:    ts.err,
 	}
@@ -190,7 +190,7 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	// Update the Status, Duration, and Err fields
 	taskExecSummary.status = event.Status
 	taskExecSummary.err = event.Err
-	taskExecSummary.duration = event.Duration
+	taskExecSummary.Duration = event.Duration
 
 	switch {
 	case event.Status == TargetBuildFailed:
