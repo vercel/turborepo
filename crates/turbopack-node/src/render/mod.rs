@@ -7,7 +7,8 @@ use turbopack_core::asset::AssetVc;
 use turbopack_dev_server::source::Body;
 
 use crate::{
-    pool::NodeJsOperation, route_matcher::Param, trace_stack, ResponseHeaders, StructuredError,
+    pool::NodeJsOperation, route_matcher::Param, source_map::trace_stack, ResponseHeaders,
+    StructuredError,
 };
 
 pub(crate) mod error_page;
@@ -79,6 +80,7 @@ pub(crate) fn stream_body_chunks(
     mut operation: NodeJsOperation,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
 ) -> Body {
     let chunks = Stream::new_open(
         vec![],
@@ -104,7 +106,7 @@ pub(crate) fn stream_body_chunks(
                     RenderBodyChunks::BodyEnd => break,
                     RenderBodyChunks::Error(error) => {
                         let trace =
-                            trace_stack(error, intermediate_asset, intermediate_output_path).await;
+                            trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).await;
                         let e = trace.map_or_else(Into::into, Into::into);
                         yield Err(e);
                         break;

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use turbo_tasks::primitives::StringVc;
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
@@ -140,7 +140,12 @@ pub async fn render_static(
             StaticResult::StreamedContent {
                 status: data.status,
                 headers: HeaderListVc::cell(data.headers),
-                body: stream_body_chunks(operation, intermediate_asset, intermediate_output_path),
+                body: stream_body_chunks(
+                    operation,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir,
+                ),
             }
         }
         .cell(),

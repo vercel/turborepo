@@ -75,7 +75,12 @@ pub async fn render_proxy(
     Ok(ProxyResult {
         status,
         headers,
-        body: stream_body_chunks(operation, intermediate_asset, intermediate_output_path),
+        body: stream_body_chunks(
+            operation,
+            intermediate_asset,
+            intermediate_output_path,
+            project_dir,
+        ),
     }
     .cell())
 }
