@@ -979,7 +979,7 @@ mod test {
     #[test]
     fn test_to_bytes() -> Result<()> {
         let rope = Rope::from("abc");
-        assert_eq!(rope.to_bytes()?, Cow::Owned::<[u8]>(vec![0x61, 0x62, 0x63]));
+        assert_eq!(rope.to_bytes()?, Cow::Borrowed::<[u8]>(&[0x61, 0x62, 0x63]));
         Ok(())
     }
 }
