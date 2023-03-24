@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
+    mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
     CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
@@ -311,6 +312,7 @@ async fn compute_evaluate_stream(
     args: Vec<JsonValueVc>,
     sender: JavaScriptStreamSenderVc,
 ) {
+    mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
         return;
