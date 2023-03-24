@@ -178,7 +178,7 @@ impl TurboTasksApi for VcStorage {
         _current_task: TaskId,
         index: CellId,
     ) -> Result<CellContent> {
-        self.read_current_task_cell(index)
+        self.read_own_task_cell(index)
     }
 
     fn emit_collectible(&self, _trait_type: turbo_tasks::TraitTypeId, _collectible: RawVc) {
@@ -201,8 +201,7 @@ impl TurboTasksApi for VcStorage {
         unimplemented!()
     }
 
-    fn read_current_task_cell(&self, index: CellId) -> Result<CellContent> {
-        let task = current_task_for_testing();
+    fn read_own_task_cell(&self, task: TaskId, index: CellId) -> Result<CellContent> {
         let map = self.cells.lock().unwrap();
         if let Some(cell) = map.get(&(task, index)) {
             Ok(cell.clone())
@@ -211,8 +210,7 @@ impl TurboTasksApi for VcStorage {
         }
     }
 
-    fn update_current_task_cell(&self, index: CellId, content: CellContent) {
-        let task = current_task_for_testing();
+    fn update_own_task_cell(&self, task: TaskId, index: CellId, content: CellContent) {
         let mut map = self.cells.lock().unwrap();
         let cell = map.entry((task, index)).or_default();
         *cell = content;
