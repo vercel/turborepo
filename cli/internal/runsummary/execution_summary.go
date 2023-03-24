@@ -87,16 +87,39 @@ func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 // executionSummary is the state of the entire `turbo run`. Individual task state in `Tasks` field
 type executionSummary struct {
 	// mu guards reads/writes to the `state` field
-	mu        sync.Mutex                       `json:"-"`
-	tasks     map[string]*TaskExecutionSummary `json:"-"` // key is a taskID
-	Success   int                              `json:"success"`
-	Failure   int                              `json:"failed"`
-	Cached    int                              `json:"cached"`
-	Attempted int                              `json:"attempted"`
-
-	startedAt time.Time
-
+	mu              sync.Mutex
+	tasks           map[string]*TaskExecutionSummary // key is a taskID
 	profileFilename string
+
+	// These get serialized to JSON
+	success   int
+	failure   int
+	cached    int
+	attempted int
+	startedAt time.Time
+	endedAt   time.Time
+}
+
+// MarshalJSON munges the executionSummary into a format we want
+// We'll use an anonmyous, private struct for this, so it's not confusingly duplicated.
+func (es *executionSummary) MarshalJSON() ([]byte, error) {
+	serializable := struct {
+		Success   int   `json:"success"`
+		Failure   int   `json:"failed"`
+		Cached    int   `json:"cached"`
+		Attempted int   `json:"attempted"`
+		StartTime int64 `json:"startTime"`
+		EndTime   int64 `json:"endTime"`
+	}{
+		StartTime: es.startedAt.UnixMilli(),
+		EndTime:   es.endedAt.UnixMilli(),
+		Success:   es.success,
+		Failure:   es.failure,
+		Cached:    es.cached,
+		Attempted: es.attempted,
+	}
+
+	return json.Marshal(&serializable)
 }
 
 // newExecutionSummary creates a executionSummary instance to track events in a `turbo run`.`
@@ -106,10 +129,10 @@ func newExecutionSummary(start time.Time, tracingProfile string) *executionSumma
 	}
 
 	return &executionSummary{
-		Success:         0,
-		Failure:         0,
-		Cached:          0,
-		Attempted:       0,
+		success:         0,
+		failure:         0,
+		cached:          0,
+		attempted:       0,
 		tasks:           make(map[string]*TaskExecutionSummary),
 		startedAt:       start,
 		profileFilename: tracingProfile,
@@ -171,14 +194,14 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 
 	switch {
 	case event.Status == TargetBuildFailed:
-		es.Failure++
-		es.Attempted++
+		es.failure++
+		es.attempted++
 	case event.Status == TargetCached:
-		es.Cached++
-		es.Attempted++
+		es.cached++
+		es.attempted++
 	case event.Status == TargetBuilt:
-		es.Success++
-		es.Attempted++
+		es.success++
+		es.attempted++
 	}
 
 	return es.tasks[event.Label]
