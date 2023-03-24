@@ -97,7 +97,7 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
       - name: Build Artifacts
-        run: cd cli && make build-go-turbo-cross
+        run: cd cli && make snapshot-turbo-cross
         env:
           CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
