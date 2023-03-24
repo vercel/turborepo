@@ -143,16 +143,16 @@ func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.Anc
 	return err
 }
 
-func (cache *httpCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (cache *httpCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, _unusedOutputGlobs []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return false, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return ItemStatus{Remote: false}, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	cache.logFetch(hit, key, duration)
-	return hit, files, duration, err
+	return ItemStatus{Remote: hit}, files, duration, err
 }
 
 func (cache *httpCache) Exists(key string) ItemStatus {
