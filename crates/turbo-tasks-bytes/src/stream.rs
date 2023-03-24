@@ -37,7 +37,7 @@ impl<T: Clone> Stream<T> {
         }
     }
 
-    /// Crates a new Stream, which will lazily pull from the source stream.
+    /// Creates a new Stream, which will lazily pull from the source stream.
     pub fn new_open(
         pulled: Vec<T>,
         source: Box<dyn StreamTrait<Item = T> + Send + 'static>,
