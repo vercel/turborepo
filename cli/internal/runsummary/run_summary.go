@@ -90,6 +90,8 @@ func NewRunSummary(
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
 func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
+	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
+
 	summary := rsm.RunSummary
 	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, rsm.ui); err != nil {
 		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))

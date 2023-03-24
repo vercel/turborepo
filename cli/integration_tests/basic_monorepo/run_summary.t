@@ -15,6 +15,19 @@ Setup
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.version'
   "0"
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.attempted'
+  2
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.cached'
+  0
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.failed'
+  0
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.success'
+  2
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.startTime'
+  [0-9]+ (re)
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.endTime'
+  [0-9]+ (re)
+
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
   {
     "startTime": [0-9]+, (re)
