@@ -80,7 +80,7 @@ func RealRun(
 		colorCache:      colorCache,
 		runState:        runState,
 		rs:              rs,
-		ui:              base.UI,
+		ui:              concurrentUIFactory.Build(os.Stdin, os.Stdout, os.Stderr),
 		runCache:        runCache,
 		logger:          base.Logger,
 		packageManager:  packageManager,
@@ -101,40 +101,38 @@ func RealRun(
 
 		grouped := rs.Opts.runOpts.logOrder == "grouped"
 
-		var uiFactory ui.UiFactory
 		outBuf := &bytes.Buffer{}
 		errBuf := &bytes.Buffer{}
 
 		var outWriter io.Writer
 		var errWriter io.Writer
 
+		defaultOutWriter := os.Stdout
+		defaultErrWriter := os.Stderr
+
 		if grouped {
-			queuedUiFactory := ui.QueuedUiFactory{
-				OutBuf: outBuf,
-				ErrBuf: errBuf,
-				Base:   &concurrentUIFactory,
-			}
-
-			uiFactory = &queuedUiFactory
-
 			outWriter = outBuf
 			errWriter = errBuf
 		} else {
-			uiFactory = &concurrentUIFactory
-
-			outWriter = os.Stdout
-			errWriter = os.Stderr
+			outWriter = defaultOutWriter
+			errWriter = defaultErrWriter
 		}
 
-		ui := uiFactory.Build(os.Stdin, os.Stdout, os.Stderr)
+		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
 
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		taskSummaries = append(taskSummaries, taskSummary)
 		// deps here are passed in to calculate the task hash
 		err := ec.exec(ctx, packageTask, deps, ui, outWriter, errWriter)
 
-		os.Stdout.Write(outBuf.Bytes())
-		os.Stderr.Write(errBuf.Bytes())
+		if grouped {
+			_, outErr := defaultOutWriter.Write(outBuf.Bytes())
+			_, errErr := defaultErrWriter.Write(errBuf.Bytes())
+
+			if outErr != nil || errErr != nil {
+				base.UI.Error("Failed to write part of the output to terminal")
+			}
+		}
 
 		return err
 	}

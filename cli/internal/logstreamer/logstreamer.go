@@ -68,11 +68,6 @@ func (l *Logstreamer) Close() error {
 }
 
 func (l *Logstreamer) Flush() error {
-	err := l.OutputLines()
-	if err != nil {
-		return err
-	}
-
 	p := make([]byte, l.buf.Len())
 	if _, err := l.buf.Read(p); err != nil {
 		return err
