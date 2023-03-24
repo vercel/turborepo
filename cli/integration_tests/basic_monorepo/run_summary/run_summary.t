@@ -6,15 +6,17 @@ Setup
   $ rm -rf .turbo/runs
 
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null # first run (should be cache miss)
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null # run again (expecting full turbo here)
 
 # no output, just check for 0 status code, which means the directory was created
   $ test -d .turbo/runs
 # expect 2 run summaries are created
   $ ls .turbo/runs/*.json | wc -l
-  \s*1 (re)
+  \s*2 (re)
 
 # get jq-parsed output of each run summary
   $ FIRST=$(/bin/ls .turbo/runs/*.json | head -n1)
+  $ SECOND=$(/bin/ls .turbo/runs/*.json | tail -n1)
 
 # some top level run summary validation
   $ cat $FIRST | jq '.tasks | length'
@@ -38,6 +40,7 @@ Setup
 
 # Extract some task-specific summaries from each
   $ FIRST_APP_BUILD=$("$TESTDIR/get-build.sh" "$FIRST" "my-app")  
+  $ SECOND_APP_BUILD=$("$TESTDIR/get-build.sh" "$SECOND" "my-app")
   $ FIRST_UTIL_BUILD=$("$TESTDIR/get-build.sh" "$FIRST" "util")
 
   $ echo $FIRST_APP_BUILD | jq '.execution'
@@ -52,13 +55,23 @@ Setup
   [
     "someargs"
   ]
-
   $ echo $FIRST_APP_BUILD | jq '.hashOfExternalDependencies'
   "ccab0b28617f1f56"
   $ echo $FIRST_APP_BUILD | jq '.expandedOutputs'
   [
     "apps/my-app/.turbo/turbo-build.log"
   ]
+
+  $ echo $FIRST_APP_BUILD | jq '.cacheState'
+  {
+    "local": false,
+    "remote": false
+  }
+  $ echo $SECOND_APP_BUILD | jq '.cacheState'
+  {
+    "local": true,
+    "remote": false
+  }
 
 # Some validation of util#build
   $ echo $FIRST_UTIL_BUILD | jq '.execution'
