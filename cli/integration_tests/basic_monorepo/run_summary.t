@@ -15,6 +15,8 @@ Setup
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.version'
   "0"
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.exitCode'
+  0
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.attempted'
   2
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.cached'
