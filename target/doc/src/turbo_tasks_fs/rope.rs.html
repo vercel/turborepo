@@ -953,6 +953,36 @@
 <a href="#953" id="953">953</a>
 <a href="#954" id="954">954</a>
 <a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::min,
@@ -1063,6 +1093,11 @@
     <span class="doccomment">/// Returns a String instance of all bytes.
     </span><span class="kw">pub fn </span>to_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, str&gt;&gt; {
         <span class="self">self</span>.data.to_str()
+    }
+
+    <span class="doccomment">/// Returns a slice of all bytes
+    </span><span class="kw">pub fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, [u8]&gt;&gt; {
+        <span class="self">self</span>.data.to_bytes()
     }
 }
 
@@ -1406,6 +1441,21 @@
             }
         }
     }
+
+    <span class="doccomment">/// Returns a slice of all bytes.
+    </span><span class="kw">pub fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cow&lt;<span class="lifetime">&#39;_</span>, [u8]&gt;&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>[..] {
+            [] =&gt; <span class="prelude-val">Ok</span>(Cow::Borrowed(EMPTY_BUF)),
+            [Shared(inner)] =&gt; inner.to_bytes(),
+            [Local(bytes)] =&gt; <span class="prelude-val">Ok</span>(Cow::Borrowed(bytes)),
+            <span class="kw">_ </span>=&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>read = RopeReader::new(<span class="self">self</span>, <span class="number">0</span>);
+                <span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::with_capacity(<span class="self">self</span>.len());
+                read.read_to_end(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(Cow::Owned(buf))
+            }
+        }
+    }
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>InnerRope {
@@ -1650,9 +1700,12 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>std::{
+        borrow::Cow,
         cmp::min,
         io::{BufRead, Read},
     };
+
+    <span class="kw">use </span>anyhow::Result;
 
     <span class="kw">use super</span>::{InnerRope, Rope, RopeBuilder, RopeElem};
 
@@ -1906,6 +1959,13 @@
                 Vec::from(<span class="kw-2">*</span><span class="string">b&quot;i&quot;</span>)
             ]
         );
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_to_bytes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>rope = Rope::from(<span class="string">&quot;abc&quot;</span>);
+        <span class="macro">assert_eq!</span>(rope.to_bytes()<span class="question-mark">?</span>, Cow::Borrowed::&lt;[u8]&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x61</span>, <span class="number">0x62</span>, <span class="number">0x63</span>]));
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div>
