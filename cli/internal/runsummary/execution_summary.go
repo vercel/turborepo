@@ -166,14 +166,14 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 			Duration: now.Sub(start),
 			Label:    taskID,
 			Status:   outcome,
+			// We'll assign this here regardless of whether it is nil, but we'll check for nil
+			// when we assign it to the taskExecutionSummary.
+			exitCode: exitCode,
 		}
 		if err != nil {
 			result.Err = fmt.Errorf("running %v failed: %w", taskID, err)
 		}
 
-		// We'll assign this here regardless of whether it is nil, but we'll check for nil
-		// when we assign it to the taskExecutionSummary.
-		result.exitCode = exitCode
 		// Ignore the return value here
 		es.add(result)
 	}
