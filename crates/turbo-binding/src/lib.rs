@@ -29,6 +29,8 @@ pub mod turbo {
     pub use turbo_tasks as tasks;
     #[cfg(feature = "__turbo_tasks_build")]
     pub use turbo_tasks_build as tasks_build;
+    #[cfg(feature = "__turbo_tasks_bytes")]
+    pub use turbo_tasks_bytes as tasks_bytes;
     #[cfg(feature = "__turbo_tasks_env")]
     pub use turbo_tasks_env as tasks_env;
     #[cfg(feature = "__turbo_tasks_fetch")]
@@ -60,6 +62,8 @@ pub mod turbopack {
     pub use turbopack_create_test_app as create_test_app;
     #[cfg(feature = "__turbopack_css")]
     pub use turbopack_css as css;
+    #[cfg(feature = "__turbopack_dev")]
+    pub use turbopack_dev as dev;
     #[cfg(feature = "__turbopack_dev_server")]
     pub use turbopack_dev_server as dev_server;
     #[cfg(feature = "__turbopack_ecmascript")]
