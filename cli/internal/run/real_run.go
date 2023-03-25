@@ -233,7 +233,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
-		// We only cache successful builds, so we can assume this is a successCode exit.
+		// We only cache successful executions, so we can assume this is a successCode exit.
 		tracer(runsummary.TargetCached, nil, &successCode)
 		return taskExecutionSummary, nil
 	}
