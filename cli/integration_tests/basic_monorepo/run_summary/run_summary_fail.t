@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../../setup.sh
+  $ . ${TESTDIR}/../setup.sh $(pwd)
 
   $ rm -rf .turbo/runs
 
