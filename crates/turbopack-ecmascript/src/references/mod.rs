@@ -98,7 +98,9 @@ use crate::{
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
-    code_gen::{CodeGenerateableVc, CodeGenerateableWithAvailabilityInfoVc, CodeGenerateablesVc},
+    code_gen::{
+        CodeGen, CodeGenerateableVc, CodeGenerateableWithAvailabilityInfoVc, CodeGenerateablesVc,
+    },
     magic_identifier,
     references::{
         cjs::{
@@ -123,22 +125,19 @@ pub struct AnalyzeEcmascriptModuleResult {
 #[turbo_tasks::value_impl]
 impl AnalyzeEcmascriptModuleResultVc {
     #[turbo_tasks::function]
-    pub async fn need_availability_info(self) -> Result<BoolVc> {
+    pub async fn needs_availability_info(self) -> Result<BoolVc> {
         let AnalyzeEcmascriptModuleResult {
             references,
             code_generation,
             ..
         } = &*self.await?;
-        for r in references.await?.iter() {
-            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(r)
-                .await?
-                .is_some()
-            {
+        for c in code_generation.await?.iter() {
+            if matches!(c, CodeGen::CodeGenerateableWithAvailabilityInfo(..)) {
                 return Ok(BoolVc::cell(true));
             }
         }
-        for c in code_generation.await?.iter() {
-            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(c)
+        for r in references.await?.iter() {
+            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(r)
                 .await?
                 .is_some()
             {
@@ -153,7 +152,7 @@ impl AnalyzeEcmascriptModuleResultVc {
 /// `AnalyzeEcmascriptModuleResultVc` eventually.
 pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: Vec<AssetReferenceVc>,
-    code_gens: Vec<CodeGenerateableVc>,
+    code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
     successful: bool,
 }
@@ -181,9 +180,20 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     where
         C: Into<CodeGenerateableVc>,
     {
-        self.code_gens.push(code_gen.into());
+        self.code_gens
+            .push(CodeGen::CodeGenerateable(code_gen.into()));
     }
 
+    /// Adds a codegen to the analysis result.
+    pub fn add_code_gen_with_availability_info<C>(&mut self, code_gen: C)
+    where
+        C: Into<CodeGenerateableWithAvailabilityInfoVc>,
+    {
+        self.code_gens
+            .push(CodeGen::CodeGenerateableWithAvailabilityInfo(
+                code_gen.into(),
+            ));
+    }
     /// Sets the analysis result ES export.
     pub fn set_exports(&mut self, exports: EcmascriptExports) {
         self.exports = exports;
@@ -201,7 +211,14 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             *r = r.resolve().await?;
         }
         for c in self.code_gens.iter_mut() {
-            *c = c.resolve().await?;
+            match c {
+                CodeGen::CodeGenerateable(c) => {
+                    *c = c.resolve().await?;
+                }
+                CodeGen::CodeGenerateableWithAvailabilityInfo(c) => {
+                    *c = c.resolve().await?;
+                }
+            }
         }
         Ok(AnalyzeEcmascriptModuleResultVc::cell(
             AnalyzeEcmascriptModuleResult {

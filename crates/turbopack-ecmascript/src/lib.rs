@@ -72,7 +72,9 @@ use self::{
         placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContent,
         EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions, EcmascriptExportsVc,
     },
-    code_gen::{CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc},
+    code_gen::{
+        CodeGen, CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc,
+    },
     parse::ParseResultVc,
 };
 use crate::{
@@ -411,7 +413,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<EcmascriptChunkItemContentVc> {
         let this = self_vc.await?;
-        if *this.module.analyze().need_availability_info().await? {
+        if *this.module.analyze().needs_availability_info().await? {
             availability_info
         } else {
             Value::new(AvailabilityInfo::Untracked)
@@ -454,11 +456,13 @@ async fn gen_content(
         }
     }
     for c in code_generation.await?.iter() {
-        let c = c.resolve().await?;
-        if let Some(code_gen) = CodeGenerateableWithAvailabilityInfoVc::resolve_from(c).await? {
-            code_gens.push(code_gen.code_generation(context, availability_info));
-        } else {
-            code_gens.push(c.code_generation(context));
+        match c {
+            CodeGen::CodeGenerateable(c) => {
+                code_gens.push(c.code_generation(context));
+            }
+            CodeGen::CodeGenerateableWithAvailabilityInfo(c) => {
+                code_gens.push(c.code_generation(context, availability_info));
+            }
         }
     }
     // need to keep that around to allow references into that

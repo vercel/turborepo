@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use swc_core::{
     ecma::ast::{Callee, ExprOrSpread},
     quote_expr,
@@ -18,8 +18,8 @@ use super::super::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveTyp
 use crate::{
     chunk::EcmascriptChunkingContextVc,
     code_gen::{
-        CodeGenerateable, CodeGenerateableVc, CodeGenerateableWithAvailabilityInfo,
-        CodeGenerateableWithAvailabilityInfoVc, CodeGeneration, CodeGenerationVc,
+        CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc,
+        CodeGeneration, CodeGenerationVc,
     },
     create_visitor,
     references::AstPathVc,
@@ -70,17 +70,6 @@ impl ChunkableAssetReference for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self) -> ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(Some(ChunkingType::SeparateAsync))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl CodeGenerateable for EsmAsyncAssetReference {
-    #[turbo_tasks::function]
-    async fn code_generation(
-        &self,
-        _context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
-        bail!("Code generation for EsmAsyncAssetReference requires availability info")
     }
 }
 
