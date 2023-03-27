@@ -103,6 +103,7 @@ type executionSummary struct {
 	attempted int
 	startedAt time.Time
 	endedAt   time.Time
+	exitCode  int
 }
 
 // MarshalJSON munges the executionSummary into a format we want
@@ -115,6 +116,7 @@ func (es *executionSummary) MarshalJSON() ([]byte, error) {
 		Attempted int   `json:"attempted"`
 		StartTime int64 `json:"startTime"`
 		EndTime   int64 `json:"endTime"`
+		ExitCode  int   `json:"exitCode"`
 	}{
 		StartTime: es.startedAt.UnixMilli(),
 		EndTime:   es.endedAt.UnixMilli(),
@@ -122,6 +124,7 @@ func (es *executionSummary) MarshalJSON() ([]byte, error) {
 		Failure:   es.failure,
 		Cached:    es.cached,
 		Attempted: es.attempted,
+		ExitCode:  es.exitCode,
 	}
 
 	return json.Marshal(&serializable)

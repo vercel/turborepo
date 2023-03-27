@@ -89,7 +89,8 @@ func NewRunSummary(
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
+func (rsm *Meta) Close(exitCode int, dir turbopath.AbsoluteSystemPath) {
+	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
 	summary := rsm.RunSummary
