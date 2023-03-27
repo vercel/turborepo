@@ -104,8 +104,8 @@ Setup
       "configured": [],
       "inferred": [],
       "global": [
-        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "SOME_ENV_VAR=",
+        "VERCEL_ANALYTICS_ID="
       ]
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56"
@@ -148,12 +148,12 @@ Setup
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [
-        "NODE_ENV=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "NODE_ENV="
       ],
       "inferred": [],
       "global": [
-        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "SOME_ENV_VAR=",
+        "VERCEL_ANALYTICS_ID="
       ]
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56"
@@ -167,8 +167,8 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
     ],
     "inferred": [],
     "global": [
-      "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "SOME_ENV_VAR=",
+      "VERCEL_ANALYTICS_ID="
     ]
   }
 

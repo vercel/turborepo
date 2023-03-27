@@ -215,7 +215,8 @@ func (g *CompleteGraph) getTaskGraphAncestors(taskGraph *dag.AcyclicGraph, taskI
 			stringAncestors = append(stringAncestors, dep.(string))
 		}
 	}
-	// TODO(mehulkar): Why are ancestors not sorted, but getTaskGraphDescendants sorts?
+
+	sort.Strings(stringAncestors)
 	return stringAncestors, nil
 }
 
@@ -237,7 +238,7 @@ func (g *CompleteGraph) getTaskGraphDescendants(taskGraph *dag.AcyclicGraph, tas
 	return stringDescendents, nil
 }
 
-var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
+var _isTurbo = regexp.MustCompile(`(?:^|\s)turbo(?:$|\s)`)
 
 func commandLooksLikeTurbo(command string) bool {
 	return _isTurbo.MatchString(command)

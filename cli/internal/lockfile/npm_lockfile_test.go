@@ -1,3 +1,6 @@
+//go:build go || !rust
+// +build go !rust
+
 package lockfile
 
 import (

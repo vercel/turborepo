@@ -26,12 +26,11 @@ func DryRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
-	summary *runsummary.RunSummary,
+	summary runsummary.Meta,
 ) error {
 	defer turboCache.Shutdown()
 
 	dryRunJSON := rs.Opts.runOpts.dryRunJSON
-	singlePackage := rs.Opts.runOpts.singlePackage
 
 	taskSummaries, err := executeDryRun(
 		ctx,
@@ -52,11 +51,11 @@ func DryRun(
 	populateCacheState(turboCache, taskSummaries)
 
 	// Assign the Task Summaries to the main summary
-	summary.Tasks = taskSummaries
+	summary.RunSummary.Tasks = taskSummaries
 
 	// Render the dry run as json
 	if dryRunJSON {
-		rendered, err := summary.FormatJSON(singlePackage)
+		rendered, err := summary.FormatJSON()
 		if err != nil {
 			return err
 		}
@@ -64,7 +63,7 @@ func DryRun(
 		return nil
 	}
 
-	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
+	return summary.FormatAndPrintText(g.WorkspaceInfos)
 }
 
 func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]*runsummary.TaskSummary, error) {

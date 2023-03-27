@@ -5,9 +5,11 @@ members = [
   "crates/auto-hash-map",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
+  "crates/turbo-binding",
   "crates/turbo-malloc",
   "crates/turbo-tasks",
   "crates/turbo-tasks-build",
+  "crates/turbo-tasks-bytes",
   "crates/turbo-tasks-env",
   "crates/turbo-tasks-fetch",
   "crates/turbo-tasks-fs",
@@ -36,6 +38,7 @@ members = [
   "crates/turborepo",
   "crates/turborepo-ffi",
   "crates/turborepo-lib",
+  "crates/turborepo-lockfiles",
   "crates/turborepo-scm",
   "crates/turborepo-paths",
   "xtask",
@@ -48,6 +51,7 @@ default-members = [
   "crates/turbo-malloc",
   "crates/turbo-tasks",
   "crates/turbo-tasks-build",
+  "crates/turbo-tasks-bytes",
   "crates/turbo-tasks-env",
   "crates/turbo-tasks-fetch",
   "crates/turbo-tasks-fs",
@@ -93,6 +97,7 @@ styled_components = { version = "0.53.10" }
 styled_jsx = { version = "0.30.10" }
 swc_core = { version = "0.69.6" }
 swc_emotion = { version = "0.29.10" }
+swc_relay = { version = "0.1.0" }
 testing = { version = "0.31.31" }
 
 auto-hash-map = { path = "crates/auto-hash-map" }
@@ -101,8 +106,9 @@ swc-ast-explorer = { path = "crates/swc-ast-explorer" }
 turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
 turbo-tasks = { path = "crates/turbo-tasks" }
 turbo-tasks-build = { path = "crates/turbo-tasks-build" }
+turbo-tasks-bytes = { path = "crates/turbo-tasks-bytes" }
 turbo-tasks-env = { path = "crates/turbo-tasks-env" }
-turbo-tasks-fetch = { path = "crates/turbo-tasks-fetch" }
+turbo-tasks-fetch = { path = "crates/turbo-tasks-fetch", default-features = false }
 turbo-tasks-fs = { path = "crates/turbo-tasks-fs" }
 turbo-tasks-hash = { path = "crates/turbo-tasks-hash" }
 turbo-tasks-macros = { path = "crates/turbo-tasks-macros" }
@@ -129,6 +135,7 @@ turbopack-tests = { path = "crates/turbopack-tests" }
 turborepo = { path = "crates/turborepo" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-lib = { path = "crates/turborepo-lib" }
+turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 
 # Be careful when selecting tls backend, including change default tls backend.
@@ -152,6 +159,7 @@ async-compression = { version = "0.3.13", default-features = false, features = [
 ] }
 async-trait = "0.1.64"
 atty = "0.2.14"
+bytes = "1.1.0"
 chrono = "0.4.23"
 clap = "4.1.6"
 clap_complete = "4.1.2"
@@ -164,7 +172,7 @@ dialoguer = "0.10.3"
 dunce = "1.0.3"
 futures = "0.3.26"
 futures-retry = "0.6.0"
-httpmock = "0.6.7"
+httpmock = { version = "0.6.7", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"

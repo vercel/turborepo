@@ -1,6 +1,7 @@
 package runsummary
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -59,33 +60,66 @@ func (en executionEventName) toString() string {
 // TaskExecutionSummary contains data about the state of a single task in a turbo run.
 // Some fields are updated over time as the task prepares to execute and finishes execution.
 type TaskExecutionSummary struct {
-	StartAt time.Time `json:"start"`
+	startAt  time.Time          // set once
+	status   executionEventName // current status, updated during execution
+	err      error              // only populated for failure statuses
+	duration time.Duration      // updated during the task execution
+}
 
-	Duration time.Duration `json:"duration"`
+// MarshalJSON munges the TaskExecutionSummary into a format we want
+// We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
+func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
+	serializable := struct {
+		Start  int64  `json:"startTime"`
+		End    int64  `json:"endTime"`
+		Status string `json:"status"`
+		Err    error  `json:"error"`
+	}{
+		Start:  ts.startAt.UnixMilli(),
+		End:    ts.startAt.Add(ts.duration).UnixMilli(),
+		Status: ts.status.toString(),
+		Err:    ts.err,
+	}
 
-	// Target which has just changed
-	Label string `json:"-"`
-
-	// Its current status
-	Status string `json:"status"`
-
-	// Error, only populated for failure statuses
-	Err error `json:"error"`
+	return json.Marshal(&serializable)
 }
 
 // executionSummary is the state of the entire `turbo run`. Individual task state in `Tasks` field
 type executionSummary struct {
 	// mu guards reads/writes to the `state` field
-	mu        sync.Mutex                       `json:"-"`
-	state     map[string]*TaskExecutionSummary `json:"-"` // key is a taskID
-	Success   int                              `json:"success"`
-	Failure   int                              `json:"failed"`
-	Cached    int                              `json:"cached"`
-	Attempted int                              `json:"attempted"`
-
-	startedAt time.Time
-
+	mu              sync.Mutex
+	tasks           map[string]*TaskExecutionSummary // key is a taskID
 	profileFilename string
+
+	// These get serialized to JSON
+	success   int
+	failure   int
+	cached    int
+	attempted int
+	startedAt time.Time
+	endedAt   time.Time
+}
+
+// MarshalJSON munges the executionSummary into a format we want
+// We'll use an anonmyous, private struct for this, so it's not confusingly duplicated.
+func (es *executionSummary) MarshalJSON() ([]byte, error) {
+	serializable := struct {
+		Success   int   `json:"success"`
+		Failure   int   `json:"failed"`
+		Cached    int   `json:"cached"`
+		Attempted int   `json:"attempted"`
+		StartTime int64 `json:"startTime"`
+		EndTime   int64 `json:"endTime"`
+	}{
+		StartTime: es.startedAt.UnixMilli(),
+		EndTime:   es.endedAt.UnixMilli(),
+		Success:   es.success,
+		Failure:   es.failure,
+		Cached:    es.cached,
+		Attempted: es.attempted,
+	}
+
+	return json.Marshal(&serializable)
 }
 
 // newExecutionSummary creates a executionSummary instance to track events in a `turbo run`.`
@@ -95,11 +129,11 @@ func newExecutionSummary(start time.Time, tracingProfile string) *executionSumma
 	}
 
 	return &executionSummary{
-		Success:         0,
-		Failure:         0,
-		Cached:          0,
-		Attempted:       0,
-		state:           make(map[string]*TaskExecutionSummary),
+		success:         0,
+		failure:         0,
+		cached:          0,
+		attempted:       0,
+		tasks:           make(map[string]*TaskExecutionSummary),
 		startedAt:       start,
 		profileFilename: tracingProfile,
 	}
@@ -107,15 +141,15 @@ func newExecutionSummary(start time.Time, tracingProfile string) *executionSumma
 
 // Run starts the Execution of a single task. It returns a function that can
 // be used to update the state of a given taskID with the executionEventName enum
-func (es *executionSummary) run(label string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
+func (es *executionSummary) run(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
 	start := time.Now()
 	taskExecutionSummary := es.add(&executionEvent{
 		Time:   start,
-		Label:  label,
+		Label:  taskID,
 		Status: targetBuilding,
 	})
 
-	tracer := chrometracing.Event(label)
+	tracer := chrometracing.Event(taskID)
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
@@ -125,11 +159,11 @@ func (es *executionSummary) run(label string) (func(outcome executionEventName, 
 		result := &executionEvent{
 			Time:     now,
 			Duration: now.Sub(start),
-			Label:    label,
+			Label:    taskID,
 			Status:   outcome,
 		}
 		if err != nil {
-			result.Err = fmt.Errorf("running %v failed: %w", label, err)
+			result.Err = fmt.Errorf("running %v failed: %w", taskID, err)
 		}
 		// Ignore the return value here
 		es.add(result)
@@ -141,32 +175,36 @@ func (es *executionSummary) run(label string) (func(outcome executionEventName, 
 func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	es.mu.Lock()
 	defer es.mu.Unlock()
-	if s, ok := es.state[event.Label]; ok {
-		s.Status = event.Status.toString()
-		s.Err = event.Err
-		s.Duration = event.Duration
+
+	var taskExecSummary *TaskExecutionSummary
+	if ts, ok := es.tasks[event.Label]; ok {
+		// If we already know about this task, we'll update it with the new event
+		taskExecSummary = ts
 	} else {
-		es.state[event.Label] = &TaskExecutionSummary{
-			StartAt:  event.Time,
-			Label:    event.Label,
-			Status:   event.Status.toString(),
-			Err:      event.Err,
-			Duration: event.Duration,
-		}
-	}
-	switch {
-	case event.Status == TargetBuildFailed:
-		es.Failure++
-		es.Attempted++
-	case event.Status == TargetCached:
-		es.Cached++
-		es.Attempted++
-	case event.Status == TargetBuilt:
-		es.Success++
-		es.Attempted++
+		// If we don't know about it yet, init and add it into the parent struct
+		// (event.Status should always be `targetBuilding` here.)
+		taskExecSummary = &TaskExecutionSummary{startAt: event.Time}
+		es.tasks[event.Label] = taskExecSummary
 	}
 
-	return es.state[event.Label]
+	// Update the Status, Duration, and Err fields
+	taskExecSummary.status = event.Status
+	taskExecSummary.err = event.Err
+	taskExecSummary.duration = event.Duration
+
+	switch {
+	case event.Status == TargetBuildFailed:
+		es.failure++
+		es.attempted++
+	case event.Status == TargetCached:
+		es.cached++
+		es.attempted++
+	case event.Status == TargetBuilt:
+		es.success++
+		es.attempted++
+	}
+
+	return es.tasks[event.Label]
 }
 
 // writeChromeTracing writes to a profile name if the `--profile` flag was passed to turbo run

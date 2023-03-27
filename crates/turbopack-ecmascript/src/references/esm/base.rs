@@ -41,7 +41,7 @@ impl ReferencedAsset {
         Ok(match self {
             ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
-                Some(magic_identifier::encode(&format!("external {}", request)))
+                Some(magic_identifier::mangle(&format!("external {}", request)))
             }
             ReferencedAsset::None => None,
         })
@@ -51,7 +51,7 @@ impl ReferencedAsset {
         asset: &EcmascriptChunkPlaceableVc,
     ) -> Result<String> {
         let path = asset.ident().to_string().await?;
-        Ok(magic_identifier::encode(&format!(
+        Ok(magic_identifier::mangle(&format!(
             "imported module {}",
             path
         )))
@@ -260,7 +260,7 @@ impl CodeGenerateable for EsmAssetReference {
 }
 
 lazy_static! {
-    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::encode(
+    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::mangle(
         "ecmascript hoisting location"
     )));
 }
