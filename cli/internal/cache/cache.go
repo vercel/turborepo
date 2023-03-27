@@ -248,6 +248,8 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
 		itemStatus, actualFiles, duration, err := cache.Fetch(anchor, key, files)
+		ok := itemStatus.Local || itemStatus.Remote
+
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {
@@ -261,8 +263,7 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 			// the operation. Future work that plumbs UI / Logging into the cache system
 			// should probably log this at least.
 		}
-
-		if itemStatus.Local == true || itemStatus.Remote == true {
+		if ok {
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.

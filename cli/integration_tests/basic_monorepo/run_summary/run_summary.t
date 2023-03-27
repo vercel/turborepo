@@ -61,7 +61,7 @@ Setup
   [
     "apps/my-app/.turbo/turbo-build.log"
   ]
-
+# validate that cache state updates in second run
   $ echo $FIRST_APP_BUILD | jq '.cacheState'
   {
     "local": false,
