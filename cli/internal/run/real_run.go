@@ -185,13 +185,12 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 }
 
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
-	cmdTime := time.Now()
+	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
+	// So make sure to call it before returning.
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
-
-	// Setup tracer
-	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
@@ -203,7 +202,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// bail if the script doesn't exist
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
-		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
+		progressLogger.Debug("done", "status", "skipped", "duration", taskExecutionSummary.Duration)
 		// Return nil here because there was no execution, so there is no task execution summary
 		return nil, nil
 	}
@@ -335,12 +334,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		return taskExecutionSummary, err
 	}
 
-	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
 		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(taskExecutionSummary.Duration.Milliseconds())); err != nil {
 			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		} else {
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
@@ -349,7 +347,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Clean up tracing
 	tracer(runsummary.TargetBuilt, nil, &successCode)
-	progressLogger.Debug("done", "status", "complete", "duration", duration)
+	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
 }
 
