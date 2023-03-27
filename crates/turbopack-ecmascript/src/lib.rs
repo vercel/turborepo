@@ -47,9 +47,7 @@ pub use transform::{
     EcmascriptInputTransformsVc, TransformContext,
 };
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc},
-    trace::TraceRawVcs,
-    RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
+    primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{

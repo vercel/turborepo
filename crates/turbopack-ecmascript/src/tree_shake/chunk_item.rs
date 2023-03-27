@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::BoolVc, Value};
+use turbo_tasks::Value;
 use turbopack_core::{
     asset::Asset,
     chunk::{availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc},
@@ -14,7 +14,6 @@ use crate::{
         EcmascriptChunkingContextVc,
     },
     gen_content,
-    references::AnalyzeEcmascriptModuleResult,
 };
 
 /// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].

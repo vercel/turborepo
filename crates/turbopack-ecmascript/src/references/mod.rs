@@ -36,7 +36,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{TryJoinIterExt, Value, primitives::BoolVc};
+use turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -98,7 +98,7 @@ use crate::{
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
-    code_gen::{CodeGenerateableVc, CodeGenerateablesVc, CodeGenerateableWithAvailabilityInfoVc},
+    code_gen::{CodeGenerateableVc, CodeGenerateableWithAvailabilityInfoVc, CodeGenerateablesVc},
     magic_identifier,
     references::{
         cjs::{
@@ -123,7 +123,7 @@ pub struct AnalyzeEcmascriptModuleResult {
 #[turbo_tasks::value_impl]
 impl AnalyzeEcmascriptModuleResultVc {
     #[turbo_tasks::function]
-   pub async fn need_availability_info(self) -> Result<BoolVc> {
+    pub async fn need_availability_info(self) -> Result<BoolVc> {
         let AnalyzeEcmascriptModuleResult {
             references,
             code_generation,
