@@ -210,6 +210,7 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -283,6 +284,7 @@
         this.context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         this.transforms,
+        Value::new(Default::default()),
         this.context.compile_time_info(),
     ))
 }

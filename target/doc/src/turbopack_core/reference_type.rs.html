@@ -125,7 +125,16 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
+
+<span class="kw">use </span><span class="kw">crate</span>::resolve::ModulePartVc;
 
 <span class="comment">// These enums list well-known types, which we use internally. Plugins might add
 // custom types too.
@@ -141,10 +150,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialOrd, Ord, Hash)]
 </span><span class="kw">pub enum </span>EcmaScriptModulesReferenceSubType {
+    ImportPart(ModulePartVc),
     Custom(u8),
-    Undefined,
+    <span class="attr">#[default]
+    </span>Undefined,
 }
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -203,7 +214,10 @@
         <span class="comment">// TODO print sub types
         </span><span class="kw">let </span>str = <span class="kw">match </span><span class="self">self </span>{
             ReferenceType::CommonJs(<span class="kw">_</span>) =&gt; <span class="string">&quot;commonjs&quot;</span>,
-            ReferenceType::EcmaScriptModules(<span class="kw">_</span>) =&gt; <span class="string">&quot;EcmaScript Modules&quot;</span>,
+            ReferenceType::EcmaScriptModules(sub) =&gt; <span class="kw">match </span>sub {
+                EcmaScriptModulesReferenceSubType::ImportPart(<span class="kw">_</span>) =&gt; <span class="string">&quot;EcmaScript Modules (part)&quot;</span>,
+                <span class="kw">_ </span>=&gt; <span class="string">&quot;EcmaScript Modules&quot;</span>,
+            },
             ReferenceType::Css(<span class="kw">_</span>) =&gt; <span class="string">&quot;css&quot;</span>,
             ReferenceType::Url(<span class="kw">_</span>) =&gt; <span class="string">&quot;url&quot;</span>,
             ReferenceType::TypeScript(<span class="kw">_</span>) =&gt; <span class="string">&quot;typescript&quot;</span>,

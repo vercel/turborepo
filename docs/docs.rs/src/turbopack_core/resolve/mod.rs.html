@@ -1284,6 +1284,36 @@
 <a href="#1284" id="1284">1284</a>
 <a href="#1285" id="1285">1285</a>
 <a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -2569,6 +2599,36 @@
             ResolveResult::unresolveable().into()
         }
     })
+}
+
+<span class="doccomment">/// ModulePart represnts a part of a module.
+///
+/// Currently this is used only for ESMs.
+</span><span class="attr">#[turbo_tasks::value]
+</span><span class="kw">pub enum </span>ModulePart {
+    <span class="doccomment">/// Represents the side effects of a module. This part is evaluated even if
+    /// all exports are unused.
+    </span>ModuleEvaluation,
+    <span class="doccomment">/// Represents an export of a module.
+    </span>Export(StringVc),
+    <span class="doccomment">/// A pointer to a specific part.
+    </span>Internal(u32),
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ModulePartVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>module_evaluation() -&gt; <span class="self">Self </span>{
+        ModulePart::ModuleEvaluation.cell()
+    }
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>export(export: String) -&gt; <span class="self">Self </span>{
+        ModulePart::Export(StringVc::cell(export)).cell()
+    }
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>internal(id: u32) -&gt; <span class="self">Self </span>{
+        ModulePart::Internal(id).cell()
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

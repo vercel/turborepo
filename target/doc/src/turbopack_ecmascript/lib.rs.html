@@ -505,6 +505,41 @@
 <a href="#505" id="505">505</a>
 <a href="#506" id="506">506</a>
 <a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -525,6 +560,7 @@
 <span class="kw">pub mod </span>resolve;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>special_cases;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>transform;
+<span class="kw">pub mod </span>tree_shake;
 <span class="kw">pub mod </span>typescript;
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>webpack;
@@ -588,6 +624,16 @@
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+#[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
+</span><span class="kw">pub struct </span>EcmascriptOptions {
+    <span class="doccomment">/// module is split into smaller module parts which can be selectively
+    /// imported
+    </span><span class="kw">pub </span>split_into_parts: bool,
+    <span class="doccomment">/// imports will import parts of modules
+    </span><span class="kw">pub </span>import_parts: bool,
+}
+
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 </span><span class="kw">pub enum </span>EcmascriptModuleAssetType {
     <span class="doccomment">/// Module with EcmaScript code
@@ -621,6 +667,7 @@
     <span class="kw">pub </span>context: AssetContextVc,
     <span class="kw">pub </span>ty: EcmascriptModuleAssetType,
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
+    <span class="kw">pub </span>options: EcmascriptOptions,
     <span class="kw">pub </span>compile_time_info: CompileTimeInfoVc,
     <span class="kw">pub </span>inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore)]
@@ -640,6 +687,7 @@
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,
+        options: Value&lt;EcmascriptOptions&gt;,
         compile_time_info: CompileTimeInfoVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(EcmascriptModuleAsset {
@@ -647,6 +695,7 @@
             context,
             ty: ty.into_value(),
             transforms,
+            options: options.into_value(),
             compile_time_info,
             inner_assets: <span class="prelude-val">None</span>,
             last_successful_analysis: Default::default(),
@@ -659,6 +708,7 @@
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,
+        options: Value&lt;EcmascriptOptions&gt;,
         compile_time_info: CompileTimeInfoVc,
         inner_assets: InnerAssetsVc,
     ) -&gt; <span class="self">Self </span>{
@@ -667,6 +717,7 @@
             context,
             ty: ty.into_value(),
             transforms,
+            options: options.into_value(),
             compile_time_info,
             inner_assets: <span class="prelude-val">Some</span>(inner_assets),
             last_successful_analysis: Default::default(),
@@ -725,7 +776,9 @@
             <span class="self">self</span>.as_resolve_origin(),
             Value::new(this.ty),
             this.transforms,
+            Value::new(this.options),
             this.compile_time_info,
+            <span class="prelude-val">None</span>,
         ))
     }
 
@@ -890,119 +943,136 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
-        <span class="kw">let </span>AnalyzeEcmascriptModuleResult {
-            references,
-            code_generation,
-            ..
-        } = <span class="kw-2">&amp;*</span><span class="self">self</span>.module.analyze().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>context = <span class="self">self</span>.context;
-        <span class="kw">let </span><span class="kw-2">mut </span>code_gens = Vec::new();
-        <span class="kw">for </span>r <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(code_gen) = CodeGenerateableVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
-                code_gens.push(code_gen.code_generation(context));
-            }
-        }
-        <span class="kw">for </span>c <span class="kw">in </span>code_generation.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">let </span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-            code_gens.push(c.code_generation(context));
-        }
-        <span class="comment">// need to keep that around to allow references into that
-        </span><span class="kw">let </span>code_gens = code_gens.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>code_gens = code_gens.iter().map(|cg| <span class="kw-2">&amp;**</span>cg).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="comment">// TOOD use interval tree with references into &quot;code_gens&quot;
-        </span><span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>root_visitors = Vec::new();
-        <span class="kw">for </span>code_gen <span class="kw">in </span>code_gens {
-            <span class="kw">for </span>(path, visitor) <span class="kw">in </span>code_gen.visitors.iter() {
-                <span class="kw">if </span>path.is_empty() {
-                    root_visitors.push(<span class="kw-2">&amp;**</span>visitor);
-                } <span class="kw">else </span>{
-                    visitors.push((path, <span class="kw-2">&amp;**</span>visitor));
-                }
-            }
-        }
-
         <span class="kw">let </span>module = <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>parsed = parse(module.source, Value::new(module.ty), module.transforms).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>parsed = parse(module.source, Value::new(module.ty), module.transforms);
 
-        <span class="kw">if let </span>ParseResult::Ok {
-            program,
-            source_map,
-            globals,
-            eval_context,
-            ..
-        } = <span class="kw-2">&amp;*</span>parsed
-        {
-            <span class="kw">let </span><span class="kw-2">mut </span>program = program.clone();
+        <span class="prelude-val">Ok</span>(gen_content(
+            <span class="self">self</span>.context.into(),
+            <span class="self">self</span>.module.analyze(),
+            parsed,
+            <span class="self">self</span>.module.ident(),
+        ))
+    }
+}
 
-            GLOBALS.set(globals, || {
-                <span class="kw">if </span>!visitors.is_empty() {
-                    program.visit_mut_with_path(
-                        <span class="kw-2">&amp;mut </span>ApplyVisitors::new(visitors),
-                        <span class="kw-2">&amp;mut </span>Default::default(),
-                    );
-                }
-                <span class="kw">for </span>visitor <span class="kw">in </span>root_visitors {
-                    program.visit_mut_with(<span class="kw-2">&amp;mut </span>visitor.create());
-                }
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::hygiene::hygiene());
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::fixer::fixer(<span class="prelude-val">None</span>));
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>gen_content(
+    context: EcmascriptChunkingContextVc,
+    analyzed: AnalyzeEcmascriptModuleResultVc,
+    parsed: ParseResultVc,
+    ident: AssetIdentVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
+    <span class="kw">let </span>AnalyzeEcmascriptModuleResult {
+        references,
+        code_generation,
+        ..
+    } = <span class="kw-2">&amp;*</span>analyzed.<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="comment">// we need to remove any shebang before bundling as it&#39;s only valid as the first
-                // line in a js file (not in a chunk item wrapped in the runtime)
-                </span>remove_shebang(<span class="kw-2">&amp;mut </span>program);
-            });
-
-            <span class="kw">let </span><span class="kw-2">mut </span>bytes: Vec&lt;u8&gt; = <span class="macro">vec!</span>[];
-            <span class="comment">// TODO: Insert this as a sourceless segment so that sourcemaps aren&#39;t affected.
-            // = format!(&quot;/* {} */\n&quot;, self.module.path().to_string().await?).into_bytes();
-
-            </span><span class="kw">let </span><span class="kw-2">mut </span>srcmap = <span class="macro">vec!</span>[];
-
-            <span class="kw">let </span><span class="kw-2">mut </span>emitter = Emitter {
-                cfg: swc_core::ecma::codegen::Config {
-                    ..Default::default()
-                },
-                cm: source_map.clone(),
-                comments: <span class="prelude-val">None</span>,
-                wr: JsWriter::new(source_map.clone(), <span class="string">&quot;\n&quot;</span>, <span class="kw-2">&amp;mut </span>bytes, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut </span>srcmap)),
-            };
-
-            emitter.emit_program(<span class="kw-2">&amp;</span>program)<span class="question-mark">?</span>;
-
-            <span class="kw">let </span>srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
-
-            <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
-                inner_code: bytes.into(),
-                source_map: <span class="prelude-val">Some</span>(srcmap),
-                options: <span class="kw">if </span>eval_context.is_esm() {
-                    EcmascriptChunkItemOptions {
-                        ..Default::default()
-                    }
-                } <span class="kw">else </span>{
-                    EcmascriptChunkItemOptions {
-                        <span class="comment">// These things are not available in ESM
-                        </span>module: <span class="bool-val">true</span>,
-                        exports: <span class="bool-val">true</span>,
-                        this: <span class="bool-val">true</span>,
-                        ..Default::default()
-                    }
-                },
-                ..Default::default()
-            }
-            .into())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
-                inner_code: <span class="macro">format!</span>(
-                    <span class="string">&quot;const e = new Error(\&quot;Could not parse module &#39;{path}&#39;\&quot;);\ne.code = \
-                     &#39;MODULE_UNPARSEABLE&#39;;\nthrow e;&quot;</span>,
-                    path = <span class="self">self</span>.module.ident().path().to_string().<span class="kw">await</span><span class="question-mark">?
-                </span>)
-                .into(),
-                ..Default::default()
-            }
-            .into())
+    <span class="kw">let </span><span class="kw-2">mut </span>code_gens = Vec::new();
+    <span class="kw">for </span>r <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(code_gen) = CodeGenerateableVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
+            code_gens.push(code_gen.code_generation(context));
         }
+    }
+    <span class="kw">for </span>c <span class="kw">in </span>code_generation.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+        <span class="kw">let </span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+        code_gens.push(c.code_generation(context));
+    }
+    <span class="comment">// need to keep that around to allow references into that
+    </span><span class="kw">let </span>code_gens = code_gens.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>code_gens = code_gens.iter().map(|cg| <span class="kw-2">&amp;**</span>cg).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="comment">// TOOD use interval tree with references into &quot;code_gens&quot;
+    </span><span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>root_visitors = Vec::new();
+    <span class="kw">for </span>code_gen <span class="kw">in </span>code_gens {
+        <span class="kw">for </span>(path, visitor) <span class="kw">in </span>code_gen.visitors.iter() {
+            <span class="kw">if </span>path.is_empty() {
+                root_visitors.push(<span class="kw-2">&amp;**</span>visitor);
+            } <span class="kw">else </span>{
+                visitors.push((path, <span class="kw-2">&amp;**</span>visitor));
+            }
+        }
+    }
+
+    <span class="kw">let </span>parsed = parsed.<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">if let </span>ParseResult::Ok {
+        program,
+        source_map,
+        globals,
+        eval_context,
+        ..
+    } = <span class="kw-2">&amp;*</span>parsed
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>program = program.clone();
+
+        GLOBALS.set(globals, || {
+            <span class="kw">if </span>!visitors.is_empty() {
+                program.visit_mut_with_path(
+                    <span class="kw-2">&amp;mut </span>ApplyVisitors::new(visitors),
+                    <span class="kw-2">&amp;mut </span>Default::default(),
+                );
+            }
+            <span class="kw">for </span>visitor <span class="kw">in </span>root_visitors {
+                program.visit_mut_with(<span class="kw-2">&amp;mut </span>visitor.create());
+            }
+            program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::hygiene::hygiene());
+            program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::fixer::fixer(<span class="prelude-val">None</span>));
+
+            <span class="comment">// we need to remove any shebang before bundling as it&#39;s only valid as the first
+            // line in a js file (not in a chunk item wrapped in the runtime)
+            </span>remove_shebang(<span class="kw-2">&amp;mut </span>program);
+        });
+
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes: Vec&lt;u8&gt; = <span class="macro">vec!</span>[];
+        <span class="comment">// TODO: Insert this as a sourceless segment so that sourcemaps aren&#39;t affected.
+        // = format!(&quot;/* {} */\n&quot;, self.module.path().to_string().await?).into_bytes();
+
+        </span><span class="kw">let </span><span class="kw-2">mut </span>srcmap = <span class="macro">vec!</span>[];
+
+        <span class="kw">let </span><span class="kw-2">mut </span>emitter = Emitter {
+            cfg: swc_core::ecma::codegen::Config {
+                ..Default::default()
+            },
+            cm: source_map.clone(),
+            comments: <span class="prelude-val">None</span>,
+            wr: JsWriter::new(source_map.clone(), <span class="string">&quot;\n&quot;</span>, <span class="kw-2">&amp;mut </span>bytes, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut </span>srcmap)),
+        };
+
+        emitter.emit_program(<span class="kw-2">&amp;</span>program)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+
+        <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
+            inner_code: bytes.into(),
+            source_map: <span class="prelude-val">Some</span>(srcmap),
+            options: <span class="kw">if </span>eval_context.is_esm() {
+                EcmascriptChunkItemOptions {
+                    ..Default::default()
+                }
+            } <span class="kw">else </span>{
+                EcmascriptChunkItemOptions {
+                    <span class="comment">// These things are not available in ESM
+                    </span>module: <span class="bool-val">true</span>,
+                    exports: <span class="bool-val">true</span>,
+                    this: <span class="bool-val">true</span>,
+                    ..Default::default()
+                }
+            },
+            ..Default::default()
+        }
+        .into())
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
+            inner_code: <span class="macro">format!</span>(
+                <span class="string">&quot;const e = new Error(\&quot;Could not parse module &#39;{path}&#39;\&quot;);\ne.code = \
+                 &#39;MODULE_UNPARSEABLE&#39;;\nthrow e;&quot;</span>,
+                path = ident.path().to_string().<span class="kw">await</span><span class="question-mark">?
+            </span>)
+            .into(),
+            ..Default::default()
+        }
+        .into())
     }
 }
 

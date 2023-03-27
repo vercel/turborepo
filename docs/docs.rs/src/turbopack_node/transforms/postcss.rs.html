@@ -267,6 +267,8 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -421,6 +423,7 @@
                             context,
                             Value::new(EcmascriptModuleAssetType::Ecmascript),
                             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
+                            Value::new(Default::default()),
                             context.compile_time_info(),
                         )
                         .into(),
@@ -455,6 +458,7 @@
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: <span class="bool-val">false</span>,
         }]),
+        Value::new(Default::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;CONFIG&quot;</span>.to_string() =&gt; config_asset

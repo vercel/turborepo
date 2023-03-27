@@ -60,6 +60,10 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -68,7 +72,7 @@
     asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
 };
 <span class="kw">use </span>turbopack_css::CssInputTransformsVc;
-<span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransformsVc;
+<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRuleCondition;
 
@@ -109,7 +113,11 @@
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>, shared)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 </span><span class="kw">pub enum </span>ModuleType {
-    Ecmascript(EcmascriptInputTransformsVc),
+    Ecmascript {
+        transforms: EcmascriptInputTransformsVc,
+        <span class="attr">#[turbo_tasks(trace_ignore)]
+        </span>options: EcmascriptOptions,
+    },
     Typescript(EcmascriptInputTransformsVc),
     TypescriptWithTypes(EcmascriptInputTransformsVc),
     TypescriptDeclaration(EcmascriptInputTransformsVc),

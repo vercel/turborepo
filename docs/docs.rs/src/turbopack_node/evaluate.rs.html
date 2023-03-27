@@ -633,6 +633,9 @@
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -750,6 +753,7 @@
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: <span class="bool-val">false</span>,
         }]),
+        Value::new(Default::default()),
         context.compile_time_info(),
     )
     .as_asset();
@@ -779,6 +783,7 @@
         EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: <span class="bool-val">false</span>,
         }]),
+        Value::new(Default::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;INNER&quot;</span>.to_string() =&gt; module_asset,
@@ -798,6 +803,7 @@
             EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
                 use_define_for_class_fields: <span class="bool-val">false</span>,
             }]),
+            Value::new(Default::default()),
             context.compile_time_info(),
         )
         .as_ecmascript_chunk_placeable();

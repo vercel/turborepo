@@ -143,6 +143,11 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Callee, ExprOrSpread},
@@ -154,6 +159,7 @@
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 
@@ -190,7 +196,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>EsmAsyncAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        esm_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        esm_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request, Default::default())
     }
 }
 
@@ -224,7 +230,11 @@
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
             context.into(),
-            esm_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
+            esm_resolve(
+                <span class="self">self</span>.origin,
+                <span class="self">self</span>.request,
+                Value::new(EcmaScriptModulesReferenceSubType::Undefined),
+            ),
             Value::new(EsmAsync),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;

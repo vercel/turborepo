@@ -168,6 +168,8 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -323,6 +325,8 @@
     </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ModuleOptionsContextVc)&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>placeholder_for_future_extensions: (),
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_tree_shaking: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

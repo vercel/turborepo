@@ -88,11 +88,25 @@
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
 <a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+
+<span class="kw">use </span><span class="kw">crate</span>::resolve::ModulePartVc;
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash)]
@@ -107,6 +121,8 @@
     </span><span class="kw">pub </span>assets: Vec&lt;(StringVc, AssetIdentVc)&gt;,
     <span class="doccomment">/// The modifiers of this asset (e.g. `client chunks`)
     </span><span class="kw">pub </span>modifiers: Vec&lt;StringVc&gt;,
+    <span class="doccomment">/// The part of the asset that is a (ECMAScript) module
+    </span><span class="kw">pub </span>part: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
 }
 
 <span class="kw">impl </span>AssetIdent {
@@ -163,6 +179,7 @@
             fragment: <span class="prelude-val">None</span>,
             assets: Vec::new(),
             modifiers: Vec::new(),
+            part: <span class="prelude-val">None</span>,
         }))
     }
 
@@ -170,6 +187,13 @@
     </span><span class="kw">pub async fn </span>with_modifier(<span class="self">self</span>, modifier: StringVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
         this.add_modifier(modifier);
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(Value::new(this)))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>with_part(<span class="self">self</span>, part: ModulePartVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+        this.part = <span class="prelude-val">Some</span>(part);
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(Value::new(this)))
     }
 

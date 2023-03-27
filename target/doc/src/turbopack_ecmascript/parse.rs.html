@@ -388,7 +388,7 @@
         <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
         </span>eval_context: EvalContext,
         <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-        </span>globals: Globals,
+        </span>globals: Arc&lt;Globals&gt;,
         <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
         </span>source_map: Arc&lt;swc_core::common::SourceMap&gt;,
     },
@@ -536,7 +536,7 @@
             title: <span class="prelude-val">Some</span>(<span class="string">&quot;Parsing ecmascript source code failed&quot;</span>.to_string()),
         },
     );
-    <span class="kw">let </span>globals = Globals::new();
+    <span class="kw">let </span>globals = Arc::new(Globals::new());
     <span class="kw">let </span>globals_ref = <span class="kw-2">&amp;</span>globals;
     <span class="kw">let </span>helpers = GLOBALS.set(globals_ref, || Helpers::new(<span class="bool-val">true</span>));
     <span class="kw">let </span><span class="kw-2">mut </span>result = WrapFuture::new(
@@ -651,7 +651,7 @@
                 eval_context,
                 <span class="comment">// Temporary globals as the current one can&#39;t be moved yet, since they are
                 // borrowed
-                </span>globals: Globals::new(),
+                </span>globals: Arc::new(Globals::new()),
                 source_map,
             })
         },

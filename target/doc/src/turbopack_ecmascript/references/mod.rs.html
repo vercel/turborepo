@@ -2216,6 +2216,34 @@
 <a href="#2216" id="2216">2216</a>
 <a href="#2217" id="2217">2217</a>
 <a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2238,6 +2266,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>constant_condition::{ConstantConditionValue, ConstantConditionVc};
+<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>regex::Regex;
@@ -2266,7 +2295,7 @@
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePartVc, PrimaryResolveResult,
     },
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
@@ -2311,7 +2340,7 @@
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::Reexport,
+        imports::{ImportedSymbol, Reexport},
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
@@ -2323,8 +2352,9 @@
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    tree_shake::{part_of_module, split},
     typescript::resolve::tsconfig,
-    EcmascriptInputTransformsVc,
+    EcmascriptInputTransformsVc, EcmascriptOptions,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -2413,7 +2443,9 @@
     origin: ResolveOriginVc,
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
+    options: Value&lt;EcmascriptOptions&gt;,
     compile_time_info: CompileTimeInfoVc,
+    part: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     <span class="kw">let </span>path = origin.origin_path();
@@ -2425,7 +2457,13 @@
         EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript =&gt; <span class="bool-val">false</span>,
     };
 
-    <span class="kw">let </span>parsed = parse(source, ty, transforms);
+    <span class="kw">let </span>parsed = <span class="kw">if let </span><span class="prelude-val">Some</span>(part) = part {
+        <span class="kw">let </span>parsed = parse(source, ty, transforms);
+        <span class="kw">let </span>split_data = split(path, parsed);
+        part_of_module(split_data, part)
+    } <span class="kw">else </span>{
+        parse(source, ty, transforms)
+    };
 
     <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), package_json()).<span class="kw">await</span><span class="question-mark">? </span>{
         FindContextFileResult::Found(package_json, <span class="kw">_</span>) =&gt; {
@@ -2446,6 +2484,7 @@
     special_cases(<span class="kw-2">&amp;</span>path.<span class="kw">await</span><span class="question-mark">?</span>.path, <span class="kw-2">&amp;mut </span>analysis);
 
     <span class="kw">let </span>parsed = parsed.<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">match </span><span class="kw-2">&amp;*</span>parsed {
         ParseResult::Ok {
             program,
@@ -2526,18 +2565,35 @@
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            <span class="kw">for </span>(src, annotations) <span class="kw">in </span>eval_context.imports.references() {
+            <span class="kw">for </span>r <span class="kw">in </span>eval_context.imports.references() {
                 <span class="kw">let </span>r = EsmAssetReferenceVc::new(
                     origin,
-                    RequestVc::parse(Value::new(src.to_string().into())),
-                    Value::new(annotations.clone()),
+                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                    Value::new(r.annotations.clone()),
+                    <span class="kw">if </span>options.import_parts {
+                        <span class="kw">match </span><span class="kw-2">&amp;</span>r.imported_symbol {
+                            ImportedSymbol::ModuleEvaluation =&gt; {
+                                <span class="prelude-val">Some</span>(ModulePartVc::module_evaluation())
+                            }
+                            ImportedSymbol::Symbol(name) =&gt; {
+                                <span class="prelude-val">Some</span>(ModulePartVc::export(name.to_string()))
+                            }
+                            ImportedSymbol::Namespace =&gt; <span class="prelude-val">None</span>,
+                        }
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>},
                 );
                 import_references.push(r);
             }
+
             <span class="kw">for </span>r <span class="kw">in </span>import_references.iter_mut() {
                 <span class="comment">// Resolving these references here avoids many resolve wrapper tasks when
                 // passing that to other turbo tasks functions later.
                 </span><span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            <span class="comment">// Avoid adding duplicate references to the analysis
+            </span><span class="kw">for </span>r <span class="kw">in </span>import_references.iter().collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;() {
                 analysis.add_reference(<span class="kw-2">*</span>r);
             }
 

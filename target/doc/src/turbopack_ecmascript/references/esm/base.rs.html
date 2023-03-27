@@ -301,6 +301,24 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -316,7 +334,11 @@
         ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
+    reference_type::EcmaScriptModulesReferenceSubType,
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, ModulePartVc, PrimaryResolveResult,
+        ResolveResultVc,
+    },
 };
 
 <span class="kw">use crate</span>::{
@@ -398,6 +420,8 @@
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>annotations: ImportAnnotations,
+
+    <span class="kw">pub </span>export_name: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
 }
 
 <span class="kw">impl </span>EsmAssetReference {
@@ -415,8 +439,13 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>get_referenced_asset(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ReferencedAssetVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>ty = Value::new(<span class="kw">match </span><span class="kw-2">&amp;</span>this.export_name {
+            <span class="prelude-val">Some</span>(part) =&gt; EcmaScriptModulesReferenceSubType::ImportPart(<span class="kw-2">*</span>part),
+            <span class="prelude-val">None </span>=&gt; EcmaScriptModulesReferenceSubType::Undefined,
+        });
         <span class="prelude-val">Ok</span>(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request),
+            esm_resolve(this.get_origin(), this.request, ty),
             this.request,
         ))
     }
@@ -426,11 +455,13 @@
         origin: ResolveOriginVc,
         request: RequestVc,
         annotations: Value&lt;ImportAnnotations&gt;,
+        export_name: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(EsmAssetReference {
             origin,
             request,
             annotations: annotations.into_value(),
+            export_name,
         })
     }
 }
@@ -439,7 +470,12 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>EsmAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        esm_resolve(<span class="self">self</span>.get_origin(), <span class="self">self</span>.request)
+        <span class="kw">let </span>ty = Value::new(<span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.export_name {
+            <span class="prelude-val">Some</span>(part) =&gt; EcmaScriptModulesReferenceSubType::ImportPart(<span class="kw-2">*</span>part),
+            <span class="prelude-val">None </span>=&gt; EcmaScriptModulesReferenceSubType::Undefined,
+        });
+
+        esm_resolve(<span class="self">self</span>.get_origin(), <span class="self">self</span>.request, ty)
     }
 }
 

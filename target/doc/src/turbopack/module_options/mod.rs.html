@@ -356,6 +356,21 @@
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -372,7 +387,9 @@
     source_transform::SourceTransformsVc,
 };
 <span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
-<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+<span class="kw">use </span>turbopack_ecmascript::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
+};
 <span class="kw">use </span>turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 <span class="kw">use </span><span class="kw">crate</span>::evaluate_context::node_evaluate_asset_context;
@@ -422,6 +439,7 @@
             enable_styled_jsx,
             enable_styled_components,
             enable_types,
+            enable_tree_shaking,
             <span class="kw-2">ref </span>enable_typescript_transform,
             <span class="kw-2">ref </span>decorators,
             enable_mdx,
@@ -465,6 +483,11 @@
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
         }
+
+        <span class="kw">let </span>ecmascript_options = EcmascriptOptions {
+            split_into_parts: enable_tree_shaking,
+            import_parts: enable_tree_shaking,
+        };
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
@@ -602,21 +625,24 @@
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
                 ]),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mjs&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.cjs&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
@@ -652,9 +678,10 @@
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
-                ))],
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: vendor_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ReferenceType(ReferenceType::Url(
@@ -691,7 +718,10 @@
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     <span class="macro">vec!</span>[
-                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: ecmascript_options.clone(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(<span class="macro">vec!</span>[
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(

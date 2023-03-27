@@ -110,6 +110,7 @@
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>node_native_binding;
 
 <span class="kw">use </span>anyhow::Result;
@@ -160,11 +161,12 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>esm_resolve(origin: ResolveOriginVc, request: RequestVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
-    <span class="comment">// TODO pass EcmaScriptModulesReferenceSubType
-    </span><span class="kw">let </span>ty = Value::new(ReferenceType::EcmaScriptModules(
-        EcmaScriptModulesReferenceSubType::Undefined,
-    ));
+</span><span class="kw">pub async fn </span>esm_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+    ty: Value&lt;EcmaScriptModulesReferenceSubType&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">let </span>ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     <span class="kw">let </span>options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
     specific_resolve(origin, request, options, ty).<span class="kw">await
 </span>}
