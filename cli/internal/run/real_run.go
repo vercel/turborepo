@@ -150,6 +150,22 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
+	// When continue on error is enabled don't register failed tasks as errors
+	// and instead must inspect the task summaries.
+	if ec.rs.Opts.runOpts.continueOnError {
+		for _, summary := range runSummary.RunSummary.Tasks {
+			if childExit := summary.Execution.ExitCode(); childExit != nil {
+				childExit := *childExit
+				if childExit < 0 {
+					childExit = -childExit
+				}
+				if childExit > exitCode {
+					exitCode = childExit
+				}
+			}
+		}
+	}
+
 	runSummary.Close(exitCode, base.RepoRoot)
 
 	if exitCode != 0 {

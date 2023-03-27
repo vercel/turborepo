@@ -89,6 +89,16 @@ func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&serializable)
 }
 
+// ExitCode access exit code nil means no exit code was received
+func (ts *TaskExecutionSummary) ExitCode() *int {
+	var exitCode int
+	if ts.exitCode == nil {
+		return nil
+	}
+	exitCode = *ts.exitCode
+	return &exitCode
+}
+
 // executionSummary is the state of the entire `turbo run`. Individual task state in `Tasks` field
 type executionSummary struct {
 	// mu guards reads/writes to the `state` field

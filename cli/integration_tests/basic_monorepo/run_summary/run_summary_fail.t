@@ -8,6 +8,8 @@ Setup
 The maybefails task fails for one workspace but not the other
   $ TURBO_RUN_SUMMARY=true ${TURBO} run maybefails --continue > /dev/null
   my-app:maybefails: command finished with error, but continuing...
+   ERROR  run failed: command  exited (1)
+  [1]
 
 # ExitCode here is 1, because npm will report all errors with exitCode 1
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#maybefails")) | .[0].execution'
