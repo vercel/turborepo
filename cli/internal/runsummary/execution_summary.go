@@ -26,6 +26,8 @@ type executionEvent struct {
 	Status executionEventName
 	// Error, only populated for failure statuses
 	Err error
+
+	exitCode *int
 }
 
 // executionEventName represents the status of a target when we log a build result.
@@ -64,21 +66,24 @@ type TaskExecutionSummary struct {
 	status   executionEventName // current status, updated during execution
 	err      error              // only populated for failure statuses
 	duration time.Duration      // updated during the task execution
+	exitCode *int               // pointer so we can distinguish between 0 and unknown.
 }
 
 // MarshalJSON munges the TaskExecutionSummary into a format we want
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
 func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 	serializable := struct {
-		Start  int64  `json:"startTime"`
-		End    int64  `json:"endTime"`
-		Status string `json:"status"`
-		Err    error  `json:"error"`
+		Start    int64  `json:"startTime"`
+		End      int64  `json:"endTime"`
+		Status   string `json:"status"`
+		Err      error  `json:"error"`
+		ExitCode *int   `json:"exitCode"`
 	}{
-		Start:  ts.startAt.UnixMilli(),
-		End:    ts.startAt.Add(ts.duration).UnixMilli(),
-		Status: ts.status.toString(),
-		Err:    ts.err,
+		Start:    ts.startAt.UnixMilli(),
+		End:      ts.startAt.Add(ts.duration).UnixMilli(),
+		Status:   ts.status.toString(),
+		Err:      ts.err,
+		ExitCode: ts.exitCode,
 	}
 
 	return json.Marshal(&serializable)
@@ -141,7 +146,7 @@ func newExecutionSummary(start time.Time, tracingProfile string) *executionSumma
 
 // Run starts the Execution of a single task. It returns a function that can
 // be used to update the state of a given taskID with the executionEventName enum
-func (es *executionSummary) run(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
+func (es *executionSummary) run(taskID string) (func(outcome executionEventName, err error, exitCode *int), *TaskExecutionSummary) {
 	start := time.Now()
 	taskExecutionSummary := es.add(&executionEvent{
 		Time:   start,
@@ -153,7 +158,7 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 
 	// This function can be called with an enum and an optional error to update
 	// the state of a given taskID.
-	tracerFn := func(outcome executionEventName, err error) {
+	tracerFn := func(outcome executionEventName, err error, exitCode *int) {
 		defer tracer.Done()
 		now := time.Now()
 		result := &executionEvent{
@@ -161,10 +166,14 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 			Duration: now.Sub(start),
 			Label:    taskID,
 			Status:   outcome,
+			// We'll assign this here regardless of whether it is nil, but we'll check for nil
+			// when we assign it to the taskExecutionSummary.
+			exitCode: exitCode,
 		}
 		if err != nil {
 			result.Err = fmt.Errorf("running %v failed: %w", taskID, err)
 		}
+
 		// Ignore the return value here
 		es.add(result)
 	}
@@ -191,6 +200,10 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	taskExecSummary.status = event.Status
 	taskExecSummary.err = event.Err
 	taskExecSummary.duration = event.Duration
+
+	if event.exitCode != nil {
+		taskExecSummary.exitCode = event.exitCode
+	}
 
 	switch {
 	case event.Status == TargetBuildFailed:

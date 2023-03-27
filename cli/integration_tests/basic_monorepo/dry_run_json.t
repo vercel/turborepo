@@ -37,6 +37,15 @@ Setup
         ],
         "persistent": false
       },
+      "maybefails": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
       "my-app#build": {
         "outputs": [
           "apple.json",
@@ -67,7 +76,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "45ec4e15c3dcf5c2",
+    "hash": "2f192ed93e20f940",
     "cacheState": {
       "local": false,
       "remote": false
@@ -96,7 +105,7 @@ Setup
       "persistent": false
     },
     "expandedInputs": {
-      "package.json": "f2a5d2525f3996a57680180a7cd9ad7310e4dec0"
+      "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
@@ -117,7 +126,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "c36e55f947cd2d28",
+    "hash": "af2ba2d52192ee45",
     "cacheState": {
       "local": false,
       "remote": false
@@ -142,7 +151,7 @@ Setup
       "persistent": false
     },
     "expandedInputs": {
-      "package.json": "8d3e121335e16dbd8d99c03522b892ec52416dda"
+      "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
