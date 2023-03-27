@@ -795,6 +795,8 @@
 <a href="#795" id="795">795</a>
 <a href="#796" id="796">796</a>
 <a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub mod </span>chunk_in_group;
@@ -1210,6 +1212,7 @@
     <span class="kw">pub </span>chunks: Vec&lt;ChunkVc&gt;,
     <span class="kw">pub </span>async_chunk_groups: Vec&lt;ChunkGroupVc&gt;,
     <span class="kw">pub </span>external_asset_references: Vec&lt;AssetReferenceVc&gt;,
+    <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
 
 <span class="attr">#[async_trait::async_trait]
@@ -1574,6 +1577,7 @@
         chunks,
         async_chunk_groups,
         external_asset_references,
+        availability_info: availability_info.into_value(),
     }))
 }
 

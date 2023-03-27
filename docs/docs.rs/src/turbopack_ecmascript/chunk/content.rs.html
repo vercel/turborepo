@@ -129,6 +129,10 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::Value;
@@ -152,6 +156,7 @@
     <span class="kw">pub </span>chunks: Vec&lt;ChunkVc&gt;,
     <span class="kw">pub </span>async_chunk_groups: Vec&lt;ChunkGroupVc&gt;,
     <span class="kw">pub </span>external_asset_references: Vec&lt;AssetReferenceVc&gt;,
+    <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
 
 <span class="kw">impl </span>From&lt;ChunkContentResult&lt;EcmascriptChunkItemVc&gt;&gt; <span class="kw">for </span>EcmascriptChunkContent {
@@ -161,6 +166,7 @@
             chunks: from.chunks,
             async_chunk_groups: from.async_chunk_groups,
             external_asset_references: from.external_asset_references,
+            availability_info: from.availability_info,
         }
     }
 }
@@ -218,6 +224,7 @@
             chunks,
             async_chunk_groups,
             external_asset_references,
+            availability_info: <span class="kw">_</span>,
         } = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">?</span>;
         all_chunk_items.extend(chunk_items.iter().copied());
         all_chunks.extend(chunks.iter().copied());
@@ -230,6 +237,7 @@
         chunks: all_chunks.into_iter().collect(),
         async_chunk_groups: all_async_chunk_groups.into_iter().collect(),
         external_asset_references: all_external_asset_references.into_iter().collect(),
+        availability_info: availability_info.into_value(),
     }
     .cell())
 }

@@ -117,7 +117,28 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
-</pre><pre class="rust"><code><span class="kw">use </span>swc_core::ecma::visit::{AstParentKind, VisitMut};
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+</pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>swc_core::ecma::visit::{AstParentKind, VisitMut};
+<span class="kw">use </span>turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Value};
+<span class="kw">use </span>turbopack_core::chunk::availability_info::AvailabilityInfo;
 
 <span class="kw">use </span><span class="kw">crate</span>::chunk::EcmascriptChunkingContextVc;
 
@@ -145,8 +166,23 @@
     <span class="kw">fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: EcmascriptChunkingContextVc) -&gt; CodeGenerationVc;
 }
 
+<span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>CodeGenerateableWithAvailabilityInfo {
+    <span class="kw">fn </span>code_generation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: EcmascriptChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; CodeGenerationVc;
+}
+
+<span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]
+</span><span class="kw">pub enum </span>CodeGen {
+    CodeGenerateable(CodeGenerateableVc),
+    CodeGenerateableWithAvailabilityInfo(CodeGenerateableWithAvailabilityInfoVc),
+}
+
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>CodeGenerateables(Vec&lt;CodeGenerateableVc&gt;);
+</span><span class="kw">pub struct </span>CodeGenerateables(Vec&lt;CodeGen&gt;);
 
 <span class="kw">pub fn </span>path_to(
     path: <span class="kw-2">&amp;</span>[AstParentKind],

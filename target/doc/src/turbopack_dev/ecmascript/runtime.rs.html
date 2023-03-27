@@ -210,6 +210,8 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
@@ -329,16 +331,18 @@
         <span class="kw">let </span><span class="self">Self </span>{
             chunk_group,
             chunking_context,
-            evaluated_entries: <span class="kw">_</span>,
+            evaluated_entries,
         } = <span class="self">self</span>;
 
-        <span class="kw">let </span>chunk_group =
-            chunk_group.unwrap_or_else(|| ChunkGroupVc::from_chunk(origin_chunk.into()));
-        AssetReferencesVc::cell(<span class="macro">vec!</span>[ChunkListReferenceVc::new(
-            chunking_context.output_root(),
-            chunk_group,
-        )
-        .into()])
+        <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
+        <span class="kw">if </span>evaluated_entries.is_some() {
+            <span class="kw">let </span>chunk_group =
+                chunk_group.unwrap_or_else(|| ChunkGroupVc::from_chunk(origin_chunk.into()));
+            references.push(
+                ChunkListReferenceVc::new(chunking_context.output_root(), chunk_group).into(),
+            );
+        }
+        AssetReferencesVc::cell(references)
     }
 
     <span class="attr">#[turbo_tasks::function]

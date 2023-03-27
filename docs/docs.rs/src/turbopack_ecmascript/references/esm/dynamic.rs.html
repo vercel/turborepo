@@ -148,6 +148,31 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Callee, ExprOrSpread},
@@ -156,7 +181,8 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
+        availability_info::AvailabilityInfo, ChunkableAssetReference, ChunkableAssetReferenceVc,
+        ChunkingType, ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
     reference_type::EcmaScriptModulesReferenceSubType,
@@ -166,7 +192,10 @@
 <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveType::EsmAsync};
 <span class="kw">use crate</span>::{
     chunk::EcmascriptChunkingContextVc,
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    code_gen::{
+        CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc,
+        CodeGeneration, CodeGenerationVc,
+    },
     create_visitor,
     references::AstPathVc,
     resolve::esm_resolve,
@@ -220,11 +249,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>EsmAsyncAssetReference {
+</span><span class="kw">impl </span>CodeGenerateableWithAvailabilityInfo <span class="kw">for </span>EsmAsyncAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code_generation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: EcmascriptChunkingContextVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span>pm = PatternMappingVc::resolve_request(
             <span class="self">self</span>.request,
@@ -235,61 +265,81 @@
                 <span class="self">self</span>.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
             ),
-            Value::new(EsmAsync),
+            Value::new(EsmAsync(availability_info.into_value())),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>visitor = <span class="kw">if let </span>PatternMapping::Invalid = <span class="kw-2">&amp;*</span>pm {
-            <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
-                <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
-                <span class="kw">let </span>message = <span class="kw">match </span>old_args.first() {
-                    <span class="prelude-val">Some</span>(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr }) =&gt; {
-                        <span class="macro">quote_expr!</span>(
-                            <span class="string">&quot;&#39;could not resolve \&quot;&#39; + $arg + &#39;\&quot; into a module&#39;&quot;</span>,
-                            arg: Expr = <span class="kw-2">*</span>expr.clone(),
-                        )
-                    }
-                    <span class="comment">// These are SWC bugs: https://github.com/swc-project/swc/issues/5394
-                    </span><span class="prelude-val">Some</span>(ExprOrSpread { spread: <span class="prelude-val">Some</span>(<span class="kw">_</span>), expr: <span class="kw">_ </span>}) =&gt; {
-                        <span class="macro">quote_expr!</span>(<span class="string">&quot;&#39;spread operator is illegal in import() expressions.&#39;&quot;</span>)
-                    }
-                    <span class="kw">_ </span>=&gt; {
-                        <span class="macro">quote_expr!</span>(<span class="string">&quot;&#39;import() expressions require at least 1 argument&#39;&quot;</span>)
-                    }
-                };
-                <span class="kw">let </span>error = <span class="macro">quote_expr!</span>(
-                    <span class="string">&quot;new Error($message)&quot;</span>,
-                    message: Expr = <span class="kw-2">*</span>message
-                );
-                call_expr.callee = Callee::Expr(<span class="macro">quote_expr!</span>(<span class="string">&quot;Promise.reject&quot;</span>));
-                call_expr.args = <span class="macro">vec!</span>[
-                    ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: error, },
-                ];
-            })
-        } <span class="kw">else </span>{
-            <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
-                <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
-                <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
-                    <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
-                    <span class="kw">_ </span>=&gt; pm.create(),
-                };
-                <span class="kw">if </span>pm.is_internal_import() {
+        <span class="kw">let </span>visitor = <span class="kw">match </span><span class="kw-2">&amp;*</span>pm {
+            PatternMapping::Invalid =&gt; {
+                <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
+                    <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
+                    <span class="kw">let </span>message = <span class="kw">match </span>old_args.first() {
+                        <span class="prelude-val">Some</span>(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr }) =&gt; {
+                            <span class="macro">quote_expr!</span>(
+                                <span class="string">&quot;&#39;could not resolve \&quot;&#39; + $arg + &#39;\&quot; into a module&#39;&quot;</span>,
+                                arg: Expr = <span class="kw-2">*</span>expr.clone(),
+                            )
+                        }
+                        <span class="comment">// These are SWC bugs: https://github.com/swc-project/swc/issues/5394
+                        </span><span class="prelude-val">Some</span>(ExprOrSpread { spread: <span class="prelude-val">Some</span>(<span class="kw">_</span>), expr: <span class="kw">_ </span>}) =&gt; {
+                            <span class="macro">quote_expr!</span>(<span class="string">&quot;&#39;spread operator is illegal in import() expressions.&#39;&quot;</span>)
+                        }
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="macro">quote_expr!</span>(<span class="string">&quot;&#39;import() expressions require at least 1 argument&#39;&quot;</span>)
+                        }
+                    };
+                    <span class="kw">let </span>error = <span class="macro">quote_expr!</span>(
+                        <span class="string">&quot;new Error($message)&quot;</span>,
+                        message: Expr = <span class="kw-2">*</span>message
+                    );
+                    call_expr.callee = Callee::Expr(<span class="macro">quote_expr!</span>(<span class="string">&quot;Promise.reject&quot;</span>));
+                    call_expr.args = <span class="macro">vec!</span>[
+                        ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: error, },
+                    ];
+                })
+            }
+            PatternMapping::SingleLoader(<span class="kw">_</span>) =&gt; {
+                <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
+                    <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
+                    <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
+                        <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
+                        <span class="kw">_ </span>=&gt; pm.create(),
+                    };
                     call_expr.callee = Callee::Expr(<span class="macro">quote_expr!</span>(
-                            <span class="string">&quot;__turbopack_require__($arg)&quot;</span>,
-                            arg: Expr = expr
+                        <span class="string">&quot;__turbopack_require__($arg)&quot;</span>,
+                        arg: Expr = expr
                     ));
                     call_expr.args = <span class="macro">vec!</span>[
                         ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="macro">quote_expr!</span>(<span class="string">&quot;__turbopack_import__&quot;</span>) },
                     ];
-                } <span class="kw">else </span>{
-                    call_expr.args = <span class="macro">vec!</span>[
-                        ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr }
-                    ]
-                }
-
-            })
+                })
+            }
+            <span class="kw">_ </span>=&gt; {
+                <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
+                    <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
+                    <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
+                        <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
+                        <span class="kw">_ </span>=&gt; pm.create(),
+                    };
+                    <span class="kw">if </span>pm.is_internal_import() {
+                        call_expr.callee = Callee::Expr(<span class="macro">quote_expr!</span>(
+                            <span class="string">&quot;Promise.resolve().then&quot;</span>,
+                        ));
+                        call_expr.args = <span class="macro">vec!</span>[
+                            ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="macro">quote_expr!</span>(
+                                <span class="string">&quot;() =&gt; __turbopack_require__($arg)&quot;</span>,
+                                arg: Expr = expr
+                            ) },
+                        ];
+                    } <span class="kw">else </span>{
+                        call_expr.args = <span class="macro">vec!</span>[
+                            ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr }
+                        ]
+                    }
+                })
+            }
         };
 
         <span class="prelude-val">Ok</span>(CodeGeneration {

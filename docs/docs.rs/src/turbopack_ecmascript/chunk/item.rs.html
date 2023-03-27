@@ -101,6 +101,12 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, Value};
@@ -141,6 +147,12 @@
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>EcmascriptChunkItem: ChunkItem {
     <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkItemContentVc;
+    <span class="kw">fn </span>content_with_availability_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; EcmascriptChunkItemContentVc {
+        <span class="self">self</span>.content()
+    }
     <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc;
 }
 

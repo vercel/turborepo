@@ -102,16 +102,30 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringVc, U64Vc},
-    TryJoinIterExt, ValueToString,
+    TryJoinIterExt, Value, ValueToString,
 };
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkItem, ModuleIdReadRef},
+    chunk::{availability_info::AvailabilityInfo, ChunkItem, ModuleIdReadRef},
     code_builder::{CodeBuilder, CodeVc},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
 };
@@ -135,8 +149,13 @@
 }
 
 <span class="kw">impl </span>EcmascriptDevChunkContentEntry {
-    <span class="kw">pub async fn </span>new(chunk_item: EcmascriptChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>code = item_code(chunk_item).resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>new(
+        chunk_item: EcmascriptChunkItemVc,
+        availability_info: AvailabilityInfo,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>code = item_code(chunk_item, Value::new(availability_info))
+            .resolve()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EcmascriptDevChunkContentEntry {
             code,
             hash: code.source_code_hash().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
@@ -156,6 +175,7 @@
         chunk_content: EcmascriptChunkContentVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptDevChunkContentEntriesVc&gt; {
         <span class="kw">let </span>chunk_content = chunk_content.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>availability_info = chunk_content.availability_info;
 
         <span class="kw">let </span>entries: IndexMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = chunk_content
             .chunk_items
@@ -163,7 +183,7 @@
             .map(|chunk_item| <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>((
                     chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>,
-                    EcmascriptDevChunkContentEntry::new(<span class="kw-2">*</span>chunk_item).<span class="kw">await</span><span class="question-mark">?</span>,
+                    EcmascriptDevChunkContentEntry::new(<span class="kw-2">*</span>chunk_item, availability_info).<span class="kw">await</span><span class="question-mark">?</span>,
                 ))
             })
             .try_join()
@@ -176,35 +196,43 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>item_code(item: EcmascriptChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
+</span><span class="kw">async fn </span>item_code(
+    item: EcmascriptChunkItemVc,
+    availability_info: Value&lt;AvailabilityInfo&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
     <span class="kw">use </span>std::fmt::Write;
 
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>module_factory(item.content()).resolve().<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(factory) =&gt; factory,
-        <span class="prelude-val">Err</span>(error) =&gt; {
-            <span class="kw">let </span>id = item.id().to_string().<span class="kw">await</span>;
-            <span class="kw">let </span>id = id.as_ref().map_or_else(|<span class="kw">_</span>| <span class="string">&quot;unknown&quot;</span>, |id| <span class="kw-2">&amp;**</span>id);
-            <span class="kw">let </span><span class="kw-2">mut </span>error_message =
-                <span class="macro">format!</span>(<span class="string">&quot;An error occurred while generating the chunk item {}&quot;</span>, id);
-            <span class="kw">for </span>err <span class="kw">in </span>error.chain() {
-                <span class="macro">write!</span>(error_message, <span class="string">&quot;\n  at {}&quot;</span>, err)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(
+        <span class="kw">match </span>module_factory(item.content_with_availability_info(availability_info))
+            .resolve()
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(factory) =&gt; factory,
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="kw">let </span>id = item.id().to_string().<span class="kw">await</span>;
+                <span class="kw">let </span>id = id.as_ref().map_or_else(|<span class="kw">_</span>| <span class="string">&quot;unknown&quot;</span>, |id| <span class="kw-2">&amp;**</span>id);
+                <span class="kw">let </span><span class="kw-2">mut </span>error_message =
+                    <span class="macro">format!</span>(<span class="string">&quot;An error occurred while generating the chunk item {}&quot;</span>, id);
+                <span class="kw">for </span>err <span class="kw">in </span>error.chain() {
+                    <span class="macro">write!</span>(error_message, <span class="string">&quot;\n  at {}&quot;</span>, err)<span class="question-mark">?</span>;
+                }
+                <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span>error_message)<span class="question-mark">?</span>;
+                <span class="kw">let </span>issue = CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: item.asset_ident().path(),
+                    title: StringVc::cell(<span class="string">&quot;Code generation for chunk item errored&quot;</span>.to_string()),
+                    message: StringVc::cell(error_message),
+                }
+                .cell();
+                issue.as_issue().emit();
+                <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
+                code += <span class="string">&quot;(() =&gt; {{\n\n&quot;</span>;
+                <span class="macro">writeln!</span>(code, <span class="string">&quot;throw new Error({error});&quot;</span>, error = <span class="kw-2">&amp;</span>js_error_message)<span class="question-mark">?</span>;
+                code += <span class="string">&quot;\n}})&quot;</span>;
+                code.build().cell()
             }
-            <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span>error_message)<span class="question-mark">?</span>;
-            <span class="kw">let </span>issue = CodeGenerationIssue {
-                severity: IssueSeverity::Error.cell(),
-                path: item.asset_ident().path(),
-                title: StringVc::cell(<span class="string">&quot;Code generation for chunk item errored&quot;</span>.to_string()),
-                message: StringVc::cell(error_message),
-            }
-            .cell();
-            issue.as_issue().emit();
-            <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
-            code += <span class="string">&quot;(() =&gt; {{\n\n&quot;</span>;
-            <span class="macro">writeln!</span>(code, <span class="string">&quot;throw new Error({error});&quot;</span>, error = <span class="kw-2">&amp;</span>js_error_message)<span class="question-mark">?</span>;
-            code += <span class="string">&quot;\n}})&quot;</span>;
-            code.build().cell()
-        }
-    })
+        },
+    )
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_dev" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

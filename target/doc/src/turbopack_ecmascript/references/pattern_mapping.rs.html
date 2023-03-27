@@ -194,6 +194,22 @@
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
@@ -236,6 +252,15 @@
     /// require(&quot;./module&quot;)
     /// ```
     </span>Single(ModuleId),
+    <span class="doccomment">/// Constant request that always maps to the same module.
+    /// This is used for dynamic imports.
+    /// Module id points to a loader module.
+    ///
+    /// ### Example
+    /// ```js
+    /// import(&quot;./module&quot;)
+    /// ```
+    </span>SingleLoader(ModuleId),
     <span class="doccomment">/// Variable request that can map to different modules at runtime.
     ///
     /// ### Example
@@ -252,7 +277,7 @@
 <span class="attr">#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 #[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>ResolveType {
-    EsmAsync,
+    EsmAsync(AvailabilityInfo),
     Cjs,
 }
 
@@ -263,6 +288,7 @@
             | PatternMapping::Unresolveable(<span class="kw">_</span>)
             | PatternMapping::Ignored
             | PatternMapping::Single(<span class="kw">_</span>)
+            | PatternMapping::SingleLoader(<span class="kw">_</span>)
             | PatternMapping::Map(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             PatternMapping::OriginalReferenceExternal
             | PatternMapping::OriginalReferenceTypeExternal(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
@@ -279,7 +305,9 @@
             PatternMapping::Ignored =&gt; {
                 <span class="macro">quote!</span>(<span class="string">&quot;undefined&quot; </span><span class="kw">as </span>Expr)
             }
-            PatternMapping::Single(module_id) =&gt; module_id_to_lit(module_id),
+            PatternMapping::Single(module_id) | PatternMapping::SingleLoader(module_id) =&gt; {
+                module_id_to_lit(module_id)
+            }
             PatternMapping::Map(<span class="kw">_</span>) =&gt; {
                 <span class="macro">todo!</span>(<span class="string">&quot;emit an error for this case: Complex expression can&#39;t be transformed&quot;</span>);
             }
@@ -352,24 +380,28 @@
         };
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">if </span><span class="kw-2">*</span>resolve_type == ResolveType::EsmAsync {
-                <span class="comment">// Passing [AvailabilityInfo::Untracked] works here because the manifest loader
-                // has an id that is independent of them. So luckily we don&#39;t need chunk
-                // dependent code generation.
-                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(loader) = EcmascriptChunkItemVc::from_async_asset(
-                    context,
-                    chunkable,
-                    Value::new(AvailabilityInfo::Untracked),
-                )
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Single(
-                        loader.id().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
-                    )));
+            <span class="kw">if let </span>ResolveType::EsmAsync(availability_info) = <span class="kw-2">*</span>resolve_type {
+                <span class="kw">let </span>available = <span class="kw">if let </span><span class="prelude-val">Some</span>(available_assets) = availability_info.available_assets()
+                {
+                    <span class="kw-2">*</span>available_assets.includes(chunkable.into()).<span class="kw">await</span><span class="question-mark">?
+                </span>} <span class="kw">else </span>{
+                    <span class="bool-val">false
+                </span>};
+                <span class="kw">if </span>!available {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(loader) = EcmascriptChunkItemVc::from_async_asset(
+                        context,
+                        chunkable,
+                        Value::new(availability_info),
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>{
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::SingleLoader(
+                            loader.id().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
+                        )));
+                    }
                 }
-            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(chunk_item) =
-                EcmascriptChunkItemVc::from_asset(context, asset).<span class="kw">await</span><span class="question-mark">?
-            </span>{
+            }
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_item) = EcmascriptChunkItemVc::from_asset(context, asset).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Single(
                     chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                 )));

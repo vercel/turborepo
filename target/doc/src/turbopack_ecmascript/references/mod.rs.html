@@ -2244,6 +2244,52 @@
 <a href="#2244" id="2244">2244</a>
 <a href="#2245" id="2245">2245</a>
 <a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
+<a href="#2254" id="2254">2254</a>
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2282,7 +2328,7 @@
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
@@ -2344,7 +2390,9 @@
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
-    code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
+    code_gen::{
+        CodeGen, CodeGenerateableVc, CodeGenerateableWithAvailabilityInfoVc, CodeGenerateablesVc,
+    },
     magic_identifier,
     references::{
         cjs::{
@@ -2366,11 +2414,37 @@
     </span><span class="kw">pub </span>successful: bool,
 }
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>AnalyzeEcmascriptModuleResultVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>needs_availability_info(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+        <span class="kw">let </span>AnalyzeEcmascriptModuleResult {
+            references,
+            code_generation,
+            ..
+        } = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>c <span class="kw">in </span>code_generation.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">if </span><span class="macro">matches!</span>(c, CodeGen::CodeGenerateableWithAvailabilityInfo(..)) {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">true</span>));
+            }
+        }
+        <span class="kw">for </span>r <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">if </span>CodeGenerateableWithAvailabilityInfoVc::resolve_from(r)
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.is_some()
+            {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">true</span>));
+            }
+        }
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
+    }
+}
+
 <span class="doccomment">/// A temporary analysis result builder to pass around, to be turned into an
 /// `AnalyzeEcmascriptModuleResultVc` eventually.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>AnalyzeEcmascriptModuleResultBuilder {
     references: Vec&lt;AssetReferenceVc&gt;,
-    code_gens: Vec&lt;CodeGenerateableVc&gt;,
+    code_gens: Vec&lt;CodeGen&gt;,
     exports: EcmascriptExports,
     successful: bool,
 }
@@ -2398,9 +2472,20 @@
     <span class="kw">where
         </span>C: Into&lt;CodeGenerateableVc&gt;,
     {
-        <span class="self">self</span>.code_gens.push(code_gen.into());
+        <span class="self">self</span>.code_gens
+            .push(CodeGen::CodeGenerateable(code_gen.into()));
     }
 
+    <span class="doccomment">/// Adds a codegen to the analysis result.
+    </span><span class="kw">pub fn </span>add_code_gen_with_availability_info&lt;C&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, code_gen: C)
+    <span class="kw">where
+        </span>C: Into&lt;CodeGenerateableWithAvailabilityInfoVc&gt;,
+    {
+        <span class="self">self</span>.code_gens
+            .push(CodeGen::CodeGenerateableWithAvailabilityInfo(
+                code_gen.into(),
+            ));
+    }
     <span class="doccomment">/// Sets the analysis result ES export.
     </span><span class="kw">pub fn </span>set_exports(<span class="kw-2">&amp;mut </span><span class="self">self</span>, exports: EcmascriptExports) {
         <span class="self">self</span>.exports = exports;
@@ -2418,7 +2503,14 @@
             <span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="kw">for </span>c <span class="kw">in </span><span class="self">self</span>.code_gens.iter_mut() {
-            <span class="kw-2">*</span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">match </span>c {
+                CodeGen::CodeGenerateable(c) =&gt; {
+                    <span class="kw-2">*</span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                }
+                CodeGen::CodeGenerateableWithAvailabilityInfo(c) =&gt; {
+                    <span class="kw-2">*</span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                }
+            }
         }
         <span class="prelude-val">Ok</span>(AnalyzeEcmascriptModuleResultVc::cell(
             AnalyzeEcmascriptModuleResult {
