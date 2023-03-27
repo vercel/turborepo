@@ -33,7 +33,8 @@ Setup
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
     "status": "built",
-    "error": null
+    "error": null,
+    "exitCode": 0
   }
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].commandArguments'
   [
@@ -45,7 +46,8 @@ Setup
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
     "status": "built",
-    "error": null
+    "error": null,
+    "exitCode": 0
   }
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].hashOfExternalDependencies'
   "ccab0b28617f1f56"
