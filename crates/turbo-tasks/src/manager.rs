@@ -113,8 +113,9 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
         index: CellId,
     ) -> Result<CellContent>;
 
-    fn read_current_task_cell(&self, index: CellId) -> Result<CellContent>;
-    fn update_current_task_cell(&self, index: CellId, content: CellContent);
+    fn read_own_task_cell(&self, task: TaskId, index: CellId) -> Result<CellContent>;
+    fn update_own_task_cell(&self, task: TaskId, index: CellId, content: CellContent);
+    fn mark_own_task_as_finished(&self, task: TaskId);
 
     fn connect_task(&self, task: TaskId);
 }
@@ -961,23 +962,22 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
         }
     }
 
-    fn read_current_task_cell(&self, index: CellId) -> Result<CellContent> {
+    fn read_own_task_cell(&self, task: TaskId, index: CellId) -> Result<CellContent> {
         // INVALIDATION: don't need to track a dependency to itself
-        self.try_read_own_task_cell_untracked(current_task("reading Vcs"), index)
+        self.try_read_own_task_cell_untracked(task, index)
     }
 
-    fn update_current_task_cell(&self, index: CellId, content: CellContent) {
-        self.backend.update_task_cell(
-            current_task("cellting turbo_tasks values"),
-            index,
-            content,
-            self,
-        );
+    fn update_own_task_cell(&self, task: TaskId, index: CellId, content: CellContent) {
+        self.backend.update_task_cell(task, index, content, self);
     }
 
     fn connect_task(&self, task: TaskId) {
         self.backend
             .connect_task(task, current_task("connecting task"), self);
+    }
+
+    fn mark_own_task_as_finished(&self, task: TaskId) {
+        self.backend.mark_own_task_as_finished(task, self);
     }
 }
 
@@ -1315,6 +1315,14 @@ pub fn get_invalidator() -> Invalidator {
     }
 }
 
+/// Marks the current task as finished. This excludes it from waiting for
+/// strongly consistency.
+pub fn mark_finished() {
+    with_turbo_tasks(|tt| {
+        tt.mark_own_task_as_finished(current_task("turbo_tasks::mark_finished()"))
+    });
+}
+
 /// Marks the current task as stateful. This prevents the tasks from being
 /// dropped without persisting the state.
 pub fn mark_stateful() {
@@ -1405,6 +1413,7 @@ pub(crate) async fn read_task_cell_untracked(
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct CurrentCellRef {
     current_task: TaskId,
     index: CellId,
@@ -1420,12 +1429,13 @@ impl CurrentCellRef {
     ) {
         let tt = turbo_tasks();
         let content = tt
-            .read_current_task_cell(self.index)
+            .read_own_task_cell(self.current_task, self.index)
             .ok()
             .and_then(|v| v.try_cast::<T>());
         let update = functor(content.as_deref());
         if let Some(update) = update {
-            tt.update_current_task_cell(
+            tt.update_own_task_cell(
+                self.current_task,
                 self.index,
                 CellContent(Some(SharedReference(
                     Some(self.index.type_id),
@@ -1448,7 +1458,8 @@ impl CurrentCellRef {
 
     pub fn update_shared<T: Send + Sync + 'static>(&self, new_content: T) {
         let tt = turbo_tasks();
-        tt.update_current_task_cell(
+        tt.update_own_task_cell(
+            self.current_task,
             self.index,
             CellContent(Some(SharedReference(
                 Some(self.index.type_id),
@@ -1459,14 +1470,14 @@ impl CurrentCellRef {
 
     pub fn update_shared_reference(&self, shared_ref: SharedReference) {
         let tt = turbo_tasks();
-        let content = tt.read_current_task_cell(self.index).ok();
+        let content = tt.read_own_task_cell(self.current_task, self.index).ok();
         let update = if let Some(CellContent(Some(content))) = content {
             content != shared_ref
         } else {
             true
         };
         if update {
-            tt.update_current_task_cell(self.index, CellContent(Some(shared_ref)))
+            tt.update_own_task_cell(self.current_task, self.index, CellContent(Some(shared_ref)))
         }
     }
 }

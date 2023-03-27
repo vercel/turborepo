@@ -2,16 +2,16 @@
 package runsummary
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
-	"github.com/vercel/turbo/cli/internal/cache"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // MissingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -23,6 +23,19 @@ const MissingTaskLabel = "<NONEXISTENT>"
 const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 const runSummarySchemaVersion = "0"
+const runsEndpoint = "/v0/spaces/%s/runs"
+const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
+
+// Meta is a wrapper around the serializable RunSummary, with some extra information
+// about the Run and references to other things that we need.
+type Meta struct {
+	RunSummary    *RunSummary
+	ui            cli.Ui
+	singlePackage bool
+	shouldSave    bool
+	apiClient     *client.APIClient
+	spaceID       string
+}
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
@@ -35,28 +48,72 @@ type RunSummary struct {
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
 
+// singlePackageRunSummary is the same as RunSummary with some adjustments
+// to the internal struct for a single package. It's likely that we can use the
+// same struct for Single Package repos in the future.
+type singlePackageRunSummary struct {
+	Tasks []singlePackageTaskSummary `json:"tasks"`
+}
+
 // NewRunSummary returns a RunSummary instance
-func NewRunSummary(startAt time.Time, profile string, turboVersion string, packages []string, globalHashSummary *GlobalHashSummary) *RunSummary {
+func NewRunSummary(
+	startAt time.Time,
+	terminal cli.Ui,
+	singlePackage bool,
+	profile string,
+	turboVersion string,
+	packages []string,
+	globalHashSummary *GlobalHashSummary,
+	shouldSave bool,
+	apiClient *client.APIClient,
+	spaceID string,
+) Meta {
 	executionSummary := newExecutionSummary(startAt, profile)
 
-	return &RunSummary{
-		ID:                ksuid.New(),
-		Version:           runSummarySchemaVersion,
-		ExecutionSummary:  executionSummary,
-		TurboVersion:      turboVersion,
-		Packages:          packages,
-		Tasks:             []*TaskSummary{},
-		GlobalHashSummary: globalHashSummary,
+	return Meta{
+		RunSummary: &RunSummary{
+			ID:                ksuid.New(),
+			Version:           runSummarySchemaVersion,
+			ExecutionSummary:  executionSummary,
+			TurboVersion:      turboVersion,
+			Packages:          packages,
+			Tasks:             []*TaskSummary{},
+			GlobalHashSummary: globalHashSummary,
+		},
+		ui:            terminal,
+		singlePackage: singlePackage,
+		shouldSave:    shouldSave,
+		apiClient:     apiClient,
+		spaceID:       spaceID,
 	}
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (summary *RunSummary) Close(terminal cli.Ui) {
-	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, terminal); err != nil {
-		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
+	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
+
+	summary := rsm.RunSummary
+	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, rsm.ui); err != nil {
+		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
-	summary.printExecutionSummary(terminal)
+	// TODO: printing summary to local, writing to disk, and sending to API
+	// are all the same thng, we should use a strategy similar to cache save/upload to
+	// do this in parallel.
+
+	rsm.printExecutionSummary()
+
+	if rsm.shouldSave {
+		if err := rsm.save(dir); err != nil {
+			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+		}
+
+		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
+			if err := rsm.record(); err != nil {
+				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
+			}
+		}
+	}
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
@@ -64,15 +121,9 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 	return summary.ExecutionSummary.run(taskID)
 }
 
-func (summary *RunSummary) normalize() {
-	for _, t := range summary.Tasks {
-		t.EnvVars.Global = summary.GlobalHashSummary.EnvVars
-	}
-}
-
 // Save saves the run summary to a file
-func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage bool) error {
-	json, err := summary.FormatJSON(singlePackage)
+func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
+	json, err := rsm.FormatJSON()
 	if err != nil {
 		return err
 	}
@@ -81,7 +132,7 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 	// We don't do a lot of validation, so `../../` paths are allowed
 	summaryPath := dir.UntypedJoin(
 		filepath.Join(".turbo", "runs"),
-		fmt.Sprintf("%s.json", summary.ID),
+		fmt.Sprintf("%s.json", rsm.RunSummary.ID),
 	)
 
 	if err := summaryPath.EnsureDir(); err != nil {
@@ -91,67 +142,86 @@ func (summary *RunSummary) Save(dir turbopath.AbsoluteSystemPath, singlePackage 
 	return summaryPath.WriteFile(json, 0644)
 }
 
-// TaskSummary contains information about the task that was about to run
-// TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
-// as the information is also available in ResolvedTaskDefinition. We could remove them
-// and favor a version of Outputs that is the fully expanded list of files.
-type TaskSummary struct {
-	TaskID                 string                                `json:"taskId"`
-	Task                   string                                `json:"task"`
-	Package                string                                `json:"package"`
-	Hash                   string                                `json:"hash"`
-	CacheState             cache.ItemStatus                      `json:"cacheState"`
-	Command                string                                `json:"command"`
-	CommandArguments       []string                              `json:"commandArguments"`
-	Outputs                []string                              `json:"outputs"`
-	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
-	Dir                    string                                `json:"directory"`
-	Dependencies           []string                              `json:"dependencies"`
-	Dependents             []string                              `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
-	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
-	Framework              string                                `json:"framework"`
-	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
-	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
-}
+// record sends the summary to the API
+// TODO: make this work for single package tasks
+func (rsm *Meta) record() []error {
+	errs := []error{}
 
-// TaskEnvVarSummary contains the environment variables that impacted a task's hash
-type TaskEnvVarSummary struct {
-	Configured []string `json:"configured"`
-	Inferred   []string `json:"inferred"`
-	Global     []string `json:"global"`
-}
-
-// toSinglePackageTask converts a TaskSummary into a singlePackageTaskSummary
-func (ht *TaskSummary) toSinglePackageTask() singlePackageTaskSummary {
-	dependencies := make([]string, len(ht.Dependencies))
-	for i, depencency := range ht.Dependencies {
-		dependencies[i] = util.StripPackageName(depencency)
-	}
-	dependents := make([]string, len(ht.Dependents))
-	for i, dependent := range ht.Dependents {
-		dependents[i] = util.StripPackageName(dependent)
+	// Right now we'll send the POST to create the Run and the subsequent task payloads
+	// when everything after all execution is done, but in the future, this first POST request
+	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
+	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
+	var runID string
+	payload := newVercelRunCreatePayload(rsm.RunSummary)
+	if startPayload, err := json.Marshal(payload); err == nil {
+		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
+			errs = append(errs, err)
+		} else {
+			vercelRunResponse := &vercelRunResponse{}
+			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
+				errs = append(errs, err)
+			} else {
+				runID = vercelRunResponse.ID
+			}
+		}
 	}
 
-	return singlePackageTaskSummary{
-		Task:                   util.RootTaskTaskName(ht.TaskID),
-		Hash:                   ht.Hash,
-		CacheState:             ht.CacheState,
-		Command:                ht.Command,
-		CommandArguments:       ht.CommandArguments,
-		Outputs:                ht.Outputs,
-		LogFile:                ht.LogFile,
-		Dependencies:           dependencies,
-		Dependents:             dependents,
-		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
-		Framework:              ht.Framework,
-		ExpandedInputs:         ht.ExpandedInputs,
-		ExpandedOutputs:        ht.ExpandedOutputs,
-		EnvVars:                ht.EnvVars,
-		Execution:              ht.Execution,
-		ExternalDepsHash:       ht.ExternalDepsHash,
+	if runID != "" {
+		rsm.postTaskSummaries(runID)
+
+		if donePayload, err := json.Marshal(newVercelDonePayload()); err == nil {
+			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
+}
+
+func (rsm *Meta) postTaskSummaries(runID string) {
+	// We make at most 8 requests at a time.
+	maxParallelRequests := 8
+	taskSummaries := rsm.RunSummary.Tasks
+	taskCount := len(taskSummaries)
+	taskURL := fmt.Sprintf(tasksEndpoint, rsm.spaceID, runID)
+
+	parallelRequestCount := maxParallelRequests
+	if taskCount < maxParallelRequests {
+		parallelRequestCount = taskCount
+	}
+
+	queue := make(chan int, taskCount)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < parallelRequestCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range queue {
+				task := taskSummaries[index]
+				if taskPayload, err := json.Marshal(task); err == nil {
+					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
+						rsm.ui.Warn(fmt.Sprintf("Eror uploading summary of %s", task.TaskID))
+					}
+				}
+			}
+		}()
+	}
+
+	for index := range taskSummaries {
+		queue <- index
+	}
+	close(queue)
+	wg.Wait()
+}
+
+func (summary *RunSummary) normalize() {
+	for _, t := range summary.Tasks {
+		t.EnvVars.Global = summary.GlobalHashSummary.EnvVars
 	}
 }

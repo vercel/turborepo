@@ -152,6 +152,7 @@ async fn extra_configs(
                             context,
                             Value::new(EcmascriptModuleAssetType::Ecmascript),
                             EcmascriptInputTransformsVc::cell(vec![]),
+                            Value::new(Default::default()),
                             context.compile_time_info(),
                         )
                         .into(),
@@ -186,6 +187,7 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
             use_define_for_class_fields: false,
         }]),
+        Value::new(Default::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
@@ -250,7 +252,7 @@ impl PostCssTransformedAssetVc {
         )
         .await?;
 
-        let SingleValue::Single(Ok(val)) = config_value.into_single().await else {
+        let SingleValue::Single(val) = config_value.try_into_single().await? else {
             // An error happened, which has already been converted into an issue.
             return Ok(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),

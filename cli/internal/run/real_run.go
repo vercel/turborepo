@@ -42,7 +42,7 @@ func RealRun(
 	turboCache cache.Cache,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
-	runSummary *runsummary.RunSummary,
+	runSummary runsummary.Meta,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 ) error {
@@ -129,12 +129,19 @@ func RealRun(
 	exitCodeErr := &process.ChildExit{}
 
 	// Assign tasks after execution
-	runSummary.Tasks = taskSummaries
+	runSummary.RunSummary.Tasks = taskSummaries
 
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
-			if exitCodeErr.ExitCode > exitCode {
-				exitCode = exitCodeErr.ExitCode
+			// If a process gets killed via a signal, Go reports it's exit code as -1.
+			// We take the absolute value of the exit code so we don't select '0' as
+			// the greatest exit code.
+			childExit := exitCodeErr.ExitCode
+			if childExit < 0 {
+				childExit = -childExit
+			}
+			if childExit > exitCode {
+				exitCode = childExit
 			}
 		} else if exitCode == 0 {
 			// We hit some error, it shouldn't be exit code 0
@@ -143,14 +150,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	runSummary.Close(base.UI)
-
-	// Write Run Summary if we wanted to
-	if rs.Opts.runOpts.summarize {
-		if err := runSummary.Save(base.RepoRoot, singlePackage); err != nil {
-			base.UI.Warn(fmt.Sprintf("Failed to write run summary: %s", err))
-		}
-	}
+	runSummary.Close(base.RepoRoot)
 
 	if exitCode != 0 {
 		return &process.ChildExit{
@@ -162,7 +162,7 @@ func RealRun(
 
 type execContext struct {
 	colorCache      *colorcache.ColorCache
-	runSummary      *runsummary.RunSummary
+	runSummary      runsummary.Meta
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
@@ -191,7 +191,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger.Debug("start")
 
 	// Setup tracer
-	tracer, taskExecutionSummary := ec.runSummary.TrackTask(packageTask.TaskID)
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash

@@ -369,6 +369,10 @@ pub struct RunArgs {
     pub tasks: Vec<String>,
     #[clap(last = true, hide = true)]
     pub pass_through_args: Vec<String>,
+
+    // Pass a string to enable posting Run Summaries to Vercel
+    #[clap(long, hide = true)]
+    pub experimental_space_id: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]

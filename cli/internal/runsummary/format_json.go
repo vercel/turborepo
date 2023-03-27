@@ -7,24 +7,24 @@ import (
 )
 
 // FormatJSON returns a json string representing a RunSummary
-func (summary *RunSummary) FormatJSON(singlePackage bool) ([]byte, error) {
-	summary.normalize() // normalize data
+func (rsm *Meta) FormatJSON() ([]byte, error) {
+	rsm.RunSummary.normalize() // normalize data
 
-	if singlePackage {
-		return summary.formatJSONSinglePackage()
+	if rsm.singlePackage {
+		return rsm.formatJSONSinglePackage()
 	}
 
-	bytes, err := json.MarshalIndent(summary, "", "  ")
+	bytes, err := json.MarshalIndent(rsm.RunSummary, "", "  ")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to render JSON")
 	}
 	return bytes, nil
 }
 
-func (summary *RunSummary) formatJSONSinglePackage() ([]byte, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
+func (rsm *Meta) formatJSONSinglePackage() ([]byte, error) {
+	singlePackageTasks := make([]singlePackageTaskSummary, len(rsm.RunSummary.Tasks))
 
-	for i, task := range summary.Tasks {
+	for i, task := range rsm.RunSummary.Tasks {
 		singlePackageTasks[i] = task.toSinglePackageTask()
 	}
 

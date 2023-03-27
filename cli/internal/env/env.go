@@ -68,8 +68,12 @@ func (evm EnvironmentVariableMap) mapToPair(transformer func(k string, v string)
 // This is the value used to print out the task hash input, so the values are cryptographically hashed
 func (evm EnvironmentVariableMap) ToSecretHashable() EnvironmentVariablePairs {
 	return evm.mapToPair(func(k, v string) string {
-		hashedValue := sha256.Sum256([]byte(v))
-		return fmt.Sprintf("%v=%x", k, hashedValue)
+		if v != "" {
+			hashedValue := sha256.Sum256([]byte(v))
+			return fmt.Sprintf("%v=%x", k, hashedValue)
+		}
+
+		return fmt.Sprintf("%v=%s", k, "")
 	})
 }
 
