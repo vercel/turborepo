@@ -1,7 +1,8 @@
 use anyhow::Result;
+use turbo_tasks::{primitives::BoolVc, Value};
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkItem, ChunkItemVc},
+    chunk::{availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
@@ -13,6 +14,7 @@ use crate::{
         EcmascriptChunkingContextVc,
     },
     gen_content,
+    references::AnalyzeEcmascriptModuleResult,
 };
 
 /// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].
@@ -27,16 +29,32 @@ pub struct EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
-        let module = self.module.await?;
+    fn content(self_vc: EcmascriptModulePartChunkItemVc) -> EcmascriptChunkItemContentVc {
+        self_vc.content_with_availability_info(Value::new(AvailabilityInfo::Untracked))
+    }
+
+    #[turbo_tasks::function]
+    async fn content_with_availability_info(
+        self_vc: EcmascriptModulePartChunkItemVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<EcmascriptChunkItemContentVc> {
+        let this = self_vc.await?;
+        let availability_info = if *this.module.analyze().need_availability_info().await? {
+            availability_info
+        } else {
+            Value::new(AvailabilityInfo::Untracked)
+        };
+
+        let module = this.module.await?;
         let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
 
         Ok(gen_content(
-            self.context,
-            self.module.analyze(),
+            this.context,
+            this.module.analyze(),
             parsed,
             module.full_module.ident(),
+            availability_info,
         ))
     }
 

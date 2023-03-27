@@ -36,7 +36,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{TryJoinIterExt, Value};
+use turbo_tasks::{TryJoinIterExt, Value, primitives::BoolVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -98,7 +98,7 @@ use crate::{
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
-    code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
+    code_gen::{CodeGenerateableVc, CodeGenerateablesVc, CodeGenerateableWithAvailabilityInfoVc},
     magic_identifier,
     references::{
         cjs::{
@@ -118,6 +118,35 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub exports: EcmascriptExportsVc,
     /// `true` when the analysis was successful.
     pub successful: bool,
+}
+
+#[turbo_tasks::value_impl]
+impl AnalyzeEcmascriptModuleResultVc {
+    #[turbo_tasks::function]
+   pub async fn need_availability_info(self) -> Result<BoolVc> {
+        let AnalyzeEcmascriptModuleResult {
+            references,
+            code_generation,
+            ..
+        } = &*self.await?;
+        for r in references.await?.iter() {
+            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(r)
+                .await?
+                .is_some()
+            {
+                return Ok(BoolVc::cell(true));
+            }
+        }
+        for c in code_generation.await?.iter() {
+            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(c)
+                .await?
+                .is_some()
+            {
+                return Ok(BoolVc::cell(true));
+            }
+        }
+        return Ok(BoolVc::cell(false));
+    }
 }
 
 /// A temporary analysis result builder to pass around, to be turned into an

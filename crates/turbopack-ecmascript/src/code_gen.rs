@@ -1,4 +1,6 @@
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
+use turbo_tasks::Value;
+use turbopack_core::chunk::availability_info::AvailabilityInfo;
 
 use crate::chunk::EcmascriptChunkingContextVc;
 
@@ -24,6 +26,15 @@ pub trait VisitorFactory: Send + Sync {
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
     fn code_generation(&self, context: EcmascriptChunkingContextVc) -> CodeGenerationVc;
+}
+
+#[turbo_tasks::value_trait]
+pub trait CodeGenerateableWithAvailabilityInfo {
+    fn code_generation(
+        &self,
+        context: EcmascriptChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> CodeGenerationVc;
 }
 
 #[turbo_tasks::value(transparent)]

@@ -47,7 +47,9 @@ pub use transform::{
     EcmascriptInputTransformsVc, TransformContext,
 };
 use turbo_tasks::{
-    primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
+    primitives::{BoolVc, StringVc},
+    trace::TraceRawVcs,
+    RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -72,6 +74,7 @@ use self::{
         placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContent,
         EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions, EcmascriptExportsVc,
     },
+    code_gen::{CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc},
     parse::ParseResultVc,
 };
 use crate::{
@@ -400,15 +403,31 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
-        let module = self.module.await?;
+    fn content(self_vc: ModuleChunkItemVc) -> EcmascriptChunkItemContentVc {
+        self_vc.content_with_availability_info(Value::new(AvailabilityInfo::Untracked))
+    }
+
+    #[turbo_tasks::function]
+    async fn content_with_availability_info(
+        self_vc: ModuleChunkItemVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<EcmascriptChunkItemContentVc> {
+        let this = self_vc.await?;
+        if *this.module.analyze().need_availability_info().await? {
+            availability_info
+        } else {
+            Value::new(AvailabilityInfo::Untracked)
+        };
+
+        let module = this.module.await?;
         let parsed = parse(module.source, Value::new(module.ty), module.transforms);
 
         Ok(gen_content(
-            self.context.into(),
-            self.module.analyze(),
+            this.context.into(),
+            this.module.analyze(),
             parsed,
-            self.module.ident(),
+            this.module.ident(),
+            availability_info,
         ))
     }
 }
@@ -419,6 +438,7 @@ async fn gen_content(
     analyzed: AnalyzeEcmascriptModuleResultVc,
     parsed: ParseResultVc,
     ident: AssetIdentVc,
+    availability_info: Value<AvailabilityInfo>,
 ) -> Result<EcmascriptChunkItemContentVc> {
     let AnalyzeEcmascriptModuleResult {
         references,
@@ -428,13 +448,20 @@ async fn gen_content(
 
     let mut code_gens = Vec::new();
     for r in references.await?.iter() {
-        if let Some(code_gen) = CodeGenerateableVc::resolve_from(r).await? {
+        let r = r.resolve().await?;
+        if let Some(code_gen) = CodeGenerateableWithAvailabilityInfoVc::resolve_from(r).await? {
+            code_gens.push(code_gen.code_generation(context, availability_info));
+        } else if let Some(code_gen) = CodeGenerateableVc::resolve_from(r).await? {
             code_gens.push(code_gen.code_generation(context));
         }
     }
     for c in code_generation.await?.iter() {
         let c = c.resolve().await?;
-        code_gens.push(c.code_generation(context));
+        if let Some(code_gen) = CodeGenerateableWithAvailabilityInfoVc::resolve_from(c).await? {
+            code_gens.push(code_gen.code_generation(context, availability_info));
+        } else {
+            code_gens.push(c.code_generation(context));
+        }
     }
     // need to keep that around to allow references into that
     let code_gens = code_gens.into_iter().try_join().await?;
