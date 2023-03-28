@@ -298,7 +298,7 @@ pub struct RunArgs {
     #[clap(long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
-    #[clap(long, env = "TURBO_FORCE")]
+    #[clap(long)]
     pub force: bool,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
@@ -347,7 +347,7 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, env = "TURBO_REMOTE_ONLY")]
+    #[clap(long)]
     pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.

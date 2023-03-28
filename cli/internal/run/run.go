@@ -3,6 +3,7 @@ package run
 import (
 	gocontext "context"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -136,6 +137,14 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 }
 
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
+	if os.Getenv("TURBO_FORCE") == "true" {
+		opts.runcacheOpts.SkipReads = true
+	}
+
+	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
+		opts.cacheOpts.SkipFilesystem = true
+	}
+
 	processes := process.NewManager(base.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
