@@ -24,7 +24,6 @@ pub struct NpmLockfile {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 struct NpmPackage {
     version: Option<String>,
     resolved: Option<String>,
@@ -322,17 +321,6 @@ mod test {
                     "node_modules/require-from-string",
                     "node_modules/table/node_modules/json-schema-traverse",
                     "node_modules/uri-js",
-                ],
-            ),
-            (
-                "node_modules/turbo",
-                vec![
-                    "node_modules/turbo-darwin-64",
-                    "node_modules/turbo-darwin-arm64",
-                    "node_modules/turbo-linux-64",
-                    "node_modules/turbo-linux-arm64",
-                    "node_modules/turbo-windows-64",
-                    "node_modules/turbo-windows-arm64",
                 ],
             ),
         ];
