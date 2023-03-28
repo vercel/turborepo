@@ -20,6 +20,8 @@ type vercelRunPayload struct {
 	// Type should be hardcoded to TURBO
 	Type string `json:"type,omitempty"`
 
+	// ExitCode is the exit code for the full run
+	ExitCode int `json:"exitCode,omitempty"`
 	// TODO: we need to add these in
 	// originationUser string
 	// gitBranch       string
@@ -40,7 +42,8 @@ func newVercelRunCreatePayload(runsummary *RunSummary) *vercelRunPayload {
 func newVercelDonePayload(runsummary *RunSummary) *vercelRunPayload {
 	endTime := int(runsummary.ExecutionSummary.endedAt.UnixMilli())
 	return &vercelRunPayload{
-		Status:  "completed",
-		EndTime: endTime,
+		Status:   "completed",
+		EndTime:  endTime,
+		ExitCode: runsummary.ExecutionSummary.exitCode,
 	}
 }
