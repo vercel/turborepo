@@ -1,14 +1,24 @@
+0 -> 1 free var = FreeVar(require)
+
 0 -> 2 call = require*0*("crypt")
 - *0* require: The require method from CommonJS
+
+0 -> 4 free var = FreeVar(require)
 
 0 -> 5 call = require*0*("charenc")
 - *0* require: The require method from CommonJS
 
+0 -> 6 free var = FreeVar(require)
+
 0 -> 7 call = require*0*("is-buffer")
 - *0* require: The require method from CommonJS
 
+0 -> 9 free var = FreeVar(require)
+
 0 -> 10 call = require*0*("charenc")
 - *0* require: The require method from CommonJS
+
+0 -> 12 free var = FreeVar(String)
 
 0 -> 13 conditional = (???*0* == ???*2*)
 - *0* ???*1*["constructor"]
@@ -126,6 +136,8 @@
 - *6* FreeVar(Array)
   ⚠️  unknown global
 
+21 -> 25 free var = FreeVar(Array)
+
 21 -> 26 member call = ???*0*["call"](
     (
       | ???*3*
@@ -160,6 +172,8 @@
   ⚠️  unknown object
 - *11* message
   ⚠️  circular variable reference
+
+21 -> 28 free var = FreeVar(Array)
 
 21 -> 29 member call = ???*0*["isArray"](
     (
@@ -2090,6 +2104,10 @@
 0 -> 178 member call = module<crypt, {}>["endian"](???*0*)
 - *0* max number of linking steps reached
 
+0 -> 186 free var = FreeVar(module)
+
+0 -> 187 free var = FreeVar(undefined)
+
 0 -> 188 conditional = ((???*0* === ???*1*) | (???*2* === null))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -2097,6 +2115,8 @@
   ⚠️  unknown global
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+
+188 -> 189 free var = FreeVar(Error)
 
 0 -> 191 call = (...) => (undefined | crypt["endian"]([a, b, c, d]))(???*0*, ???*1*)
 - *0* arguments[0]

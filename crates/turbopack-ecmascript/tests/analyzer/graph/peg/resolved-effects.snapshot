@@ -1,10 +1,16 @@
+0 -> 11 free var = FreeVar(Error)
+
 0 -> 12 conditional = (???*0* === "function")
 - *0* unsupported expression
+
+12 -> 14 free var = FreeVar(Error)
 
 12 -> 15 member call = ???*0*["captureStackTrace"](???*1*, (...) => undefined)
 - *0* FreeVar(Error)
   ⚠️  unknown global
 - *1* unsupported expression
+
+0 -> 16 free var = FreeVar(Error)
 
 0 -> 17 call = (...) => undefined((...) => undefined, ???*0*)
 - *0* FreeVar(Error)
@@ -18,6 +24,8 @@
   ⚠️  unknown object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 25 free var = FreeVar(Array)
 
 0 -> 29 call = (...) => (
   | undefined
@@ -292,6 +300,8 @@
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 88 free var = FreeVar(Array)
+
 0 -> 93 call = (...) => (
   | undefined
   | DESCRIBE_EXPECTATION_FNS[expectation["type"]](expectation)
@@ -410,6 +420,8 @@
   | {"type": "class", "parts": parts, "inverted": inverted, "ignoreCase": ignoreCase}
 )([["0", "9"]], false, false)
 
+0 -> 130 free var = FreeVar(parseInt)
+
 0 -> 131 call = (...) => (undefined | input["substring"](peg$savedPos, peg$currPos))()
 
 0 -> 132 call = ???*0*((undefined | ???*1*), 16)
@@ -419,6 +431,8 @@
   ⚠️  unknown callee object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 133 free var = FreeVar(parseFloat)
 
 0 -> 134 call = (...) => (undefined | input["substring"](peg$savedPos, peg$currPos))()
 
@@ -641,6 +655,10 @@
   | {"type": "literal", "text": text, "ignoreCase": ignoreCase}
 )("u", false)
 
+0 -> 184 free var = FreeVar(String)
+
+0 -> 185 free var = FreeVar(parseInt)
+
 0 -> 186 call = ???*0*(???*1*, 16)
 - *0* FreeVar(parseInt)
   ⚠️  unknown global
@@ -784,6 +802,8 @@
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 213 free var = FreeVar(Number)
+
 0 -> 214 call = (...) => (undefined | input["substring"](peg$savedPos, peg$currPos))()
 
 0 -> 215 call = ???*0*((undefined | ???*1*))
@@ -796,6 +816,8 @@
 
 0 -> 217 conditional = !(???*0*)
 - *0* unsupported expression
+
+217 -> 218 free var = FreeVar(Error)
 
 0 -> 223 member call = ???*0*["substring"](???*1*, ???*2*)
 - *0* arguments[0]
@@ -7838,3 +7860,5 @@
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 - *3* max number of linking steps reached
+
+0 -> 2242 free var = FreeVar(module)

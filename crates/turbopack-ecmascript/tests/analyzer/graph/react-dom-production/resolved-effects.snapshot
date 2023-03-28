@@ -1,8 +1,18 @@
+0 -> 1 free var = FreeVar(require)
+
 0 -> 2 call = require*0*("react")
 - *0* require: The require method from CommonJS
 
+0 -> 3 free var = FreeVar(require)
+
 0 -> 4 call = require*0*("scheduler")
 - *0* require: The require method from CommonJS
+
+0 -> 6 free var = FreeVar(arguments)
+
+0 -> 7 free var = FreeVar(encodeURIComponent)
+
+0 -> 9 free var = FreeVar(arguments)
 
 0 -> 10 call = ???*0*(???*1*)
 - *0* FreeVar(encodeURIComponent)
@@ -11,6 +21,8 @@
   ⚠️  unknown object
 - *2* FreeVar(arguments)
   ⚠️  unknown global
+
+0 -> 11 free var = FreeVar(Set)
 
 0 -> 12 call = (...) => undefined(???*0*, ???*1*)
 - *0* arguments[0]
@@ -30,6 +42,14 @@
   ⚠️  unknown object
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
+
+0 -> 19 free var = FreeVar(window)
+
+0 -> 21 free var = FreeVar(window)
+
+0 -> 24 free var = FreeVar(window)
+
+0 -> 27 free var = FreeVar(Object)
 
 0 -> 29 member call = ???*0*["call"]({}, ???*3*)
 - *0* ???*1*["hasOwnProperty"]
@@ -97,11 +117,15 @@
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 
+45 -> 47 free var = FreeVar(isNaN)
+
 45 -> 48 call = ???*0*(???*1*)
 - *0* FreeVar(isNaN)
   ⚠️  unknown global
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
+
+45 -> 49 free var = FreeVar(isNaN)
 
 45 -> 50 call = ???*0*(???*1*)
 - *0* FreeVar(isNaN)
@@ -372,77 +396,117 @@
 - *6* c
   ⚠️  circular variable reference
 
+0 -> 162 free var = FreeVar(Symbol)
+
 0 -> 163 member call = ???*0*["for"]("react.element")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 165 free var = FreeVar(Symbol)
 
 0 -> 166 member call = ???*0*["for"]("react.portal")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 168 free var = FreeVar(Symbol)
+
 0 -> 169 member call = ???*0*["for"]("react.fragment")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 171 free var = FreeVar(Symbol)
 
 0 -> 172 member call = ???*0*["for"]("react.strict_mode")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 174 free var = FreeVar(Symbol)
+
 0 -> 175 member call = ???*0*["for"]("react.profiler")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 177 free var = FreeVar(Symbol)
 
 0 -> 178 member call = ???*0*["for"]("react.provider")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 180 free var = FreeVar(Symbol)
+
 0 -> 181 member call = ???*0*["for"]("react.context")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 183 free var = FreeVar(Symbol)
 
 0 -> 184 member call = ???*0*["for"]("react.forward_ref")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 186 free var = FreeVar(Symbol)
+
 0 -> 187 member call = ???*0*["for"]("react.suspense")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 189 free var = FreeVar(Symbol)
 
 0 -> 190 member call = ???*0*["for"]("react.suspense_list")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 192 free var = FreeVar(Symbol)
+
 0 -> 193 member call = ???*0*["for"]("react.memo")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 195 free var = FreeVar(Symbol)
 
 0 -> 196 member call = ???*0*["for"]("react.lazy")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 198 free var = FreeVar(Symbol)
+
 0 -> 199 member call = ???*0*["for"]("react.scope")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 201 free var = FreeVar(Symbol)
 
 0 -> 202 member call = ???*0*["for"]("react.debug_trace_mode")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 204 free var = FreeVar(Symbol)
+
 0 -> 205 member call = ???*0*["for"]("react.offscreen")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 207 free var = FreeVar(Symbol)
 
 0 -> 208 member call = ???*0*["for"]("react.legacy_hidden")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 210 free var = FreeVar(Symbol)
+
 0 -> 211 member call = ???*0*["for"]("react.cache")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
 
+0 -> 213 free var = FreeVar(Symbol)
+
 0 -> 214 member call = ???*0*["for"]("react.tracing_marker")
 - *0* FreeVar(Symbol)
   ⚠️  unknown global
+
+0 -> 216 free var = FreeVar(Symbol)
+
+0 -> 220 free var = FreeVar(Object)
 
 0 -> 221 conditional = (???*0* === (???*1* | ???*2* | ???*7* | ""))
 - *0* unsupported expression
@@ -469,6 +533,8 @@
 - *11* ???["trim"]
   ⚠️  unknown object
 
+221 -> 222 free var = FreeVar(Error)
+
 221 -> 223 call = ???*0*()
 - *0* FreeVar(Error)
   ⚠️  unknown global
@@ -487,13 +553,23 @@
 - *2* c
   ⚠️  pattern without value
 
+0 -> 231 free var = FreeVar(Error)
+
+0 -> 233 free var = FreeVar(Error)
+
 0 -> 234 conditional = (???*0* | (...) => undefined)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
+234 -> 235 free var = FreeVar(Error)
+
 234 -> 236 call = ???*0*()
 - *0* FreeVar(Error)
   ⚠️  unknown global
+
+234 -> 238 free var = FreeVar(Object)
+
+234 -> 240 free var = FreeVar(Error)
 
 234 -> 241 call = ???*0*()
 - *0* FreeVar(Error)
@@ -507,6 +583,10 @@
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
 
+234 -> 243 free var = FreeVar(Reflect)
+
+234 -> 245 free var = FreeVar(Reflect)
+
 234 -> 246 conditional = (("object" === ???*0*) | ???*1*)
 - *0* unsupported expression
 - *1* ???*2*["construct"]
@@ -514,11 +594,15 @@
 - *2* FreeVar(Reflect)
   ⚠️  unknown global
 
+246 -> 248 free var = FreeVar(Reflect)
+
 246 -> 249 member call = ???*0*["construct"]((???*1* | (...) => undefined), [])
 - *0* FreeVar(Reflect)
   ⚠️  unknown global
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
+
+246 -> 251 free var = FreeVar(Reflect)
 
 246 -> 252 member call = ???*0*["construct"]((???*1* | ???*2* | ""), [], (???*4* | (...) => undefined))
 - *0* FreeVar(Reflect)
@@ -547,6 +631,8 @@
   ⚠️  unknown object
 - *4* arguments[1]
   ⚠️  function calls are not analysed yet
+
+234 -> 258 free var = FreeVar(Error)
 
 234 -> 259 call = ???*0*()
 - *0* FreeVar(Error)
@@ -670,6 +756,8 @@ ${???*0*}`
   ⚠️  unknown object
 - *8* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 290 free var = FreeVar(Error)
 
 0 -> 293 call = (...) => (
   | undefined
@@ -1076,6 +1164,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 345 free var = FreeVar(Object)
+
 0 -> 348 member call = ???*0*["getOwnPropertyDescriptor"](???*1*, ("checked" | "value"))
 - *0* FreeVar(Object)
   ⚠️  unknown global
@@ -1097,6 +1187,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
 - *3* unsupported expression
+
+354 -> 358 free var = FreeVar(Object)
 
 354 -> 360 member call = ???*0*["call"](???*3*)
 - *0* ???*1*["get"]
@@ -1128,6 +1220,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
+
+354 -> 365 free var = FreeVar(Object)
 
 354 -> 367 member call = ???*0*["defineProperty"](???*1*, ("checked" | "value"), {"enumerable": ???*2*})
 - *0* FreeVar(Object)
@@ -1181,6 +1275,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* a
   ⚠️  circular variable reference
+
+0 -> 381 free var = FreeVar(document)
+
+0 -> 382 free var = FreeVar(document)
 
 0 -> 389 call = ???*0*(
     {},
@@ -1357,6 +1455,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 462 free var = FreeVar(Array)
+
 0 -> 464 conditional = (???*0* | {} | null | ???*1*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -1438,6 +1538,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+493 -> 494 free var = FreeVar(Error)
+
 493 -> 495 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -1502,6 +1604,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* b
   ⚠️  circular variable reference
 
+505 -> 506 free var = FreeVar(Error)
+
 505 -> 507 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -1539,6 +1643,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* FreeVar(Array)
   ⚠️  unknown global
+
+510 -> 512 free var = FreeVar(Error)
 
 510 -> 513 call = (...) => (
   | undefined
@@ -1587,6 +1693,12 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 533 free var = FreeVar(MSApp)
+
+0 -> 535 free var = FreeVar(MSApp)
+
+0 -> 537 free var = FreeVar(MSApp)
+
 0 -> 538 member call = ???*0*["execUnsafeLocalFunction"]((...) => (undefined | a(b, c, d, e)))
 - *0* FreeVar(MSApp)
   ⚠️  unknown global
@@ -1607,6 +1719,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
+
+541 -> 544 free var = FreeVar(document)
 
 541 -> 545 member call = ???*0*["createElement"]("div")
 - *0* FreeVar(document)
@@ -1665,6 +1779,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *8* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 569 free var = FreeVar(Object)
 
 0 -> 570 member call = ???*0*["keys"](
     {
@@ -1902,6 +2018,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* arguments[1]
   ⚠️  function calls are not analysed yet
 
+603 -> 604 free var = FreeVar(Error)
+
 603 -> 605 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -1930,6 +2048,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+610 -> 611 free var = FreeVar(Error)
+
 610 -> 612 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -1947,6 +2067,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 608 -> 616 conditional = (("object" !== ???*0*) | !(???*1*))
 - *0* unsupported expression
 - *1* unsupported expression
+
+616 -> 617 free var = FreeVar(Error)
 
 616 -> 618 call = (...) => (
   | undefined
@@ -1968,6 +2090,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
+
+622 -> 623 free var = FreeVar(Error)
 
 622 -> 624 call = (...) => (
   | undefined
@@ -1994,6 +2118,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 632 free var = FreeVar(window)
+
 0 -> 637 call = (...) => (undefined | null | a)((???*0* | undefined | null | ???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -2006,6 +2132,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 638 conditional = ("function" !== ???*0*)
 - *0* unsupported expression
+
+638 -> 639 free var = FreeVar(Error)
 
 638 -> 640 call = (...) => (
   | undefined
@@ -2224,6 +2352,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *19* unsupported expression
 
+667 -> 668 free var = FreeVar(Error)
+
 667 -> 669 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -2246,17 +2376,27 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  nested operation
 - *1* unsupported expression
 
+671 -> 673 free var = FreeVar(Object)
+
 671 -> 674 member call = ???*0*["defineProperty"]({}, "passive", {"get": (...) => undefined})
 - *0* FreeVar(Object)
   ⚠️  unknown global
+
+671 -> 676 free var = FreeVar(window)
 
 671 -> 677 member call = ???*0*["addEventListener"]("test", {}, {})
 - *0* FreeVar(window)
   ⚠️  unknown global
 
+671 -> 679 free var = FreeVar(window)
+
 671 -> 680 member call = ???*0*["removeEventListener"]("test", {}, {})
 - *0* FreeVar(window)
   ⚠️  unknown global
+
+0 -> 684 free var = FreeVar(Array)
+
+0 -> 685 free var = FreeVar(arguments)
 
 0 -> 686 member call = ???*0*["call"](???*3*, 3)
 - *0* ???*1*["slice"]
@@ -2287,9 +2427,13 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* m
   ⚠️  pattern without value
 
+0 -> 692 free var = FreeVar(arguments)
+
 0 -> 693 member call = (...) => undefined["apply"]({"onError": (...) => undefined}, ???*0*)
 - *0* FreeVar(arguments)
   ⚠️  unknown global
+
+0 -> 695 free var = FreeVar(arguments)
 
 0 -> 696 member call = (...) => undefined["apply"](???*0*, ???*1*)
 - *0* unsupported expression
@@ -2299,6 +2443,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 697 conditional = (false | true)
 
 697 -> 698 conditional = (false | true)
+
+698 -> 699 free var = FreeVar(Error)
 
 698 -> 700 call = (...) => (
   | undefined
@@ -2348,6 +2494,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
 
+718 -> 719 free var = FreeVar(Error)
+
 718 -> 720 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -2385,6 +2533,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *3* a
   ⚠️  circular variable reference
+
+725 -> 726 free var = FreeVar(Error)
 
 725 -> 727 call = (...) => (
   | undefined
@@ -2492,6 +2642,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+735 -> 742 free var = FreeVar(Error)
+
 735 -> 743 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -2522,6 +2674,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 750 -> 753 conditional = !((false | true))
 
+753 -> 754 free var = FreeVar(Error)
+
 753 -> 755 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -2550,6 +2704,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* a
   ⚠️  circular variable reference
 
+758 -> 759 free var = FreeVar(Error)
+
 758 -> 760 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -2569,6 +2725,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
+
+763 -> 764 free var = FreeVar(Error)
 
 763 -> 765 call = (...) => (
   | undefined
@@ -2628,6 +2786,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *4* unsupported expression
 - *5* unsupported expression
+
+0 -> 794 free var = FreeVar(Math)
+
+0 -> 796 free var = FreeVar(Math)
+
+0 -> 798 free var = FreeVar(Math)
+
+0 -> 800 free var = FreeVar(Math)
 
 0 -> 801 call = ???*0*(???*2*)
 - *0* ???*1*["log"]
@@ -2744,6 +2910,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown global
 - *2* unsupported expression
 - *3* unsupported expression
+
+0 -> 854 free var = FreeVar(Map)
+
+0 -> 855 free var = FreeVar(Map)
 
 0 -> 857 member call = "mousedown mouseup touchcancel touchend touchstart auxclick dblclick pointercancel pointerdown pointerup dragend dragstart drop compositionend compositionstart keydown keypress keyup input textInput copy cut paste click change contextmenu reset submit"["split"](" ")
 
@@ -3666,6 +3836,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown global
 - *2* unsupported expression
 
+0 -> 1068 free var = FreeVar(Date)
+
 0 -> 1069 member call = ???*0*["now"]()
 - *0* FreeVar(Date)
   ⚠️  unknown global
@@ -3858,6 +4030,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* FreeVar(Object)
   ⚠️  unknown global
 
+0 -> 1096 free var = FreeVar(window)
+
 0 -> 1097 call = ???*0*(
     {},
     {
@@ -3938,6 +4112,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *3* a
   ⚠️  circular variable reference
+
+0 -> 1115 free var = FreeVar(String)
 
 0 -> 1116 member call = ???*0*["fromCharCode"]((???*1* | undefined | ???*2* | ???*3* | 13 | 0))
 - *0* FreeVar(String)
@@ -4229,6 +4405,16 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* FreeVar(Object)
   ⚠️  unknown global
 
+0 -> 1146 free var = FreeVar(window)
+
+0 -> 1147 free var = FreeVar(document)
+
+0 -> 1149 free var = FreeVar(document)
+
+0 -> 1150 free var = FreeVar(window)
+
+0 -> 1152 free var = FreeVar(String)
+
 0 -> 1153 member call = ???*0*["fromCharCode"](32)
 - *0* FreeVar(String)
   ⚠️  unknown global
@@ -4315,6 +4501,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+1178 -> 1180 free var = FreeVar(String)
+
 1178 -> 1182 member call = ???*0*["fromCharCode"](???*1*)
 - *0* FreeVar(String)
   ⚠️  unknown global
@@ -4372,11 +4560,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  nested operation
 - *1* unsupported expression
 
+1200 -> 1201 free var = FreeVar(document)
+
 1200 -> 1202 conditional = !((???*0* | ???*1*))
 - *0* unsupported expression
 - *1* ("function" === ???*2*)
   ⚠️  nested operation
 - *2* unsupported expression
+
+1202 -> 1204 free var = FreeVar(document)
 
 1202 -> 1205 member call = ???*0*["createElement"]("div")
 - *0* FreeVar(document)
@@ -4387,6 +4579,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown callee object
 - *1* FreeVar(document)
   ⚠️  unknown global
+
+1199 -> 1210 free var = FreeVar(document)
+
+1199 -> 1212 free var = FreeVar(document)
 
 0 -> 1214 member call = (null | ???*0*)["detachEvent"]("onpropertychange", (...) => undefined)
 - *0* arguments[1]
@@ -4466,6 +4662,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 1232 free var = FreeVar(Object)
+
+0 -> 1234 free var = FreeVar(Object)
+
 0 -> 1235 call = (
   | ???*0*
   | (...) => (
@@ -4484,11 +4684,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 1237 free var = FreeVar(Object)
+
 0 -> 1238 member call = ???*0*["keys"](???*1*)
 - *0* FreeVar(Object)
   ⚠️  unknown global
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 1240 free var = FreeVar(Object)
 
 0 -> 1241 member call = ???*0*["keys"](???*1*)
 - *0* FreeVar(Object)
@@ -4619,6 +4823,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 1272 free var = FreeVar(window)
+
 0 -> 1273 call = (...) => (undefined | null | (a["activeElement"] || a["body"]) | a["body"])()
 
 0 -> 1278 conditional = (("string" === ???*0*) | false)
@@ -4673,11 +4879,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 1299 -> 1301 conditional = ???*0*
 - *0* max number of linking steps reached
 
+1301 -> 1307 free var = FreeVar(Math)
+
 1301 -> 1310 member call = ???*0*["min"](???*1*, ???*2*)
 - *0* FreeVar(Math)
   ⚠️  unknown global
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
+
+1301 -> 1312 free var = FreeVar(document)
+
+1301 -> 1314 free var = FreeVar(window)
 
 1301 -> 1316 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -4685,11 +4897,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 1316 -> 1318 member call = ???*0*["getSelection"]()
 - *0* max number of linking steps reached
 
+1316 -> 1322 free var = FreeVar(Math)
+
 1316 -> 1324 member call = ???*0*["min"](???*1*, ???*2*)
 - *0* FreeVar(Math)
   ⚠️  unknown global
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
+
+1316 -> 1327 free var = FreeVar(Math)
 
 1316 -> 1329 member call = ???*0*["min"](???*1*, ???*2*)
 - *0* FreeVar(Math)
@@ -4743,6 +4959,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 1299 -> 1370 member call = ???*0*["focus"]()
 - *0* max number of linking steps reached
 
+0 -> 1379 free var = FreeVar(document)
+
+0 -> 1381 free var = FreeVar(document)
+
 0 -> 1386 call = (...) => (undefined | null | (a["activeElement"] || a["body"]) | a["body"])(???*0*)
 - *0* max number of linking steps reached
 
@@ -4767,6 +4987,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     )
 )(???*0*)
 - *0* max number of linking steps reached
+
+0 -> 1394 free var = FreeVar(window)
 
 0 -> 1395 member call = ???*0*["getSelection"]()
 - *0* max number of linking steps reached
@@ -4799,9 +5021,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 1416 call = (...) => (undefined | c)("Transition", "TransitionEnd")
 
+0 -> 1419 free var = FreeVar(document)
+
 0 -> 1420 member call = ???*0*["createElement"]("div")
 - *0* FreeVar(document)
   ⚠️  unknown global
+
+0 -> 1421 free var = FreeVar(window)
+
+0 -> 1428 free var = FreeVar(window)
 
 0 -> 1432 conditional = ???*0*
 - *0* {}[???*1*]
@@ -4848,6 +5076,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 1444 call = (...) => (undefined | Xe[a] | a | ???*0*)("transitionend")
 - *0* unsupported expression
+
+0 -> 1445 free var = FreeVar(Map)
 
 0 -> 1447 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")
 
@@ -4988,6 +5218,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 1489 member call = "abort canplay canplaythrough durationchange emptied encrypted ended error loadeddata loadedmetadata loadstart pause play playing progress ratechange resize seeked seeking stalled suspend timeupdate volumechange waiting"["split"](" ")
 
+0 -> 1490 free var = FreeVar(Set)
+
 0 -> 1493 member call = "cancel close invalid load scroll toggle"["split"](" ")
 
 0 -> 1494 member call = "cancel close invalid load scroll toggle"["split"](" ")["concat"](
@@ -5086,6 +5318,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *12* unsupported expression
 - *13* unsupported expression
 
+0 -> 1522 free var = FreeVar(Set)
+
 0 -> 1524 member call = (???*0* | ???*2*)["has"](`${???*3*}__bubble`)
 - *0* ???*1*[of]
   ⚠️  unknown object
@@ -5117,6 +5351,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
+
+0 -> 1532 free var = FreeVar(Math)
 
 0 -> 1533 member call = ???*0*["random"]()
 - *0* FreeVar(Math)
@@ -5442,6 +5678,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 1598 -> 1603 conditional = ???*0*
 - *0* max number of linking steps reached
 
+1603 -> 1608 free var = FreeVar(window)
+
 1603 -> 1609 conditional = ???*0*
 - *0* max number of linking steps reached
 
@@ -5504,6 +5742,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 1598 -> 1634 call = (...) => (undefined | a["stateNode"])(???*0*)
 - *0* max number of linking steps reached
+
+1598 -> 1635 free var = FreeVar(window)
 
 1598 -> 1639 member call = ???*0*["toLowerCase"]()
 - *0* max number of linking steps reached
@@ -5590,6 +5830,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 1598 -> 1658 call = (...) => (undefined | a["stateNode"])(???*0*)
 - *0* max number of linking steps reached
+
+1598 -> 1659 free var = FreeVar(window)
 
 1598 -> 1660 call = (...) => (undefined | !(!(le[a["type"]])) | !(0) | !(1))(???*0*)
 - *0* max number of linking steps reached
@@ -6106,6 +6348,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *7* arguments[2]
   ⚠️  function calls are not analysed yet
 
+1721 -> 1722 free var = FreeVar(Error)
+
 1721 -> 1723 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -6119,6 +6363,22 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
+
+0 -> 1731 free var = FreeVar(setTimeout)
+
+0 -> 1732 free var = FreeVar(setTimeout)
+
+0 -> 1733 free var = FreeVar(clearTimeout)
+
+0 -> 1734 free var = FreeVar(clearTimeout)
+
+0 -> 1735 free var = FreeVar(Promise)
+
+0 -> 1736 free var = FreeVar(Promise)
+
+0 -> 1737 free var = FreeVar(queueMicrotask)
+
+0 -> 1738 free var = FreeVar(queueMicrotask)
 
 0 -> 1742 member call = (???*0* | ???*1*)["resolve"](null)
 - *0* FreeVar(Promise)
@@ -6140,6 +6400,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown callee object
 - *2* FreeVar(Promise)
   ⚠️  unknown global
+
+0 -> 1745 free var = FreeVar(setTimeout)
 
 0 -> 1746 call = ???*0*((...) => undefined)
 - *0* FreeVar(setTimeout)
@@ -6209,6 +6471,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 1771 free var = FreeVar(Math)
+
 0 -> 1772 member call = ???*0*["random"]()
 - *0* FreeVar(Math)
   ⚠️  unknown global
@@ -6264,6 +6528,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 1797 free var = FreeVar(Error)
+
 0 -> 1798 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -6303,6 +6569,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 1824 conditional = ((undefined["current"] | {} | ???*0*) !== {})
 - *0* unknown mutation
 
+1824 -> 1825 free var = FreeVar(Error)
+
 1824 -> 1826 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -6337,6 +6605,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 1835 conditional = !(???*0*)
 - *0* unsupported expression
+
+1835 -> 1836 free var = FreeVar(Error)
 
 1835 -> 1837 call = (...) => (
   | undefined
@@ -6414,6 +6684,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* FreeVar(undefined)
   ⚠️  unknown global
 - *3* unknown mutation
+
+1848 -> 1849 free var = FreeVar(Error)
 
 1848 -> 1850 call = (...) => (
   | undefined
@@ -6611,6 +6883,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* unsupported expression
 - *1* unsupported expression
 
+1928 -> 1929 free var = FreeVar(Error)
+
 1928 -> 1930 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -6646,6 +6920,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 1924 -> 1939 conditional = (undefined | (0 !== ???*0*) | (0 === ???*1*))
 - *0* unsupported expression
 - *1* unsupported expression
+
+1939 -> 1940 free var = FreeVar(Error)
 
 1939 -> 1941 call = (...) => (
   | undefined
@@ -6716,6 +6992,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 1960 -> 1961 call = (...) => undefined()
 
+1960 -> 1962 free var = FreeVar(Error)
+
 1960 -> 1963 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -6763,6 +7041,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* a
   ⚠️  circular variable reference
+
+1973 -> 1974 free var = FreeVar(Error)
 
 1973 -> 1975 call = (...) => (
   | undefined
@@ -6879,6 +7159,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* a
   ⚠️  circular variable reference
+
+2019 -> 2020 free var = FreeVar(Error)
 
 2019 -> 2021 call = (...) => (
   | undefined
@@ -7199,6 +7481,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 2178 -> 2180 conditional = ("function" !== ???*0*)
 - *0* unsupported expression
+
+2180 -> 2181 free var = FreeVar(Error)
 
 2180 -> 2182 call = (...) => (
   | undefined
@@ -7889,6 +8173,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 
+2307 -> 2308 free var = FreeVar(Error)
+
 2307 -> 2309 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -7908,6 +8194,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
+
+2312 -> 2313 free var = FreeVar(Error)
 
 2312 -> 2314 call = (...) => (
   | undefined
@@ -7958,6 +8246,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 2301 -> 2327 conditional = ("string" !== ???*0*)
 - *0* unsupported expression
 
+2327 -> 2328 free var = FreeVar(Error)
+
 2327 -> 2329 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -7977,6 +8267,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
+
+2332 -> 2333 free var = FreeVar(Error)
 
 2332 -> 2334 call = (...) => (
   | undefined
@@ -7998,6 +8290,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* FreeVar(Error)
   ⚠️  unknown global
 
+0 -> 2339 free var = FreeVar(Object)
+
 0 -> 2340 member call = ???*0*["call"](???*3*)
 - *0* ???*1*["toString"]
   ⚠️  unknown object
@@ -8007,6 +8301,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown global
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
+
+0 -> 2341 free var = FreeVar(Error)
+
+0 -> 2344 free var = FreeVar(Object)
 
 0 -> 2345 member call = ???*0*["keys"](???*1*)
 - *0* FreeVar(Object)
@@ -8081,6 +8379,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *3* d
   ⚠️  circular variable reference
+
+0 -> 2360 free var = FreeVar(Map)
 
 0 -> 2364 member call = (???*0* | ???*1*)["set"](???*2*, (???*4* | ???*5*))
 - *0* arguments[0]
@@ -9023,6 +9323,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 2543 conditional = ("function" !== ???*0*)
 - *0* unsupported expression
 
+2543 -> 2544 free var = FreeVar(Error)
+
 2543 -> 2545 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -9043,6 +9345,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 2549 conditional = ???*0*
 - *0* max number of linking steps reached
+
+2549 -> 2550 free var = FreeVar(Error)
 
 2549 -> 2551 call = (...) => (
   | undefined
@@ -9507,6 +9811,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
+2696 -> 2697 free var = FreeVar(Error)
+
 2696 -> 2698 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -9720,6 +10026,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 2758 free var = FreeVar(Error)
+
 0 -> 2759 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -9766,6 +10074,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 2772 conditional = (false | ???*0*)
 - *0* unsupported expression
+
+2772 -> 2773 free var = FreeVar(Error)
 
 2772 -> 2774 call = (...) => (
   | undefined
@@ -9827,6 +10137,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *13* unsupported expression
 - *14* unknown mutation
+
+2781 -> 2782 free var = FreeVar(Error)
 
 2781 -> 2783 call = (...) => (
   | undefined
@@ -9916,6 +10228,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *9* unsupported expression
 
+2794 -> 2795 free var = FreeVar(Error)
+
 2794 -> 2796 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -9940,6 +10254,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 2807 conditional = ???*0*
 - *0* max number of linking steps reached
+
+2807 -> 2808 free var = FreeVar(Error)
 
 2807 -> 2809 call = (...) => (
   | undefined
@@ -10056,6 +10372,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 2858 conditional = ???*0*
 - *0* max number of linking steps reached
+
+2858 -> 2859 free var = FreeVar(Error)
 
 2858 -> 2860 call = (...) => (
   | undefined
@@ -10641,6 +10959,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* a
   ⚠️  circular variable reference
 - *4* unknown new expression
+
+2895 -> 2896 free var = FreeVar(Error)
 
 2895 -> 2897 call = (...) => (
   | undefined
@@ -12130,6 +12450,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* c
   ⚠️  circular variable reference
 
+3088 -> 3089 free var = FreeVar(Error)
+
 3088 -> 3090 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -12166,6 +12488,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* a
   ⚠️  circular variable reference
 - *4* unknown new expression
+
+3094 -> 3095 free var = FreeVar(Error)
 
 3094 -> 3096 call = (...) => (
   | undefined
@@ -12704,6 +13028,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* d
   ⚠️  circular variable reference
 
+0 -> 3141 free var = FreeVar(console)
+
 0 -> 3143 member call = ???*0*["error"](???*1*)
 - *0* FreeVar(console)
   ⚠️  unknown global
@@ -12712,9 +13038,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 3144 free var = FreeVar(setTimeout)
+
 0 -> 3145 call = ???*0*((...) => undefined)
 - *0* FreeVar(setTimeout)
   ⚠️  unknown global
+
+0 -> 3146 free var = FreeVar(WeakMap)
+
+0 -> 3147 free var = FreeVar(WeakMap)
+
+0 -> 3148 free var = FreeVar(Map)
 
 0 -> 3149 call = (...) => (
   | undefined
@@ -12785,6 +13119,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 3169 free var = FreeVar(Set)
+
 0 -> 3171 member call = (???*0* | null)["add"](???*1*)
 - *0* unknown new expression
 - *1* unsupported expression
@@ -12806,6 +13142,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
+
+3177 -> 3179 free var = FreeVar(Set)
 
 3177 -> 3181 member call = (
   | ???*0*
@@ -12869,6 +13207,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* unsupported expression
 - *6* arguments[1]
   ⚠️  function calls are not analysed yet
+
+3177 -> 3184 free var = FreeVar(Set)
 
 3177 -> 3186 member call = (
   | ???*0*
@@ -14210,6 +14550,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 
+3573 -> 3576 free var = FreeVar(Error)
+
 3573 -> 3577 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -14284,6 +14626,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 3607 -> 3611 conditional = ???*0*
 - *0* max number of linking steps reached
 
+3607 -> 3613 free var = FreeVar(Error)
+
 3607 -> 3614 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -14330,6 +14674,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unsupported expression
 
 3619 -> 3626 call = (...) => undefined()
+
+3619 -> 3627 free var = FreeVar(Error)
 
 3619 -> 3628 call = (...) => (
   | undefined
@@ -14720,6 +15066,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
+
+3730 -> 3731 free var = FreeVar(Error)
 
 3730 -> 3732 call = (...) => (
   | undefined
@@ -15801,6 +16149,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 3960 -> 3962 conditional = ???*0*
 - *0* max number of linking steps reached
 
+3962 -> 3963 free var = FreeVar(Error)
+
 3962 -> 3964 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -16125,6 +16475,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 4106 -> 4110 conditional = ???*0*
 - *0* max number of linking steps reached
 
+4110 -> 4111 free var = FreeVar(Error)
+
 4110 -> 4112 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -16195,6 +16547,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 4157 -> 4158 conditional = ???*0*
 - *0* max number of linking steps reached
 
+4158 -> 4159 free var = FreeVar(Error)
+
 4158 -> 4160 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -16211,6 +16565,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 4157 -> 4164 conditional = ???*0*
 - *0* max number of linking steps reached
+
+4164 -> 4165 free var = FreeVar(Error)
 
 4164 -> 4166 call = (...) => (
   | undefined
@@ -16354,6 +16710,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 4311 call = (...) => (undefined | b)(???*0*)
 - *0* max number of linking steps reached
 
+0 -> 4312 free var = FreeVar(Error)
+
 0 -> 4314 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -16410,6 +16768,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
+4335 -> 4336 free var = FreeVar(Error)
+
 4335 -> 4337 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -16439,6 +16799,12 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 
 0 -> 4347 call = (...) => undefined()
+
+0 -> 4348 free var = FreeVar(WeakSet)
+
+0 -> 4349 free var = FreeVar(WeakSet)
+
+0 -> 4350 free var = FreeVar(Set)
 
 0 -> 4352 conditional = (null !== ???*0*)
 - *0* ???*1*["ref"]
@@ -16502,6 +16868,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 4361 conditional = ???*0*
 - *0* max number of linking steps reached
 
+4361 -> 4366 free var = FreeVar(window)
+
 4361 -> 4369 member call = ???*0*["getSelection"]()
 - *0* max number of linking steps reached
 
@@ -16529,6 +16897,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 4392 -> 4413 member call = ???*0*["removeChild"](???*1*)
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
+
+4392 -> 4414 free var = FreeVar(Error)
 
 4392 -> 4415 call = (...) => (
   | undefined
@@ -17137,6 +17507,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 4609 -> 4619 conditional = ???*0*
 - *0* max number of linking steps reached
 
+4619 -> 4620 free var = FreeVar(Error)
+
 4619 -> 4621 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -17516,6 +17888,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+4703 -> 4704 free var = FreeVar(Error)
+
 4703 -> 4705 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -17804,6 +18178,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 4824 free var = FreeVar(Error)
+
 0 -> 4825 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -17863,6 +18239,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 4838 free var = FreeVar(Error)
 
 0 -> 4839 call = (...) => (
   | undefined
@@ -17996,6 +18374,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 4919 -> 4921 call = (...) => undefined(???*0*)
 - *0* max number of linking steps reached
 
+4871 -> 4922 free var = FreeVar(Error)
+
 4871 -> 4923 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -18073,7 +18453,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 4959 conditional = ???*0*
 - *0* max number of linking steps reached
 
+0 -> 4964 free var = FreeVar(Math)
+
 0 -> 4968 call = (...) => (undefined | {"current": a})(0)
+
+0 -> 4969 free var = FreeVar(Infinity)
 
 0 -> 4970 call = module<scheduler, {}>["unstable_now"]()
 
@@ -18082,6 +18466,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 4974 conditional = (null !== module<react, {}>["__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED"]["ReactCurrentBatchConfig"]["transition"])
 
 4974 -> 4975 call = (...) => (undefined | a)()
+
+0 -> 4977 free var = FreeVar(window)
 
 0 -> 4979 call = (...) => (undefined | 1 | 4 | 16 | 536870912)(
     (
@@ -18099,6 +18485,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 4980 free var = FreeVar(Error)
 
 0 -> 4981 call = (...) => (
   | undefined
@@ -18340,6 +18728,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 5016 conditional = (0 !== ???*0*)
 - *0* unsupported expression
 
+5016 -> 5017 free var = FreeVar(Error)
+
 5016 -> 5018 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -18496,6 +18886,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
+5043 -> 5058 free var = FreeVar(Error)
+
 5043 -> 5059 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -18595,6 +18987,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
+
+5043 -> 5088 free var = FreeVar(Error)
 
 5043 -> 5089 call = (...) => (
   | undefined
@@ -18699,6 +19093,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 5133 conditional = (0 !== ???*0*)
 - *0* unsupported expression
+
+5133 -> 5134 free var = FreeVar(Error)
 
 5133 -> 5135 call = (...) => (
   | undefined
@@ -18818,6 +19214,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 5152 conditional = ???*0*
 - *0* max number of linking steps reached
+
+5152 -> 5153 free var = FreeVar(Error)
 
 5152 -> 5154 call = (...) => (
   | undefined
@@ -18951,6 +19349,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 5242 -> 5248 conditional = ???*0*
 - *0* max number of linking steps reached
 
+5248 -> 5249 free var = FreeVar(Set)
+
 5248 -> 5251 member call = ???*0*["add"](???*1*)
 - *0* unknown new expression
 - *1* max number of linking steps reached
@@ -18968,6 +19368,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* max number of linking steps reached
 
 5255 -> 5257 call = (...) => undefined()
+
+5242 -> 5258 free var = FreeVar(Error)
 
 5242 -> 5259 call = (...) => (
   | undefined
@@ -19100,6 +19502,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 5303 conditional = ???*0*
 - *0* max number of linking steps reached
 
+5303 -> 5304 free var = FreeVar(Error)
+
 5303 -> 5305 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -19218,6 +19622,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 5334 conditional = (0 !== ???*0*)
 - *0* unsupported expression
 
+5334 -> 5335 free var = FreeVar(Error)
+
 5334 -> 5336 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -19243,6 +19649,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
+
+5343 -> 5344 free var = FreeVar(Error)
 
 5343 -> 5345 call = (...) => (
   | undefined
@@ -19443,6 +19851,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 5391 -> 5392 conditional = (0 !== ???*0*)
 - *0* unsupported expression
+
+5392 -> 5393 free var = FreeVar(Error)
 
 5392 -> 5394 call = (...) => (
   | undefined
@@ -20303,6 +20713,8 @@ ${???*9*}`
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 5506 free var = FreeVar(Error)
+
 0 -> 5507 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -20553,6 +20965,8 @@ ${???*9*}`
 - *7* c
   ⚠️  circular variable reference
 
+0 -> 5573 free var = FreeVar(Error)
+
 0 -> 5574 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -20612,6 +21026,8 @@ ${???*9*}`
 0 -> 5587 conditional = ???*0*
 - *0* max number of linking steps reached
 
+5587 -> 5588 free var = FreeVar(Error)
+
 5587 -> 5589 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -20647,6 +21063,8 @@ ${???*9*}`
 
 0 -> 5599 conditional = ???*0*
 - *0* max number of linking steps reached
+
+5599 -> 5607 free var = FreeVar(Error)
 
 5599 -> 5608 call = (...) => (
   | undefined
@@ -20691,6 +21109,8 @@ ${???*9*}`
 
 5599 -> 5612 conditional = ???*0*
 - *0* max number of linking steps reached
+
+5612 -> 5613 free var = FreeVar(Error)
 
 5612 -> 5614 call = (...) => (
   | undefined
@@ -21080,6 +21500,8 @@ ${???*9*}`
 5721 -> 5723 conditional = ???*0*
 - *0* max number of linking steps reached
 
+5723 -> 5724 free var = FreeVar(Error)
+
 5723 -> 5725 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -21307,6 +21729,8 @@ ${???*9*}`
 - *5* c
   ⚠️  circular variable reference
 
+0 -> 5775 free var = FreeVar(Error)
+
 0 -> 5777 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -21441,6 +21865,8 @@ ${???*9*}`
   ⚠️  function calls are not analysed yet
 - *2* unknown new expression
 
+5853 -> 5868 free var = FreeVar(Error)
+
 5853 -> 5869 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -21528,6 +21954,12 @@ ${???*9*}`
   ⚠️  function calls are not analysed yet
 - *1* unknown new expression
 
+0 -> 5924 free var = FreeVar(arguments)
+
+0 -> 5926 free var = FreeVar(arguments)
+
+0 -> 5928 free var = FreeVar(arguments)
+
 0 -> 5930 call = (...) => (undefined | c | null)((???*0* | ???*1*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -21558,6 +21990,8 @@ ${???*9*}`
   ⚠️  unknown object
 - *8* arguments[0]
   ⚠️  function calls are not analysed yet
+
+5932 -> 5933 free var = FreeVar(Error)
 
 5932 -> 5934 call = (...) => (
   | undefined
@@ -21590,6 +22024,8 @@ ${???*9*}`
   ⚠️  unknown object
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 5945 free var = FreeVar(Error)
 
 0 -> 5946 call = (...) => (
   | undefined
@@ -22169,6 +22605,12 @@ ${???*9*}`
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
 
+0 -> 5996 free var = FreeVar(reportError)
+
+0 -> 5997 free var = FreeVar(reportError)
+
+0 -> 5999 free var = FreeVar(console)
+
 0 -> 6000 member call = ???*0*["error"](???*1*)
 - *0* FreeVar(console)
   ⚠️  unknown global
@@ -22179,6 +22621,8 @@ ${???*9*}`
 - *0* ???*1*["_internalRoot"]
   ⚠️  unknown object
 - *1* unsupported expression
+
+6007 -> 6008 free var = FreeVar(Error)
 
 6007 -> 6009 call = (...) => (
   | undefined
@@ -22694,6 +23138,8 @@ ${???*9*}`
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
 
+6118 -> 6123 free var = FreeVar(JSON)
+
 6118 -> 6124 member call = ???*0*["stringify"]((???*1* | ???*2* | 0))
 - *0* FreeVar(JSON)
   ⚠️  unknown global
@@ -22777,6 +23223,8 @@ ${???*9*}`
   ⚠️  unknown object
 - *5* arguments[2]
   ⚠️  function calls are not analysed yet
+
+6132 -> 6133 free var = FreeVar(Error)
 
 6132 -> 6134 call = (...) => (
   | undefined
@@ -22880,8 +23328,12 @@ ${???*9*}`
 - *7* a
   ⚠️  circular variable reference
 
+0 -> 6150 free var = FreeVar(__REACT_DEVTOOLS_GLOBAL_HOOK__)
+
 0 -> 6151 conditional = ("undefined" !== ???*0*)
 - *0* unsupported expression
+
+6151 -> 6152 free var = FreeVar(__REACT_DEVTOOLS_GLOBAL_HOOK__)
 
 6151 -> 6155 conditional = (!(???*0*) | ???*2*)
 - *0* ???*1*["isDisabled"]
@@ -22929,6 +23381,16 @@ ${???*9*}`
 - *5* unknown mutation
 - *6* unknown mutation
 
+0 -> 6159 free var = FreeVar(exports)
+
+0 -> 6161 free var = FreeVar(exports)
+
+0 -> 6163 free var = FreeVar(arguments)
+
+0 -> 6165 free var = FreeVar(arguments)
+
+0 -> 6167 free var = FreeVar(arguments)
+
 0 -> 6168 call = (...) => (
   | undefined
   | !((
@@ -22946,6 +23408,8 @@ ${???*9*}`
   ⚠️  nested operation
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
+
+6169 -> 6170 free var = FreeVar(Error)
 
 6169 -> 6171 call = (...) => (
   | undefined
@@ -22974,6 +23438,8 @@ ${???*9*}`
 - *3* FreeVar(arguments)
   ⚠️  unknown global
 
+0 -> 6175 free var = FreeVar(exports)
+
 0 -> 6176 call = (...) => (
   | undefined
   | !((
@@ -22991,6 +23457,8 @@ ${???*9*}`
   ⚠️  nested operation
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+
+6177 -> 6178 free var = FreeVar(Error)
 
 6177 -> 6179 call = (...) => (
   | undefined
@@ -23038,6 +23506,8 @@ ${???*9*}`
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 6193 free var = FreeVar(exports)
+
 0 -> 6196 conditional = (???*0* === (???*1* | undefined["_reactInternals"] | null["_reactInternals"]))
 - *0* unsupported expression
 - *1* ???*2*["_reactInternals"]
@@ -23047,6 +23517,8 @@ ${???*9*}`
 
 6196 -> 6198 conditional = ("function" === ???*0*)
 - *0* unsupported expression
+
+6198 -> 6199 free var = FreeVar(Error)
 
 6198 -> 6200 call = (...) => (
   | undefined
@@ -23061,6 +23533,8 @@ ${???*9*}`
 )
 - *0* FreeVar(Error)
   ⚠️  unknown global
+
+6196 -> 6204 free var = FreeVar(Object)
 
 6196 -> 6205 member call = ???*0*["keys"](
     (???*1* | ???*2* | undefined | ???*5* | null | ???*7* | ???*8*)
@@ -23095,6 +23569,8 @@ ${???*9*}`
   ⚠️  unknown callee object
 - *1* FreeVar(Object)
   ⚠️  unknown global
+
+6196 -> 6207 free var = FreeVar(Error)
 
 6196 -> 6208 call = (...) => (
   | undefined
@@ -23143,9 +23619,13 @@ ${???*9*}`
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 6213 free var = FreeVar(exports)
+
 0 -> 6214 call = (...) => (undefined | a())(???*0*)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 6216 free var = FreeVar(exports)
 
 0 -> 6217 call = (...) => (
   | undefined
@@ -23173,6 +23653,8 @@ ${???*9*}`
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
 
+6218 -> 6219 free var = FreeVar(Error)
+
 6218 -> 6220 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -23195,6 +23677,8 @@ ${???*9*}`
 - *2* arguments[2]
   ⚠️  function calls are not analysed yet
 
+0 -> 6224 free var = FreeVar(exports)
+
 0 -> 6225 call = (...) => (
   | undefined
   | !((
@@ -23212,6 +23696,8 @@ ${???*9*}`
   ⚠️  nested operation
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+
+6226 -> 6227 free var = FreeVar(Error)
 
 6226 -> 6228 call = (...) => (
   | undefined
@@ -23406,6 +23892,8 @@ ${???*9*}`
 - *15* e
   ⚠️  circular variable reference
 
+0 -> 6252 free var = FreeVar(exports)
+
 0 -> 6253 call = (...) => (
   | undefined
   | !((
@@ -23432,6 +23920,8 @@ ${???*9*}`
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
 
+6254 -> 6255 free var = FreeVar(Error)
+
 6254 -> 6256 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -23453,6 +23943,8 @@ ${???*9*}`
   ⚠️  function calls are not analysed yet
 - *2* arguments[2]
   ⚠️  function calls are not analysed yet
+
+0 -> 6260 free var = FreeVar(exports)
 
 0 -> 6261 call = (...) => (
   | undefined
@@ -23480,6 +23972,8 @@ ${???*9*}`
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
+6262 -> 6263 free var = FreeVar(Error)
+
 6262 -> 6264 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -23499,6 +23993,10 @@ ${???*9*}`
 6267 -> 6268 call = (...) => (undefined | hl(g))(null, null, ???*0*, false, (...) => undefined)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 6272 free var = FreeVar(exports)
+
+0 -> 6274 free var = FreeVar(exports)
 
 0 -> 6275 call = (...) => (
   | undefined
@@ -23526,6 +24024,8 @@ ${???*9*}`
 - *2* arguments[2]
   ⚠️  function calls are not analysed yet
 
+6276 -> 6277 free var = FreeVar(Error)
+
 6276 -> 6278 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
@@ -23548,6 +24048,8 @@ ${???*9*}`
   ⚠️  unknown object
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
+
+6281 -> 6282 free var = FreeVar(Error)
 
 6281 -> 6283 call = (...) => (
   | undefined
@@ -23572,3 +24074,5 @@ ${???*9*}`
   ⚠️  function calls are not analysed yet
 - *3* arguments[3]
   ⚠️  function calls are not analysed yet
+
+0 -> 6287 free var = FreeVar(exports)

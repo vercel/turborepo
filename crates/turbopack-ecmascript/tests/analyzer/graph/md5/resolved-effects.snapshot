@@ -1,6 +1,10 @@
 0 -> 1 conditional = (???*0* == "string")
 - *0* unsupported expression
 
+1 -> 2 free var = FreeVar(unescape)
+
+1 -> 3 free var = FreeVar(encodeURIComponent)
+
 1 -> 4 call = ???*0*((???*1* | ???*2*))
 - *0* FreeVar(encodeURIComponent)
   ⚠️  unknown global
@@ -15,6 +19,8 @@
   ⚠️  unknown callee
 - *2* FreeVar(encodeURIComponent)
   ⚠️  unknown global
+
+1 -> 6 free var = FreeVar(Array)
 
 1 -> 11 member call = ???*0*["charCodeAt"](0)
 - *0* ???*1*(FreeVar(encodeURIComponent)(bytes))
@@ -32,6 +38,8 @@
 
 0 -> 15 call = (...) => (undefined | output)(???*0*)
 - *0* max number of linking steps reached
+
+0 -> 18 free var = FreeVar(parseInt)
 
 0 -> 20 member call = "0123456789abcdef"["charAt"](???*0*)
 - *0* unsupported expression
@@ -830,6 +838,8 @@
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
 
+0 -> 163 free var = FreeVar(undefined)
+
 0 -> 169 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* arguments[1]
@@ -936,3 +946,5 @@
   ⚠️  function calls are not analysed yet
 - *5* arguments[6]
   ⚠️  function calls are not analysed yet
+
+0 -> 179 free var = FreeVar(module)

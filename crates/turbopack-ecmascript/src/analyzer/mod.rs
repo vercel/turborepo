@@ -3182,8 +3182,7 @@ mod tests {
                                     JsValue::call(box func, new_args),
                                 ));
                             }
-                            Effect::Call { var, .. } => {
-                                let var = resolve(&var_graph, var).await;
+                            Effect::FreeVar { var, .. } => {
                                 resolved.push((format!("{parent} -> {i} free var"), var));
                             }
                             Effect::MemberCall {

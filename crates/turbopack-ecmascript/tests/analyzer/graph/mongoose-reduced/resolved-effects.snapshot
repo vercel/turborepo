@@ -1,3 +1,7 @@
+0 -> 2 free var = FreeVar(global)
+
+0 -> 3 free var = FreeVar(require)
+
 0 -> 4 call = require*0*(
     `${(???*1* | "./drivers/node-mongodb-native")}/connection`
 )
@@ -6,6 +10,8 @@
   ⚠️  unknown object
 - *2* FreeVar(global)
   ⚠️  unknown global
+
+0 -> 5 free var = FreeVar(require)
 
 0 -> 6 call = require*0*(
     `${(???*1* | "./drivers/node-mongodb-native")}/collection`

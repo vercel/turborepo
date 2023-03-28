@@ -185,6 +185,14 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
+0 -> 36 free var = FreeVar(safeAdd)
+
+0 -> 37 free var = FreeVar(bitRotateLeft)
+
+0 -> 38 free var = FreeVar(safeAdd)
+
+0 -> 39 free var = FreeVar(safeAdd)
+
 0 -> 40 call = ???*0*(???*1*, ???*2*)
 - *0* FreeVar(safeAdd)
   ⚠️  unknown global
@@ -192,6 +200,8 @@
   ⚠️  function calls are not analysed yet
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+
+0 -> 41 free var = FreeVar(safeAdd)
 
 0 -> 42 call = ???*0*(???*1*, ???*2*)
 - *0* FreeVar(safeAdd)
@@ -257,3 +267,7 @@
   ⚠️  function calls are not analysed yet
 - *5* arguments[6]
   ⚠️  function calls are not analysed yet
+
+0 -> 48 free var = FreeVar(module)
+
+0 -> 49 free var = FreeVar(md5)
