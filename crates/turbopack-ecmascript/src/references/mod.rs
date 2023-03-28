@@ -1196,7 +1196,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             .eq(name.iter().map(Cow::Borrowed).rev())
                         {
                             match value {
-                                FreeVarReference::Esm {
+                                FreeVarReference::EcmaScriptModule {
                                     request,
                                     context,
                                     export,

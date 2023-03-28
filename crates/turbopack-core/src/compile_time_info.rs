@@ -99,7 +99,7 @@ impl CompileTimeDefinesVc {
 
 #[turbo_tasks::value]
 pub enum FreeVarReference {
-    Esm {
+    EcmaScriptModule {
         request: String,
         context: Option<FileSystemPathVc>,
         export: Option<String>,
