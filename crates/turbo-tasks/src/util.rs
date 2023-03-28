@@ -47,6 +47,19 @@ impl From<Error> for SharedError {
     }
 }
 
+#[macro_export]
+macro_rules! shared_anyhow {
+    ($msg:literal $(,)?) => {
+        $crate::util::SharedError::new(anyhow::anyhow!($msg))
+    };
+    ($err:expr $(,)?) => {
+        $crate::util::SharedError::new(anyhow::anyhow!($err))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::util::SharedError::new(anyhow::anyhow!($fmt, $($arg)*))
+    };
+}
+
 pub struct FormatDuration(pub Duration);
 
 impl Display for FormatDuration {
