@@ -21,13 +21,19 @@ PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
 YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
 if [ "$pkgManager" == "npm" ]; then
   set_package_manager "$NPM_PACKAGE_MANAGER_VALUE"
-  npm ci > /dev/null
+  if [[ -f "package-lock.json" ]]; then
+    npm ci > /dev/null
+  fi
 elif [ "$pkgManager" == "pnpm" ]; then
   set_package_manager "$PNPM_PACKAGE_MANAGER_VALUE"
-  pnpm install --frozen-lockfile > /dev/null
+  if [[ -f "pnpm-lock.yaml" ]]; then
+    pnpm install --frozen-lockfile > /dev/null
+  fi
 elif [ "$pkgManager" == "yarn" ]; then
   set_package_manager "$YARN_PACKAGE_MANAGER_VALUE"
-  yarn install --frozen-lockfile > /dev/null
+  if [[ -f "yarn.lock" ]]; then
+    yarn install --frozen-lockfile > /dev/null
+  fi
 fi
 
 # $TESTDIR is set by prysk to be the directory the test script is in
