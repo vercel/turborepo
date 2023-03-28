@@ -11,14 +11,17 @@ Setup
 | true    | missing | yes      |
 | true    | true    | yes      |
 | true    | false   | no       |
+| true    | novalue | yes      |
 
 | false   | missing | no       |
 | false   | true    | yes      |
 | false   | false   | no       |
+| false   | novalue | yes      |
 
 | missing | missing | no       |
 | missing | true    | yes      |
 | missing | false   | no       |
+| missing | novalue | yes      |
 
 
 # env var=true, missing flag: yes
@@ -34,6 +37,11 @@ Setup
 # env var=true, --flag=false: no
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize=false > /dev/null
+  $ test -d .turbo/runs
+  [1]
+# env var=true, --flag (no value): yes
+  $ rm -rf .turbo/runs
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize > /dev/null
   $ test -d .turbo/runs
   [1]
 
@@ -52,6 +60,11 @@ Setup
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize=false > /dev/null
   $ test -d .turbo/runs
   [1]
+# env var=false, --flag (no value): yes
+  $ rm -rf .turbo/runs
+  $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize > /dev/null
+  $ test -d .turbo/runs
+  [1]
 
 # missing env var, missing flag: no
   $ rm -rf .turbo/runs
@@ -66,5 +79,10 @@ Setup
 # missing env var, --flag=false: no
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize=false > /dev/null
+  $ test -d .turbo/runs
+  [1]
+# missing env var, --flag (no value): yes
+  $ rm -rf .turbo/runs
+  $ ${TURBO} run build --summarize > /dev/null
   $ test -d .turbo/runs
   [1]
