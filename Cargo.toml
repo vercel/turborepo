@@ -101,7 +101,7 @@ swc_relay = { version = "0.1.0" }
 testing = { version = "0.31.31" }
 
 auto-hash-map = { path = "crates/auto-hash-map" }
-node-file-trace = { path = "crates/node-file-trace" }
+node-file-trace = { path = "crates/node-file-trace", default-features = false }
 swc-ast-explorer = { path = "crates/swc-ast-explorer" }
 turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
 turbo-tasks = { path = "crates/turbo-tasks" }
