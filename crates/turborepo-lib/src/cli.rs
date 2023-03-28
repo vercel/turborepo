@@ -298,7 +298,7 @@ pub struct RunArgs {
     #[clap(long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
-    #[clap(long)]
+    #[clap(long, env = "TURBO_FORCE")]
     pub force: bool,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
@@ -347,7 +347,7 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long)]
+    #[clap(long, env = "TURBO_REMOTE_ONLY")]
     pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
@@ -358,6 +358,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Opt in to using the turbo run summary.
+    #[clap(long, hide = true, env = "TURBO_RUN_SUMMARY")]
+    pub summarize: Option<bool>,
     /// Use "none" to remove prefixes from task logs. Note that tasks running
     /// in parallel interleave their logs and prefix is the only way
     /// to identify which task produced a log.
