@@ -225,10 +225,56 @@ jobs:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
           NEXT_INTEGRATION_TEST: true
 
+  test_flaky_subset:
+    # This job name is being used in github action to collect test results. Do not change it, or should update
+    # ./.github/actions/next-integration-stat to match the new name.
+    name: Next.js integration test (FLAKY_SUBSET)
+    runs-on: ubuntu-latest
+    needs: [setup_nextjs]
+    env:
+      # Enabling backtrace will makes snapshot tests fail
+      RUST_BACKTRACE: 0
+      NEXT_TELEMETRY_DISABLED: 1
+      # Path to the next-dev binary located in **docker container** image.
+      NEXT_DEV_BIN: /work/next-dev
+      FAILED_TEST_LIST_PATH: /work/integration-test-data/test-results/main/failed-test-path-list.json
+      # Glob pattern to run specific tests with --turbo.
+      NEXT_DEV_TEST_GLOB: "*"
+      # pnpm version should match to what upstream next.js uses
+      PNPM_VERSION: 7.24.3
+      # List of test files to run that expected to pass always. Whole test suite should pass.
+      TEST_FILES_LIST: |
+        test/development/acceptance-app/dynamic-error.test.ts \
+        test/development/acceptance-app/unsupported-app-features.test.ts \
+        test/development/acceptance-app/ReactRefresh.test.ts
+
+    strategy:
+      matrix:
+        node: [16]
+
+    steps:
+      - uses: actions/cache/restore@v3
+        id: restore-build
+        with:
+          path: ./*
+          key: ${{ inputs.version }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - run: |
+          docker run -i -v nextjs-test-volume:/volume --rm loomchild/volume-backup restore < volume.tar.bz2
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -c 1 $TEST_FILES_LIST >> /proc/1/fd/1"
+        name: Run test/development
+        # This should not fail, but if fails collect result to update dashboard.
+        continue-on-error: true
+        env:
+          # marker to parse log output, do not delete / change.
+          NEXT_INTEGRATION_TEST: true
+
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
   collect_nextjs_integration_stat:
-    needs: [test_dev, test_dev_e2e, test_cna, test_integration]
+    needs:
+      [test_dev, test_dev_e2e, test_cna, test_integration, test_flaky_subset]
     name: Next.js integration test status report
     runs-on: ubuntu-latest
     permissions:
