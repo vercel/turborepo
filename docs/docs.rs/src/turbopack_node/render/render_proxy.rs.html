@@ -178,6 +178,10 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
@@ -192,7 +196,8 @@
     ResponseHeaders,
 };
 <span class="kw">use crate</span>::{
-    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
+    render::error_page::error_html, source_map::trace_stack,
 };
 
 <span class="doccomment">/// Renders a module as static HTML in a node.js process.
@@ -334,10 +339,13 @@
         details.push(<span class="macro">format!</span>(<span class="string">&quot;status: {status}&quot;</span>));
     }
 
-    <span class="kw">let </span>body = <span class="macro">format!</span>(
-        <span class="string">&quot;An error occurred while proxying a request to Node.js:\n{message}\n{}&quot;</span>,
-        details.join(<span class="string">&quot;\n&quot;</span>)
-    );
+    <span class="kw">let </span>status_code = <span class="number">500</span>;
+    <span class="kw">let </span>body = <span class="kw-2">&amp;*</span>error_html(
+        status_code,
+        <span class="string">&quot;An error occurred while proxying the request to Node.js&quot;</span>.to_string(),
+        <span class="macro">format!</span>(<span class="string">&quot;{message}\n\n{}&quot;</span>, details.join(<span class="string">&quot;\n&quot;</span>)),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     RenderingIssue {
         context: path,
@@ -349,12 +357,12 @@
     .emit();
 
     <span class="prelude-val">Ok</span>(ProxyResult {
-        status: <span class="number">500</span>,
+        status: status_code,
         headers: <span class="macro">vec!</span>[(
             <span class="string">&quot;content-type&quot;</span>.to_string(),
             <span class="string">&quot;text/html; charset=utf-8&quot;</span>.to_string(),
         )],
-        body: body.into(),
+        body: body.clone().into(),
     }
     .cell())
 }

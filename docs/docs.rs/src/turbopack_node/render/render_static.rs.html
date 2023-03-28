@@ -200,6 +200,7 @@
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -219,7 +220,8 @@
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
 <span class="kw">use crate</span>::{
-    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, source_map::trace_stack,
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
+    render::error_page::error_html_body, source_map::trace_stack,
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -364,30 +366,30 @@
     operation: <span class="prelude-ty">Option</span>&lt;NodeJsOperation&gt;,
     fallback_page: DevHtmlAssetVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
-    <span class="kw">let </span>error = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>error));
-    <span class="kw">let </span>message = error
-        <span class="comment">// TODO this is pretty inefficient
-        </span>.replace(<span class="string">&#39;&amp;&#39;</span>, <span class="string">&quot;&amp;amp;&quot;</span>)
-        .replace(<span class="string">&#39;&gt;&#39;</span>, <span class="string">&quot;&amp;gt;&quot;</span>)
-        .replace(<span class="string">&#39;&lt;&#39;</span>, <span class="string">&quot;&amp;lt;&quot;</span>);
     <span class="kw">let </span>status = <span class="kw">match </span>operation {
         <span class="prelude-val">Some</span>(operation) =&gt; <span class="prelude-val">Some</span>(operation.wait_or_kill().<span class="kw">await</span><span class="question-mark">?</span>),
         <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
     };
 
-    <span class="kw">let </span>html_status = <span class="kw">match </span>status {
-        <span class="prelude-val">Some</span>(status) =&gt; <span class="macro">format!</span>(<span class="string">&quot;&lt;h2&gt;Exit status&lt;/h2&gt;&lt;pre&gt;{status}&lt;/pre&gt;&quot;</span>),
-        <span class="prelude-val">None </span>=&gt; <span class="string">&quot;&lt;h3&gt;No exit status&lt;/pre&gt;&quot;</span>.to_owned(),
-    };
+    <span class="kw">let </span>error = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>error));
+    <span class="kw">let </span><span class="kw-2">mut </span>message = error
+        <span class="comment">// TODO this is pretty inefficient
+        </span>.replace(<span class="string">&#39;&amp;&#39;</span>, <span class="string">&quot;&amp;amp;&quot;</span>)
+        .replace(<span class="string">&#39;&gt;&#39;</span>, <span class="string">&quot;&amp;gt;&quot;</span>)
+        .replace(<span class="string">&#39;&lt;&#39;</span>, <span class="string">&quot;&amp;lt;&quot;</span>);
 
-    <span class="kw">let </span>body = <span class="macro">format!</span>(
-        <span class="string">&quot;&lt;script id=\&quot;__NEXT_DATA__\&quot; type=\&quot;application/json\&quot;&gt;{{ \&quot;props\&quot;: {{}} }}&lt;/script&gt;
-    &lt;div id=\&quot;__next\&quot;&gt;
-        &lt;h1&gt;Error rendering page&lt;/h1&gt;
-        &lt;h2&gt;Message&lt;/h2&gt;
-        &lt;pre&gt;{message}&lt;/pre&gt;
-        {html_status}
-    &lt;/div&gt;&quot;</span>,
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(status) = status {
+        message.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;\n\nStatus: {}&quot;</span>, status));
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>body = <span class="string">&quot;&lt;script id=\&quot;__NEXT_DATA__\&quot; type=\&quot;application/json\&quot;&gt;{ \&quot;props\&quot;: {} \
+                    }&lt;/script&gt;&quot;
+        </span>.to_string();
+
+    body.push_str(
+        error_html_body(<span class="number">500</span>, <span class="string">&quot;Error rendering page&quot;</span>.to_string(), message)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_str(),
     );
 
     <span class="kw">let </span>issue = RenderingIssue {

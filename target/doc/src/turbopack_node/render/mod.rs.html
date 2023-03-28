@@ -56,11 +56,13 @@
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use crate</span>::{route_matcher::Param, ResponseHeaders, StructuredError};
 
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>error_page;
 <span class="kw">pub mod </span>issue;
 <span class="kw">pub mod </span>node_api_source;
 <span class="kw">pub mod </span>render_proxy;
