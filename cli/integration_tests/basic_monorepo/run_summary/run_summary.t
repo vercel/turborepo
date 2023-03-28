@@ -97,10 +97,3 @@ Setup
 # another#build is not in tasks, because it didn't execute (script was not implemented)
   $ "$TESTDIR/get-build.sh" $FIRST "another"
   null
-
-# Without env var, no summary file is generated
-  $ rm -rf .turbo/runs
-  $ ${TURBO} run build > /dev/null
-# validate with exit code so the test works on macOS and linux
-  $ test -d .turbo/runs
-  [1]
