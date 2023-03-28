@@ -170,7 +170,7 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		if donePayload, err := json.Marshal(newVercelDonePayload()); err == nil {
+		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
 			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
 				errs = append(errs, err)
 			}
