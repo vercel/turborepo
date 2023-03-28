@@ -70,7 +70,7 @@ impl Asset for WebpackModuleAsset {
     }
 }
 
-#[turbo_tasks::value(shared)]
+#[turbo_tasks::value(shared, serialization = "none")]
 pub struct WebpackChunkAssetReference {
     #[turbo_tasks(trace_ignore)]
     pub chunk_id: Lit,
