@@ -816,7 +816,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -1982,7 +1982,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -2554,9 +2554,7 @@
     },
     Member {
         obj: FreeVar(
-            Other(
-                Atom('module' type=static),
-            ),
+            Atom('module' type=static),
         ),
         prop: Constant(
             Str(

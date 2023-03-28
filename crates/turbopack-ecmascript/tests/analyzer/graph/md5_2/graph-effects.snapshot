@@ -1,7 +1,7 @@
 [
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -90,7 +90,7 @@
         obj: Call(
             3,
             FreeVar(
-                Require,
+                Atom('require' type=static),
             ),
             [
                 Constant(
@@ -183,7 +183,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -276,7 +276,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -365,7 +365,7 @@
         obj: Call(
             3,
             FreeVar(
-                Require,
+                Atom('require' type=static),
             ),
             [
                 Constant(
@@ -458,7 +458,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -682,9 +682,7 @@
             ),
             Equal,
             FreeVar(
-                Other(
-                    Atom('String' type=static),
-                ),
+                Atom('String' type=static),
             ),
         ),
         kind: IfElse {
@@ -1888,9 +1886,7 @@
                                             Member(
                                                 3,
                                                 FreeVar(
-                                                    Other(
-                                                        Atom('Array' type=static),
-                                                    ),
+                                                    Atom('Array' type=static),
                                                 ),
                                                 Constant(
                                                     Str(
@@ -2038,9 +2034,7 @@
                                         obj: Member(
                                             3,
                                             FreeVar(
-                                                Other(
-                                                    Atom('Array' type=static),
-                                                ),
+                                                Atom('Array' type=static),
                                             ),
                                             Constant(
                                                 Str(
@@ -2184,9 +2178,7 @@
                                     },
                                     Member {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('Array' type=static),
-                                            ),
+                                            Atom('Array' type=static),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -2332,9 +2324,7 @@
                                             Member(
                                                 3,
                                                 FreeVar(
-                                                    Other(
-                                                        Atom('Array' type=static),
-                                                    ),
+                                                    Atom('Array' type=static),
                                                 ),
                                                 Constant(
                                                     Str(
@@ -2579,9 +2569,7 @@
                                 effects: [
                                     Member {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('Array' type=static),
-                                            ),
+                                            Atom('Array' type=static),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -2711,9 +2699,7 @@
                                     },
                                     MemberCall {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('Array' type=static),
-                                            ),
+                                            Atom('Array' type=static),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -2848,9 +2834,7 @@
                                             MemberCall(
                                                 4,
                                                 FreeVar(
-                                                    Other(
-                                                        Atom('Array' type=static),
-                                                    ),
+                                                    Atom('Array' type=static),
                                                 ),
                                                 Constant(
                                                     Str(
@@ -28713,9 +28697,7 @@
     },
     Member {
         obj: FreeVar(
-            Other(
-                Atom('module' type=static),
-            ),
+            Atom('module' type=static),
         ),
         prop: Constant(
             Str(

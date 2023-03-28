@@ -230,7 +230,7 @@
   | [
         "node",
         [
-            path2["join"](FreeVar(Dirname), "..", "bin", "esbuild")
+            path2["join"](FreeVar(__dirname), "..", "bin", "esbuild")
         ]
     ]
   | [generateBinPath(), []]

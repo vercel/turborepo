@@ -15,10 +15,7 @@ use swc_core::{
 };
 
 use super::{ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
-use crate::{
-    analyzer::{is_unresolved, FreeVarKind},
-    utils::unparen,
-};
+use crate::{analyzer::is_unresolved, utils::unparen};
 
 #[derive(Debug, Clone, Default)]
 pub struct EffectsBlock {
@@ -345,15 +342,7 @@ impl EvalContext {
                     return imported;
                 }
                 if is_unresolved(i, self.unresolved_mark) {
-                    match &*i.sym {
-                        "require" => JsValue::FreeVar(FreeVarKind::Require),
-                        "define" => JsValue::FreeVar(FreeVarKind::Define),
-                        "__dirname" => JsValue::FreeVar(FreeVarKind::Dirname),
-                        "__filename" => JsValue::FreeVar(FreeVarKind::Filename),
-                        "process" => JsValue::FreeVar(FreeVarKind::NodeProcess),
-                        "Object" => JsValue::FreeVar(FreeVarKind::Object),
-                        _ => JsValue::FreeVar(FreeVarKind::Other(i.sym.clone())),
-                    }
+                    JsValue::FreeVar(i.sym.clone())
                 } else {
                     JsValue::Variable(id)
                 }
@@ -551,7 +540,7 @@ impl EvalContext {
                 }
                 let args = args.iter().map(|arg| self.eval(&arg.expr)).collect();
 
-                let callee = box JsValue::FreeVar(FreeVarKind::Import);
+                let callee = box JsValue::FreeVar(js_word!("import"));
 
                 JsValue::call(callee, args)
             }
@@ -566,7 +555,7 @@ impl EvalContext {
                     .iter()
                     .map(|e| match e {
                         Some(e) => self.eval(&e.expr),
-                        _ => JsValue::FreeVar(FreeVarKind::Other(js_word!("undefined"))),
+                        _ => JsValue::FreeVar(js_word!("undefined")),
                     })
                     .collect();
                 JsValue::array(arr)
@@ -867,7 +856,7 @@ impl Analyzer<'_> {
         match &n.callee {
             Callee::Import(_) => {
                 self.add_effect(Effect::Call {
-                    func: JsValue::FreeVar(FreeVarKind::Import),
+                    func: JsValue::FreeVar(js_word!("import")),
                     args,
                     ast_path: as_parent_path(ast_path),
                     span: n.span(),
@@ -933,7 +922,7 @@ impl Analyzer<'_> {
         let values = self.cur_fn_return_values.take().unwrap();
 
         match values.len() {
-            0 => box JsValue::FreeVar(FreeVarKind::Other(js_word!("undefined"))),
+            0 => box JsValue::FreeVar(js_word!("undefined")),
             1 => box values.into_iter().next().unwrap(),
             _ => box JsValue::alternatives(values),
         }
@@ -1421,7 +1410,7 @@ impl VisitAstPath for Analyzer<'_> {
                 .arg
                 .as_deref()
                 .map(|e| self.eval_context.eval(e))
-                .unwrap_or(JsValue::FreeVar(FreeVarKind::Other(js_word!("undefined"))));
+                .unwrap_or(JsValue::FreeVar(js_word!("undefined")));
 
             values.push(return_value);
         }

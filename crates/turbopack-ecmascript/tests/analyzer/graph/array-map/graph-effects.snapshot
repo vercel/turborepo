@@ -505,7 +505,7 @@
                     effects: [
                         Member {
                             obj: FreeVar(
-                                Require,
+                                Atom('require' type=static),
                             ),
                             prop: Constant(
                                 Str(
@@ -593,7 +593,7 @@
                         },
                         MemberCall {
                             obj: FreeVar(
-                                Require,
+                                Atom('require' type=static),
                             ),
                             prop: Constant(
                                 Str(
@@ -767,7 +767,7 @@
     },
     Member {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(
@@ -833,7 +833,7 @@
     },
     MemberCall {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(

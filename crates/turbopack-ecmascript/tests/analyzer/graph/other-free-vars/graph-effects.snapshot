@@ -1,7 +1,7 @@
 [
     Member {
         obj: FreeVar(
-            Object,
+            Atom('Object' type=static),
         ),
         prop: Constant(
             Str(
@@ -58,7 +58,7 @@
     },
     MemberCall {
         obj: FreeVar(
-            Object,
+            Atom('Object' type=static),
         ),
         prop: Constant(
             Str(
@@ -191,7 +191,7 @@
         args: [
             Value(
                 FreeVar(
-                    Object,
+                    Atom('Object' type=static),
                 ),
             ),
         ],

@@ -1,7 +1,7 @@
 [
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -53,7 +53,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -111,9 +111,7 @@
             ),
         ),
         prop: FreeVar(
-            Other(
-                Atom('platformKey' type=dynamic),
-            ),
+            Atom('platformKey' type=dynamic),
         ),
         ast_path: [
             Program(
@@ -231,7 +229,7 @@
     },
     Member {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(
@@ -314,7 +312,7 @@
     },
     MemberCall {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(

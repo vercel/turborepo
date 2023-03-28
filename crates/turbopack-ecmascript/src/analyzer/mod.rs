@@ -426,7 +426,7 @@ pub enum JsValue {
     Argument(u32, usize),
     // TODO no predefined kinds, only JsWord
     /// A reference to a free variable.
-    FreeVar(FreeVarKind),
+    FreeVar(JsWord),
     /// This is a reference to a imported module.
     Module(ModuleValue),
 }
@@ -1125,8 +1125,7 @@ impl JsValue {
                     "| "
                 )
             ),
-            JsValue::FreeVar(FreeVarKind::Other(name)) => format!("FreeVar({})", name),
-            JsValue::FreeVar(name) => format!("FreeVar({:?})", name),
+            JsValue::FreeVar(name) => format!("FreeVar({})", &*name),
             JsValue::Variable(name) => {
                 format!("{}", name.0)
             }
@@ -1526,7 +1525,7 @@ impl<'a> Iterator for DefineableNameIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let value = self.next.take()?;
         Some(match value {
-            JsValue::FreeVar(kind) => kind.as_str().into(),
+            JsValue::FreeVar(kind) => (&**kind).into(),
             JsValue::Member(_, obj, prop) => {
                 self.next = Some(obj);
                 prop.as_str()?.into()
@@ -2807,48 +2806,6 @@ impl Hash for SimilarJsValue {
     }
 }
 
-// TODO get rid of that and only use `JsWord` in `FreeVar(...)`
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum FreeVarKind {
-    // Object
-    Object,
-    /// `__dirname`
-    Dirname,
-
-    /// `__filename`
-    Filename,
-
-    /// A reference to global `require`
-    Require,
-
-    /// A reference to global `define` (AMD)
-    Define,
-
-    /// A reference to `import`
-    Import,
-
-    /// Node.js process
-    NodeProcess,
-
-    /// `abc` `some_global`
-    Other(JsWord),
-}
-
-impl FreeVarKind {
-    pub fn as_str(&self) -> &str {
-        match self {
-            FreeVarKind::Object => "Object",
-            FreeVarKind::Dirname => "__dirname",
-            FreeVarKind::Filename => "__filename",
-            FreeVarKind::Require => "require",
-            FreeVarKind::Define => "define",
-            FreeVarKind::Import => "import",
-            FreeVarKind::NodeProcess => "process",
-            FreeVarKind::Other(v) => v.as_ref(),
-        }
-    }
-}
-
 /// A list of well-known objects that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownObjectKind {
@@ -2944,8 +2901,8 @@ pub mod test_utils {
     use turbopack_core::compile_time_info::CompileTimeInfoVc;
 
     use super::{
-        builtin::early_replace_builtin, well_known::replace_well_known, FreeVarKind, JsValue,
-        ModuleValue, WellKnownFunctionKind, WellKnownObjectKind,
+        builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
+        WellKnownFunctionKind, WellKnownObjectKind,
     };
     use crate::analyzer::builtin::replace_builtin;
 
@@ -2967,20 +2924,14 @@ pub mod test_utils {
                 JsValue::Constant(v) => (v.to_string() + "/resolved/lib/index.js").into(),
                 _ => JsValue::Unknown(Some(Arc::new(v)), "resolve.resolve non constant"),
             },
-            JsValue::FreeVar(FreeVarKind::Require) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Require)
-            }
-            JsValue::FreeVar(FreeVarKind::Define) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Define)
-            }
-            JsValue::FreeVar(FreeVarKind::Dirname) => "__dirname".into(),
-            JsValue::FreeVar(FreeVarKind::Filename) => "__filename".into(),
-            JsValue::FreeVar(FreeVarKind::NodeProcess) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-            }
-            JsValue::FreeVar(kind) => {
-                JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(kind))), "unknown global")
-            }
+            JsValue::FreeVar(var) => match &*var {
+                "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+                "__dirname" => "__dirname".into(),
+                "__filename" => "__filename".into(),
+                "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+                _ => JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(var))), "unknown global"),
+            },
             JsValue::Module(ModuleValue {
                 module: ref name, ..
             }) => match name.as_ref() {

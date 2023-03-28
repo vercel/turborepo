@@ -77,7 +77,7 @@ use super::{
         graph::{create_graph, Effect},
         linker::link,
         well_known::replace_well_known,
-        FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind, WellKnownObjectKind,
+        JsValue, ObjectPart, WellKnownFunctionKind, WellKnownObjectKind,
     },
     errors,
     parse::{parse, ParseResult},
@@ -995,7 +995,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                                         WellKnownFunctionKind::PathJoin,
                                                     ),
                                                     vec![
-                                                        JsValue::FreeVar(FreeVarKind::Dirname),
+                                                        JsValue::FreeVar("__dirname".into()),
                                                         pkg_or_dir.clone(),
                                                     ],
                                                 ))
@@ -1048,7 +1048,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 let linked_func_call = link_value(JsValue::call(
                                     box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
                                     vec![
-                                        JsValue::FreeVar(FreeVarKind::Dirname),
+                                        JsValue::FreeVar("__dirname".into()),
                                         p.into(),
                                         "intl".into(),
                                     ],
@@ -1744,15 +1744,15 @@ async fn value_visitor_inner(
                 )
             }
         }
-        JsValue::FreeVar(ref kind) => match kind {
-            FreeVarKind::Dirname => as_abs_path(origin.origin_path().parent()).await?,
-            FreeVarKind::Filename => as_abs_path(origin.origin_path()).await?,
+        JsValue::FreeVar(ref kind) => match &**kind {
+            "__dirname" => as_abs_path(origin.origin_path().parent()).await?,
+            "__filename" => as_abs_path(origin.origin_path()).await?,
 
-            FreeVarKind::Require => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
-            FreeVarKind::Define => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
-            FreeVarKind::Import => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
-            FreeVarKind::NodeProcess => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-            FreeVarKind::Object => JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
+            "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+            "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+            "import" => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
+            "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+            "Object" => JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
             _ => return Ok((v, false)),
         },
         JsValue::Module(ModuleValue {

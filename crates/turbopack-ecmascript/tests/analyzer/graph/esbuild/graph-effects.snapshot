@@ -1,7 +1,7 @@
 [
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -53,7 +53,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -105,7 +105,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -157,7 +157,7 @@
     },
     Member {
         obj: FreeVar(
-            NodeProcess,
+            Atom('process' type=static),
         ),
         prop: Constant(
             Str(
@@ -780,7 +780,7 @@
     },
     Member {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(
@@ -863,7 +863,7 @@
     },
     MemberCall {
         obj: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         prop: Constant(
             Str(
@@ -965,9 +965,7 @@
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('downloadedBinPath' type=dynamic),
-            ),
+            Atom('downloadedBinPath' type=dynamic),
         ),
         args: [
             Value(
@@ -1055,9 +1053,7 @@
     },
     Member {
         obj: FreeVar(
-            Other(
-                Atom('fs' type=inline),
-            ),
+            Atom('fs' type=inline),
         ),
         prop: Constant(
             Str(
@@ -1143,9 +1139,7 @@
     },
     MemberCall {
         obj: FreeVar(
-            Other(
-                Atom('fs' type=inline),
-            ),
+            Atom('fs' type=inline),
         ),
         prop: Constant(
             Str(
@@ -1236,9 +1230,7 @@
             MemberCall(
                 4,
                 FreeVar(
-                    Other(
-                        Atom('fs' type=inline),
-                    ),
+                    Atom('fs' type=inline),
                 ),
                 Constant(
                     Str(
@@ -1262,7 +1254,7 @@
                 effects: [
                     Member {
                         obj: FreeVar(
-                            Require,
+                            Atom('require' type=static),
                         ),
                         prop: Constant(
                             Str(
@@ -1367,7 +1359,7 @@
                     },
                     MemberCall {
                         obj: FreeVar(
-                            Require,
+                            Atom('require' type=static),
                         ),
                         prop: Constant(
                             Str(
@@ -1580,7 +1572,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -1753,7 +1745,7 @@
                     },
                     Member {
                         obj: FreeVar(
-                            Require,
+                            Atom('require' type=static),
                         ),
                         prop: Constant(
                             Str(
@@ -1852,7 +1844,7 @@
                     },
                     MemberCall {
                         obj: FreeVar(
-                            Require,
+                            Atom('require' type=static),
                         ),
                         prop: Constant(
                             Str(
@@ -1970,7 +1962,7 @@
                                 MemberCall(
                                     4,
                                     FreeVar(
-                                        Require,
+                                        Atom('require' type=static),
                                     ),
                                     Constant(
                                         Str(
@@ -2516,9 +2508,7 @@
                     },
                     Member {
                         obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
+                            Atom('fs' type=inline),
                         ),
                         prop: Constant(
                             Str(
@@ -2604,9 +2594,7 @@
                     },
                     MemberCall {
                         obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
+                            Atom('fs' type=inline),
                         ),
                         prop: Constant(
                             Str(
@@ -2697,9 +2685,7 @@
                             MemberCall(
                                 4,
                                 FreeVar(
-                                    Other(
-                                        Atom('fs' type=inline),
-                                    ),
+                                    Atom('fs' type=inline),
                                 ),
                                 Constant(
                                     Str(
@@ -2723,9 +2709,7 @@
                                 effects: [
                                     Member {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('fs' type=inline),
-                                            ),
+                                            Atom('fs' type=inline),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -2819,9 +2803,7 @@
                                     },
                                     MemberCall {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('fs' type=inline),
-                                            ),
+                                            Atom('fs' type=inline),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -2924,9 +2906,7 @@
                                     },
                                     Member {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('fs' type=inline),
-                                            ),
+                                            Atom('fs' type=inline),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -3020,9 +3000,7 @@
                                     },
                                     MemberCall {
                                         obj: FreeVar(
-                                            Other(
-                                                Atom('fs' type=inline),
-                                            ),
+                                            Atom('fs' type=inline),
                                         ),
                                         prop: Constant(
                                             Str(
@@ -3431,7 +3409,7 @@
         args: [
             Value(
                 FreeVar(
-                    Filename,
+                    Atom('__filename' type=dynamic),
                 ),
             ),
         ],
@@ -3637,7 +3615,7 @@
         args: [
             Value(
                 FreeVar(
-                    Dirname,
+                    Atom('__dirname' type=dynamic),
                 ),
             ),
         ],
@@ -3862,7 +3840,7 @@
                         args: [
                             Value(
                                 FreeVar(
-                                    Dirname,
+                                    Atom('__dirname' type=dynamic),
                                 ),
                             ),
                             Value(
