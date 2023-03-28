@@ -1,4 +1,45 @@
 [
+    FreeVar {
+        var: FreeVar(
+            Atom('Object' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                11,
+            ),
+            hi: BytePos(
+                17,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: FreeVar(
             Atom('Object' type=static),
@@ -54,6 +95,62 @@
                 41,
             ),
             ctxt: #0,
+        },
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('Object' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                30,
+            ),
+            hi: BytePos(
+                36,
+            ),
+            ctxt: #1,
         },
     },
     MemberCall {
@@ -172,6 +269,58 @@
                 62,
             ),
             ctxt: #0,
+        },
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('Object' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    2,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                63,
+            ),
+            hi: BytePos(
+                69,
+            ),
+            ctxt: #1,
         },
     },
     MemberCall {

@@ -1317,6 +1317,10 @@ impl JsValue {
                         "@grpc/proto-loader",
                         "The Node.js @grpc/proto-loader package: https://github.com/grpc/grpc-node"
                     ),
+                    WellKnownObjectKind::NodeBuffer => (
+                        "Buffer",
+                        "The Node.js Buffer object: https://nodejs.org/api/buffer.html#class-buffer"
+                    ),
                     WellKnownObjectKind::RequireCache => (
                         "require.cache",
                         "The CommonJS require.cache object: https://nodejs.org/api/modules.html#requirecache"
@@ -2826,6 +2830,7 @@ pub enum WellKnownObjectKind {
     NodePreGyp,
     NodeExpressApp,
     NodeProtobufLoader,
+    NodeBuffer,
     RequireCache,
 }
 
@@ -2840,6 +2845,7 @@ impl WellKnownObjectKind {
             Self::OsModule => Some(&["os"]),
             Self::NodeProcess => Some(&["process"]),
             Self::NodeProcessEnv => Some(&["process", "env"]),
+            Self::NodeBuffer => Some(&["Buffer"]),
             Self::RequireCache => Some(&["require", "cache"]),
             _ => None,
         }
@@ -2968,7 +2974,7 @@ mod tests {
     };
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
-        compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
+        compile_time_info::CompileTimeInfo,
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -3176,6 +3182,10 @@ mod tests {
                                     JsValue::call(box func, new_args),
                                 ));
                             }
+                            Effect::Call { var, .. } => {
+                                let var = resolve(&var_graph, var).await;
+                                resolved.push((format!("{parent} -> {i} free var"), var));
+                            }
                             Effect::MemberCall {
                                 obj, prop, args, ..
                             } => {
@@ -3231,25 +3241,22 @@ mod tests {
 
     async fn resolve(var_graph: &VarGraph, val: JsValue) -> JsValue {
         turbo_tasks_testing::VcStorage::with(async {
-            let compile_time_info = CompileTimeInfo {
-                environment: EnvironmentVc::new(
-                    Value::new(ExecutionEnvironment::NodeJsLambda(
-                        NodeJsEnvironment {
-                            compile_target: CompileTarget {
-                                arch: Arch::X64,
-                                platform: Platform::Linux,
-                                endianness: Endianness::Little,
-                                libc: Libc::Glibc,
-                            }
-                            .into(),
-                            ..Default::default()
+            let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
+                Value::new(ExecutionEnvironment::NodeJsLambda(
+                    NodeJsEnvironment {
+                        compile_target: CompileTarget {
+                            arch: Arch::X64,
+                            platform: Platform::Linux,
+                            endianness: Endianness::Little,
+                            libc: Libc::Glibc,
                         }
                         .into(),
-                    )),
-                    Value::new(EnvironmentIntention::ServerRendering),
-                ),
-                defines: CompileTimeDefinesVc::empty(),
-            }
+                        ..Default::default()
+                    }
+                    .into(),
+                )),
+                Value::new(EnvironmentIntention::ServerRendering),
+            ))
             .cell();
             link(
                 var_graph,

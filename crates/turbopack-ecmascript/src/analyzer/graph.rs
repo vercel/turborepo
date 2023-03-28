@@ -145,6 +145,13 @@ pub enum Effect {
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A reference to a free var access.
+    FreeVar {
+        var: JsValue,
+        ast_path: Vec<AstParentKind>,
+        span: Span,
+    },
+    // TODO ImportMeta should be replaced with Member
     /// A reference to `import.meta`.
     ImportMeta {
         ast_path: Vec<AstParentKind>,
@@ -203,6 +210,13 @@ impl Effect {
             } => {
                 obj.normalize();
                 prop.normalize();
+            }
+            Effect::FreeVar {
+                var,
+                ast_path: _,
+                span: _,
+            } => {
+                var.normalize();
             }
             Effect::ImportedBinding {
                 esm_reference_index: _,
@@ -1427,6 +1441,12 @@ impl VisitAstPath for Analyzer<'_> {
             self.add_effect(Effect::ImportedBinding {
                 esm_reference_index,
                 export,
+                ast_path: as_parent_path(ast_path),
+                span: ident.span(),
+            })
+        } else if is_unresolved(ident, self.eval_context.unresolved_mark) {
+            self.add_effect(Effect::FreeVar {
+                var: JsValue::FreeVar(ident.sym.clone()),
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
             })

@@ -130,6 +130,65 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Prop,
+            ),
+            MemberProp(
+                Computed,
+            ),
+            ComputedPropName(
+                Expr,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                50,
+            ),
+            hi: BytePos(
+                56,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: Variable(
             (
@@ -245,6 +304,65 @@
                 115,
             ),
             ctxt: #0,
+        },
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Prop,
+            ),
+            MemberProp(
+                Computed,
+            ),
+            ComputedPropName(
+                Expr,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                103,
+            ),
+            hi: BytePos(
+                109,
+            ),
+            ctxt: #1,
         },
     },
     Member {

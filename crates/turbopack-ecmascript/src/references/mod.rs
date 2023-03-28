@@ -40,12 +40,12 @@ use turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    compile_time_info::CompileTimeInfoVc,
+    compile_time_info::{CompileTimeInfoVc, FreeVarReference},
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
-        origin::{ResolveOrigin, ResolveOriginVc},
+        origin::{PlainResolveOriginVc, ResolveOrigin, ResolveOriginVc},
         package_json,
         parse::RequestVc,
         pattern::Pattern,
@@ -151,7 +151,7 @@ impl AnalyzeEcmascriptModuleResultVc {
 /// A temporary analysis result builder to pass around, to be turned into an
 /// `AnalyzeEcmascriptModuleResultVc` eventually.
 pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
-    references: Vec<AssetReferenceVc>,
+    references: IndexSet<AssetReferenceVc>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
     successful: bool,
@@ -160,7 +160,7 @@ pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
 impl AnalyzeEcmascriptModuleResultBuilder {
     pub fn new() -> Self {
         Self {
-            references: Vec::new(),
+            references: IndexSet::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
             successful: false,
@@ -172,7 +172,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     where
         R: Into<AssetReferenceVc>,
     {
-        self.references.push(reference.into());
+        self.references.insert(reference.into());
     }
 
     /// Adds a codegen to the analysis result.
@@ -207,7 +207,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     /// Builds the final analysis result. Resolves internal Vcs for performance
     /// in using them.
     pub async fn build(mut self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        for r in self.references.iter_mut() {
+        let mut references: Vec<_> = self.references.into_iter().collect();
+        for r in references.iter_mut() {
             *r = r.resolve().await?;
         }
         for c in self.code_gens.iter_mut() {
@@ -222,7 +223,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         }
         Ok(AnalyzeEcmascriptModuleResultVc::cell(
             AnalyzeEcmascriptModuleResult {
-                references: AssetReferencesVc::cell(self.references),
+                references: AssetReferencesVc::cell(references),
                 code_generation: CodeGenerateablesVc::cell(self.code_gens),
                 exports: self.exports.into(),
                 successful: self.successful,
@@ -235,6 +236,21 @@ impl Default for AnalyzeEcmascriptModuleResultBuilder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+struct AnalysisState<'a> {
+    handler: &'a Handler,
+    source: AssetVc,
+    origin: ResolveOriginVc,
+    compile_time_info: CompileTimeInfoVc,
+    var_graph: &'a VarGraph,
+    /// This is the current state of known values of function
+    /// arguments.
+    fun_args_values: Mutex<HashMap<u32, Vec<JsValue>>>,
+    // There can be many references to import.meta, but only the first should hoist
+    // the object allocation.
+    first_import_meta: bool,
+    import_parts: bool,
 }
 
 #[turbo_tasks::function]
@@ -392,8 +408,8 @@ pub(crate) async fn analyze_ecmascript_module(
                 // passing that to other turbo tasks functions later.
                 *r = r.resolve().await?;
             }
-            // Avoid adding duplicate references to the analysis
-            for r in import_references.iter().collect::<IndexSet<_>>() {
+            for r in import_references.iter() {
+                // `add_reference` will avoid adding duplicate references
                 analysis.add_reference(*r);
             }
 
@@ -1162,6 +1178,66 @@ pub(crate) async fn analyze_ecmascript_module(
                 Ok(())
             }
 
+            async fn handle_free_var(
+                ast_path: &[AstParentKind],
+                var: JsValue,
+                state: &AnalysisState<'_>,
+                analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
+            ) -> Result<()> {
+                if let Some(def_name_len) = var.get_defineable_name_len() {
+                    let compile_time_info = state.compile_time_info.await?;
+                    let free_var_references = compile_time_info.free_var_references.await?;
+                    for (name, value) in free_var_references.iter() {
+                        if name.len() != def_name_len {
+                            continue;
+                        }
+                        if var
+                            .iter_defineable_name_rev()
+                            .eq(name.iter().map(Cow::Borrowed).rev())
+                        {
+                            match value {
+                                FreeVarReference::Esm {
+                                    request,
+                                    context,
+                                    export,
+                                } => {
+                                    let esm_reference = EsmAssetReferenceVc::new(
+                                        context.map_or(state.origin, |context| {
+                                            PlainResolveOriginVc::new(
+                                                state.origin.context(),
+                                                context,
+                                            )
+                                            .into()
+                                        }),
+                                        RequestVc::parse(Value::new(request.clone().into())),
+                                        Default::default(),
+                                        state
+                                            .import_parts
+                                            .then(|| {
+                                                export.as_ref().map(|export| {
+                                                    ModulePartVc::export(export.to_string())
+                                                })
+                                            })
+                                            .flatten(),
+                                    )
+                                    .resolve()
+                                    .await?;
+                                    analysis.add_reference(esm_reference);
+                                    analysis.add_code_gen(EsmBindingVc::new(
+                                        esm_reference,
+                                        export.clone(),
+                                        AstPathVc::cell(ast_path.to_vec()),
+                                    ));
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
             let effects = take(&mut var_graph.effects);
 
             enum Action {
@@ -1180,20 +1256,6 @@ pub(crate) async fn analyze_ecmascript_module(
             queue_stack
                 .get_mut()
                 .extend(effects.into_iter().map(Action::Effect).rev());
-
-            struct AnalysisState<'a> {
-                handler: &'a Handler,
-                source: AssetVc,
-                origin: ResolveOriginVc,
-                compile_time_info: CompileTimeInfoVc,
-                var_graph: &'a VarGraph,
-                /// This is the current state of known values of function
-                /// arguments.
-                fun_args_values: Mutex<HashMap<u32, Vec<JsValue>>>,
-                // There can be many references to import.meta, but only the first should hoist
-                // the object allocation.
-                first_import_meta: bool,
-            }
 
             impl<'a> AnalysisState<'a> {
                 async fn link_value(&self, value: JsValue) -> Result<JsValue> {
@@ -1217,6 +1279,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 var_graph: &var_graph,
                 fun_args_values: Mutex::new(HashMap::<u32, Vec<JsValue>>::new()),
                 first_import_meta: true,
+                import_parts: options.import_parts,
             };
 
             while let Some(action) = queue_stack.get_mut().pop() {
@@ -1423,6 +1486,14 @@ pub(crate) async fn analyze_ecmascript_module(
                                     &mut analysis,
                                 )
                                 .await?;
+                            }
+                            Effect::FreeVar {
+                                var,
+                                ast_path,
+                                span: _,
+                            } => {
+                                handle_free_var(&ast_path, var, &analysis_state, &mut analysis)
+                                    .await?;
                             }
                             Effect::Member {
                                 obj,
@@ -1758,6 +1829,7 @@ async fn value_visitor_inner(
             "import" => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
             "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
             "Object" => JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
+            "Buffer" => JsValue::WellKnownObject(WellKnownObjectKind::NodeBuffer),
             _ => return Ok((v, false)),
         },
         JsValue::Module(ModuleValue {

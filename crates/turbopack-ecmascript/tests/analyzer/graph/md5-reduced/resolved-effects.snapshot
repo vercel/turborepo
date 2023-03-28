@@ -185,7 +185,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 36 call = ???*0*(???*1*, ???*2*)
+0 -> 40 call = ???*0*(???*1*, ???*2*)
 - *0* FreeVar(safeAdd)
   ⚠️  unknown global
 - *1* arguments[1]
@@ -193,7 +193,7 @@
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 37 call = ???*0*(???*1*, ???*2*)
+0 -> 42 call = ???*0*(???*1*, ???*2*)
 - *0* FreeVar(safeAdd)
   ⚠️  unknown global
 - *1* arguments[3]
@@ -201,7 +201,7 @@
 - *2* arguments[5]
   ⚠️  function calls are not analysed yet
 
-0 -> 38 call = ???*0*(???*1*, ???*3*)
+0 -> 43 call = ???*0*(???*1*, ???*3*)
 - *0* FreeVar(safeAdd)
   ⚠️  unknown global
 - *1* ???*2*(a, q)
@@ -213,7 +213,7 @@
 - *4* FreeVar(safeAdd)
   ⚠️  unknown global
 
-0 -> 39 call = ???*0*(???*1*, ???*3*)
+0 -> 44 call = ???*0*(???*1*, ???*3*)
 - *0* FreeVar(bitRotateLeft)
   ⚠️  unknown global
 - *1* ???*2*(FreeVar(safeAdd)(a, q), FreeVar(safeAdd)(x, t))
@@ -223,7 +223,7 @@
 - *3* arguments[4]
   ⚠️  function calls are not analysed yet
 
-0 -> 40 call = ???*0*(???*1*, ???*3*)
+0 -> 45 call = ???*0*(???*1*, ???*3*)
 - *0* FreeVar(safeAdd)
   ⚠️  unknown global
 - *1* ???*2*(
@@ -236,7 +236,7 @@
 - *3* arguments[2]
   ⚠️  function calls are not analysed yet
 
-0 -> 41 call = (...) => (
+0 -> 46 call = (...) => (
   | undefined
   | FreeVar(safeAdd)(
         FreeVar(bitRotateLeft)(
