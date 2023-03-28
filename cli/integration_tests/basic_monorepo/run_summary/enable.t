@@ -21,50 +21,50 @@ Setup
 | missing | false   | no       |
 
 
-# env var=true, no flag: yes
+# env var=true, missing flag: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=true: yes
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize=true > /dev/null
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=false: no
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize=false > /dev/null
   $ test -d .turbo/runs
   [1]
 
-# env var=false, no flag, no
+# env var=false, missing flag, no
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build > /dev/null
   $ test -d .turbo/runs
   [1]
 # env var=false, --flag=true: yes
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=false ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize=true > /dev/null
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=false, --flag=false: no
   $ rm -rf .turbo/runs
-  $ TURBO_RUN_SUMMARY=false ${TURBO} run build > /dev/null
+  $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize=false > /dev/null
   $ test -d .turbo/runs
   [1]
 
-# no env var, no flag: no
+# missing env var, missing flag: no
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null
   $ test -d .turbo/runs
   [1]
-# no env var, --flag=true: yes
+# missing env var, --flag=true: yes
   $ rm -rf .turbo/runs
-  $ ${TURBO} run build > /dev/null
+  $ ${TURBO} run build --summarize=true > /dev/null
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
-# no env var, --flag=false: no
+# missing env var, --flag=false: no
   $ rm -rf .turbo/runs
-  $ ${TURBO} run build > /dev/null
+  $ ${TURBO} run build --summarize=false > /dev/null
   $ test -d .turbo/runs
   [1]
