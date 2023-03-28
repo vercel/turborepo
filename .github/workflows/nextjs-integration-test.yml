@@ -45,7 +45,7 @@ jobs:
       RUST_BACKTRACE: 0
       NEXT_TELEMETRY_DISABLED: 1
       # Path to the next-dev binary located in **docker container** image.
-      NEXT_DEV_BIN: /work/packages/next-swc/target/release/next-dev
+      NEXT_DEV_BIN: /work/next-dev
       FAILED_TEST_LIST_PATH: /work/integration-test-data/test-results/main/failed-test-path-list.json
       # Glob pattern to run specific tests with --turbo.
       NEXT_DEV_TEST_GLOB: "*"
