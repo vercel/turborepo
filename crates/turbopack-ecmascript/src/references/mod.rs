@@ -93,7 +93,7 @@ use super::{
 use crate::{
     analyzer::{
         builtin::early_replace_builtin,
-        graph::{ConditionalKind, EffectArg, EvalContext},
+        graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
         ModuleValue,
     },
@@ -508,59 +508,45 @@ pub(crate) async fn analyze_ecmascript_module(
 
             analysis.set_exports(exports);
 
-            fn handle_call_boxed<
-                'a,
-                FF: Future<Output = Result<JsValue>> + Send + 'a,
-                F: Fn(JsValue) -> FF + Sync + 'a,
-                G: Fn(Vec<Effect>) + Send + Sync + 'a,
-            >(
-                handler: &'a Handler,
-                source: AssetVc,
-                origin: ResolveOriginVc,
+            fn handle_call_boxed<'a, G: Fn(Vec<Effect>) + Send + Sync + 'a>(
                 ast_path: &'a [AstParentKind],
                 span: Span,
                 func: JsValue,
                 this: JsValue,
                 args: Vec<EffectArg>,
-                link_value: &'a F,
+                state: &'a AnalysisState<'a>,
                 add_effects: &'a G,
                 analysis: &'a mut AnalyzeEcmascriptModuleResultBuilder,
-                compile_time_info: CompileTimeInfoVc,
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
                 Box::pin(handle_call(
-                    handler,
-                    source,
-                    origin,
                     ast_path,
                     span,
                     func,
                     this,
                     args,
-                    link_value,
+                    state,
                     add_effects,
                     analysis,
-                    compile_time_info,
                 ))
             }
 
-            async fn handle_call<
-                FF: Future<Output = Result<JsValue>> + Send,
-                F: Fn(JsValue) -> FF + Sync,
-                G: Fn(Vec<Effect>) + Send + Sync,
-            >(
-                handler: &Handler,
-                source: AssetVc,
-                origin: ResolveOriginVc,
+            async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 ast_path: &[AstParentKind],
                 span: Span,
                 func: JsValue,
                 this: JsValue,
                 args: Vec<EffectArg>,
-                link_value: &F,
+                state: &AnalysisState<'_>,
                 add_effects: &G,
                 analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
-                compile_time_info: CompileTimeInfoVc,
             ) -> Result<()> {
+                let &AnalysisState {
+                    handler,
+                    origin,
+                    source,
+                    compile_time_info,
+                    ..
+                } = state;
                 fn explain_args(args: &[JsValue]) -> (String, String) {
                     JsValue::explain_args(args, 10, 2)
                 }
@@ -579,7 +565,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                         JsValue::Unknown(None, "spread is not supported yet")
                                     }
                                 };
-                                link_value(value).await
+                                state.link_value(value).await
                             }
                         })
                         .try_join()
@@ -589,18 +575,14 @@ pub(crate) async fn analyze_ecmascript_module(
                     JsValue::Alternatives(_, alts) => {
                         for alt in alts {
                             handle_call_boxed(
-                                handler,
-                                source,
-                                origin,
                                 ast_path,
                                 span,
                                 alt,
                                 this.clone(),
                                 args.clone(),
-                                link_value,
+                                state,
                                 add_effects,
                                 analysis,
-                                compile_time_info,
                             )
                             .await?;
                         }
@@ -743,13 +725,14 @@ pub(crate) async fn analyze_ecmascript_module(
                         let parent_path = origin.origin_path().parent().await?;
                         let args = linked_args(args).await?;
 
-                        let linked_func_call = link_value(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(
-                                box parent_path.path.as_str().into(),
-                            )),
-                            args.clone(),
-                        ))
-                        .await?;
+                        let linked_func_call = state
+                            .link_value(JsValue::call(
+                                box JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(
+                                    box parent_path.path.as_str().into(),
+                                )),
+                                args.clone(),
+                            ))
+                            .await?;
 
                         let pat = js_value_to_pattern(&linked_func_call);
                         if !pat.has_constant_parts() {
@@ -768,11 +751,12 @@ pub(crate) async fn analyze_ecmascript_module(
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) => {
                         let args = linked_args(args).await?;
-                        let linked_func_call = link_value(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
-                            args.clone(),
-                        ))
-                        .await?;
+                        let linked_func_call = state
+                            .link_value(JsValue::call(
+                                box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
+                                args.clone(),
+                            ))
+                            .await?;
                         let pat = js_value_to_pattern(&linked_func_call);
                         if !pat.has_constant_parts() {
                             let (args, hints) = explain_args(&args);
@@ -797,7 +781,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             if pat.is_match("node") && args.len() >= 2 {
                                 let first_arg =
                                     JsValue::member(box args[1].clone(), box 0_f64.into());
-                                let first_arg = link_value(first_arg).await?;
+                                let first_arg = state.link_value(first_arg).await?;
                                 let pat = js_value_to_pattern(&first_arg);
                                 if !pat.has_constant_parts() {
                                     show_dynamic_warning = true;
@@ -912,7 +896,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
                         let args = linked_args(args).await?;
                         if args.len() == 1 {
-                            let first_arg = link_value(args[0].clone()).await?;
+                            let first_arg = state.link_value(args[0].clone()).await?;
                             if let Some(s) = first_arg.as_str() {
                                 // TODO this resolving should happen within NodeGypBuildReferenceVc
                                 let current_context = origin
@@ -943,7 +927,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
                         let args = linked_args(args).await?;
                         if args.len() == 1 {
-                            let first_arg = link_value(args[0].clone()).await?;
+                            let first_arg = state.link_value(args[0].clone()).await?;
                             if let Some(ref s) = first_arg.as_str() {
                                 analysis.add_reference(NodeBindingsReferenceVc::new(
                                     origin.origin_path(),
@@ -990,16 +974,17 @@ pub(crate) async fn analyze_ecmascript_module(
                                             let abs_pattern = if p.starts_with("/ROOT/") {
                                                 pat
                                             } else {
-                                                let linked_func_call = link_value(JsValue::call(
-                                                    box JsValue::WellKnownFunction(
-                                                        WellKnownFunctionKind::PathJoin,
-                                                    ),
-                                                    vec![
-                                                        JsValue::FreeVar("__dirname".into()),
-                                                        pkg_or_dir.clone(),
-                                                    ],
-                                                ))
-                                                .await?;
+                                                let linked_func_call = state
+                                                    .link_value(JsValue::call(
+                                                        box JsValue::WellKnownFunction(
+                                                            WellKnownFunctionKind::PathJoin,
+                                                        ),
+                                                        vec![
+                                                            JsValue::FreeVar("__dirname".into()),
+                                                            pkg_or_dir.clone(),
+                                                        ],
+                                                    ))
+                                                    .await?;
                                                 js_value_to_pattern(&linked_func_call)
                                             };
                                             analysis.add_reference(DirAssetReferenceVc::new(
@@ -1045,15 +1030,18 @@ pub(crate) async fn analyze_ecmascript_module(
                             let abs_pattern = if p.starts_with("/ROOT/") {
                                 Pattern::Constant(format!("{p}/intl"))
                             } else {
-                                let linked_func_call = link_value(JsValue::call(
-                                    box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
-                                    vec![
-                                        JsValue::FreeVar("__dirname".into()),
-                                        p.into(),
-                                        "intl".into(),
-                                    ],
-                                ))
-                                .await?;
+                                let linked_func_call = state
+                                    .link_value(JsValue::call(
+                                        box JsValue::WellKnownFunction(
+                                            WellKnownFunctionKind::PathJoin,
+                                        ),
+                                        vec![
+                                            JsValue::FreeVar("__dirname".into()),
+                                            p.into(),
+                                            "intl".into(),
+                                        ],
+                                    ))
+                                    .await?;
                                 js_value_to_pattern(&linked_func_call)
                             };
                             analysis.add_reference(DirAssetReferenceVc::new(
@@ -1193,10 +1181,43 @@ pub(crate) async fn analyze_ecmascript_module(
                 .get_mut()
                 .extend(effects.into_iter().map(Action::Effect).rev());
 
-            let linker = |value| value_visitor(origin, value, compile_time_info);
-            // There can be many references to import.meta, but only the first should hoist
-            // the object allocation.
-            let mut first_import_meta = true;
+            struct AnalysisState<'a> {
+                handler: &'a Handler,
+                source: AssetVc,
+                origin: ResolveOriginVc,
+                compile_time_info: CompileTimeInfoVc,
+                var_graph: &'a VarGraph,
+                /// This is the current state of known values of function
+                /// arguments.
+                fun_args_values: Mutex<HashMap<u32, Vec<JsValue>>>,
+                // There can be many references to import.meta, but only the first should hoist
+                // the object allocation.
+                first_import_meta: bool,
+            }
+
+            impl<'a> AnalysisState<'a> {
+                async fn link_value(&self, value: JsValue) -> Result<JsValue> {
+                    let fun_args_values = self.fun_args_values.lock().clone();
+                    link(
+                        self.var_graph,
+                        value,
+                        &early_value_visitor,
+                        &|value| value_visitor(self.origin, value, self.compile_time_info),
+                        fun_args_values,
+                    )
+                    .await
+                }
+            }
+
+            let mut analysis_state = AnalysisState {
+                handler: &handler,
+                source,
+                origin,
+                compile_time_info,
+                var_graph: &var_graph,
+                fun_args_values: Mutex::new(HashMap::<u32, Vec<JsValue>>::new()),
+                first_import_meta: true,
+            };
 
             while let Some(action) = queue_stack.get_mut().pop() {
                 match action {
@@ -1209,15 +1230,6 @@ pub(crate) async fn analyze_ecmascript_module(
                                 .lock()
                                 .extend(effects.into_iter().map(Action::Effect).rev())
                         };
-                        let link_value = |value| {
-                            link(
-                                &var_graph,
-                                value,
-                                &early_value_visitor,
-                                &linker,
-                                fun_args_values.lock().clone(),
-                            )
-                        };
                         match effect {
                             Effect::Conditional {
                                 condition,
@@ -1225,7 +1237,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 ast_path: condition_ast_path,
                                 span: _,
                             } => {
-                                let condition = link_value(condition).await?;
+                                let condition = analysis_state.link_value(condition).await?;
                                 macro_rules! inactive {
                                     ($block:ident) => {
                                         analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
@@ -1334,21 +1346,17 @@ pub(crate) async fn analyze_ecmascript_module(
                                         continue;
                                     }
                                 }
-                                let func = link_value(func).await?;
+                                let func = analysis_state.link_value(func).await?;
 
                                 handle_call(
-                                    &handler,
-                                    source,
-                                    origin,
                                     &ast_path,
                                     span,
                                     func,
                                     JsValue::Unknown(None, "no this provided"),
                                     args,
-                                    &link_value,
+                                    &analysis_state,
                                     &add_effects,
                                     &mut analysis,
-                                    compile_time_info,
                                 )
                                 .await?;
                             }
@@ -1364,8 +1372,8 @@ pub(crate) async fn analyze_ecmascript_module(
                                         continue;
                                     }
                                 }
-                                let mut obj = link_value(obj).await?;
-                                let prop = link_value(prop).await?;
+                                let mut obj = analysis_state.link_value(obj).await?;
+                                let prop = analysis_state.link_value(prop).await?;
 
                                 if let JsValue::Array {
                                     items: ref mut values,
@@ -1375,7 +1383,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 {
                                     if matches!(prop.as_str(), Some("map" | "forEach" | "filter")) {
                                         if let [EffectArg::Closure(value, block)] = &mut args[..] {
-                                            *value = link_value(take(value)).await?;
+                                            *value = analysis_state.link_value(take(value)).await?;
                                             if let JsValue::Function(_, func_ident, _) = value {
                                                 let mut closure_arg =
                                                     JsValue::alternatives(take(values));
@@ -1400,22 +1408,19 @@ pub(crate) async fn analyze_ecmascript_module(
                                     }
                                 }
 
-                                let func =
-                                    link_value(JsValue::member(box obj.clone(), box prop)).await?;
+                                let func = analysis_state
+                                    .link_value(JsValue::member(box obj.clone(), box prop))
+                                    .await?;
 
                                 handle_call(
-                                    &handler,
-                                    source,
-                                    origin,
                                     &ast_path,
                                     span,
                                     func,
                                     obj,
                                     args,
-                                    &link_value,
+                                    &analysis_state,
                                     &add_effects,
                                     &mut analysis,
-                                    compile_time_info,
                                 )
                                 .await?;
                             }
@@ -1425,8 +1430,8 @@ pub(crate) async fn analyze_ecmascript_module(
                                 ast_path,
                                 span: _,
                             } => {
-                                let obj = link_value(obj).await?;
-                                let prop = link_value(prop).await?;
+                                let obj = analysis_state.link_value(obj).await?;
+                                let prop = analysis_state.link_value(prop).await?;
 
                                 handle_member(&ast_path, obj, prop, &mut analysis).await?;
                             }
@@ -1452,8 +1457,8 @@ pub(crate) async fn analyze_ecmascript_module(
                                 }
                             }
                             Effect::ImportMeta { ast_path, span: _ } => {
-                                if first_import_meta {
-                                    first_import_meta = false;
+                                if analysis_state.first_import_meta {
+                                    analysis_state.first_import_meta = false;
                                     analysis.add_code_gen(ImportMetaBindingVc::new(
                                         source.ident().path(),
                                     ));
