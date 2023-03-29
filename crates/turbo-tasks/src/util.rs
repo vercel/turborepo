@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub use super::{id_factory::IdFactory, no_move_vec::NoMoveVec, once_map::*};
@@ -27,7 +27,7 @@ impl SharedError {
     }
 }
 
-impl std::error::Error for SharedError {
+impl StdError for SharedError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.inner.source()
     }
@@ -59,38 +59,28 @@ impl Eq for SharedError {}
 
 impl Serialize for SharedError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // Why doesn't anyhow::Error implement std::error::Error!?
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("SerdeError", 2)?;
-        state.serialize_field("description", &self.inner.to_string())?;
-        state.serialize_field(
-            "source",
-            &self.inner.source().map(|inner| SerdeError { inner }),
-        )?;
-        state.end()
+        let mut v = vec![self.to_string()];
+        let mut source = self.source();
+        while let Some(s) = source {
+            v.push(s.to_string());
+            source = s.source();
+        }
+        Serialize::serialize(&v, serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for SharedError {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        todo!();
-    }
-}
-
-struct SerdeError<'a> {
-    inner: &'a dyn StdError,
-}
-
-impl<'a> Serialize for SerdeError<'a> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("SerdeError", 3)?;
-        state.serialize_field("description", &self.inner.to_string())?;
-        state.serialize_field(
-            "source",
-            &self.inner.source().map(|inner| SerdeError { inner }),
-        )?;
-        state.end()
+        use serde::de::Error;
+        let mut messages = <Vec<String>>::deserialize(deserializer)?;
+        let mut e = match messages.pop() {
+            Some(e) => anyhow!(e),
+            None => return Err(Error::custom("expected at least 1 error message")),
+        };
+        while let Some(message) = messages.pop() {
+            e = e.context(message);
+        }
+        Ok(SharedError::new(e))
     }
 }
 

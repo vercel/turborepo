@@ -236,7 +236,7 @@ pub struct ContentSourceData {
 pub type BodyChunk = Result<Bytes, SharedError>;
 
 /// A request body.
-#[turbo_tasks::value(shared, serialization = "none")]
+#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 pub struct Body {
     #[turbo_tasks(trace_ignore)]
