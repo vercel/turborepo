@@ -35,7 +35,8 @@ type executionEventName int
 
 // The collection of expected build result statuses.
 const (
-	targetBuilding executionEventName = iota
+	targetInitialized executionEventName = iota
+	TargetBuilding
 	TargetBuildStopped
 	TargetBuilt
 	TargetCached
@@ -44,7 +45,9 @@ const (
 
 func (en executionEventName) toString() string {
 	switch en {
-	case targetBuilding:
+	case targetInitialized:
+		return "initialized"
+	case TargetBuilding:
 		return "building"
 	case TargetBuildStopped:
 		return "buildStopped"
@@ -164,7 +167,7 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 	taskExecutionSummary := es.add(&executionEvent{
 		Time:   start,
 		Label:  taskID,
-		Status: targetBuilding,
+		Status: targetInitialized,
 	})
 
 	tracer := chrometracing.Event(taskID)
@@ -219,7 +222,7 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	}
 
 	switch {
-	case event.Status == targetBuilding:
+	case event.Status == TargetBuilding:
 		es.attempted++
 	case event.Status == TargetBuildFailed:
 		es.failure++
