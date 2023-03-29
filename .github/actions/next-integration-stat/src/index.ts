@@ -65,6 +65,7 @@ interface TestResultManifest {
   nextjsVersion: string;
   ref: string;
   result: Array<FailedJobResult>;
+  flakyMonitorJobResults: Array<FailedJobResult>;
 }
 
 // A comment marker to identify the comment created by this action.
@@ -470,21 +471,63 @@ async function getFailedJobResults(
     ref: sha,
   } as any;
 
-  const failedJobResults = fullJobLogsFromWorkflow.reduce(
-    (acc, { logs, job }) => {
-      // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
-      const splittedLogs = logs
-        .split("NEXT_INTEGRATION_TEST: true")
-        .filter((log) => log.includes("--test output start--"));
+  const [failedJobResults, flakyMonitorJobResults] =
+    fullJobLogsFromWorkflow.reduce(
+      (acc, { logs, job }) => {
+        // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
+        const splittedLogs = logs
+          .split("NEXT_INTEGRATION_TEST: true")
+          .filter((log) => log.includes("--test output start--"));
 
-      // Iterate each chunk of logs, find out test name and corresponding test data
-      const failedTestResultsData = collectFailedTestResults(splittedLogs, job);
+        // There is a job named `Next.js integration test (FLAKY_SUBSET)`, which we runs known subset of the tests
+        // that are flaky. If given job is flaky subset monitoring, we are interested in to grab test results only.
+        // [NOTE]: this is similar to `collectFailedTestResults`, but not identical: collectFailedTestResults intentionally
+        // skips if test success, while in here we want to collect all the test results.
+        if (job.name.includes("FLAKY_SUBSET")) {
+          const splittedLogs = logs.split("--test output start--");
+          const ret = [];
+          let logLine = splittedLogs.shift();
+          while (logLine) {
+            try {
+              const testData = logLine
+                ?.split("--test output start--")
+                .pop()
+                ?.split("--test output end--")
+                ?.shift()
+                ?.trim()!;
 
-      return acc.concat(failedTestResultsData);
-    },
-    [] as Array<FailedJobResult>
-  );
+              ret.push({
+                job: job.name,
+                // We may able to parse test suite name, but skipping for now
+                name: "empty",
+                data: JSON.parse(testData),
+              });
+            } catch (_) {
+              console.log("Failed to parse flaky subset test results", {
+                logs,
+              });
+            } finally {
+              logLine = splittedLogs.shift();
+            }
+          }
+          acc[1] = acc[1].concat(ret);
+        } else {
+          // Iterate each chunk of logs, find out test name and corresponding test data
+          const failedTestResultsData = collectFailedTestResults(
+            splittedLogs,
+            job
+          );
+          acc[0] = acc[0].concat(failedTestResultsData);
+        }
 
+        return acc;
+      },
+      [[], []] as [Array<FailedJobResult>, Array<FailedJobResult>]
+    );
+
+  console.log(`Flakyness test subset results`, { flakyMonitorJobResults });
+
+  testResultManifest.flakyMonitorJobResults = flakyMonitorJobResults;
   testResultManifest.result = failedJobResults;
 
   // Collect all test results into single manifest to store into file. This'll allow to upload / compare test results
