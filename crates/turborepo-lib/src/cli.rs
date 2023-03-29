@@ -520,7 +520,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             ..
         } => {
             let command = *command;
-            let base = CommandBase::new(clap_args, repo_root)?;
+            let base = CommandBase::new(clap_args, repo_root, version)?;
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },

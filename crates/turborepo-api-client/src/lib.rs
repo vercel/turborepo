@@ -1,7 +1,6 @@
 use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
-use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
