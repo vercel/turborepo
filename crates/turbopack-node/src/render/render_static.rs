@@ -180,7 +180,7 @@ enum RenderItem {
 type RenderItemResult = Result<RenderItem, SharedError>;
 
 #[turbo_tasks::value(eq = "manual", cell = "new", serialization = "none")]
-pub struct RenderStreamSender {
+struct RenderStreamSender {
     #[turbo_tasks(trace_ignore, debug_ignore)]
     get: Box<dyn Fn() -> UnboundedSender<RenderItemResult> + Send + Sync>,
 }
