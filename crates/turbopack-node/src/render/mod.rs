@@ -1,15 +1,7 @@
-use async_stream::stream as generator;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks_bytes::Stream;
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::asset::AssetVc;
-use turbopack_dev_server::source::Body;
 
-use crate::{
-    pool::NodeJsOperation, route_matcher::Param, source_map::trace_stack, ResponseHeaders,
-    StructuredError,
-};
+use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
 
 pub(crate) mod error_page;
 pub mod issue;
@@ -52,7 +44,7 @@ enum RenderProxyIncomingMessage {
     Error(StructuredError),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RenderStaticIncomingMessage {
     #[serde(rename_all = "camelCase")]
@@ -64,58 +56,12 @@ enum RenderStaticIncomingMessage {
     Headers {
         data: ResponseHeaders,
     },
+    BodyChunk {
+        data: Vec<u8>,
+    },
+    BodyEnd,
     Rewrite {
         path: String,
     },
     Error(StructuredError),
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum RenderBodyChunks {
-    BodyChunk { data: Vec<u8> },
-    BodyEnd,
-    Error(StructuredError),
-}
-
-pub(crate) fn stream_body_chunks(
-    mut operation: NodeJsOperation,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-) -> Body {
-    let chunks = Stream::new_open(
-        vec![],
-        Box::pin(generator! {
-            macro_rules! tri {
-                ($exp:expr) => {
-                    match $exp {
-                        Ok(v) => v,
-                        Err(e) => {
-                            operation.disallow_reuse();
-                            yield Err(e.into());
-                            return;
-                        }
-                    }
-                }
-            }
-
-            loop {
-                match tri!(operation.recv().await) {
-                    RenderBodyChunks::BodyChunk { data } => {
-                        yield Ok(data.into());
-                    }
-                    RenderBodyChunks::BodyEnd => break,
-                    RenderBodyChunks::Error(error) => {
-                        let trace =
-                            trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).await;
-                        let e = trace.map_or_else(Into::into, Into::into);
-                        yield Err(e);
-                        break;
-                    }
-                }
-            }
-        }),
-    );
-    Body::from_stream(chunks.read())
 }
