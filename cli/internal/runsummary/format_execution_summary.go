@@ -42,20 +42,19 @@ func (rsm *Meta) printExecutionSummary() {
 
 	// We'll start with some default lines
 	lines := []string{
-		util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, success, attempted),
+		util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
 		util.Sprintf("${BOLD}Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
 		util.Sprintf("${BOLD}  Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
 	}
 
-	// If we have a run summary file and we can get  a
+	// If we have a run summary file, add that in. We have to do some whitespace adjusting, so just
+	// duplicate the lines above instead of using some fancy tabbibg/spacing mechanism.
 	if rsm.getPath().FileExists() {
-		if relativePath, err := rsm.repoRoot.PathTo(rsm.getPath()); err == nil {
-			lines = []string{
-				util.Sprintf("${BOLD}  Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
-				util.Sprintf("${BOLD} Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
-				util.Sprintf("${BOLD}   Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
-				util.Sprintf("${BOLD}Summary:%s%s${RESET}", spacer, relativePath),
-			}
+		lines = []string{
+			util.Sprintf("${BOLD}  Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
+			util.Sprintf("${BOLD} Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
+			util.Sprintf("${BOLD}   Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
+			util.Sprintf("${BOLD}Summary:%s%s${RESET}", spacer, rsm.getPath()),
 		}
 	}
 
