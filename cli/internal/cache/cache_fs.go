@@ -33,7 +33,7 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
-func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
+func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
@@ -45,33 +45,33 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []st
 	} else {
 		// It's not in the cache, bail now
 		f.logFetch(false, hash, 0)
-		return ItemStatus{Local: false}, nil, 0, nil
+		return false, nil, 0, nil
 	}
 
 	cacheItem, openErr := cacheitem.Open(actualCachePath)
 	if openErr != nil {
-		return ItemStatus{Local: false}, nil, 0, openErr
+		return false, nil, 0, openErr
 	}
 
 	restoredFiles, restoreErr := cacheItem.Restore(anchor)
 	if restoreErr != nil {
 		_ = cacheItem.Close()
-		return ItemStatus{Local: false}, nil, 0, restoreErr
+		return false, nil, 0, restoreErr
 	}
 
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
 	if err != nil {
 		_ = cacheItem.Close()
-		return ItemStatus{Local: false}, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
+		return false, nil, 0, fmt.Errorf("error reading cache metadata: %w", err)
 	}
 	f.logFetch(true, hash, meta.Duration)
 
 	// Wait to see what happens with close.
 	closeErr := cacheItem.Close()
 	if closeErr != nil {
-		return ItemStatus{Local: false}, restoredFiles, 0, closeErr
+		return false, restoredFiles, 0, closeErr
 	}
-	return ItemStatus{Local: true}, restoredFiles, meta.Duration, nil
+	return true, restoredFiles, meta.Duration, nil
 }
 
 func (f *fsCache) Exists(hash string) ItemStatus {
@@ -129,7 +129,7 @@ func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration
 	return cacheItem.Close()
 }
 
-func (f *fsCache) Clean(_ turbopath.AbsoluteSystemPath) {
+func (f *fsCache) Clean(anchor turbopath.AbsoluteSystemPath) {
 	fmt.Println("Not implemented yet")
 }
 
