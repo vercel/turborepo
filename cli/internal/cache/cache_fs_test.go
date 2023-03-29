@@ -216,9 +216,8 @@ func TestFetch(t *testing.T) {
 
 	outputDir := turbopath.AbsoluteSystemPath(t.TempDir())
 	dstOutputPath := "some-package"
-	cacheStatus, files, _, err := cache.Fetch(outputDir, "the-hash", []string{})
+	hit, files, _, err := cache.Fetch(outputDir, "the-hash", []string{})
 	assert.NilError(t, err, "Fetch")
-	hit := cacheStatus.Local || cacheStatus.Remote
 	if !hit {
 		t.Error("Fetch got false, want true")
 	}

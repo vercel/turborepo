@@ -109,14 +109,13 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns true if successful.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return cache.ItemStatus{Local: false, Remote: false}, nil
+		return false, nil
 	}
-
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
@@ -125,26 +124,19 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	}
 
 	hasChangedOutputs := len(changedOutputGlobs) > 0
-	var cacheStatus cache.ItemStatus
-
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		itemStatus, restoredFiles, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
-		hit := itemStatus.Local || itemStatus.Remote
+		hit, restoredFiles, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		tc.ExpandedOutputs = restoredFiles
-		// Assign to this variable outside this closure so we can return at the end of the function
-		cacheStatus = itemStatus
 		if err != nil {
-			// If there was an error fetching from cache, we'll say there was no cache hit
-			return cache.ItemStatus{Local: false, Remote: false}, err
+			return false, err
 		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
-			// If there was no hit, we can also say there was no hit
-			return cache.ItemStatus{Local: false, Remote: false}, nil
+			return false, nil
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
@@ -170,7 +162,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	default:
 		// NoLogs, do not output anything
 	}
-	return cacheStatus, nil
+
+	return true, nil
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal

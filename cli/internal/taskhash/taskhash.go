@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -42,25 +41,23 @@ type Tracker struct {
 
 	// mu is a mutex that we can lock/unlock to read/write from maps
 	// the fields below should be protected by the mutex.
-	mu                     sync.RWMutex
-	packageTaskEnvVars     map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
-	packageTaskHashes      map[string]string          // taskID -> hash
-	packageTaskFramework   map[string]string          // taskID -> inferred framework for package
-	packageTaskOutputs     map[string][]turbopath.AnchoredSystemPath
-	packageTaskCacheStatus map[string]cache.ItemStatus
+	mu                   sync.RWMutex
+	packageTaskEnvVars   map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
+	packageTaskHashes    map[string]string          // taskID -> hash
+	packageTaskFramework map[string]string          // taskID -> inferred framework for package
+	packageTaskOutputs   map[string][]turbopath.AnchoredSystemPath
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Tracker {
 	return &Tracker{
-		rootNode:               rootNode,
-		globalHash:             globalHash,
-		pipeline:               pipeline,
-		packageTaskHashes:      make(map[string]string),
-		packageTaskFramework:   make(map[string]string),
-		packageTaskEnvVars:     make(map[string]env.DetailedMap),
-		packageTaskOutputs:     make(map[string][]turbopath.AnchoredSystemPath),
-		packageTaskCacheStatus: make(map[string]cache.ItemStatus),
+		rootNode:             rootNode,
+		globalHash:           globalHash,
+		pipeline:             pipeline,
+		packageTaskHashes:    make(map[string]string),
+		packageTaskFramework: make(map[string]string),
+		packageTaskEnvVars:   make(map[string]env.DetailedMap),
+		packageTaskOutputs:   make(map[string][]turbopath.AnchoredSystemPath),
 	}
 }
 
@@ -423,22 +420,4 @@ func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.Anchore
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.packageTaskOutputs[taskID] = outputs
-}
-
-// SetCacheStatus records the task status for the given taskID
-func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus) {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	th.packageTaskCacheStatus[taskID] = cacheStatus
-}
-
-// GetCacheStatus records the task status for the given taskID
-func (th *Tracker) GetCacheStatus(taskID string) cache.ItemStatus {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	status, ok := th.packageTaskCacheStatus[taskID]
-	if !ok {
-		return cache.ItemStatus{Local: false, Remote: false}
-	}
-	return status
 }
