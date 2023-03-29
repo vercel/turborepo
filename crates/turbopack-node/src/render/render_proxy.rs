@@ -136,7 +136,7 @@ struct RenderStreamSender {
     get: Box<dyn Fn() -> UnboundedSender<RenderItemResult> + Send + Sync>,
 }
 
-#[turbo_tasks::value(transparent, eq = "manual", cell = "new", serialization = "none")]
+#[turbo_tasks::value(transparent)]
 struct RenderStream(#[turbo_tasks(trace_ignore)] Stream<RenderItemResult>);
 
 #[turbo_tasks::function]
