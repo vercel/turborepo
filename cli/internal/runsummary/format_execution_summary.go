@@ -40,21 +40,24 @@ func (rsm *Meta) printExecutionSummary() {
 	ui.Output("")    // Clear the line
 	spacer := "    " // 4 chars
 
-	// We'll start with some default lines
-	lines := []string{
-		util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
-		util.Sprintf("${BOLD}Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
-		util.Sprintf("${BOLD}  Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
-	}
+	var lines []string
 
-	// If we have a run summary file, add that in. We have to do some whitespace adjusting, so just
-	// duplicate the lines above instead of using some fancy tabbibg/spacing mechanism.
+	// The only difference between these two branches is that when there is a run summary
+	// we print the path to that file and we adjust the whitespace in the printed text so it aligns.
+	// We could just always align to account for the summary line, but that would require a whole
+	// bunch of test output assertions to change.
 	if rsm.getPath().FileExists() {
 		lines = []string{
 			util.Sprintf("${BOLD}  Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
 			util.Sprintf("${BOLD} Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
 			util.Sprintf("${BOLD}   Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
 			util.Sprintf("${BOLD}Summary:%s%s${RESET}", spacer, rsm.getPath()),
+		}
+	} else {
+		lines = []string{
+			util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
+			util.Sprintf("${BOLD}Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
+			util.Sprintf("${BOLD}  Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
 		}
 	}
 
