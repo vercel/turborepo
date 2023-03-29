@@ -59,6 +59,7 @@ type RunPayload struct {
 	Scope               []string `json:"scope"`
 	Since               string   `json:"since"`
 	SinglePackage       bool     `json:"single_package"`
+	Summarize           bool     `json:"summarize"`
 	Tasks               []string `json:"tasks"`
 	PkgInferenceRoot    string   `json:"pkg_inference_root"`
 	LogPrefix           string   `json:"log_prefix"`

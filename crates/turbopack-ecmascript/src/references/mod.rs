@@ -20,6 +20,7 @@ use std::{
 
 use anyhow::Result;
 use constant_condition::{ConstantConditionValue, ConstantConditionVc};
+use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -35,7 +36,7 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{TryJoinIterExt, Value};
+use turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -48,7 +49,7 @@ use turbopack_core::{
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePartVc, PrimaryResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -93,11 +94,13 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext},
-        imports::Reexport,
+        imports::{ImportedSymbol, Reexport},
         ModuleValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
-    code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
+    code_gen::{
+        CodeGen, CodeGenerateableVc, CodeGenerateableWithAvailabilityInfoVc, CodeGenerateablesVc,
+    },
     magic_identifier,
     references::{
         cjs::{
@@ -105,8 +108,9 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    tree_shake::{part_of_module, split},
     typescript::resolve::tsconfig,
-    EcmascriptInputTransformsVc,
+    EcmascriptInputTransformsVc, EcmascriptOptions,
 };
 
 #[turbo_tasks::value(shared)]
@@ -118,11 +122,37 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub successful: bool,
 }
 
+#[turbo_tasks::value_impl]
+impl AnalyzeEcmascriptModuleResultVc {
+    #[turbo_tasks::function]
+    pub async fn needs_availability_info(self) -> Result<BoolVc> {
+        let AnalyzeEcmascriptModuleResult {
+            references,
+            code_generation,
+            ..
+        } = &*self.await?;
+        for c in code_generation.await?.iter() {
+            if matches!(c, CodeGen::CodeGenerateableWithAvailabilityInfo(..)) {
+                return Ok(BoolVc::cell(true));
+            }
+        }
+        for r in references.await?.iter() {
+            if CodeGenerateableWithAvailabilityInfoVc::resolve_from(r)
+                .await?
+                .is_some()
+            {
+                return Ok(BoolVc::cell(true));
+            }
+        }
+        return Ok(BoolVc::cell(false));
+    }
+}
+
 /// A temporary analysis result builder to pass around, to be turned into an
 /// `AnalyzeEcmascriptModuleResultVc` eventually.
 pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: Vec<AssetReferenceVc>,
-    code_gens: Vec<CodeGenerateableVc>,
+    code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
     successful: bool,
 }
@@ -150,9 +180,20 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     where
         C: Into<CodeGenerateableVc>,
     {
-        self.code_gens.push(code_gen.into());
+        self.code_gens
+            .push(CodeGen::CodeGenerateable(code_gen.into()));
     }
 
+    /// Adds a codegen to the analysis result.
+    pub fn add_code_gen_with_availability_info<C>(&mut self, code_gen: C)
+    where
+        C: Into<CodeGenerateableWithAvailabilityInfoVc>,
+    {
+        self.code_gens
+            .push(CodeGen::CodeGenerateableWithAvailabilityInfo(
+                code_gen.into(),
+            ));
+    }
     /// Sets the analysis result ES export.
     pub fn set_exports(&mut self, exports: EcmascriptExports) {
         self.exports = exports;
@@ -170,7 +211,14 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             *r = r.resolve().await?;
         }
         for c in self.code_gens.iter_mut() {
-            *c = c.resolve().await?;
+            match c {
+                CodeGen::CodeGenerateable(c) => {
+                    *c = c.resolve().await?;
+                }
+                CodeGen::CodeGenerateableWithAvailabilityInfo(c) => {
+                    *c = c.resolve().await?;
+                }
+            }
         }
         Ok(AnalyzeEcmascriptModuleResultVc::cell(
             AnalyzeEcmascriptModuleResult {
@@ -195,7 +243,9 @@ pub(crate) async fn analyze_ecmascript_module(
     origin: ResolveOriginVc,
     ty: Value<EcmascriptModuleAssetType>,
     transforms: EcmascriptInputTransformsVc,
+    options: Value<EcmascriptOptions>,
     compile_time_info: CompileTimeInfoVc,
+    part: Option<ModulePartVc>,
 ) -> Result<AnalyzeEcmascriptModuleResultVc> {
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = origin.origin_path();
@@ -207,7 +257,13 @@ pub(crate) async fn analyze_ecmascript_module(
         EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };
 
-    let parsed = parse(source, ty, transforms);
+    let parsed = if let Some(part) = part {
+        let parsed = parse(source, ty, transforms);
+        let split_data = split(path, parsed);
+        part_of_module(split_data, part)
+    } else {
+        parse(source, ty, transforms)
+    };
 
     match &*find_context_file(path.parent(), package_json()).await? {
         FindContextFileResult::Found(package_json, _) => {
@@ -228,6 +284,7 @@ pub(crate) async fn analyze_ecmascript_module(
     special_cases(&path.await?.path, &mut analysis);
 
     let parsed = parsed.await?;
+
     match &*parsed {
         ParseResult::Ok {
             program,
@@ -308,18 +365,35 @@ pub(crate) async fn analyze_ecmascript_module(
                 GLOBALS.set(globals, || create_graph(program, eval_context))
             });
 
-            for (src, annotations) in eval_context.imports.references() {
+            for r in eval_context.imports.references() {
                 let r = EsmAssetReferenceVc::new(
                     origin,
-                    RequestVc::parse(Value::new(src.to_string().into())),
-                    Value::new(annotations.clone()),
+                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
+                    Value::new(r.annotations.clone()),
+                    if options.import_parts {
+                        match &r.imported_symbol {
+                            ImportedSymbol::ModuleEvaluation => {
+                                Some(ModulePartVc::module_evaluation())
+                            }
+                            ImportedSymbol::Symbol(name) => {
+                                Some(ModulePartVc::export(name.to_string()))
+                            }
+                            ImportedSymbol::Namespace => None,
+                        }
+                    } else {
+                        None
+                    },
                 );
                 import_references.push(r);
             }
+
             for r in import_references.iter_mut() {
                 // Resolving these references here avoids many resolve wrapper tasks when
                 // passing that to other turbo tasks functions later.
                 *r = r.resolve().await?;
+            }
+            // Avoid adding duplicate references to the analysis
+            for r in import_references.iter().collect::<IndexSet<_>>() {
                 analysis.add_reference(*r);
             }
 

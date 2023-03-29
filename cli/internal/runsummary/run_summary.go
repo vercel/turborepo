@@ -89,7 +89,8 @@ func NewRunSummary(
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
+func (rsm *Meta) Close(exitCode int, dir turbopath.AbsoluteSystemPath) {
+	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
 	summary := rsm.RunSummary
@@ -117,7 +118,7 @@ func (rsm *Meta) Close(dir turbopath.AbsoluteSystemPath) {
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
-func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error), *TaskExecutionSummary) {
+func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error, exitCode *int), *TaskExecutionSummary) {
 	return summary.ExecutionSummary.run(taskID)
 }
 
@@ -169,7 +170,7 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		if donePayload, err := json.Marshal(newVercelDonePayload()); err == nil {
+		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
 			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
 				errs = append(errs, err)
 			}
