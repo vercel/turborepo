@@ -269,7 +269,7 @@ jobs:
     name: Go E2E Tests
     needs: determine_jobs
     if: needs.determine_jobs.outputs.go_e2e == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
