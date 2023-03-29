@@ -3270,49 +3270,6 @@
 <a href="#3270" id="3270">3270</a>
 <a href="#3271" id="3271">3271</a>
 <a href="#3272" id="3272">3272</a>
-<a href="#3273" id="3273">3273</a>
-<a href="#3274" id="3274">3274</a>
-<a href="#3275" id="3275">3275</a>
-<a href="#3276" id="3276">3276</a>
-<a href="#3277" id="3277">3277</a>
-<a href="#3278" id="3278">3278</a>
-<a href="#3279" id="3279">3279</a>
-<a href="#3280" id="3280">3280</a>
-<a href="#3281" id="3281">3281</a>
-<a href="#3282" id="3282">3282</a>
-<a href="#3283" id="3283">3283</a>
-<a href="#3284" id="3284">3284</a>
-<a href="#3285" id="3285">3285</a>
-<a href="#3286" id="3286">3286</a>
-<a href="#3287" id="3287">3287</a>
-<a href="#3288" id="3288">3288</a>
-<a href="#3289" id="3289">3289</a>
-<a href="#3290" id="3290">3290</a>
-<a href="#3291" id="3291">3291</a>
-<a href="#3292" id="3292">3292</a>
-<a href="#3293" id="3293">3293</a>
-<a href="#3294" id="3294">3294</a>
-<a href="#3295" id="3295">3295</a>
-<a href="#3296" id="3296">3296</a>
-<a href="#3297" id="3297">3297</a>
-<a href="#3298" id="3298">3298</a>
-<a href="#3299" id="3299">3299</a>
-<a href="#3300" id="3300">3300</a>
-<a href="#3301" id="3301">3301</a>
-<a href="#3302" id="3302">3302</a>
-<a href="#3303" id="3303">3303</a>
-<a href="#3304" id="3304">3304</a>
-<a href="#3305" id="3305">3305</a>
-<a href="#3306" id="3306">3306</a>
-<a href="#3307" id="3307">3307</a>
-<a href="#3308" id="3308">3308</a>
-<a href="#3309" id="3309">3309</a>
-<a href="#3310" id="3310">3310</a>
-<a href="#3311" id="3311">3311</a>
-<a href="#3312" id="3312">3312</a>
-<a href="#3313" id="3313">3313</a>
-<a href="#3314" id="3314">3314</a>
-<a href="#3315" id="3315">3315</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::Ordering,
@@ -3741,7 +3698,7 @@
     </span>Argument(u32, usize),
     <span class="comment">// TODO no predefined kinds, only JsWord
     </span><span class="doccomment">/// A reference to a free variable.
-    </span>FreeVar(FreeVarKind),
+    </span>FreeVar(JsWord),
     <span class="doccomment">/// This is a reference to a imported module.
     </span>Module(ModuleValue),
 }
@@ -4440,8 +4397,7 @@
                     <span class="string">&quot;| &quot;
                 </span>)
             ),
-            JsValue::FreeVar(FreeVarKind::Other(name)) =&gt; <span class="macro">format!</span>(<span class="string">&quot;FreeVar({})&quot;</span>, name),
-            JsValue::FreeVar(name) =&gt; <span class="macro">format!</span>(<span class="string">&quot;FreeVar({:?})&quot;</span>, name),
+            JsValue::FreeVar(name) =&gt; <span class="macro">format!</span>(<span class="string">&quot;FreeVar({})&quot;</span>, <span class="kw-2">&amp;*</span>name),
             JsValue::Variable(name) =&gt; {
                 <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, name.<span class="number">0</span>)
             }
@@ -4632,6 +4588,10 @@
                     WellKnownObjectKind::NodeProtobufLoader =&gt; (
                         <span class="string">&quot;@grpc/proto-loader&quot;</span>,
                         <span class="string">&quot;The Node.js @grpc/proto-loader package: https://github.com/grpc/grpc-node&quot;
+                    </span>),
+                    WellKnownObjectKind::NodeBuffer =&gt; (
+                        <span class="string">&quot;Buffer&quot;</span>,
+                        <span class="string">&quot;The Node.js Buffer object: https://nodejs.org/api/buffer.html#class-buffer&quot;
                     </span>),
                     WellKnownObjectKind::RequireCache =&gt; (
                         <span class="string">&quot;require.cache&quot;</span>,
@@ -4841,7 +4801,7 @@
     <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
         <span class="kw">let </span>value = <span class="self">self</span>.next.take()<span class="question-mark">?</span>;
         <span class="prelude-val">Some</span>(<span class="kw">match </span>value {
-            JsValue::FreeVar(kind) =&gt; kind.as_str().into(),
+            JsValue::FreeVar(kind) =&gt; (<span class="kw-2">&amp;**</span>kind).into(),
             JsValue::Member(<span class="kw">_</span>, obj, prop) =&gt; {
                 <span class="self">self</span>.next = <span class="prelude-val">Some</span>(obj);
                 prop.as_str()<span class="question-mark">?</span>.into()
@@ -6122,48 +6082,6 @@
     }
 }
 
-<span class="comment">// TODO get rid of that and only use `JsWord` in `FreeVar(...)`
-</span><span class="attr">#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-</span><span class="kw">pub enum </span>FreeVarKind {
-    <span class="comment">// Object
-    </span>Object,
-    <span class="doccomment">/// `__dirname`
-    </span>Dirname,
-
-    <span class="doccomment">/// `__filename`
-    </span>Filename,
-
-    <span class="doccomment">/// A reference to global `require`
-    </span>Require,
-
-    <span class="doccomment">/// A reference to global `define` (AMD)
-    </span>Define,
-
-    <span class="doccomment">/// A reference to `import`
-    </span>Import,
-
-    <span class="doccomment">/// Node.js process
-    </span>NodeProcess,
-
-    <span class="doccomment">/// `abc` `some_global`
-    </span>Other(JsWord),
-}
-
-<span class="kw">impl </span>FreeVarKind {
-    <span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw">match </span><span class="self">self </span>{
-            FreeVarKind::Object =&gt; <span class="string">&quot;Object&quot;</span>,
-            FreeVarKind::Dirname =&gt; <span class="string">&quot;__dirname&quot;</span>,
-            FreeVarKind::Filename =&gt; <span class="string">&quot;__filename&quot;</span>,
-            FreeVarKind::Require =&gt; <span class="string">&quot;require&quot;</span>,
-            FreeVarKind::Define =&gt; <span class="string">&quot;define&quot;</span>,
-            FreeVarKind::Import =&gt; <span class="string">&quot;import&quot;</span>,
-            FreeVarKind::NodeProcess =&gt; <span class="string">&quot;process&quot;</span>,
-            FreeVarKind::Other(v) =&gt; v.as_ref(),
-        }
-    }
-}
-
 <span class="doccomment">/// A list of well-known objects that have special meaning in the analysis.
 </span><span class="attr">#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>WellKnownObjectKind {
@@ -6184,6 +6102,7 @@
     NodePreGyp,
     NodeExpressApp,
     NodeProtobufLoader,
+    NodeBuffer,
     RequireCache,
 }
 
@@ -6198,6 +6117,7 @@
             <span class="self">Self</span>::OsModule =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;os&quot;</span>]),
             <span class="self">Self</span>::NodeProcess =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;process&quot;</span>]),
             <span class="self">Self</span>::NodeProcessEnv =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;process&quot;</span>, <span class="string">&quot;env&quot;</span>]),
+            <span class="self">Self</span>::NodeBuffer =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;Buffer&quot;</span>]),
             <span class="self">Self</span>::RequireCache =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;require&quot;</span>, <span class="string">&quot;cache&quot;</span>]),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         }
@@ -6259,8 +6179,8 @@
     <span class="kw">use </span>turbopack_core::compile_time_info::CompileTimeInfoVc;
 
     <span class="kw">use super</span>::{
-        builtin::early_replace_builtin, well_known::replace_well_known, FreeVarKind, JsValue,
-        ModuleValue, WellKnownFunctionKind, WellKnownObjectKind,
+        builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
+        WellKnownFunctionKind, WellKnownObjectKind,
     };
     <span class="kw">use </span><span class="kw">crate</span>::analyzer::builtin::replace_builtin;
 
@@ -6282,20 +6202,14 @@
                 JsValue::Constant(v) =&gt; (v.to_string() + <span class="string">&quot;/resolved/lib/index.js&quot;</span>).into(),
                 <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(v)), <span class="string">&quot;resolve.resolve non constant&quot;</span>),
             },
-            JsValue::FreeVar(FreeVarKind::Require) =&gt; {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Require)
-            }
-            JsValue::FreeVar(FreeVarKind::Define) =&gt; {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Define)
-            }
-            JsValue::FreeVar(FreeVarKind::Dirname) =&gt; <span class="string">&quot;__dirname&quot;</span>.into(),
-            JsValue::FreeVar(FreeVarKind::Filename) =&gt; <span class="string">&quot;__filename&quot;</span>.into(),
-            JsValue::FreeVar(FreeVarKind::NodeProcess) =&gt; {
-                JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-            }
-            JsValue::FreeVar(kind) =&gt; {
-                JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(JsValue::FreeVar(kind))), <span class="string">&quot;unknown global&quot;</span>)
-            }
+            JsValue::FreeVar(var) =&gt; <span class="kw">match </span><span class="kw-2">&amp;*</span>var {
+                <span class="string">&quot;require&quot; </span>=&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                <span class="string">&quot;define&quot; </span>=&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+                <span class="string">&quot;__dirname&quot; </span>=&gt; <span class="string">&quot;__dirname&quot;</span>.into(),
+                <span class="string">&quot;__filename&quot; </span>=&gt; <span class="string">&quot;__filename&quot;</span>.into(),
+                <span class="string">&quot;process&quot; </span>=&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+                <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">Some</span>(Arc::new(JsValue::FreeVar(var))), <span class="string">&quot;unknown global&quot;</span>),
+            },
             JsValue::Module(ModuleValue {
                 module: <span class="kw-2">ref </span>name, ..
             }) =&gt; <span class="kw">match </span>name.as_ref() {
@@ -6332,7 +6246,7 @@
     };
     <span class="kw">use </span>turbo_tasks::{util::FormatDuration, Value};
     <span class="kw">use </span>turbopack_core::{
-        compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
+        compile_time_info::CompileTimeInfo,
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -6540,6 +6454,9 @@
                                     JsValue::call(<span class="kw">box </span>func, new_args),
                                 ));
                             }
+                            Effect::FreeVar { var, .. } =&gt; {
+                                resolved.push((<span class="macro">format!</span>(<span class="string">&quot;{parent} -&gt; {i} free var&quot;</span>), var));
+                            }
                             Effect::MemberCall {
                                 obj, prop, args, ..
                             } =&gt; {
@@ -6595,25 +6512,22 @@
 
     <span class="kw">async fn </span>resolve(var_graph: <span class="kw-2">&amp;</span>VarGraph, val: JsValue) -&gt; JsValue {
         turbo_tasks_testing::VcStorage::with(<span class="kw">async </span>{
-            <span class="kw">let </span>compile_time_info = CompileTimeInfo {
-                environment: EnvironmentVc::new(
-                    Value::new(ExecutionEnvironment::NodeJsLambda(
-                        NodeJsEnvironment {
-                            compile_target: CompileTarget {
-                                arch: Arch::X64,
-                                platform: Platform::Linux,
-                                endianness: Endianness::Little,
-                                libc: Libc::Glibc,
-                            }
-                            .into(),
-                            ..Default::default()
+            <span class="kw">let </span>compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
+                Value::new(ExecutionEnvironment::NodeJsLambda(
+                    NodeJsEnvironment {
+                        compile_target: CompileTarget {
+                            arch: Arch::X64,
+                            platform: Platform::Linux,
+                            endianness: Endianness::Little,
+                            libc: Libc::Glibc,
                         }
                         .into(),
-                    )),
-                    Value::new(EnvironmentIntention::ServerRendering),
-                ),
-                defines: CompileTimeDefinesVc::empty(),
-            }
+                        ..Default::default()
+                    }
+                    .into(),
+                )),
+                Value::new(EnvironmentIntention::ServerRendering),
+            ))
             .cell();
             link(
                 var_graph,

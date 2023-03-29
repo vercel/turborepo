@@ -1713,6 +1713,15 @@
 <a href="#1713" id="1713">1713</a>
 <a href="#1714" id="1714">1714</a>
 <a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -1730,10 +1739,7 @@
 };
 
 <span class="kw">use super</span>::{ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
-<span class="kw">use crate</span>::{
-    analyzer::{is_unresolved, FreeVarKind},
-    utils::unparen,
-};
+<span class="kw">use crate</span>::{analyzer::is_unresolved, utils::unparen};
 
 <span class="attr">#[derive(Debug, Clone, Default)]
 </span><span class="kw">pub struct </span>EffectsBlock {
@@ -1863,7 +1869,14 @@
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    <span class="doccomment">/// A reference to `import.meta`.
+    <span class="doccomment">/// A reference to a free var access.
+    </span>FreeVar {
+        var: JsValue,
+        ast_path: Vec&lt;AstParentKind&gt;,
+        span: Span,
+    },
+    <span class="comment">// TODO ImportMeta should be replaced with Member
+    </span><span class="doccomment">/// A reference to `import.meta`.
     </span>ImportMeta {
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
@@ -1921,6 +1934,13 @@
             } =&gt; {
                 obj.normalize();
                 prop.normalize();
+            }
+            Effect::FreeVar {
+                var,
+                ast_path: <span class="kw">_</span>,
+                span: <span class="kw">_</span>,
+            } =&gt; {
+                var.normalize();
             }
             Effect::ImportedBinding {
                 esm_reference_index: <span class="kw">_</span>,
@@ -2060,15 +2080,7 @@
                     <span class="kw">return </span>imported;
                 }
                 <span class="kw">if </span>is_unresolved(i, <span class="self">self</span>.unresolved_mark) {
-                    <span class="kw">match </span><span class="kw-2">&amp;*</span>i.sym {
-                        <span class="string">&quot;require&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::Require),
-                        <span class="string">&quot;define&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::Define),
-                        <span class="string">&quot;__dirname&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::Dirname),
-                        <span class="string">&quot;__filename&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::Filename),
-                        <span class="string">&quot;process&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::NodeProcess),
-                        <span class="string">&quot;Object&quot; </span>=&gt; JsValue::FreeVar(FreeVarKind::Object),
-                        <span class="kw">_ </span>=&gt; JsValue::FreeVar(FreeVarKind::Other(i.sym.clone())),
-                    }
+                    JsValue::FreeVar(i.sym.clone())
                 } <span class="kw">else </span>{
                     JsValue::Variable(id)
                 }
@@ -2266,7 +2278,7 @@
                 }
                 <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
 
-                <span class="kw">let </span>callee = <span class="kw">box </span>JsValue::FreeVar(FreeVarKind::Import);
+                <span class="kw">let </span>callee = <span class="kw">box </span>JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;import&quot;</span>));
 
                 JsValue::call(callee, args)
             }
@@ -2281,7 +2293,7 @@
                     .iter()
                     .map(|e| <span class="kw">match </span>e {
                         <span class="prelude-val">Some</span>(e) =&gt; <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>e.expr),
-                        <span class="kw">_ </span>=&gt; JsValue::FreeVar(FreeVarKind::Other(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>))),
+                        <span class="kw">_ </span>=&gt; JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>)),
                     })
                     .collect();
                 JsValue::array(arr)
@@ -2582,7 +2594,7 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span>n.callee {
             Callee::Import(<span class="kw">_</span>) =&gt; {
                 <span class="self">self</span>.add_effect(Effect::Call {
-                    func: JsValue::FreeVar(FreeVarKind::Import),
+                    func: JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;import&quot;</span>)),
                     args,
                     ast_path: as_parent_path(ast_path),
                     span: n.span(),
@@ -2648,7 +2660,7 @@
         <span class="kw">let </span>values = <span class="self">self</span>.cur_fn_return_values.take().unwrap();
 
         <span class="kw">match </span>values.len() {
-            <span class="number">0 </span>=&gt; <span class="kw">box </span>JsValue::FreeVar(FreeVarKind::Other(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>))),
+            <span class="number">0 </span>=&gt; <span class="kw">box </span>JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>)),
             <span class="number">1 </span>=&gt; <span class="kw">box </span>values.into_iter().next().unwrap(),
             <span class="kw">_ </span>=&gt; <span class="kw">box </span>JsValue::alternatives(values),
         }
@@ -3136,7 +3148,7 @@
                 .arg
                 .as_deref()
                 .map(|e| <span class="self">self</span>.eval_context.eval(e))
-                .unwrap_or(JsValue::FreeVar(FreeVarKind::Other(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>))));
+                .unwrap_or(JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>)));
 
             values.push(return_value);
         }
@@ -3153,6 +3165,12 @@
             <span class="self">self</span>.add_effect(Effect::ImportedBinding {
                 esm_reference_index,
                 export,
+                ast_path: as_parent_path(ast_path),
+                span: ident.span(),
+            })
+        } <span class="kw">else if </span>is_unresolved(ident, <span class="self">self</span>.eval_context.unresolved_mark) {
+            <span class="self">self</span>.add_effect(Effect::FreeVar {
+                var: JsValue::FreeVar(ident.sym.clone()),
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
             })

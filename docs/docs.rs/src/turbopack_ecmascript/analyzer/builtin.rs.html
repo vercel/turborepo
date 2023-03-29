@@ -493,10 +493,12 @@
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
+<span class="kw">use </span>swc_core::ecma::atoms::js_word;
+
 <span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
-<span class="kw">use </span><span class="kw">crate</span>::analyzer::FreeVarKind;
 
 <span class="doccomment">/// Replaces some builtin values with their resulting values. Called early
 /// without lazy nested values. This allows to skip a lot of work to process the
@@ -742,7 +744,7 @@
                             }
                         }
                         <span class="kw">if </span>potential_values.is_empty() {
-                            <span class="kw-2">*</span>value = JsValue::FreeVar(FreeVarKind::Other(<span class="string">&quot;undefined&quot;</span>.into()));
+                            <span class="kw-2">*</span>value = JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>));
                         } <span class="kw">else </span>{
                             <span class="kw-2">*</span>value = potential_values_to_alternatives(
                                 potential_values,
