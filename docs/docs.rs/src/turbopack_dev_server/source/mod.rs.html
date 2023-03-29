@@ -550,6 +550,26 @@
 <a href="#550" id="550">550</a>
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -601,6 +621,26 @@
 <span class="kw">impl </span>BodyError {
     <span class="kw">pub fn </span>new(err: String) -&gt; <span class="self">Self </span>{
         BodyError { err }
+    }
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>str&gt; <span class="kw">for </span>BodyError {
+    <span class="kw">fn </span>from(err: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        BodyError {
+            err: err.to_string(),
+        }
+    }
+}
+
+<span class="kw">impl </span>From&lt;String&gt; <span class="kw">for </span>BodyError {
+    <span class="kw">fn </span>from(err: String) -&gt; <span class="self">Self </span>{
+        BodyError { err }
+    }
+}
+
+<span class="kw">impl </span>From&lt;anyhow::Error&gt; <span class="kw">for </span>BodyError {
+    <span class="kw">fn </span>from(value: anyhow::Error) -&gt; <span class="self">Self </span>{
+        value.to_string().into()
     }
 }
 
@@ -798,29 +838,29 @@
     </span><span class="kw">pub </span>cache_buster: u64,
 }
 
-<span class="kw">type </span>Chunk = <span class="prelude-ty">Result</span>&lt;Bytes, BodyError&gt;;
+<span class="kw">pub type </span>BodyChunk = <span class="prelude-ty">Result</span>&lt;Bytes, BodyError&gt;;
 <span class="doccomment">/// A request body.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>Body {
     <span class="attr">#[turbo_tasks(trace_ignore)]
-    </span>chunks: Stream&lt;Chunk&gt;,
+    </span>chunks: Stream&lt;BodyChunk&gt;,
 }
 
 <span class="kw">impl </span>Body {
     <span class="doccomment">/// Creates a new body from a list of chunks.
-    </span><span class="kw">pub fn </span>new(chunks: Vec&lt;Chunk&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(chunks: Vec&lt;BodyChunk&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             chunks: Stream::new_closed(chunks),
         }
     }
 
     <span class="doccomment">/// Returns an iterator over the body&#39;s chunks.
-    </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StreamRead&lt;Chunk&gt; {
+    </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StreamRead&lt;BodyChunk&gt; {
         <span class="self">self</span>.chunks.read()
     }
 
-    <span class="kw">pub fn </span>from_stream&lt;T: StreamTrait&lt;Item = Chunk&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;(
+    <span class="kw">pub fn </span>from_stream&lt;T: StreamTrait&lt;Item = BodyChunk&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;(
         source: T,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{

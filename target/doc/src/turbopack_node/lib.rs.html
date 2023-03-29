@@ -292,6 +292,7 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -572,7 +573,8 @@
     .into())
 }
 
-<span class="attr">#[turbo_tasks::value(shared)]
+<span class="attr">#[derive(Clone, Debug)]
+#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ResponseHeaders {
     <span class="kw">pub </span>status: u16,
     <span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,

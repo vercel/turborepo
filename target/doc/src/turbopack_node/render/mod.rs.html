@@ -57,6 +57,14 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -94,15 +102,16 @@
     BodyEnd,
 }
 
-<span class="attr">#[derive(Deserialize)]
+<span class="attr">#[derive(Deserialize, Debug)]
 #[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">enum </span>RenderProxyIncomingMessage {
     Headers { data: ResponseHeaders },
-    Body { data: Vec&lt;u8&gt; },
+    BodyChunk { data: Vec&lt;u8&gt; },
+    BodyEnd,
     Error(StructuredError),
 }
 
-<span class="attr">#[derive(Deserialize)]
+<span class="attr">#[derive(Deserialize, Debug)]
 #[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">enum </span>RenderStaticIncomingMessage {
     <span class="attr">#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
@@ -111,6 +120,13 @@
         headers: Vec&lt;(String, String)&gt;,
         body: String,
     },
+    Headers {
+        data: ResponseHeaders,
+    },
+    BodyChunk {
+        data: Vec&lt;u8&gt;,
+    },
+    BodyEnd,
     Rewrite {
         path: String,
     },

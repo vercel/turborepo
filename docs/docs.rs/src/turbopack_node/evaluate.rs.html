@@ -636,6 +636,18 @@
 <a href="#636" id="636">636</a>
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -887,17 +899,6 @@
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; JavaScriptEvaluationVc {
-    <span class="kw">let </span>pool = get_evaluate_pool(
-        module_asset,
-        cwd,
-        env,
-        context,
-        chunking_context,
-        runtime_entries,
-        additional_invalidation,
-        debug,
-    );
-
     <span class="comment">// Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -916,11 +917,16 @@
 
     <span class="comment">// run the evaluation as side effect
     </span>compute_evaluate_stream(
-        pool,
+        module_asset,
         cwd,
+        env,
         context_ident_for_issue,
+        context,
         chunking_context,
+        runtime_entries,
         args,
+        additional_invalidation,
+        debug,
         JavaScriptStreamSender {
             get: Box::new(<span class="kw">move </span>|| {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = initial.lock().take() {
@@ -946,11 +952,16 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>compute_evaluate_stream(
-    pool: NodeJsPoolVc,
+    module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context_ident_for_issue: AssetIdentVc,
+    context: AssetContextVc,
     chunking_context: ChunkingContextVc,
+    runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
     args: Vec&lt;JsonValueVc&gt;,
+    additional_invalidation: CompletionVc,
+    debug: bool,
     sender: JavaScriptStreamSenderVc,
 ) {
     mark_finished();
@@ -960,7 +971,20 @@
     };
 
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
-        <span class="kw">let </span>pool = pool.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>pool = get_evaluate_pool(
+            module_asset,
+            cwd,
+            env,
+            context,
+            chunking_context,
+            runtime_entries,
+            additional_invalidation,
+            debug,
+        );
+
+        <span class="comment">// Read this strongly consistent, since we don&#39;t want to run inconsistent
+        // node.js code.
+        </span><span class="kw">let </span>pool = pool.strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>args = args.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// Assume this is a one-off operation, so we can kill the process
@@ -1045,7 +1069,7 @@
         <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
             EvalJavaScriptIncomingMessage::Error(error) =&gt; {
                 EvaluationIssue {
-                    error: error.clone(),
+                    error,
                     context_ident: context_ident_for_issue,
                     assets_for_source_mapping: pool.assets_for_source_mapping,
                     assets_root: pool.assets_root,

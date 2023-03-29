@@ -182,13 +182,147 @@
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
+<span class="kw">use </span>futures::{
+    channel::mpsc::{unbounded, UnboundedSender},
+    pin_mut, SinkExt, StreamExt, TryStreamExt,
+};
+<span class="kw">use </span>parking_lot::Mutex;
+<span class="kw">use </span>turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc};
+<span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, error::PrettyPrintError};
-<span class="kw">use </span>turbopack_dev_server::source::{BodyVc, ProxyResult, ProxyResultVc};
+<span class="kw">use </span>turbopack_core::{chunk::ChunkingContextVc, error::PrettyPrintError};
+<span class="kw">use </span>turbopack_dev_server::source::{Body, BodyError, BodyVc, ProxyResult, ProxyResultVc};
 <span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 <span class="kw">use super</span>::{
@@ -215,118 +349,57 @@
     data: RenderDataVc,
     body: BodyVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ProxyResultVc&gt; {
-    <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
-        module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
-        intermediate_output_path,
-    );
-
-    <span class="kw">let </span>pool = get_renderer_pool(
+    <span class="kw">let </span>render = render_stream(
         cwd,
         env,
-        intermediate_asset,
+        path,
+        module,
+        runtime_entries,
+        chunking_context,
         intermediate_output_path,
         output_root,
         project_dir,
-        <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+        data,
+        body,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span><span class="kw-2">mut </span>operation = <span class="kw">match </span>pool.operation().<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(operation) =&gt; operation,
-        <span class="prelude-val">Err</span>(err) =&gt; {
-            <span class="kw">return </span>proxy_error(path, err, <span class="prelude-val">None</span>).<span class="kw">await</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>stream = render.read();
+    <span class="kw">let </span>first = <span class="kw">match </span>stream.try_next().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="prelude-val">Some</span>(f) =&gt; f,
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="comment">// If an Error was received first, then it would have been
+            // transformed into a proxy err error response.
+            </span><span class="macro">bail!</span>(<span class="string">&quot;did not receive response from render&quot;</span>);
         }
     };
 
-    <span class="kw">match </span>run_proxy_operation(
-        <span class="kw-2">&amp;mut </span>operation,
-        data,
+    <span class="kw">let </span>RenderItem::Headers(data) = first <span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;did not receive headers from render&quot;</span>);
+    };
+
+    <span class="kw">let </span>body = Body::from_stream(stream.map(|item| <span class="kw">match </span>item {
+        <span class="prelude-val">Ok</span>(RenderItem::BodyChunk(b)) =&gt; <span class="prelude-val">Ok</span>(b),
+        <span class="prelude-val">Ok</span>(v) =&gt; <span class="prelude-val">Err</span>(BodyError::new(<span class="macro">format!</span>(<span class="string">&quot;unexpected render item: {:#?}&quot;</span>, v))),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(BodyError::new(<span class="macro">format!</span>(
+            <span class="string">&quot;error streaming proxied contents: {}&quot;</span>,
+            e
+        ))),
+    }));
+    <span class="kw">let </span>result = ProxyResult {
+        status: data.status,
+        headers: data.headers,
         body,
-        intermediate_asset,
-        intermediate_output_path,
-        project_dir,
-    )
-    .<span class="kw">await
-    </span>{
-        <span class="prelude-val">Ok</span>(proxy_result) =&gt; <span class="prelude-val">Ok</span>(proxy_result.cell()),
-        <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Ok</span>(proxy_error(path, err, <span class="prelude-val">Some</span>(operation)).<span class="kw">await</span><span class="question-mark">?</span>),
-    }
-}
-
-<span class="kw">async fn </span>run_proxy_operation(
-    operation: <span class="kw-2">&amp;mut </span>NodeJsOperation,
-    data: RenderDataVc,
-    body: BodyVc,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ProxyResult&gt; {
-    <span class="kw">let </span>data = data.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="comment">// First, send the render data.
-    </span>operation
-        .send(RenderProxyOutgoingMessage::Headers { data: <span class="kw-2">&amp;</span>data })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">let </span><span class="kw-2">mut </span>body = body.<span class="kw">await</span><span class="question-mark">?</span>.read();
-    <span class="comment">// Then, send the binary body in chunks.
-    </span><span class="kw">while let </span><span class="prelude-val">Some</span>(data) = body.next().<span class="kw">await </span>{
-        operation
-            .send(RenderProxyOutgoingMessage::BodyChunk { data: <span class="kw-2">&amp;</span>data<span class="question-mark">? </span>})
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-    }
-
-    operation.send(RenderProxyOutgoingMessage::BodyEnd).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">let </span>(status, headers) = <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
-        RenderProxyIncomingMessage::Headers {
-            data: ResponseHeaders { status, headers },
-        } =&gt; (status, headers),
-        RenderProxyIncomingMessage::Error(error) =&gt; {
-            <span class="macro">bail!</span>(
-                trace_stack(
-                    error,
-                    intermediate_asset,
-                    intermediate_output_path,
-                    project_dir
-                )
-                .<span class="kw">await</span><span class="question-mark">?
-            </span>)
-        }
-        <span class="kw">_ </span>=&gt; {
-            <span class="macro">bail!</span>(<span class="string">&quot;unexpected response from the Node.js process while reading response headers&quot;</span>)
-        }
     };
 
-    <span class="kw">let </span>body = <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
-        RenderProxyIncomingMessage::Body { data: body } =&gt; body,
-        RenderProxyIncomingMessage::Error(error) =&gt; {
-            <span class="macro">bail!</span>(
-                trace_stack(
-                    error,
-                    intermediate_asset,
-                    intermediate_output_path,
-                    project_dir
-                )
-                .<span class="kw">await</span><span class="question-mark">?
-            </span>)
-        }
-        <span class="kw">_ </span>=&gt; {
-            <span class="macro">bail!</span>(<span class="string">&quot;unexpected response from the Node.js process while reading response body&quot;</span>)
-        }
-    };
-
-    <span class="prelude-val">Ok</span>(ProxyResult {
-        status,
-        headers,
-        body: body.into(),
-    })
+    <span class="prelude-val">Ok</span>(result.cell())
 }
 
 <span class="kw">async fn </span>proxy_error(
     path: FileSystemPathVc,
     error: anyhow::Error,
     operation: <span class="prelude-ty">Option</span>&lt;NodeJsOperation&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ProxyResultVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(u16, String)&gt; {
     <span class="kw">let </span>message = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>error));
 
     <span class="kw">let </span>status = <span class="kw">match </span>operation {
@@ -340,12 +413,13 @@
     }
 
     <span class="kw">let </span>status_code = <span class="number">500</span>;
-    <span class="kw">let </span>body = <span class="kw-2">&amp;*</span>error_html(
+    <span class="kw">let </span>body = error_html(
         status_code,
         <span class="string">&quot;An error occurred while proxying the request to Node.js&quot;</span>.to_string(),
         <span class="macro">format!</span>(<span class="string">&quot;{message}\n\n{}&quot;</span>, details.join(<span class="string">&quot;\n&quot;</span>)),
     )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.clone_value();
 
     RenderingIssue {
         context: path,
@@ -356,15 +430,197 @@
     .as_issue()
     .emit();
 
-    <span class="prelude-val">Ok</span>(ProxyResult {
-        status: status_code,
-        headers: <span class="macro">vec!</span>[(
-            <span class="string">&quot;content-type&quot;</span>.to_string(),
-            <span class="string">&quot;text/html; charset=utf-8&quot;</span>.to_string(),
-        )],
-        body: body.clone().into(),
+    <span class="prelude-val">Ok</span>((status_code, body))
+}
+
+<span class="attr">#[derive(Clone, Debug)]
+#[turbo_tasks::value]
+</span><span class="kw">enum </span>RenderItem {
+    Headers(ResponseHeaders),
+    BodyChunk(Bytes),
+}
+
+<span class="kw">type </span>RenderItemResult = <span class="prelude-ty">Result</span>&lt;RenderItem, SharedError&gt;;
+
+<span class="attr">#[turbo_tasks::value(eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
+</span><span class="kw">pub struct </span>RenderStreamSender {
+    <span class="attr">#[turbo_tasks(trace_ignore, debug_ignore)]
+    </span>get: Box&lt;<span class="kw">dyn </span>Fn() -&gt; UnboundedSender&lt;RenderItemResult&gt; + Send + Sync&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value(transparent, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
+</span><span class="kw">struct </span>RenderStream(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Stream&lt;RenderItemResult&gt;);
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>render_stream(
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
+    data: RenderDataVc,
+    body: BodyVc,
+) -&gt; RenderStreamVc {
+    <span class="comment">// Note the following code uses some hacks to create a child task that produces
+    // a stream that is returned by this task.
+
+    // We create a new cell in this task, which will be updated from the
+    // [render_stream_internal] task.
+    </span><span class="kw">let </span>cell = turbo_tasks::macro_helpers::find_cell_by_type(<span class="kw-2">*</span>RENDERSTREAM_VALUE_TYPE_ID);
+
+    <span class="comment">// We initialize the cell with a stream that is open, but has no values.
+    // The first [render_stream_internal] pipe call will pick up that stream.
+    </span><span class="kw">let </span>(sender, receiver) = unbounded();
+    cell.update_shared(RenderStream(Stream::new_open(<span class="macro">vec!</span>[], Box::new(receiver))));
+    <span class="kw">let </span>initial = Mutex::new(<span class="prelude-val">Some</span>(sender));
+
+    <span class="comment">// run the evaluation as side effect
+    </span>render_stream_internal(
+        cwd,
+        env,
+        path,
+        module,
+        runtime_entries,
+        chunking_context,
+        intermediate_output_path,
+        output_root,
+        project_dir,
+        data,
+        body,
+        RenderStreamSender {
+            get: Box::new(<span class="kw">move </span>|| {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = initial.lock().take() {
+                    sender
+                } <span class="kw">else </span>{
+                    <span class="comment">// In cases when only [render_stream_internal] is (re)executed, we need to
+                    // update the old stream with a new value.
+                    </span><span class="kw">let </span>(sender, receiver) = unbounded();
+                    cell.update_shared(RenderStream(Stream::new_open(<span class="macro">vec!</span>[], Box::new(receiver))));
+                    sender
+                }
+            }),
+        }
+        .cell(),
+    );
+
+    <span class="kw">let </span>raw: RawVc = cell.into();
+    raw.into()
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>render_stream_internal(
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
+    data: RenderDataVc,
+    body: BodyVc,
+    sender: RenderStreamSenderVc,
+) {
+    mark_finished();
+    <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
+        <span class="comment">// Impossible to handle the error in a good way.
+        </span><span class="kw">return</span>;
+    };
+
+    <span class="kw">let </span>stream = <span class="macro">generator! </span>{
+        <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
+            module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
+            intermediate_output_path,
+        );
+        <span class="kw">let </span>pool = get_renderer_pool(
+            cwd,
+            env,
+            intermediate_asset,
+            intermediate_output_path,
+            output_root,
+            project_dir,
+            <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+        );
+
+        <span class="comment">// Read this strongly consistent, since we don&#39;t want to run inconsistent
+        // node.js code.
+        </span><span class="kw">let </span>pool = pool.strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>data = data.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>operation = pool.operation().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// First, send the render data.
+        </span>operation
+            .send(RenderProxyOutgoingMessage::Headers { data: <span class="kw-2">&amp;</span>data })
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Then, send the binary body in chunks.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>body = body.<span class="kw">await</span><span class="question-mark">?</span>.read();
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(data) = body.next().<span class="kw">await </span>{
+            operation
+                .send(RenderProxyOutgoingMessage::BodyChunk { data: <span class="kw-2">&amp;</span>data.unwrap() })
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        operation.send(RenderProxyOutgoingMessage::BodyEnd).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
+            RenderProxyIncomingMessage::Headers { data } =&gt; <span class="kw">yield </span>RenderItem::Headers(data),
+            RenderProxyIncomingMessage::Error(error) =&gt; {
+                <span class="comment">// If we don&#39;t get headers, then something is very wrong. Instead, we send down a
+                // 500 proxy error as if it were the proper result.
+                </span><span class="kw">let </span>trace = trace_stack(
+                    error,
+                    intermediate_asset,
+                    intermediate_output_path,
+                    project_dir
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(status, body) =  proxy_error(path, <span class="macro">anyhow!</span>(<span class="string">&quot;error rendering: {}&quot;</span>, trace), <span class="prelude-val">Some</span>(operation)).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">yield </span>RenderItem::Headers(ResponseHeaders {
+                    status,
+                    headers: <span class="macro">vec!</span>[(
+                        <span class="string">&quot;content-type&quot;</span>.to_string(),
+                        <span class="string">&quot;text/html; charset=utf-8&quot;</span>.to_string(),
+                    )],
+                });
+                <span class="kw">yield </span>RenderItem::BodyChunk(body.into());
+                <span class="kw">return</span>;
+            }
+            v =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>,
+        };
+
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
+                RenderProxyIncomingMessage::BodyChunk { data } =&gt; {
+                    <span class="kw">yield </span>RenderItem::BodyChunk(data.into());
+                }
+                RenderProxyIncomingMessage::BodyEnd =&gt; <span class="kw">break</span>,
+                RenderProxyIncomingMessage::Error(error) =&gt; {
+                    <span class="comment">// We have already started to send a result, so we can&#39;t change the
+                    // headers/body to a proxy error.
+                    </span>operation.disallow_reuse();
+                    <span class="kw">let </span>trace =
+                        trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;error during streaming render: {}&quot;</span>, trace))<span class="question-mark">?</span>;
+                }
+                v =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>,
+            }
+        }
+    };
+
+    <span class="kw">let </span><span class="kw-2">mut </span>sender = (sender.get)();
+    <span class="macro">pin_mut!</span>(stream);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(value) = stream.next().<span class="kw">await </span>{
+        <span class="kw">if </span>sender.send(value).<span class="kw">await</span>.is_err() {
+            <span class="kw">return</span>;
+        }
+        <span class="kw">if </span>sender.flush().<span class="kw">await</span>.is_err() {
+            <span class="kw">return</span>;
+        }
     }
-    .cell())
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_node" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

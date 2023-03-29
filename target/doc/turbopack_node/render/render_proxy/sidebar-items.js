@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["render_proxy","render_proxy_inline"]};
+window.SIDEBAR_ITEMS = {"fn":["render_proxy","render_proxy_inline"],"struct":["RenderStreamSender","RenderStreamSenderVc"],"type":["RenderStreamSenderReadRef"]};

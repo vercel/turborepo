@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["StaticResult"],"fn":["render_static","render_static_inline"],"struct":["StaticResultVc"],"type":["StaticResultReadRef"]};
+window.SIDEBAR_ITEMS = {"enum":["StaticResult"],"fn":["render_static","render_static_inline"],"struct":["RenderStreamSender","RenderStreamSenderVc","StaticResultVc"],"type":["RenderStreamSenderReadRef","StaticResultReadRef"]};
