@@ -538,7 +538,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
-          ref: ${{ env.NEXTJS_VERSION }}
 
       - name: Build next-swc
         continue-on-error: true
