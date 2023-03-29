@@ -352,6 +352,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	summary := runsummary.NewRunSummary(
 		startAt,
 		r.base.UI,
+		r.base.RepoRoot,
 		rs.Opts.runOpts.singlePackage,
 		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,

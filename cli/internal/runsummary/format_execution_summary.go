@@ -37,11 +37,32 @@ func (rsm *Meta) printExecutionSummary() {
 		ui.Warn("No tasks were executed as part of this run.")
 	}
 
-	ui.Output("") // Clear the line
+	ui.Output("")    // Clear the line
+	spacer := "    " // 4 chars
 
-	// The whitespaces in the string are to align the UI in a nice way.
-	ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", successful, attempted))
-	ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", cached, attempted))
-	ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", duration, maybeFullTurbo))
+	// We'll start with some default lines
+	lines := []string{
+		util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, success, attempted),
+		util.Sprintf("${BOLD}Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
+		util.Sprintf("${BOLD}  Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
+	}
+
+	// If we have a run summary file and we can get  a
+	if rsm.getPath().FileExists() {
+		if relativePath, err := rsm.repoRoot.PathTo(rsm.getPath()); err == nil {
+			lines = []string{
+				util.Sprintf("${BOLD}  Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
+				util.Sprintf("${BOLD} Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
+				util.Sprintf("${BOLD}   Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
+				util.Sprintf("${BOLD}Summary:%s%s${RESET}", spacer, relativePath),
+			}
+		}
+	}
+
+	// Print the real thing
+	for _, line := range lines {
+		ui.Output(line)
+	}
+
 	ui.Output("")
 }
