@@ -107,10 +107,10 @@ type executionSummary struct {
 	profileFilename string
 
 	// These get serialized to JSON
-	success   int
-	failure   int
-	cached    int
-	attempted int
+	success   int // number of tasks that exited successfully (does not include cache hits)
+	failure   int // number of tasks that exited with failure
+	cached    int // number of tasks that had a cache hit
+	attempted int // number of tasks that started
 	startedAt time.Time
 	endedAt   time.Time
 	exitCode  int
@@ -219,15 +219,14 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	}
 
 	switch {
+	case event.Status == targetBuilding:
+		es.attempted++
 	case event.Status == TargetBuildFailed:
 		es.failure++
-		es.attempted++
 	case event.Status == TargetCached:
 		es.cached++
-		es.attempted++
 	case event.Status == TargetBuilt:
 		es.success++
-		es.attempted++
 	}
 
 	return es.tasks[event.Label]
