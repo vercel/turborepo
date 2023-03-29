@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_stream::try_stream as generator;
 use futures::{
     channel::mpsc::{unbounded, UnboundedSender},
-    pin_mut, SinkExt, StreamExt,
+    pin_mut, SinkExt, StreamExt, TryStreamExt,
 };
 use parking_lot::Mutex;
 use turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc};
@@ -93,9 +93,9 @@ pub async fn render_static(
     .await?;
 
     let mut stream = render.read();
-    let first = match stream.next().await {
-        Some(Ok(f)) => f,
-        _ => {
+    let first = match stream.try_next().await? {
+        Some(f) => f,
+        None => {
             // If an Error was received first, then it would have been
             // transformed into a proxy err error response.
             bail!("did not receive response from render");
