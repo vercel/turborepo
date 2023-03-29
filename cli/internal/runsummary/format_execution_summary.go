@@ -37,11 +37,34 @@ func (rsm *Meta) printExecutionSummary() {
 		ui.Warn("No tasks were executed as part of this run.")
 	}
 
-	ui.Output("") // Clear the line
+	ui.Output("")    // Clear the line
+	spacer := "    " // 4 chars
 
-	// The whitespaces in the string are to align the UI in a nice way.
-	ui.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", successful, attempted))
-	ui.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", cached, attempted))
-	ui.Output(util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", duration, maybeFullTurbo))
+	var lines []string
+
+	// The only difference between these two branches is that when there is a run summary
+	// we print the path to that file and we adjust the whitespace in the printed text so it aligns.
+	// We could just always align to account for the summary line, but that would require a whole
+	// bunch of test output assertions to change.
+	if rsm.getPath().FileExists() {
+		lines = []string{
+			util.Sprintf("${BOLD}  Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
+			util.Sprintf("${BOLD} Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
+			util.Sprintf("${BOLD}   Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
+			util.Sprintf("${BOLD}Summary:%s%s${RESET}", spacer, rsm.getPath()),
+		}
+	} else {
+		lines = []string{
+			util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", successful, attempted),
+			util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", cached, attempted),
+			util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", duration, maybeFullTurbo),
+		}
+	}
+
+	// Print the real thing
+	for _, line := range lines {
+		ui.Output(line)
+	}
+
 	ui.Output("")
 }

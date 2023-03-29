@@ -166,7 +166,7 @@ func RealRun(
 		}
 	}
 
-	runSummary.Close(exitCode, base.RepoRoot)
+	runSummary.Close(exitCode)
 
 	if exitCode != 0 {
 		return &process.ChildExit{
