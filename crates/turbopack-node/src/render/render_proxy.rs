@@ -9,7 +9,7 @@ use turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc}
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc, error::PrettyPrintError};
+use turbopack_core::{chunk::ChunkingContextVc, error::PrettyPrintError};
 use turbopack_dev_server::source::{Body, BodyError, BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
@@ -18,10 +18,8 @@ use super::{
     ResponseHeaders,
 };
 use crate::{
-    get_intermediate_asset, get_renderer_pool,
-    pool::{NodeJsOperation, NodeJsPoolVc},
-    render::error_page::error_html,
-    source_map::trace_stack,
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
+    render::error_page::error_html, source_map::trace_stack,
 };
 
 /// Renders a module as static HTML in a node.js process.
@@ -39,29 +37,18 @@ pub async fn render_proxy(
     data: RenderDataVc,
     body: BodyVc,
 ) -> Result<ProxyResultVc> {
-    let intermediate_asset = get_intermediate_asset(
-        module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
-        intermediate_output_path,
-    );
-
-    let pool = get_renderer_pool(
+    let render = render_stream(
         cwd,
         env,
-        intermediate_asset,
+        path,
+        module,
+        runtime_entries,
+        chunking_context,
         intermediate_output_path,
         output_root,
         project_dir,
-        /* debug */ false,
-    );
-
-    let render = render_stream(
-        pool,
         data,
         body,
-        intermediate_asset,
-        intermediate_output_path,
-        project_dir,
-        path,
     )
     .await?;
 
@@ -154,13 +141,17 @@ struct RenderStream(#[turbo_tasks(trace_ignore)] Stream<RenderItemResult>);
 
 #[turbo_tasks::function]
 fn render_stream(
-    pool: NodeJsPoolVc,
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     data: RenderDataVc,
     body: BodyVc,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    error_path: FileSystemPathVc,
 ) -> RenderStreamVc {
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
@@ -177,13 +168,17 @@ fn render_stream(
 
     // run the evaluation as side effect
     render_stream_internal(
-        pool,
+        cwd,
+        env,
+        path,
+        module,
+        runtime_entries,
+        chunking_context,
+        intermediate_output_path,
+        output_root,
+        project_dir,
         data,
         body,
-        intermediate_asset,
-        intermediate_output_path,
-        project_dir,
-        error_path,
         RenderStreamSender {
             get: Box::new(move || {
                 if let Some(sender) = initial.lock().take() {
@@ -206,13 +201,17 @@ fn render_stream(
 
 #[turbo_tasks::function]
 async fn render_stream_internal(
-    pool: NodeJsPoolVc,
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     data: RenderDataVc,
     body: BodyVc,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    error_path: FileSystemPathVc,
     sender: RenderStreamSenderVc,
 ) {
     mark_finished();
@@ -222,8 +221,24 @@ async fn render_stream_internal(
     };
 
     let stream = generator! {
+        let intermediate_asset = get_intermediate_asset(
+            module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
+            intermediate_output_path,
+        );
+        let pool = get_renderer_pool(
+            cwd,
+            env,
+            intermediate_asset,
+            intermediate_output_path,
+            output_root,
+            project_dir,
+            /* debug */ false,
+        );
+
+        // Read this strongly consistent, since we don't want to run inconsistent
+        // node.js code.
+        let pool = pool.strongly_consistent().await?;
         let data = data.await?;
-        let pool = pool.await?;
         let mut operation = pool.operation().await?;
 
         // First, send the render data.
@@ -251,7 +266,7 @@ async fn render_stream_internal(
                     project_dir
                 )
                 .await?;
-                let (status, body) =  proxy_error(error_path, anyhow!("error rendering: {}", trace), Some(operation)).await?;
+                let (status, body) =  proxy_error(path, anyhow!("error rendering: {}", trace), Some(operation)).await?;
                 yield RenderItem::Headers(ResponseHeaders {
                     status,
                     headers: vec![(

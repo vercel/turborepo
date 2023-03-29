@@ -10,7 +10,7 @@ use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc},
     chunk::ChunkingContextVc,
     error::PrettyPrintError,
 };
@@ -24,11 +24,8 @@ use super::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
 use crate::{
-    get_intermediate_asset, get_renderer_pool,
-    pool::{NodeJsOperation, NodeJsPoolVc},
-    render::error_page::error_html_body,
-    source_map::trace_stack,
-    ResponseHeaders,
+    get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation,
+    render::error_page::error_html_body, source_map::trace_stack, ResponseHeaders,
 };
 
 #[derive(Clone, Debug)]
@@ -80,28 +77,18 @@ pub async fn render_static(
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
 ) -> Result<StaticResultVc> {
-    let intermediate_asset = get_intermediate_asset(
-        module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
-        intermediate_output_path,
-    );
-    let renderer_pool = get_renderer_pool(
+    let render = render_stream(
         cwd,
         env,
-        intermediate_asset,
+        path,
+        module,
+        runtime_entries,
+        fallback_page,
+        chunking_context,
         intermediate_output_path,
         output_root,
         project_dir,
-        /* debug */ false,
-    );
-
-    let render = render_stream(
-        renderer_pool,
         data,
-        intermediate_asset,
-        intermediate_output_path,
-        project_dir,
-        path,
-        fallback_page,
     )
     .await?;
 
@@ -203,13 +190,17 @@ struct RenderStream(#[turbo_tasks(trace_ignore)] Stream<RenderItemResult>);
 
 #[turbo_tasks::function]
 fn render_stream(
-    pool: NodeJsPoolVc,
-    data: RenderDataVc,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    error_path: FileSystemPathVc,
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
+    data: RenderDataVc,
 ) -> RenderStreamVc {
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
@@ -226,13 +217,17 @@ fn render_stream(
 
     // run the evaluation as side effect
     render_stream_internal(
-        pool,
-        data,
-        intermediate_asset,
-        intermediate_output_path,
-        project_dir,
-        error_path,
+        cwd,
+        env,
+        path,
+        module,
+        runtime_entries,
         fallback_page,
+        chunking_context,
+        intermediate_output_path,
+        output_root,
+        project_dir,
+        data,
         RenderStreamSender {
             get: Box::new(move || {
                 if let Some(sender) = initial.lock().take() {
@@ -255,13 +250,17 @@ fn render_stream(
 
 #[turbo_tasks::function]
 async fn render_stream_internal(
-    pool: NodeJsPoolVc,
-    data: RenderDataVc,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
-    error_path: FileSystemPathVc,
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    path: FileSystemPathVc,
+    module: EcmascriptModuleAssetVc,
+    runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
+    chunking_context: ChunkingContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
+    data: RenderDataVc,
     sender: RenderStreamSenderVc,
 ) {
     mark_finished();
@@ -271,10 +270,24 @@ async fn render_stream_internal(
     };
 
     let stream = generator! {
-        let data = data.await?;
+        let intermediate_asset = get_intermediate_asset(
+            module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
+            intermediate_output_path,
+        );
+        let renderer_pool = get_renderer_pool(
+            cwd,
+            env,
+            intermediate_asset,
+            intermediate_output_path,
+            output_root,
+            project_dir,
+            /* debug */ false,
+        );
+
         // Read this strongly consistent, since we don't want to run inconsistent
         // node.js code.
-        let pool = pool.strongly_consistent().await?;
+        let pool = renderer_pool.strongly_consistent().await?;
+        let data = data.await?;
         let mut operation = pool.operation().await?;
 
         operation
@@ -312,7 +325,7 @@ async fn render_stream_internal(
                 .await?;
                 yield RenderItem::Response(
                     StaticResultVc::content(
-                        static_error(error_path, anyhow!(trace), Some(operation), fallback_page).await?,
+                        static_error(path, anyhow!(trace), Some(operation), fallback_page).await?,
                         500,
                         HeaderListVc::empty(),
                     )
