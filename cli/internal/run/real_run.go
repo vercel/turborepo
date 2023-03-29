@@ -224,6 +224,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		return nil, nil
 	}
 
+	// Set building status now that we know it's going to run.
+	tracer(runsummary.TargetBuilding, nil, &successCode)
+
 	var prefix string
 	var prettyPrefix string
 	if ec.rs.Opts.runOpts.logPrefix == "none" {
