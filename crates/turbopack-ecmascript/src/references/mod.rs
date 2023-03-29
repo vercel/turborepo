@@ -1245,9 +1245,6 @@ pub(crate) async fn analyze_ecmascript_module(
                 LeaveScope(u32),
             }
 
-            // This is the current state of known values of function arguments.
-            let mut fun_args_values = Mutex::new(HashMap::<u32, Vec<JsValue>>::new());
-
             // This is a stack of effects to process. We use a stack since during processing
             // of an effect we might want to add more effects into the middle of the
             // processing. Using a stack where effects are appended in reverse
@@ -1285,7 +1282,7 @@ pub(crate) async fn analyze_ecmascript_module(
             while let Some(action) = queue_stack.get_mut().pop() {
                 match action {
                     Action::LeaveScope(func_ident) => {
-                        fun_args_values.get_mut().remove(&func_ident);
+                        analysis_state.fun_args_values.get_mut().remove(&func_ident);
                     }
                     Action::Effect(effect) => {
                         let add_effects = |effects: Vec<Effect>| {
@@ -1453,7 +1450,8 @@ pub(crate) async fn analyze_ecmascript_module(
                                                 if mutable {
                                                     closure_arg.add_unknown_mutations();
                                                 }
-                                                fun_args_values
+                                                analysis_state
+                                                    .fun_args_values
                                                     .get_mut()
                                                     .insert(*func_ident, vec![closure_arg]);
                                                 queue_stack
