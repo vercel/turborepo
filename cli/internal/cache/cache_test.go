@@ -17,16 +17,16 @@ type testCache struct {
 	entries     map[string][]turbopath.AnchoredSystemPath
 }
 
-func (tc *testCache) Fetch(_ turbopath.AbsoluteSystemPath, hash string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
+func (tc *testCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	if tc.disabledErr != nil {
-		return ItemStatus{}, nil, 0, tc.disabledErr
+		return false, nil, 0, tc.disabledErr
 	}
 	foundFiles, ok := tc.entries[hash]
 	if ok {
 		duration := 5
-		return ItemStatus{Local: true}, foundFiles, duration, nil
+		return true, foundFiles, duration, nil
 	}
-	return ItemStatus{}, nil, 0, nil
+	return false, nil, 0, nil
 }
 
 func (tc *testCache) Exists(hash string) ItemStatus {
@@ -40,7 +40,7 @@ func (tc *testCache) Exists(hash string) ItemStatus {
 	return ItemStatus{}
 }
 
-func (tc *testCache) Put(_ turbopath.AbsoluteSystemPath, hash string, _ int, files []turbopath.AnchoredSystemPath) error {
+func (tc *testCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	if tc.disabledErr != nil {
 		return tc.disabledErr
 	}
@@ -48,9 +48,9 @@ func (tc *testCache) Put(_ turbopath.AbsoluteSystemPath, hash string, _ int, fil
 	return nil
 }
 
-func (tc *testCache) Clean(_ turbopath.AbsoluteSystemPath) {}
-func (tc *testCache) CleanAll()                            {}
-func (tc *testCache) Shutdown()                            {}
+func (tc *testCache) Clean(anchor turbopath.AbsoluteSystemPath) {}
+func (tc *testCache) CleanAll()                                 {}
+func (tc *testCache) Shutdown()                                 {}
 
 func newEnabledCache() *testCache {
 	return &testCache{
@@ -106,11 +106,10 @@ func TestPutCachingDisabled(t *testing.T) {
 	mplex.mu.RUnlock()
 
 	// subsequent Fetch should still work
-	cacheStatus, _, _, err := mplex.Fetch("unused-target", "some-hash", []string{"unused", "files"})
+	hit, _, _, err := mplex.Fetch("unused-target", "some-hash", []string{"unused", "files"})
 	if err != nil {
 		t.Errorf("got error fetching files: %v", err)
 	}
-	hit := cacheStatus.Local || cacheStatus.Remote
 	if !hit {
 		t.Error("failed to find previously stored files")
 	}
@@ -186,12 +185,11 @@ func TestFetchCachingDisabled(t *testing.T) {
 		},
 	}
 
-	cacheStatus, _, _, err := mplex.Fetch("unused-target", "some-hash", []string{"unused", "files"})
+	hit, _, _, err := mplex.Fetch("unused-target", "some-hash", []string{"unused", "files"})
 	if err != nil {
 		// don't leak the cache removal
 		t.Errorf("Fetch got error %v, want <nil>", err)
 	}
-	hit := cacheStatus.Local || cacheStatus.Remote
 	if hit {
 		t.Error("hit on empty cache, expected miss")
 	}
