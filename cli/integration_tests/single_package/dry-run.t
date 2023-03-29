@@ -31,6 +31,40 @@ Check
 
   $ ${TURBO} run build --dry=json --single-package
   {
+    "id": "[a-zA-Z0-9]+", (re)
+    "version": "0",
+    "turboVersion": "1.8.7",
+    "globalHashSummary": {
+      "globalFileHashMap": {
+        "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+        "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+        "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
+      },
+      "rootExternalDepsHash": "",
+      "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+      "pipeline": {
+        "//#build": {
+          "outputs": [
+            "foo"
+          ],
+          "cache": true,
+          "dependsOn": [],
+          "inputs": [],
+          "outputMode": "full",
+          "env": [],
+          "persistent": false
+        }
+      }
+    },
+    "executionSummary": {
+      "success": 0,
+      "failed": 0,
+      "cached": 0,
+      "attempted": 0,
+      "startTime": [0-9]+, (re)
+      "endTime": [0-9-]+, (re)
+      "exitCode": 0
+    },
     "tasks": [
       {
         "task": "build",
