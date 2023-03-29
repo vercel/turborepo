@@ -55,9 +55,9 @@ func (rsm *Meta) printExecutionSummary() {
 		}
 	} else {
 		lines = []string{
-			util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}%s%v successful${RESET}${GRAY}, %v total${RESET}", spacer, successful, attempted),
-			util.Sprintf("${BOLD}Cached:%s%v cached${RESET}${GRAY}, %v total${RESET}", spacer, cached, attempted),
-			util.Sprintf("${BOLD}  Time:%s%v${RESET} %v${RESET}", spacer, duration, maybeFullTurbo),
+			util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", successful, attempted),
+			util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", cached, attempted),
+			util.Sprintf("${BOLD}  Time:    %v${RESET} %v${RESET}", duration, maybeFullTurbo),
 		}
 	}
 
