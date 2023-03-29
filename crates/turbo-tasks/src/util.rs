@@ -1,5 +1,6 @@
 use std::{
     any::Provider,
+    error::Error as StdError,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
     ops::Deref,
@@ -8,6 +9,7 @@ use std::{
 };
 
 use anyhow::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub use super::{id_factory::IdFactory, no_move_vec::NoMoveVec, once_map::*};
 
@@ -44,6 +46,51 @@ impl Display for SharedError {
 impl From<Error> for SharedError {
     fn from(e: Error) -> Self {
         Self::new(e)
+    }
+}
+
+impl PartialEq for SharedError {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for SharedError {}
+
+impl Serialize for SharedError {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Why doesn't anyhow::Error implement std::error::Error!?
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SerdeError", 2)?;
+        state.serialize_field("description", &self.inner.to_string())?;
+        state.serialize_field(
+            "source",
+            &self.inner.source().map(|inner| SerdeError { inner }),
+        )?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SharedError {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        todo!();
+    }
+}
+
+struct SerdeError<'a> {
+    inner: &'a dyn StdError,
+}
+
+impl<'a> Serialize for SerdeError<'a> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SerdeError", 3)?;
+        state.serialize_field("description", &self.inner.to_string())?;
+        state.serialize_field(
+            "source",
+            &self.inner.source().map(|inner| SerdeError { inner }),
+        )?;
+        state.end()
     }
 }
 

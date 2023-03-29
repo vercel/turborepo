@@ -16,7 +16,7 @@ use turbopack_core::{
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
-    source::{Body, BodyError, HeaderListVc, RewriteBuilder, RewriteVc},
+    source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
 };
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
@@ -107,11 +107,11 @@ pub async fn render_static(
         RenderItem::Headers(data) => {
             let body = stream.map(|item| match item {
                 Ok(RenderItem::BodyChunk(b)) => Ok(b),
-                Ok(v) => Err(BodyError::new(format!("unexpected render item: {:#?}", v))),
-                Err(e) => Err(BodyError::new(format!(
-                    "error streaming proxied contents: {}",
-                    e
+                Ok(v) => Err(SharedError::new(anyhow!(
+                    "unexpected render item: {:#?}",
+                    v
                 ))),
+                Err(e) => Err(e),
             });
             StaticResult::StreamedContent {
                 status: data.status,

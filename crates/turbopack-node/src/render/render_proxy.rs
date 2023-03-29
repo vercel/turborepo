@@ -10,7 +10,7 @@ use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{chunk::ChunkingContextVc, error::PrettyPrintError};
-use turbopack_dev_server::source::{Body, BodyError, BodyVc, ProxyResult, ProxyResultVc};
+use turbopack_dev_server::source::{Body, BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use super::{
@@ -68,11 +68,11 @@ pub async fn render_proxy(
 
     let body = Body::from_stream(stream.map(|item| match item {
         Ok(RenderItem::BodyChunk(b)) => Ok(b),
-        Ok(v) => Err(BodyError::new(format!("unexpected render item: {:#?}", v))),
-        Err(e) => Err(BodyError::new(format!(
-            "error streaming proxied contents: {}",
-            e
+        Ok(v) => Err(SharedError::new(anyhow!(
+            "unexpected render item: {:#?}",
+            v
         ))),
+        Err(e) => Err(e),
     }));
     let result = ProxyResult {
         status: data.status,
