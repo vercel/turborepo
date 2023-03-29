@@ -297,5 +297,3 @@ impl APIClient {
         format!("{}{}", self.base_url, endpoint)
     }
 }
-
-lazy_static! {}
