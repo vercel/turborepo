@@ -56,14 +56,14 @@ func DryRun(
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
 	}
+
 	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, dryRunExecFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
 	}
-	errs := engine.Execute(visitorFn, execOpts)
 
-	if len(errs) > 0 {
+	if errs := engine.Execute(visitorFn, execOpts); len(errs) > 0 {
 		for _, err := range errs {
 			base.UI.Error(err.Error())
 		}
