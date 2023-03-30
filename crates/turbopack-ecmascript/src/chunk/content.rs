@@ -2,9 +2,10 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::Value;
 use turbopack_core::{
+    asset::AssetsVc,
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split,
-        ChunkContentResult, ChunkGroupVc, ChunkVc,
+        ChunkContentResult, ChunkVc,
     },
     reference::AssetReferenceVc,
 };
@@ -19,7 +20,7 @@ use super::{
 pub struct EcmascriptChunkContent {
     pub chunk_items: Vec<EcmascriptChunkItemVc>,
     pub chunks: Vec<ChunkVc>,
-    pub async_chunk_groups: Vec<ChunkGroupVc>,
+    pub async_chunk_groups: Vec<AssetsVc>,
     pub external_asset_references: Vec<AssetReferenceVc>,
     pub availability_info: AvailabilityInfo,
 }
@@ -80,7 +81,7 @@ async fn ecmascript_chunk_content_internal(
 
     let mut all_chunk_items = IndexSet::<EcmascriptChunkItemVc>::new();
     let mut all_chunks = IndexSet::<ChunkVc>::new();
-    let mut all_async_chunk_groups = IndexSet::<ChunkGroupVc>::new();
+    let mut all_async_chunk_groups = IndexSet::<AssetsVc>::new();
     let mut all_external_asset_references = IndexSet::<AssetReferenceVc>::new();
 
     for content in contents {

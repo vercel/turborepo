@@ -9,14 +9,14 @@ use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
         availability_info::AvailabilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
-        FromChunkableAsset, ModuleId, ModuleIdVc,
+        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkReferenceVc,
+        ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::{AssetIdent, AssetIdentVc},
@@ -197,7 +197,7 @@ impl GenerateSourceMap for CssChunkContent {
 pub struct CssChunkContentResult {
     pub chunk_items: Vec<CssChunkItemVc>,
     pub chunks: Vec<ChunkVc>,
-    pub async_chunk_groups: Vec<ChunkGroupVc>,
+    pub async_chunk_groups: Vec<AssetsVc>,
     pub external_asset_references: Vec<AssetReferenceVc>,
 }
 
@@ -231,7 +231,7 @@ async fn css_chunk_content(
 
     let mut all_chunk_items = IndexSet::<CssChunkItemVc>::new();
     let mut all_chunks = IndexSet::<ChunkVc>::new();
-    let mut all_async_chunk_groups = IndexSet::<ChunkGroupVc>::new();
+    let mut all_async_chunk_groups = IndexSet::<AssetsVc>::new();
     let mut all_external_asset_references = IndexSet::<AssetReferenceVc>::new();
 
     for content in contents {
