@@ -37,6 +37,7 @@ type Meta struct {
 	shouldSave    bool
 	apiClient     *client.APIClient
 	spaceID       string
+	runType       string // "real", "dryjson", "drytext"
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -66,6 +67,7 @@ func NewRunSummary(
 	profile string,
 	turboVersion string,
 	packages []string,
+	runType string,
 	globalHashSummary *GlobalHashSummary,
 	shouldSave bool,
 	apiClient *client.APIClient,
@@ -84,6 +86,7 @@ func NewRunSummary(
 			GlobalHashSummary: globalHashSummary,
 		},
 		ui:            terminal,
+		runType:       runType,
 		repoRoot:      repoRoot,
 		singlePackage: singlePackage,
 		shouldSave:    shouldSave,
@@ -100,25 +103,12 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 	return rsm.repoRoot.UntypedJoin(filepath.Join(".turbo", "runs"), filename)
 }
 
-// CloseDryRun wraps up the Run Summary at the end of `turbo run --dry`.
-// Ideally this should be inlined into Close(), but RunSummary doesn't currently
-// have context about whether a run was real or dry.
-func (rsm *Meta) CloseDryRun(workspaceInfos workspace.Catalog, dryRunJSON bool) error {
-	// Render the dry run as json
-	if dryRunJSON {
-		rendered, err := rsm.FormatJSON()
-		if err != nil {
-			return err
-		}
-		rsm.ui.Output(string(rendered))
-		return nil
+// Close wraps up the RunSummary at the end of a `turbo run`.
+func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+	if rsm.runType == "dryjson" || rsm.runType == "drytext" {
+		return rsm.closeDryRun(workspaceInfos)
 	}
 
-	return rsm.FormatAndPrintText(workspaceInfos)
-}
-
-// Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int) {
 	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
@@ -149,6 +139,25 @@ func (rsm *Meta) Close(exitCode int) {
 		}
 	}
 
+	return nil
+}
+
+// closeDryRun wraps up the Run Summary at the end of `turbo run --dry`.
+// Ideally this should be inlined into Close(), but RunSummary doesn't currently
+// have context about whether a run was real or dry.
+func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
+	// Render the dry run as json
+	if rsm.runType == "dryjson" {
+		rendered, err := rsm.FormatJSON()
+		if err != nil {
+			return err
+		}
+
+		rsm.ui.Output(string(rendered))
+		return nil
+	}
+
+	return rsm.FormatAndPrintText(workspaceInfos)
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.

@@ -80,7 +80,8 @@ func DryRun(
 	// Assign the Task Summaries to the main summary
 	summary.RunSummary.Tasks = taskSummaries
 
-	return summary.CloseDryRun(g.WorkspaceInfos, rs.Opts.runOpts.dryRunJSON)
+	// This is terrible, but pass a 0 exitCode into Close()
+	return summary.Close(0, g.WorkspaceInfos)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {

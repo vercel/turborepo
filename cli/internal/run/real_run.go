@@ -163,7 +163,9 @@ func RealRun(
 		}
 	}
 
-	runSummary.Close(exitCode)
+	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
+		// Ignore the error. All errors are swallowed for real runs
+	}
 
 	if exitCode != 0 {
 		return &process.ChildExit{

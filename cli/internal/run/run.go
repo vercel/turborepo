@@ -347,6 +347,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	runType := "real"
+	if rs.Opts.runOpts.dryRun {
+		runType = "drytext"
+		if rs.Opts.runOpts.dryRunJSON {
+			runType = "dryjson"
+		}
+	}
+
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
@@ -357,6 +365,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,
 		packagesInScope,
+		runType,
 		runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,
