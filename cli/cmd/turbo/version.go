@@ -1,3 +1,3 @@
 package main
 
-const turboVersion = "1.8.7"
+const turboVersion = "1.8.8"
