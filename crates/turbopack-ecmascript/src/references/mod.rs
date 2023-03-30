@@ -5,6 +5,7 @@ pub mod esm;
 pub mod node;
 pub mod pattern_mapping;
 pub mod raw;
+pub mod require_context;
 pub mod typescript;
 pub mod unreachable;
 pub mod util;
@@ -20,7 +21,7 @@ use std::{
 
 use anyhow::Result;
 use constant_condition::{ConstantConditionValue, ConstantConditionVc};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -37,7 +38,10 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
+use turbo_tasks::{
+    primitives::{BoolVc, RegexVc},
+    TryJoinIterExt, Value,
+};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
@@ -97,7 +101,7 @@ use crate::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
-        ModuleValue,
+        parse_require_context, ModuleValue, RequireContextValue,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{
@@ -109,6 +113,7 @@ use crate::{
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
+        require_context::{generate_require_context_map, CjsRequireContextAssetReferenceVc},
     },
     resolve::try_to_severity,
     tree_shake::{part_of_module, split},
@@ -721,6 +726,52 @@ pub(crate) async fn analyze_ecmascript_module(
                             ),
                             DiagnosticId::Error(
                                 errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE.to_string(),
+                            ),
+                        )
+                    }
+
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) => {
+                        let args = linked_args(args).await?;
+                        if (1..=3).contains(&args.len()) {
+                            let options = match parse_require_context(&args) {
+                                Ok(options) => options,
+                                Err(reason) => {
+                                    let (args, hints) = explain_args(&args);
+                                    handler.span_err_with_code(
+                                        span,
+                                        &format!(
+                                            "require.context({args}) is not statically \
+                                             analyse-able: {reason}{hints}",
+                                        ),
+                                        DiagnosticId::Error(
+                                            errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
+                                                .to_string(),
+                                        ),
+                                    );
+                                    return Ok(());
+                                }
+                            };
+
+                            analysis.add_reference(CjsRequireContextAssetReferenceVc::new(
+                                origin,
+                                options.dir,
+                                options.include_subdirs,
+                                RegexVc::cell(options.filter),
+                                AstPathVc::cell(ast_path.to_vec()),
+                                OptionIssueSourceVc::some(issue_source(source, span)),
+                                in_try,
+                            ));
+                            return Ok(());
+                        }
+                        let (args, hints) = explain_args(&args);
+                        handler.span_err_with_code(
+                            span,
+                            &format!(
+                                "require.context({args}) is not statically analyse-able, it \
+                                 should have 1-3 arguments {hints}",
+                            ),
+                            DiagnosticId::Error(
+                                errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT.to_string(),
                             ),
                         )
                     }
@@ -1870,53 +1921,12 @@ async fn value_visitor_inner(
             _,
             box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
             args,
-        ) => {
-            if args.len() == 1 {
-                let pat = js_value_to_pattern(&args[0]);
-                let request = RequestVc::parse(Value::new(pat.clone()));
-                let resolved = cjs_resolve(
-                    origin,
-                    request,
-                    OptionIssueSourceVc::none(),
-                    try_to_severity(in_try),
-                )
-                .await?;
-                let mut values = resolved
-                    .primary
-                    .iter()
-                    .map(|result| async move {
-                        Ok(if let PrimaryResolveResult::Asset(asset) = result {
-                            Some(require_resolve(asset.ident().path()).await?)
-                        } else {
-                            None
-                        })
-                    })
-                    .try_join()
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-                match values.len() {
-                    0 => JsValue::Unknown(
-                        Some(Arc::new(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                            args,
-                        ))),
-                        "unresolveable request",
-                    ),
-                    1 => values.pop().unwrap(),
-                    _ => JsValue::alternatives(values),
-                }
-            } else {
-                JsValue::Unknown(
-                    Some(Arc::new(JsValue::call(
-                        box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                        args,
-                    ))),
-                    "only a single argument is supported",
-                )
-            }
-        }
+        ) => require_resolve_visitor(origin, args, in_try).await?,
+        JsValue::Call(
+            _,
+            box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+            args,
+        ) => require_context_visitor(origin, args, in_try).await?,
         JsValue::FreeVar(ref kind) => match &**kind {
             "__dirname" => as_abs_path(origin.origin_path().parent()).await?,
             "__filename" => as_abs_path(origin.origin_path()).await?,
@@ -1982,6 +1992,100 @@ async fn value_visitor_inner(
         }
     };
     Ok((value, true))
+}
+
+async fn require_resolve_visitor(
+    origin: ResolveOriginVc,
+    args: Vec<JsValue>,
+    in_try: bool,
+) -> Result<JsValue> {
+    Ok(if args.len() == 1 {
+        let pat = js_value_to_pattern(&args[0]);
+        let request = RequestVc::parse(Value::new(pat.clone()));
+        let resolved = cjs_resolve(
+            origin,
+            request,
+            OptionIssueSourceVc::none(),
+            try_to_severity(in_try),
+        )
+        .await?;
+        let mut values = resolved
+            .primary
+            .iter()
+            .map(|result| async move {
+                Ok(if let PrimaryResolveResult::Asset(asset) = result {
+                    Some(require_resolve(asset.ident().path()).await?)
+                } else {
+                    None
+                })
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        match values.len() {
+            0 => JsValue::Unknown(
+                Some(Arc::new(JsValue::call(
+                    box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                    args,
+                ))),
+                "unresolveable request",
+            ),
+            1 => values.pop().unwrap(),
+            _ => JsValue::alternatives(values),
+        }
+    } else {
+        JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                args,
+            ))),
+            "only a single argument is supported",
+        )
+    })
+}
+
+async fn require_context_visitor(
+    origin: ResolveOriginVc,
+    args: Vec<JsValue>,
+    in_try: bool,
+) -> Result<JsValue> {
+    let options = match parse_require_context(&args) {
+        Ok(options) => options,
+        Err(reason) => {
+            return Ok(JsValue::Unknown(
+                Some(Arc::new(JsValue::call(
+                    box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                    args,
+                ))),
+                reason,
+            ))
+        }
+    };
+
+    let dir = origin.origin_path().parent().join(&options.dir);
+
+    let map = &*generate_require_context_map(
+        origin,
+        dir,
+        options.include_subdirs,
+        RegexVc::cell(options.filter),
+        OptionIssueSourceVc::none(),
+        try_to_severity(in_try),
+    )
+    .await?;
+
+    let mut context_map = IndexMap::new();
+
+    for (key, entry) in map {
+        context_map.insert(key.clone(), entry.origin_relative.clone());
+    }
+
+    Ok(JsValue::WellKnownFunction(
+        WellKnownFunctionKind::RequireContextRequire(RequireContextValue { map: context_map }),
+    ))
 }
 
 #[derive(Debug)]

@@ -9,9 +9,10 @@ use std::{
     sync::Arc,
 };
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
+use regex::Regex;
 use swc_core::{
     common::Mark,
     ecma::{
@@ -167,6 +168,14 @@ impl ConstantValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::True => Some(true),
+            Self::False => Some(false),
             _ => None,
         }
     }
@@ -1358,6 +1367,10 @@ impl JsValue {
                     ),
                     WellKnownFunctionKind::Require => ("require".to_string(), "The require method from CommonJS"),
                     WellKnownFunctionKind::RequireResolve => ("require.resolve".to_string(), "The require.resolve method from CommonJS"),
+                    WellKnownFunctionKind::RequireContext => ("require.context".to_string(), "The require.context method from webpack"),
+                    WellKnownFunctionKind::RequireContextRequire(..) => ("require.context(...)".to_string(), "The require.context(...) method from webpack: https://webpack.js.org/api/module-methods/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireKeys(..) => ("require.context(...).keys".to_string(), "The require.context(...).keys method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireResolve(..) => ("require.context(...).resolve".to_string(), "The require.context(...).resolve method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
                     WellKnownFunctionKind::Define => ("define".to_string(), "The define method from AMD"),
                     WellKnownFunctionKind::FsReadMethod(name) => (
                         format!("fs.{name}"),
@@ -1567,6 +1580,14 @@ impl JsValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             JsValue::Constant(c) => c.as_str(),
+            _ => None,
+        }
+    }
+
+    /// Returns the constant bool if the value represents a constant boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => c.as_bool(),
             _ => None,
         }
     }
@@ -2852,6 +2873,97 @@ impl WellKnownObjectKind {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RequireContextOptions {
+    pub dir: String,
+    pub include_subdirs: bool,
+    /// this is a regex (pattern, flags)
+    pub filter: Regex,
+}
+
+pub fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
+    // rust regex doesn't allow escaped slashes, but they are necessary in js
+    let pattern = pattern.replace("\\/", "/");
+
+    let mut applied_flags = String::new();
+    for flag in flags.chars() {
+        match flag {
+            // case-insensitive: letters match both upper and lower case
+            'i' => applied_flags.push('i'),
+            // multi-line mode: ^ and $ match begin/end of line
+            'm' => applied_flags.push('m'),
+            // allow . to match \n
+            's' => applied_flags.push('s'),
+            // Unicode support (enabled by default)
+            'u' => applied_flags.push('u'),
+            // default in rust, ignore
+            'g' => {}
+            // TODO: maybe error in the future
+            _ => {}
+        }
+    }
+
+    let regex = if !applied_flags.is_empty() {
+        format!("(?{}){}", applied_flags, pattern)
+    } else {
+        pattern
+    };
+
+    Regex::new(&regex).map_err(|_| "could not convert javascript regex to rust regex")
+}
+
+pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions, &'static str> {
+    if !(1..=3).contains(&args.len()) {
+        return Err("only 1-3 arguments are supported (mode is not supported)");
+    }
+
+    let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
+        return Err("dir needs to be a constant argument");
+    };
+
+    let include_subdirs = if let Some(include_subdirs) = args.get(1) {
+        if let Some(include_subdirs) = include_subdirs.as_bool() {
+            include_subdirs
+        } else {
+            return Err("includeSubdirs needs to be a boolean");
+        }
+    } else {
+        true
+    };
+
+    let filter = if let Some(filter) = args.get(2) {
+        if let JsValue::Constant(ConstantValue::Regex(pattern, flags)) = filter {
+            regex_from_js(pattern, flags)?
+        } else {
+            return Err("filter needs to be a regex");
+        }
+    } else {
+        // https://webpack.js.org/api/module-methods/#requirecontext
+        // > optional, default /^\.\/.*$/, any file
+        Regex::new("^\\./.*$").expect("valid static regex should always compile")
+    };
+
+    Ok(RequireContextOptions {
+        dir,
+        include_subdirs,
+        filter,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequireContextValue {
+    pub(crate) map: IndexMap<String, String>,
+}
+
+impl Hash for RequireContextValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for (k, v) in self.map.iter() {
+            k.hash(state);
+            v.hash(state);
+        }
+    }
+}
+
 /// A list of well-known functions that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownFunctionKind {
@@ -2863,6 +2975,10 @@ pub enum WellKnownFunctionKind {
     Import,
     Require,
     RequireResolve,
+    RequireContext,
+    RequireContextRequire(RequireContextValue),
+    RequireContextRequireKeys(RequireContextValue),
+    RequireContextRequireResolve(RequireContextValue),
     Define,
     FsReadMethod(JsWord),
     PathToFileUrl,
@@ -2889,6 +3005,7 @@ impl WellKnownFunctionKind {
             Self::Import => Some(&["import"]),
             Self::Require => Some(&["require"]),
             Self::RequireResolve => Some(&["require", "resolve"]),
+            Self::RequireContext => Some(&["require", "context"]),
             Self::Define => Some(&["define"]),
             _ => None,
         }
@@ -2904,13 +3021,14 @@ pub mod test_utils {
     use std::sync::Arc;
 
     use anyhow::Result;
+    use indexmap::IndexMap;
     use turbopack_core::compile_time_info::CompileTimeInfoVc;
 
     use super::{
         builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
         WellKnownFunctionKind, WellKnownObjectKind,
     };
-    use crate::analyzer::builtin::replace_builtin;
+    use crate::analyzer::{builtin::replace_builtin, parse_require_context, RequireContextValue};
 
     pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
         let m = early_replace_builtin(&mut v);
@@ -2928,7 +3046,25 @@ pub mod test_utils {
                 ref args,
             ) => match &args[0] {
                 JsValue::Constant(v) => (v.to_string() + "/resolved/lib/index.js").into(),
-                _ => JsValue::Unknown(Some(Arc::new(v)), "resolve.resolve non constant"),
+                _ => JsValue::Unknown(Some(Arc::new(v)), "require.resolve non constant"),
+            },
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                ref args,
+            ) => match parse_require_context(args) {
+                Ok(options) => {
+                    let mut map = IndexMap::new();
+
+                    map.insert("./a".into(), format!("[context: {}]/a", options.dir));
+                    map.insert("./b".into(), format!("[context: {}]/b", options.dir));
+                    map.insert("./c".into(), format!("[context: {}]/c", options.dir));
+
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
+                        RequireContextValue { map },
+                    ))
+                }
+                Err(reason) => JsValue::Unknown(Some(Arc::new(v)), reason),
             },
             JsValue::FreeVar(var) => match &*var {
                 "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),

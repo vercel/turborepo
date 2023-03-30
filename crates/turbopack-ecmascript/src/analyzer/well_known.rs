@@ -8,6 +8,7 @@ use super::{
     imports::ImportAnnotations, ConstantValue, JsValue, ModuleValue, WellKnownFunctionKind,
     WellKnownObjectKind,
 };
+use crate::analyzer::RequireContextValue;
 
 pub async fn replace_well_known(
     value: JsValue,
@@ -63,6 +64,13 @@ pub async fn well_known_function_call(
             "import() is not supported",
         ),
         WellKnownFunctionKind::Require => require(args),
+        WellKnownFunctionKind::RequireContextRequire(value) => require_context_require(value, args),
+        WellKnownFunctionKind::RequireContextRequireKeys(value) => {
+            require_context_require_keys(value, args)
+        }
+        WellKnownFunctionKind::RequireContextRequireResolve(value) => {
+            require_context_require_resolve(value, args)
+        }
         WellKnownFunctionKind::PathToFileUrl => path_to_file_url(args),
         WellKnownFunctionKind::OsArch => compile_time_info
             .environment()
@@ -337,6 +345,99 @@ pub fn require(args: Vec<JsValue>) -> JsValue {
     }
 }
 
+pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
+    if args.len() < 1 {
+        return JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+                args,
+            ))),
+            "only a single argument is supported",
+        );
+    }
+
+    let Some(s) = args[0].as_str() else {
+        return JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+                args,
+            ))),
+            "only constant argument is supported",
+        );
+    };
+
+    let Some(m) = val.map.get(s) else {
+       return JsValue::Unknown(
+           Some(Arc::new(JsValue::call(
+               box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+               args,
+           ))),
+           "argument has to be in the context",
+       );
+    };
+
+    JsValue::Module(ModuleValue {
+        module: m.to_string().into(),
+        annotations: ImportAnnotations::default(),
+    })
+}
+
+pub fn require_context_require_keys(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
+    if args.len() == 0 {
+        JsValue::array(val.map.keys().cloned().map(|k| k.into()).collect())
+    } else {
+        JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequireKeys(
+                    val,
+                )),
+                args,
+            ))),
+            "no arguments are supported",
+        )
+    }
+}
+
+pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
+    if args.len() != 1 {
+        return JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireContextRequireResolve(val),
+                ),
+                args,
+            ))),
+            "only a single argument is supported",
+        );
+    }
+
+    let Some(s) = args[0].as_str() else {
+        return JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireContextRequireResolve(val),
+                ),
+                args,
+            ))),
+            "only constant argument is supported",
+        );
+    };
+
+    let Some(m) = val.map.get(s) else {
+        return JsValue::Unknown(
+            Some(Arc::new(JsValue::call(
+                box JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireContextRequireResolve(val),
+                ),
+                args,
+            ))),
+            "argument has to be in the context",
+        );
+    };
+
+    m.as_str().into()
+}
+
 pub fn path_to_file_url(args: Vec<JsValue>) -> JsValue {
     if args.len() == 1 {
         if let Some(path) = args[0].as_str() {
@@ -373,12 +474,21 @@ pub fn path_to_file_url(args: Vec<JsValue>) -> JsValue {
 }
 
 pub fn well_known_function_member(kind: WellKnownFunctionKind, prop: JsValue) -> (JsValue, bool) {
-    let new_value = match (&kind, prop.as_str()) {
+    let new_value = match (kind, prop.as_str()) {
         (WellKnownFunctionKind::Require, Some("resolve")) => {
             JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve)
         }
         (WellKnownFunctionKind::Require, Some("cache")) => {
             JsValue::WellKnownObject(WellKnownObjectKind::RequireCache)
+        }
+        (WellKnownFunctionKind::Require, Some("context")) => {
+            JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext)
+        }
+        (WellKnownFunctionKind::RequireContextRequire(val), Some("resolve")) => {
+            JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequireResolve(val))
+        }
+        (WellKnownFunctionKind::RequireContextRequire(val), Some("keys")) => {
+            JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequireKeys(val))
         }
         (WellKnownFunctionKind::NodeStrongGlobalize, Some("SetRootDir")) => {
             JsValue::WellKnownFunction(WellKnownFunctionKind::NodeStrongGlobalizeSetRootDir)
@@ -387,7 +497,7 @@ pub fn well_known_function_member(kind: WellKnownFunctionKind, prop: JsValue) ->
             JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom)
         }
         #[allow(unreachable_patterns)]
-        _ => {
+        (kind, _) => {
             return (
                 JsValue::member(box JsValue::WellKnownFunction(kind), box prop),
                 false,
