@@ -142,11 +142,18 @@ impl<T: Watcher> HashGlobWatcher<T> {
             self.config.include(glob.to_owned()).await.unwrap();
         }
 
-        let mut map = self.glob_status.lock().expect("no panic");
-        map.entry(hash.clone()).or_default().extend(include.clone());
+        {
+            let mut glob_status = self.glob_status.lock().expect("no panic");
+            glob_status
+                .entry(hash.clone())
+                .or_default()
+                .extend(include.clone());
+        }
 
-        let mut map = self.hash_globs.lock().expect("no panic");
-        map.insert(hash, Glob { include, exclude });
+        {
+            let mut hash_globs = self.hash_globs.lock().expect("no panic");
+            hash_globs.insert(hash, Glob { include, exclude });
+        }
     }
 
     /// Given a hash and a set of candidates, return the subset of candidates
