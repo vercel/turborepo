@@ -28,6 +28,14 @@ const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
 const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
+type runType int
+
+const (
+	runTypeReal runType = iota
+	runTypeDryText
+	runTypeDryJSON
+)
+
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
 type Meta struct {
@@ -38,7 +46,7 @@ type Meta struct {
 	shouldSave    bool
 	apiClient     *client.APIClient
 	spaceID       string
-	runType       string // "real", "dryjson", "drytext"
+	runType       runType
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -75,11 +83,11 @@ func NewRunSummary(
 	shouldSave := runOpts.Summarize
 	spaceID := runOpts.ExperimentalSpaceID
 
-	runType := "real"
+	runType := runTypeReal
 	if runOpts.DryRun {
-		runType = "drytext"
+		runType = runTypeDryText
 		if runOpts.DryRunJSON {
-			runType = "dryjson"
+			runType = runTypeDryJSON
 		}
 	}
 
@@ -115,7 +123,7 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
 func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
-	if rsm.runType == "dryjson" || rsm.runType == "drytext" {
+	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
 		return rsm.closeDryRun(workspaceInfos)
 	}
 
@@ -157,7 +165,7 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 // have context about whether a run was real or dry.
 func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
 	// Render the dry run as json
-	if rsm.runType == "dryjson" {
+	if rsm.runType == runTypeDryJSON {
 		rendered, err := rsm.FormatJSON()
 		if err != nil {
 			return err
