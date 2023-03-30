@@ -53,6 +53,7 @@ impl GlobWatcher<notify::RecommendedWatcher> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (tconf, rconf) = tokio::sync::mpsc::channel(10);
 
+        // even if this fails, we may still be able to continue
         std::fs::create_dir_all(&flush_dir).ok();
 
         let mut watcher = notify::recommended_watcher(move |event: Result<Event, Error>| {
