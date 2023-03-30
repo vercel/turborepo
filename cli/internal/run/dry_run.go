@@ -35,7 +35,7 @@ func DryRun(
 	taskSummaries := []*runsummary.TaskSummary{}
 
 	mu := sync.Mutex{}
-	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		// Assign some fallbacks if they were missing
 		if taskSummary.Command == "" {
 			taskSummary.Command = runsummary.MissingTaskLabel
@@ -61,7 +61,7 @@ func DryRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, dryRunExecFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
