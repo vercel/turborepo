@@ -32,42 +32,7 @@ func DryRun(
 
 	dryRunJSON := rs.Opts.runOpts.dryRunJSON
 
-	taskSummaries, err := executeDryRun(
-		ctx,
-		engine,
-		g,
-		taskHashTracker,
-		rs,
-		base,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	// We walk the graph with no concurrency.
-	// Populating the cache state is parallelizable.
-	// Do this _after_ walking the graph.
-	populateCacheState(turboCache, taskSummaries)
-
-	// Assign the Task Summaries to the main summary
-	summary.RunSummary.Tasks = taskSummaries
-
-	// Render the dry run as json
-	if dryRunJSON {
-		rendered, err := summary.FormatJSON()
-		if err != nil {
-			return err
-		}
-		base.UI.Output(string(rendered))
-		return nil
-	}
-
-	return summary.FormatAndPrintText(g.WorkspaceInfos)
-}
-
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]*runsummary.TaskSummary, error) {
-	taskIDs := []*runsummary.TaskSummary{}
+	taskSummaries := []*runsummary.TaskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		// Assign some fallbacks if they were missing
@@ -79,7 +44,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			taskSummary.Framework = runsummary.MissingFrameworkLabel
 		}
 
-		taskIDs = append(taskIDs, taskSummary)
+		taskSummaries = append(taskSummaries, taskSummary)
 
 		return nil
 	}
@@ -102,10 +67,28 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		for _, err := range errs {
 			base.UI.Error(err.Error())
 		}
-		return nil, errors.New("errors occurred during dry-run graph traversal")
+		return errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return taskIDs, nil
+	// We walk the graph with no concurrency.
+	// Populating the cache state is parallelizable.
+	// Do this _after_ walking the graph.
+	populateCacheState(turboCache, taskSummaries)
+
+	// Assign the Task Summaries to the main summary
+	summary.RunSummary.Tasks = taskSummaries
+
+	// Render the dry run as json
+	if dryRunJSON {
+		rendered, err := summary.FormatJSON()
+		if err != nil {
+			return err
+		}
+		base.UI.Output(string(rendered))
+		return nil
+	}
+
+	return summary.FormatAndPrintText(g.WorkspaceInfos)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
