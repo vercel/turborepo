@@ -91,10 +91,6 @@ impl GlobWatcher<notify::RecommendedWatcher> {
     }
 }
 
-trait IntoPaths {
-    fn into_paths(self) -> Vec<PathBuf>;
-}
-
 impl<T: Watcher> GlobWatcher<T> {
     /// Convert the watcher into a stream of events,
     /// handling config changes and flushing transparently.
