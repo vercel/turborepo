@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
@@ -93,9 +92,7 @@ func RealRun(
 	mu := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		// deps here are passed in to calculate the task hash
-		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
+		taskExecutionSummary, err := ec.exec(ctx, packageTask)
 		if err != nil {
 			return err
 		}
@@ -190,7 +187,7 @@ type execContext struct {
 	isSinglePackage bool
 }
 
-func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
+func (ec *execContext) logError(prefix string, err error) {
 	ec.logger.Error(prefix, "error", err)
 
 	if prefix != "" {
@@ -200,7 +197,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
 	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
@@ -276,7 +273,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err, nil)
 
-		ec.logError(progressLogger, prettyPrefix, err)
+		ec.logError(prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.continueOnError {
 			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
 		}
@@ -355,10 +352,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
-		ec.logError(progressLogger, "", err)
+		ec.logError("", err)
 	} else {
 		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(taskExecutionSummary.Duration.Milliseconds())); err != nil {
-			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
+			ec.logError("", fmt.Errorf("error caching output: %w", err))
 		} else {
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		}
