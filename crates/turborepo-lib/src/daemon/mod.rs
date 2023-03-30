@@ -1,3 +1,4 @@
+mod bump_timeout;
 mod client;
 mod connector;
 pub(crate) mod endpoint;

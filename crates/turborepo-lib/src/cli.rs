@@ -553,7 +553,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             let base = CommandBase::new(clap_args.clone(), repo_root, version)?;
 
             match command {
-                Some(command) => daemon::daemon_client(command, &base, idle_time).await,
+                Some(command) => daemon::daemon_client(command, &base).await,
                 None => daemon::daemon_server(&base, idle_time).await,
             }?;
 

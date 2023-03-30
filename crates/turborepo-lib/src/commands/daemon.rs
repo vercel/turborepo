@@ -7,11 +7,7 @@ use crate::{
 };
 
 /// Runs the daemon command.
-pub async fn daemon_client(
-    command: &DaemonCommand,
-    base: &CommandBase,
-    idle_time: &Option<String>,
-) -> Result<(), DaemonError> {
+pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
