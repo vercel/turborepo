@@ -34,6 +34,7 @@ func DryRun(
 
 	taskSummaries := []*runsummary.TaskSummary{}
 
+	mu := sync.Mutex{}
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		// Assign some fallbacks if they were missing
 		if taskSummary.Command == "" {
@@ -44,8 +45,11 @@ func DryRun(
 			taskSummary.Framework = runsummary.MissingFrameworkLabel
 		}
 
+		// This mutex is not _really_ required, since we are using Concurrency: 1 as an execution
+		// option, but we add it here to match the shape of RealRuns execFunc.
+		mu.Lock()
+		defer mu.Unlock()
 		taskSummaries = append(taskSummaries, taskSummary)
-
 		return nil
 	}
 
