@@ -14,7 +14,7 @@ pub async fn main(
 ) -> anyhow::Result<()> {
     let command = match command {
         Some(command) => command,
-        None => return run_daemon(base, idle_time).await.map_err(Into::into),
+        None => return Ok(run_daemon(base, idle_time).await?),
     };
 
     let (can_start_server, can_kill_server) = match command {
