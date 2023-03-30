@@ -7,16 +7,11 @@ use crate::{
 };
 
 /// Runs the daemon command.
-pub async fn main(
-    command: &Option<DaemonCommand>,
+pub async fn daemon_client(
+    command: &DaemonCommand,
     base: &CommandBase,
     idle_time: &Option<String>,
-) -> anyhow::Result<()> {
-    let command = match command {
-        Some(command) => command,
-        None => return Ok(run_daemon(base, idle_time).await?),
-    };
-
+) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
@@ -71,7 +66,10 @@ pub async fn main(
     Ok(())
 }
 
-pub async fn run_daemon(base: &CommandBase, idle_time: &Option<String>) -> Result<(), DaemonError> {
+pub async fn daemon_server(
+    base: &CommandBase,
+    idle_time: &Option<String>,
+) -> Result<(), DaemonError> {
     let log_file = {
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");

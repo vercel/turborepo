@@ -143,6 +143,9 @@ pub enum DaemonError {
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]
     FileWatching(#[from] globwatch::Error),
+
+    #[error("unable to display output: {0}")]
+    DisplayError(#[from] serde_json::Error),
 }
 
 impl From<Status> for DaemonError {
