@@ -522,7 +522,7 @@ jobs:
 
   next_dev_check:
     needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     name: Check next-swc
     runs-on: ubuntu-latest-8-core-oss
     permissions:
@@ -545,10 +545,17 @@ jobs:
         env:
           CARGO_TERM_COLOR: never
         run: |
+          export TURBOPACK_REMOTE="https://github.com/vercel/turbo"
+
+          # Apply patches to the cargo to the latest turbopack's sha.
+          export BINDING=$(printf 'patch."%s".%s.git="%s?rev=%s"' "$TURBOPACK_REMOTE" "turbo-binding" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+          export TASKS=$(printf 'patch."%s".%s.git="%s?rev=%s"' "$TURBOPACK_REMOTE" "turbo-tasks" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+          export TASKS_FS=$(printf 'patch."%s".%s.git="%s?rev=%s"' "$TURBOPACK_REMOTE" "turbo-tasks-fs" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+
           cd packages/next-swc
-          cargo check --message-format short --quiet && \
-          cargo check -p next-swc-napi --features plugin,rustls-tls --message-format short --quiet && \
-          cargo check -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test --message-format short --quiet &> cargo_output.log
+          cargo check --config $BINDING --config $TASKS --config $TASKS_FS --message-format short --quiet && \
+          cargo check --config $BINDING --config $TASKS --config $TASKS_FS -p next-swc-napi --features plugin,rustls-tls --message-format short --quiet && \
+          cargo check --config $BINDING --config $TASKS --config $TASKS_FS -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test --message-format short --quiet &> cargo_output.log
 
       - name: Post logs if there are errors
         run: |
@@ -557,6 +564,9 @@ jobs:
 
       - name: PR comment with file
         uses: thollander/actions-comment-pull-request@v2
+        if: github.repository == 'vercel/turbo'
+        # We'll not block CI on this step
+        continue-on-error: true
         with:
           filePath: ./out.log
           comment_tag: check_next_swc_turbopack
