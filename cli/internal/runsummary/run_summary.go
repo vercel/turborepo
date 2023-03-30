@@ -31,6 +31,7 @@ const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 type Meta struct {
 	RunSummary    *RunSummary
 	ui            cli.Ui
+	repoRoot      turbopath.AbsoluteSystemPath // used to write run summary
 	singlePackage bool
 	shouldSave    bool
 	apiClient     *client.APIClient
@@ -59,6 +60,7 @@ type singlePackageRunSummary struct {
 func NewRunSummary(
 	startAt time.Time,
 	terminal cli.Ui,
+	repoRoot turbopath.AbsoluteSystemPath,
 	singlePackage bool,
 	profile string,
 	turboVersion string,
@@ -81,6 +83,7 @@ func NewRunSummary(
 			GlobalHashSummary: globalHashSummary,
 		},
 		ui:            terminal,
+		repoRoot:      repoRoot,
 		singlePackage: singlePackage,
 		shouldSave:    shouldSave,
 		apiClient:     apiClient,
@@ -88,8 +91,16 @@ func NewRunSummary(
 	}
 }
 
+// getPath returns a path to where the runSummary is written.
+// The returned path will always be relative to the dir passsed in.
+// We don't do a lot of validation, so `../../` paths are allowed.
+func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
+	filename := fmt.Sprintf("%s.json", rsm.RunSummary.ID)
+	return rsm.repoRoot.UntypedJoin(filepath.Join(".turbo", "runs"), filename)
+}
+
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int, dir turbopath.AbsoluteSystemPath) {
+func (rsm *Meta) Close(exitCode int) {
 	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
@@ -102,19 +113,24 @@ func (rsm *Meta) Close(exitCode int, dir turbopath.AbsoluteSystemPath) {
 	// are all the same thng, we should use a strategy similar to cache save/upload to
 	// do this in parallel.
 
+	// Otherwise, attempt to save the summary
+	// Warn on the error, but we don't need to throw an error
+	if rsm.shouldSave {
+		if err := rsm.save(); err != nil {
+			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+		}
+	}
+
 	rsm.printExecutionSummary()
 
 	if rsm.shouldSave {
-		if err := rsm.save(dir); err != nil {
-			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
-		}
-
 		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
 			if err := rsm.record(); err != nil {
 				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
 			}
 		}
 	}
+
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
@@ -123,7 +139,7 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 }
 
 // Save saves the run summary to a file
-func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
+func (rsm *Meta) save() error {
 	json, err := rsm.FormatJSON()
 	if err != nil {
 		return err
@@ -131,10 +147,7 @@ func (rsm *Meta) save(dir turbopath.AbsoluteSystemPath) error {
 
 	// summaryPath will always be relative to the dir passsed in.
 	// We don't do a lot of validation, so `../../` paths are allowed
-	summaryPath := dir.UntypedJoin(
-		filepath.Join(".turbo", "runs"),
-		fmt.Sprintf("%s.json", rsm.RunSummary.ID),
-	)
+	summaryPath := rsm.getPath()
 
 	if err := summaryPath.EnsureDir(); err != nil {
 		return err
@@ -170,7 +183,7 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		if donePayload, err := json.Marshal(newVercelDonePayload()); err == nil {
+		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
 			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
 				errs = append(errs, err)
 			}

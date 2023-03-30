@@ -12,11 +12,18 @@ on:
 jobs:
   build_nextjs:
     name: Build Next.js for the turbopack integration test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-core-oss
     env:
       # pnpm version should match to what upstream next.js uses
       PNPM_VERSION: 7.24.3
     steps:
+      - name: Get number of CPU cores
+        uses: SimenB/github-actions-cpu-cores@v1
+        id: cpu-cores
+
+      - name: Display runner information
+        run: echo runner cpu count ${{ steps.cpu-cores.outputs.count }}
+
       - name: Find Next.js latest release version
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,16 +66,16 @@ jobs:
 
       - name: Build next.js volume
         run: |
-          ./next-dev --version
           docker volume create nextjs-test-volume
           # Run a dummy container to cp checked out next.js to the volume
           docker run --rm -d --mount src=nextjs-test-volume,dst=/work --name dummy mcr.microsoft.com/playwright:v1.28.1-focal tail -f /dev/null
-          docker cp ./ dummy:/work
+          docker cp ./. dummy:/work
           docker stop dummy
-          # Build next-dev
-          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "apt update && apt install build-essential libssl-dev zsh -y && apt-get install --reinstall pkg-config libfontconfig1-dev cmake-data -y && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH="/root/.cargo/bin:${PATH}" && git config --global --add safe.directory /work && cd /work && git status && cd packages/next-swc && cargo build --release -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test"
           # Build next.js
-          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "apt update && apt install build-essential libssl-dev zsh -y && apt-get install --reinstall pkg-config libfontconfig1-dev cmake-data -y && curl https://install-node.vercel.app/v16 | FORCE=1 bash && npm i -g pnpm@${PNPM_VERSION} && pnpm --version && git config --global --add safe.directory /work && cd /work && git status && pnpm install && pnpm run build"
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "git config --global --add safe.directory /work && cd /work && ls -al && git status && apt update && apt install build-essential libssl-dev zsh -y && apt-get install --reinstall pkg-config libfontconfig1-dev cmake-data -y && curl https://install-node.vercel.app/v16 | FORCE=1 bash && npm i -g pnpm@${PNPM_VERSION} && pnpm --version && cd /work && pnpm install && pnpm run build"
+          # Build next-dev
+          # [TODO]: reenable LTO
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "apt update && apt install build-essential libssl-dev zsh -y && apt-get install --reinstall pkg-config libfontconfig1-dev cmake-data -y && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && export PATH="/root/.cargo/bin:${PATH}" && git config --global --add safe.directory /work && cd /work && git status && cd packages/next-swc && CARGO_PROFILE_RELEASE_LTO=off cargo build --release -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test && cp ./target/release/next-dev /work && cargo clean && cd /work"
           # Backup named volume to tar. Named volume is created under /var/lib, which is not accessible by github action.
           docker run --mount src=nextjs-test-volume,dst=/volume --rm --log-driver none loomchild/volume-backup backup > volume.tar.bz2
 
@@ -76,7 +83,7 @@ jobs:
       - name: Detects Next.js build version
         run: |
           # Validate next-dev binary
-          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c '/work/packages/next-swc/target/release/next-dev --version'
+          docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c '/work/next-dev --version'
           # This is being used in github action to collect test results. Do not change it, or should update ./.github/actions/next-integration-test to match.
           docker run --rm --mount src=nextjs-test-volume,dst=/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c 'curl https://install-node.vercel.app/v16 | FORCE=1 bash && cd /work && echo RUNNING NEXTJS VERSION: $(packages/next/dist/bin/next --version)'
 

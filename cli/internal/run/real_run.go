@@ -166,7 +166,7 @@ func RealRun(
 		}
 	}
 
-	runSummary.Close(exitCode, base.RepoRoot)
+	runSummary.Close(exitCode)
 
 	if exitCode != 0 {
 		return &process.ChildExit{
@@ -222,6 +222,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// Return nil here because there was no execution, so there is no task execution summary
 		return nil, nil
 	}
+
+	// Set building status now that we know it's going to run.
+	tracer(runsummary.TargetBuilding, nil, &successCode)
 
 	var prefix string
 	var prettyPrefix string

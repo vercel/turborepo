@@ -81,6 +81,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
 	opts.runOpts.logPrefix = runPayload.LogPrefix
+	opts.runOpts.summarize = runPayload.Summarize
 	opts.runOpts.experimentalSpaceID = runPayload.ExperimentalSpaceID
 
 	// Runcache flags
@@ -142,10 +143,6 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 
 	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
 		opts.cacheOpts.SkipFilesystem = true
-	}
-
-	if os.Getenv("TURBO_RUN_SUMMARY") == "true" {
-		opts.runOpts.summarize = true
 	}
 
 	processes := process.NewManager(base.Logger.Named("processes"))
@@ -355,6 +352,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	summary := runsummary.NewRunSummary(
 		startAt,
 		r.base.UI,
+		r.base.RepoRoot,
 		rs.Opts.runOpts.singlePackage,
 		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,

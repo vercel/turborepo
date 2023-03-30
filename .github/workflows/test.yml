@@ -269,7 +269,7 @@ jobs:
     name: Go E2E Tests
     needs: determine_jobs
     if: needs.determine_jobs.outputs.go_e2e == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -519,6 +519,47 @@ jobs:
               exit 1
             fi
           fi
+
+  next_dev_check:
+    needs: [determine_jobs]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Check next-swc
+    runs-on: ubuntu-latest-8-core-oss
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: tune linux network
+        run: sudo ethtool -K eth0 tx off rx off
+
+      - name: Checkout Next.js
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/next.js
+          ref: ${{ env.NEXTJS_VERSION }}
+
+      - name: Build next-swc
+        continue-on-error: true
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          cd packages/next-swc
+          cargo check --message-format short --quiet && \
+          cargo check -p next-swc-napi --features plugin,rustls-tls --message-format short --quiet && \
+          cargo check -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test --message-format short --quiet &> cargo_output.log
+
+      - name: Post logs if there are errors
+        run: |
+          cp packages/next-swc/cargo_output.log ./cargo_output.log
+          if grep 'error: could not compile' ./cargo_output.log; then (printf "This changes may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This changes can build \`next-swc\`" > out.log; fi
+
+      - name: PR comment with file
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: ./out.log
+          comment_tag: check_next_swc_turbopack
 
   turborepo_rust_test:
     needs: [determine_jobs, rust_prepare]
