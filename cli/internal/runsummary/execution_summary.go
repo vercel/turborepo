@@ -35,7 +35,8 @@ type executionEventName int
 
 // The collection of expected build result statuses.
 const (
-	targetBuilding executionEventName = iota
+	targetInitialized executionEventName = iota
+	TargetBuilding
 	TargetBuildStopped
 	TargetBuilt
 	TargetCached
@@ -44,7 +45,9 @@ const (
 
 func (en executionEventName) toString() string {
 	switch en {
-	case targetBuilding:
+	case targetInitialized:
+		return "initialized"
+	case TargetBuilding:
 		return "building"
 	case TargetBuildStopped:
 		return "buildStopped"
@@ -107,10 +110,10 @@ type executionSummary struct {
 	profileFilename string
 
 	// These get serialized to JSON
-	success   int
-	failure   int
-	cached    int
-	attempted int
+	success   int // number of tasks that exited successfully (does not include cache hits)
+	failure   int // number of tasks that exited with failure
+	cached    int // number of tasks that had a cache hit
+	attempted int // number of tasks that started
 	startedAt time.Time
 	endedAt   time.Time
 	exitCode  int
@@ -164,7 +167,7 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 	taskExecutionSummary := es.add(&executionEvent{
 		Time:   start,
 		Label:  taskID,
-		Status: targetBuilding,
+		Status: targetInitialized,
 	})
 
 	tracer := chrometracing.Event(taskID)
@@ -219,15 +222,14 @@ func (es *executionSummary) add(event *executionEvent) *TaskExecutionSummary {
 	}
 
 	switch {
+	case event.Status == TargetBuilding:
+		es.attempted++
 	case event.Status == TargetBuildFailed:
 		es.failure++
-		es.attempted++
 	case event.Status == TargetCached:
 		es.cached++
-		es.attempted++
 	case event.Status == TargetBuilt:
 		es.success++
-		es.attempted++
 	}
 
 	return es.tasks[event.Label]
