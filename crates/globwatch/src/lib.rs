@@ -30,8 +30,8 @@ use itertools::Itertools;
 use merge_streams::StreamExt as _;
 pub use notify::{Error, Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{event, span, trace, warn, Id, Level, Span};
 
 /// A wrapper around notify that allows for glob-based watching.
@@ -41,7 +41,7 @@ pub struct GlobWatcher<T: Watcher> {
     stream: UnboundedReceiver<Event>,
     flush_dir: PathBuf,
 
-    config: tokio::sync::mpsc::Receiver<WatcherCommand>,
+    config: UnboundedReceiver<WatcherCommand>,
 }
 
 impl GlobWatcher<notify::RecommendedWatcher> {
@@ -51,7 +51,7 @@ impl GlobWatcher<notify::RecommendedWatcher> {
     #[tracing::instrument]
     pub fn new(flush_dir: PathBuf) -> Result<(Self, GlobSender), Error> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (tconf, rconf) = tokio::sync::mpsc::channel(10);
+        let (tconf, rconf) = tokio::sync::mpsc::unbounded_channel();
 
         // even if this fails, we may still be able to continue
         std::fs::create_dir_all(&flush_dir).ok();
@@ -105,7 +105,7 @@ impl<T: Watcher> GlobWatcher<T> {
         Box::pin(
             UnboundedReceiverStream::new(self.stream)
                 .map(Either::Left)
-                .merge(ReceiverStream::new(self.config).map(Either::Right))
+                .merge(UnboundedReceiverStream::new(self.config).map(Either::Right))
                 .filter_map(move |f| {
                     let span = span!(tracing::Level::TRACE, "stream_processor");
                     let _ = span.enter();
@@ -221,7 +221,7 @@ pub enum WatcherChange {
 
 /// A sender for watcher configuration changes.
 #[derive(Debug, Clone)]
-pub struct GlobSender(tokio::sync::mpsc::Sender<WatcherCommand>);
+pub struct GlobSender(UnboundedSender<WatcherCommand>);
 
 /// The server is no longer running.
 #[derive(Debug, Copy, Clone)]
@@ -237,7 +237,6 @@ impl GlobSender {
                 glob,
                 Span::current().id(),
             )))
-            .await
             .map_err(|_| ConfigError)
     }
 
@@ -250,7 +249,6 @@ impl GlobSender {
                 glob,
                 Span::current().id(),
             )))
-            .await
             .map_err(|_| ConfigError)
     }
 
@@ -259,7 +257,6 @@ impl GlobSender {
         let (tx, rx) = oneshot::channel();
         self.0
             .send(WatcherCommand::Flush(tx))
-            .await
             .map_err(|_| ConfigError)?;
         rx.await.map_err(|_| ConfigError)
     }
