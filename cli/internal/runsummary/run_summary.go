@@ -12,6 +12,7 @@ import (
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
@@ -61,18 +62,27 @@ type singlePackageRunSummary struct {
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
 	startAt time.Time,
-	terminal cli.Ui,
+	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
-	singlePackage bool,
-	profile string,
 	turboVersion string,
-	packages []string,
-	runType string,
-	globalHashSummary *GlobalHashSummary,
-	shouldSave bool,
 	apiClient *client.APIClient,
-	spaceID string,
+	runOpts util.RunOpts,
+	packages []string,
+	globalHashSummary *GlobalHashSummary,
 ) Meta {
+	singlePackage := runOpts.SinglePackage
+	profile := runOpts.Profile
+	shouldSave := runOpts.Summarize
+	spaceID := runOpts.ExperimentalSpaceID
+
+	runType := "real"
+	if runOpts.DryRun {
+		runType = "drytext"
+		if runOpts.DryRunJSON {
+			runType = "dryjson"
+		}
+	}
+
 	executionSummary := newExecutionSummary(startAt, profile)
 
 	return Meta{
@@ -85,7 +95,7 @@ func NewRunSummary(
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},
-		ui:            terminal,
+		ui:            ui,
 		runType:       runType,
 		repoRoot:      repoRoot,
 		singlePackage: singlePackage,

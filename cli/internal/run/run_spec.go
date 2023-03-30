@@ -27,10 +27,10 @@ type runSpec struct {
 
 // ArgsForTask returns the set of args that need to be passed through to the task
 func (rs *runSpec) ArgsForTask(task string) []string {
-	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.passThroughArgs))
+	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.PassThroughArgs))
 	for _, target := range rs.Targets {
 		if target == task {
-			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.passThroughArgs...)
+			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.PassThroughArgs...)
 		}
 	}
 	return passThroughArgs
@@ -38,7 +38,7 @@ func (rs *runSpec) ArgsForTask(task string) []string {
 
 // Opts holds the current run operations configuration
 type Opts struct {
-	runOpts      runOpts
+	runOpts      util.RunOpts
 	cacheOpts    cache.Opts
 	clientOpts   client.Opts
 	runcacheOpts runcache.Opts
@@ -48,43 +48,11 @@ type Opts struct {
 // getDefaultOptions returns the default set of Opts for every run
 func getDefaultOptions() *Opts {
 	return &Opts{
-		runOpts: runOpts{
-			concurrency: 10,
+		runOpts: util.RunOpts{
+			Concurrency: 10,
 		},
 		clientOpts: client.Opts{
 			Timeout: client.ClientTimeout,
 		},
 	}
-}
-
-// RunOpts holds the options that control the execution of a turbo run
-type runOpts struct {
-	// Force execution to be serially one-at-a-time
-	concurrency int
-	// Whether to execute in parallel (defaults to false)
-	parallel bool
-
-	// The filename to write a perf profile.
-	profile string
-	// If true, continue task executions even if a task fails.
-	continueOnError bool
-	passThroughArgs []string
-	// Restrict execution to only the listed task names. Default false
-	only bool
-	// Dry run flags
-	dryRun     bool
-	dryRunJSON bool
-	// Graph flags
-	graphDot      bool
-	graphFile     string
-	noDaemon      bool
-	singlePackage bool
-
-	// logPrefix controls whether we should print a prefix in task logs
-	logPrefix string
-
-	// Whether turbo should create a run summary
-	summarize bool
-
-	experimentalSpaceID string
 }
