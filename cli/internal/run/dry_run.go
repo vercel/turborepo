@@ -23,7 +23,7 @@ func DryRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	taskHashTracker *taskhash.Tracker,
+	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
