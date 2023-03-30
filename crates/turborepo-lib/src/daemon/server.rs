@@ -182,11 +182,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
         self.watcher
-            .watch_globs(
-                inner.hash,
-                HashSet::from_iter(inner.output_globs),
-                HashSet::from_iter(inner.output_exclusion_globs),
-            )
+            .watch_globs(inner.hash, inner.output_globs, inner.output_exclusion_globs)
             .await;
 
         Ok(tonic::Response::new(proto::NotifyOutputsWrittenResponse {}))

@@ -15,16 +15,16 @@ use notify::RecommendedWatcher;
 /// changes and allow the user to query for changes.
 #[derive(Clone)]
 pub struct HashGlobWatcher<T: Watcher> {
-    hash_globs: Arc<Mutex<HashMap<String, Glob>>>,
-    glob_status: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    hash_globs: Arc<Mutex<HashMap<Arc<String>, Glob>>>,
+    glob_status: Arc<Mutex<HashMap<Arc<String>, HashSet<Arc<String>>>>>,
     watcher: Arc<Mutex<Option<GlobWatcher<T>>>>,
     config: GlobSender,
 }
 
 #[derive(Clone)]
 pub struct Glob {
-    include: HashSet<String>,
-    exclude: HashSet<String>,
+    include: HashSet<Arc<String>>,
+    exclude: HashSet<Arc<String>>,
 }
 
 impl HashGlobWatcher<RecommendedWatcher> {
@@ -61,7 +61,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
         // watch all the globs currently in the map
         for glob in start_globs {
-            self.config.include(glob.to_owned()).await.unwrap();
+            self.config.include(glob.to_string()).await.unwrap();
         }
 
         while let Some(Ok(event)) = stream.next().await {
@@ -125,21 +125,25 @@ impl<T: Watcher> HashGlobWatcher<T> {
             }
 
             for glob in exclude_globs {
-                self.config.exclude(glob.to_owned()).await.unwrap();
+                self.config.exclude(glob.to_string()).await.unwrap();
             }
         }
     }
 
-    pub async fn watch_globs(
+    pub async fn watch_globs<Iter: IntoIterator<Item = String>>(
         &self,
         hash: String,
-        include: HashSet<String>,
-        exclude: HashSet<String>,
+        include: Iter,
+        exclude: Iter,
     ) {
         self.config.flush().await.unwrap();
 
+        let hash = Arc::new(hash);
+        let include: HashSet<_> = include.into_iter().map(Arc::new).collect();
+        let exclude = exclude.into_iter().map(Arc::new).collect();
+
         for glob in include.iter() {
-            self.config.include(glob.to_owned()).await.unwrap();
+            self.config.include(glob.to_string()).await.unwrap();
         }
 
         {
@@ -166,7 +170,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
         self.config.flush().await.unwrap();
 
         let globs = self.hash_globs.lock().unwrap();
-        match globs.get(hash) {
+        match globs.get(&Arc::new(hash.to_string())) {
             Some(glob) => {
                 candidates.retain(|c| glob.include.contains(c));
                 candidates
