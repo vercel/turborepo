@@ -30,8 +30,6 @@ func DryRun(
 ) error {
 	defer turboCache.Shutdown()
 
-	dryRunJSON := rs.Opts.runOpts.dryRunJSON
-
 	taskSummaries := []*runsummary.TaskSummary{}
 
 	mu := sync.Mutex{}
@@ -82,17 +80,7 @@ func DryRun(
 	// Assign the Task Summaries to the main summary
 	summary.RunSummary.Tasks = taskSummaries
 
-	// Render the dry run as json
-	if dryRunJSON {
-		rendered, err := summary.FormatJSON()
-		if err != nil {
-			return err
-		}
-		base.UI.Output(string(rendered))
-		return nil
-	}
-
-	return summary.FormatAndPrintText(g.WorkspaceInfos)
+	return summary.CloseDryRun(g.WorkspaceInfos, rs.Opts.runOpts.dryRunJSON)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {

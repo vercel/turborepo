@@ -12,6 +12,7 @@ import (
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // MissingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -97,6 +98,23 @@ func NewRunSummary(
 func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 	filename := fmt.Sprintf("%s.json", rsm.RunSummary.ID)
 	return rsm.repoRoot.UntypedJoin(filepath.Join(".turbo", "runs"), filename)
+}
+
+// CloseDryRun wraps up the Run Summary at the end of `turbo run --dry`.
+// Ideally this should be inlined into Close(), but RunSummary doesn't currently
+// have context about whether a run was real or dry.
+func (rsm *Meta) CloseDryRun(workspaceInfos workspace.Catalog, dryRunJSON bool) error {
+	// Render the dry run as json
+	if dryRunJSON {
+		rendered, err := rsm.FormatJSON()
+		if err != nil {
+			return err
+		}
+		rsm.ui.Output(string(rendered))
+		return nil
+	}
+
+	return rsm.FormatAndPrintText(workspaceInfos)
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
