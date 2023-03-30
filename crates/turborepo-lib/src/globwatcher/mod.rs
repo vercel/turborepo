@@ -151,16 +151,20 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
     /// Given a hash and a set of candidates, return the subset of candidates
     /// that have changed.
-    pub async fn changed_globs(&self, hash: &str, candidates: HashSet<String>) -> HashSet<String> {
+    pub async fn changed_globs(
+        &self,
+        hash: &str,
+        mut candidates: HashSet<String>,
+    ) -> HashSet<String> {
         self.config.flush().await.unwrap();
 
         let globs = self.hash_globs.lock().unwrap();
         match globs.get(hash) {
-            Some(glob) => candidates
-                .into_iter()
-                .filter(|c| glob.include.contains(c))
-                .collect(),
-            None => candidates.into_iter().collect(),
+            Some(glob) => {
+                candidates.retain(|c| glob.include.contains(c));
+                candidates
+            }
+            None => candidates,
         }
     }
 }
