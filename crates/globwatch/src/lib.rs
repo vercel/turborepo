@@ -265,8 +265,8 @@ impl GlobSender {
 /// Gets the minimum set of paths that can be watched for a given glob,
 /// specified in minimatch glob syntax.
 ///
-/// note: it is currently extremely conservative, handling only **, braces, and
-/// ?. any other case watches the entire directory.
+/// note: it is currently extremely conservative, handling only `**`, braces,
+/// and `?`. any other case watches the entire directory.
 fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     let mut chunks = vec![];
 
@@ -297,19 +297,22 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
                 break;
             }
 
-            // we need the powerset of all the paths
-            // with and without the optional characters
-            return chunk
+            // get all the indices of characters that could be optional
+            // ex: ab? -> [1]
+            // ex: ab?b? -> [1, 2]
+            let potentially_optional_character_indices = chunk
                 .match_indices('?')
-                .map(|(i, _)| i)
-                .enumerate()
-                .map(|(i, j)| j - i - 1) // subtract 1 for each index to account for the removal of the '?'
-                .powerset() // get all the possible combinations of ignored and not
-                .map(|indices| {
+                .map(|(qmark_index, _)| qmark_index) // get all the indices of question marks
+                .enumerate() // pair those with the number of question marks we've seen so far
+                .map(|(qmark_index, qmarks_so_far)| qmark_index - qmarks_so_far - 1); // get the index of the preceding character with qmarks removed
+
+            return potentially_optional_character_indices
+                .powerset() // get all combinations of indices to remove
+                .map(|indices_to_remove| {
                     let mut new_chunk = no_qmark.clone();
                     // reverse the indices so we can remove them without
                     // having to recalculate the offsets
-                    for i in indices.iter().rev() {
+                    for i in indices_to_remove.iter().rev() {
                         new_chunk.remove(*i);
                     }
                     new_chunk
