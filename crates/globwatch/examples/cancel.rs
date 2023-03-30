@@ -7,7 +7,7 @@ use tracing::{info, info_span};
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
-    let (watcher, config) = GlobWatcher::new("./sink".into());
+    let (watcher, config) = GlobWatcher::new("./flush".into()).unwrap();
     let stop = stop_token::StopSource::new();
     let mut stream = watcher.into_stream(stop.token());
 
@@ -26,12 +26,14 @@ async fn main() {
         for x in 0..5 {
             info!(parent: &span, "iteration {}", x);
             config
-                .include("/Users/arlyon/Programming/globwatch/src/**".to_string())
-                .await;
+                .include("./globwatch/src/**".to_string())
+                .await
+                .unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
             config
-                .exclude("/Users/arlyon/Programming/globwatch/src/**".to_string())
-                .await;
+                .exclude("./globwatch/src/**".to_string())
+                .await
+                .unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
