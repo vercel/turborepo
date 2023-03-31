@@ -49,6 +49,15 @@ pub struct DaemonServer<T: Watcher> {
     shutdown: Mutex<Option<Sender<()>>>,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum CloseReason {
+    Timeout,
+    Shutdown,
+    WatcherClosed,
+    ServerClosed,
+    Interrupt,
+}
+
 impl DaemonServer<notify::RecommendedWatcher> {
     pub fn new(
         base: &CommandBase,
@@ -85,7 +94,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
     }
 
     /// Serve the daemon server, while also watching for filesystem changes.
-    pub async fn serve(self, repo_root: AbsoluteNormalizedPathBuf) {
+    pub async fn serve(self, repo_root: AbsoluteNormalizedPathBuf) -> CloseReason {
         let (server, shutdown_fut) = self.with_shutdown();
 
         let stop = StopSource::new();
@@ -129,12 +138,12 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         };
 
         select! {
-            _ = server_fut => {}
-            _ = watcher_fut => {}
-            _ = shutdown_fut => {}
-            _ = ctrl_c() => {}
-            _ = timeout_fut => {}
-        };
+            _ = server_fut => CloseReason::ServerClosed,
+            _ = watcher_fut => CloseReason::WatcherClosed,
+            _ = shutdown_fut => CloseReason::Shutdown,
+            _ = timeout_fut => CloseReason::Timeout,
+            _ = ctrl_c() => CloseReason::Interrupt,
+        }
 
         // here the stop token is dropped, and the pid lock is dropped
         // causing them to be cleaned up
@@ -220,4 +229,80 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
 
 impl<T: Watcher> NamedService for DaemonServer<T> {
     const NAME: &'static str = "turborepo.Daemon";
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::{Duration, Instant};
+
+    use tokio::select;
+    use turborepo_paths::{AbsoluteNormalizedPathBuf, ForwardRelativePath};
+
+    use super::DaemonServer;
+    use crate::{commands::CommandBase, Args};
+
+    #[tokio::test]
+    async fn lifecycle() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path: AbsoluteNormalizedPathBuf = tempdir.into_path().try_into().unwrap();
+
+        let daemon = DaemonServer::new(
+            &CommandBase::new(
+                Args {
+                    ..Default::default()
+                },
+                path.as_path().to_path_buf(),
+            )
+            .unwrap(),
+            Duration::from_secs(60 * 60),
+            path.clone(),
+        )
+        .unwrap();
+
+        let pid_path = path.join(ForwardRelativePath::new("turbod.pid").unwrap());
+        let sock_path = path.join(ForwardRelativePath::new("turbod.sock").unwrap());
+
+        select! {
+            _ = daemon.serve(path) => panic!("must not close"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => (),
+        }
+
+        assert!(!pid_path.exists(), "pid file must be deleted");
+        assert!(!sock_path.exists(), "socket file must be deleted");
+    }
+
+    #[tokio::test]
+    async fn timeout() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path: AbsoluteNormalizedPathBuf = tempdir.into_path().try_into().unwrap();
+
+        let daemon = DaemonServer::new(
+            &CommandBase::new(
+                Args {
+                    ..Default::default()
+                },
+                path.as_path().to_path_buf(),
+            )
+            .unwrap(),
+            Duration::from_millis(5),
+            path.clone(),
+        )
+        .unwrap();
+
+        let pid_path = path.join(ForwardRelativePath::new("turbod.pid").unwrap());
+
+        let now = Instant::now();
+        let close_reason = daemon.serve(path).await;
+
+        assert!(
+            now.elapsed() >= Duration::from_millis(5),
+            "must wait at least 5ms"
+        );
+        assert_eq!(
+            super::CloseReason::Timeout,
+            close_reason,
+            "must close due to timeout"
+        );
+        assert!(!pid_path.exists(), "pid file must be deleted");
+    }
 }

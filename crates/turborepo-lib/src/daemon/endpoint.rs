@@ -1,9 +1,6 @@
-use std::{pin::Pin, sync::Arc};
-
 use futures::Stream;
 use log::debug;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio_util::compat::FuturesAsyncReadCompatExt;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
 
 #[derive(thiserror::Error, Debug)]
@@ -48,6 +45,10 @@ pub async fn open_socket(
 
     #[cfg(windows)]
     {
+        use std::sync::Arc;
+
+        use tokio_util::compat::FuturesAsyncReadCompatExt;
+
         let listener = Arc::new(uds_windows::UnixListener::bind(sock_path)?);
         let stream = futures::stream::unfold(listener, |listener| async move {
             let task_listener = listener.clone();
@@ -75,6 +76,7 @@ pub async fn open_socket(
 #[cfg(windows)]
 struct UdsWindowsStream<T>(T);
 
+#[cfg(windows)]
 impl<T> UdsWindowsStream<T> {
     /// Project the (pinned) uds windows stream to get the inner (pinned) type
     ///
@@ -90,21 +92,23 @@ impl<T> UdsWindowsStream<T> {
     /// - we must uphold the rust 'drop guarantee'
     /// - we cannot offer any api to move data out of the pinned value (such as
     ///   Option::take)
-    fn project(self: Pin<&mut Self>) -> Pin<&mut T> {
+    fn project(self: std::pin::Pin<&mut Self>) -> std::pin::Pin<&mut T> {
         unsafe { self.map_unchecked_mut(|s| &mut s.0) }
     }
 }
 
+#[cfg(windows)]
 impl<T: AsyncRead> AsyncRead for UdsWindowsStream<T> {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-        buf: &mut ReadBuf<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         self.project().poll_read(cx, buf)
     }
 }
 
+#[cfg(windows)]
 impl<T: AsyncWrite> AsyncWrite for UdsWindowsStream<T> {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
@@ -129,6 +133,7 @@ impl<T: AsyncWrite> AsyncWrite for UdsWindowsStream<T> {
     }
 }
 
+#[cfg(windows)]
 impl<T> Connected for UdsWindowsStream<T> {
     type ConnectInfo = ();
     fn connect_info(&self) -> Self::ConnectInfo {
