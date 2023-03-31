@@ -22,6 +22,11 @@ func (rsm *Meta) normalize() {
 		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.EnvVars
 	}
 
+	// Remove execution summary for dry runs
+	if rsm.runType == runTypeDryJSON {
+		rsm.RunSummary.ExecutionSummary = nil
+	}
+
 	// For single packages, we don't need the Packages
 	// and each task summary needs some cleaning.
 	if rsm.singlePackage {

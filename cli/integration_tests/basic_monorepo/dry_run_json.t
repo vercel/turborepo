@@ -70,6 +70,16 @@ Setup
     }
   }
 
+  $ cat tmpjson.log | jq 'keys'
+  [
+    "globalHashSummary",
+    "id",
+    "packages",
+    "tasks",
+    "turboVersion",
+    "version"
+  ]
+
 # Validate output of my-app#build task
   $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {

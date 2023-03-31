@@ -56,15 +56,6 @@ Check
         }
       }
     },
-    "executionSummary": {
-      "success": 0,
-      "failed": 0,
-      "cached": 0,
-      "attempted": 0,
-      "startTime": [0-9]+, (re)
-      "endTime": [0-9-]+, (re)
-      "exitCode": 0
-    },
     "tasks": [
       {
         "task": "build",
