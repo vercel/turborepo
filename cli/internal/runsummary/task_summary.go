@@ -44,8 +44,8 @@ type TaskEnvVarSummary struct {
 // cleanForSinglePackage converts a TaskSummary to remove references to workspaces
 func (ts *TaskSummary) cleanForSinglePackage() {
 	dependencies := make([]string, len(ts.Dependencies))
-	for i, depencency := range ts.Dependencies {
-		dependencies[i] = util.StripPackageName(depencency)
+	for i, dependency := range ts.Dependencies {
+		dependencies[i] = util.StripPackageName(dependency)
 	}
 	dependents := make([]string, len(ts.Dependents))
 	for i, dependent := range ts.Dependents {
