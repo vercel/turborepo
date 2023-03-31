@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, package_manager::Globs, PackageManager, Payload};
+use crate::{cli, get_version, package_manager::Globs, spawn_child, PackageManager, Payload};
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -649,18 +649,21 @@ impl RepoState {
 
         // We spawn a process that executes the local turbo
         // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path)
+        let mut command = process::Command::new(local_turbo_path);
+        command
             .args(&raw_args)
             // rather than passing an argument that local turbo might not understand, set
             // an environment variable that can be optionally used
             .env(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir)
             .current_dir(cwd)
             .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("Failed to execute turbo.");
+            .stderr(Stdio::inherit());
 
-        Ok(command.wait()?.code().unwrap_or(2))
+        let child = spawn_child(command)?;
+
+        let exit_code = child.wait()?.code().unwrap_or(2);
+
+        Ok(exit_code)
     }
 }
 
