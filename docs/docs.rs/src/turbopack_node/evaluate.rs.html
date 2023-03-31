@@ -741,7 +741,7 @@
     </span>get: Box&lt;<span class="kw">dyn </span>Fn() -&gt; UnboundedSender&lt;<span class="prelude-ty">Result</span>&lt;Bytes, SharedError&gt;&gt; + Send + Sync&gt;,
 }
 
-<span class="attr">#[turbo_tasks::value(transparent, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
+<span class="attr">#[turbo_tasks::value(transparent)]
 #[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>JavaScriptEvaluation(<span class="attr">#[turbo_tasks(trace_ignore)] </span>JavaScriptStream);
 

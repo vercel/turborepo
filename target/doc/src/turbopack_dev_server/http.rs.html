@@ -217,7 +217,7 @@
 <a href="#217" id="217">217</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::{StreamExt, TryStreamExt};
 <span class="kw">use </span>hyper::{
     header::{HeaderName, CONTENT_ENCODING, CONTENT_LENGTH},
@@ -227,7 +227,7 @@
 <span class="kw">use </span>mime::Mime;
 <span class="kw">use </span>mime_guess::mime;
 <span class="kw">use </span>tokio_util::io::{ReaderStream, StreamReader};
-<span class="kw">use </span>turbo_tasks::TransientInstance;
+<span class="kw">use </span>turbo_tasks::{util::SharedError, TransientInstance};
 <span class="kw">use </span>turbo_tasks_bytes::Bytes;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef};
 <span class="kw">use </span>turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
@@ -235,7 +235,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::source::{
     request::SourceRequest,
     resolve::{resolve_source_request, ResolveSourceRequestResult},
-    Body, BodyError, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
+    Body, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
@@ -416,7 +416,7 @@
     </span><span class="kw">let </span>bytes: Vec&lt;<span class="kw">_</span>&gt; = body
         .map(|bytes| {
             bytes.map_or_else(
-                |e| <span class="prelude-val">Err</span>(BodyError::new(e.to_string())),
+                |e| <span class="prelude-val">Err</span>(SharedError::new(<span class="macro">anyhow!</span>(e))),
                 <span class="comment">// The outer Ok is consumed by try_collect, but the Body type requires a Result, so
                 // we need to double wrap.
                 </span>|b| <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(Bytes::from(b))),

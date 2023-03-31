@@ -385,7 +385,7 @@
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
-    source::{Body, BodyError, HeaderListVc, RewriteBuilder, RewriteVc},
+    source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
@@ -476,11 +476,11 @@
         RenderItem::Headers(data) =&gt; {
             <span class="kw">let </span>body = stream.map(|item| <span class="kw">match </span>item {
                 <span class="prelude-val">Ok</span>(RenderItem::BodyChunk(b)) =&gt; <span class="prelude-val">Ok</span>(b),
-                <span class="prelude-val">Ok</span>(v) =&gt; <span class="prelude-val">Err</span>(BodyError::new(<span class="macro">format!</span>(<span class="string">&quot;unexpected render item: {:#?}&quot;</span>, v))),
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(BodyError::new(<span class="macro">format!</span>(
-                    <span class="string">&quot;error streaming proxied contents: {}&quot;</span>,
-                    e
+                <span class="prelude-val">Ok</span>(v) =&gt; <span class="prelude-val">Err</span>(SharedError::new(<span class="macro">anyhow!</span>(
+                    <span class="string">&quot;unexpected render item: {:#?}&quot;</span>,
+                    v
                 ))),
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
             });
             StaticResult::StreamedContent {
                 status: data.status,
@@ -549,12 +549,12 @@
 <span class="kw">type </span>RenderItemResult = <span class="prelude-ty">Result</span>&lt;RenderItem, SharedError&gt;;
 
 <span class="attr">#[turbo_tasks::value(eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
-</span><span class="kw">pub struct </span>RenderStreamSender {
+</span><span class="kw">struct </span>RenderStreamSender {
     <span class="attr">#[turbo_tasks(trace_ignore, debug_ignore)]
     </span>get: Box&lt;<span class="kw">dyn </span>Fn() -&gt; UnboundedSender&lt;RenderItemResult&gt; + Send + Sync&gt;,
 }
 
-<span class="attr">#[turbo_tasks::value(transparent, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, serialization = <span class="string">&quot;none&quot;</span>)]
+<span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">struct </span>RenderStream(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Stream&lt;RenderItemResult&gt;);
 
 <span class="attr">#[turbo_tasks::function]
