@@ -2,7 +2,7 @@
     (
         "a",
         FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
     ),
     (
@@ -10,7 +10,7 @@
         Variable(
             (
                 Atom('a' type=static),
-                #1,
+                #2,
             ),
         ),
     ),
@@ -28,7 +28,7 @@
         Variable(
             (
                 Atom('a' type=static),
-                #1,
+                #2,
             ),
         ),
     ),
@@ -46,7 +46,7 @@
         Variable(
             (
                 Atom('a' type=static),
-                #1,
+                #2,
             ),
         ),
     ),

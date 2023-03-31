@@ -8,16 +8,18 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // FormatAndPrintText prints a Run Summary to the Terminal UI
-func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace.Catalog, isSinglePackage bool) error {
-	summary.normalize() // normalize data
+func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
+	ui := rsm.ui
+	summary := rsm.RunSummary
 
-	if !isSinglePackage {
+	rsm.normalize() // normalize data
+
+	if !rsm.singlePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
@@ -53,45 +55,30 @@ func (summary RunSummary) FormatAndPrintText(ui cli.Ui, workspaceInfos workspace
 	for _, task := range summary.Tasks {
 		taskName := task.TaskID
 
-		if isSinglePackage {
-			taskName = util.RootTaskTaskName(taskName)
+		if rsm.singlePackage {
+			taskName = task.Task
 		}
 
 		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
 
-		var dependencies []string
-		var dependents []string
-
-		if !isSinglePackage {
+		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
-			dependencies = task.Dependencies
-			dependents = task.Dependents
-		} else {
-			dependencies = make([]string, len(task.Dependencies))
-			for i, dependency := range task.Dependencies {
-				dependencies[i] = util.StripPackageName(dependency)
-			}
-			dependents = make([]string, len(task.Dependents))
-			for i, dependent := range task.Dependents {
-				dependents[i] = util.StripPackageName(dependent)
-			}
 		}
-
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
 
-		if !isSinglePackage {
+		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 		}
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))

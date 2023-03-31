@@ -62,7 +62,7 @@ func TestRemoteCacheTimeoutEnvVar(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get command base %v", err)
 		}
-		assert.Equal(t, base.APIClient.HttpClient.HTTPClient.Timeout, time.Duration(600)*time.Second)
+		assert.Equal(t, base.APIClient.HTTPClient.HTTPClient.Timeout, time.Duration(600)*time.Second)
 	})
 }
 
@@ -78,7 +78,7 @@ func TestRemoteCacheTimeoutFlag(t *testing.T) {
 		t.Fatalf("failed to get command base %v", err)
 	}
 
-	assert.Equal(t, base.APIClient.HttpClient.HTTPClient.Timeout, time.Duration(599)*time.Second)
+	assert.Equal(t, base.APIClient.HTTPClient.HTTPClient.Timeout, time.Duration(599)*time.Second)
 }
 
 func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
@@ -104,6 +104,6 @@ func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get command base %v", err)
 		}
-		assert.Equal(t, base.APIClient.HttpClient.HTTPClient.Timeout, time.Duration(1)*time.Second)
+		assert.Equal(t, base.APIClient.HTTPClient.HTTPClient.Timeout, time.Duration(1)*time.Second)
 	})
 }

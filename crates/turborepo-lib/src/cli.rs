@@ -358,6 +358,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Opt in to using the turbo run summary.
+    #[clap(long, hide = true, env = "TURBO_RUN_SUMMARY")]
+    pub summarize: Option<bool>,
     /// Use "none" to remove prefixes from task logs. Note that tasks running
     /// in parallel interleave their logs and prefix is the only way
     /// to identify which task produced a log.
@@ -369,6 +372,10 @@ pub struct RunArgs {
     pub tasks: Vec<String>,
     #[clap(last = true, hide = true)]
     pub pass_through_args: Vec<String>,
+
+    // Pass a string to enable posting Run Summaries to Vercel
+    #[clap(long, hide = true)]
+    pub experimental_space_id: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]

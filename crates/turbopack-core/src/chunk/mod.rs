@@ -80,6 +80,7 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 /// A context for the chunking that influences the way chunks are created
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
+    fn context_path(&self) -> FileSystemPathVc;
     fn output_root(&self) -> FileSystemPathVc;
 
     // TODO remove this, a chunking context should not be bound to a specific
@@ -91,6 +92,9 @@ pub trait ChunkingContext {
     /// Returns the path to the chunk list file for the given unoptimized entry
     /// chunk path.
     fn chunk_list_path(&self, entry_chunk_path: FileSystemPathVc) -> FileSystemPathVc;
+
+    /// Reference Source Map Assets for chunks
+    fn reference_chunk_source_maps(&self, chunk: ChunkVc) -> BoolVc;
 
     fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> BoolVc;
 
@@ -409,6 +413,7 @@ pub struct ChunkContentResult<I> {
     pub chunks: Vec<ChunkVc>,
     pub async_chunk_groups: Vec<ChunkGroupVc>,
     pub external_asset_references: Vec<AssetReferenceVc>,
+    pub availability_info: AvailabilityInfo,
 }
 
 #[async_trait::async_trait]
@@ -773,6 +778,7 @@ where
         chunks,
         async_chunk_groups,
         external_asset_references,
+        availability_info: availability_info.into_value(),
     }))
 }
 

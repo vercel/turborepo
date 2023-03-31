@@ -25,12 +25,34 @@ Check
     Inputs Files Considered          = 3                                                                                                       
     Configured Environment Variables =                                                                                                         
     Inferred Environment Variables   =                                                                                                         
-    Global Environment Variables     = VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                    
+    Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                    
     ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                 
 
   $ ${TURBO} run build --dry=json --single-package
   {
+    "id": "[a-zA-Z0-9]+", (re)
+    "version": "0",
+    "turboVersion": "[0-9\.]+", (re)
+    "globalHashSummary": {
+      "globalFileHashMap": {
+        "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+        "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
+      },
+      "rootExternalDepsHash": "",
+      "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+      "pipeline": {
+        "//#build": {
+          "outputs": [],
+          "cache": false,
+          "dependsOn": [],
+          "inputs": [],
+          "outputMode": "full",
+          "env": [],
+          "persistent": false
+        }
+      }
+    },
     "tasks": [
       {
         "task": "build",
@@ -66,7 +88,7 @@ Check
           "configured": [],
           "inferred": [],
           "global": [
-            "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            "VERCEL_ANALYTICS_ID="
           ]
         },
         "hashOfExternalDependencies": ""

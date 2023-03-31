@@ -37,6 +37,15 @@ Setup
         ],
         "persistent": false
       },
+      "maybefails": {
+        "outputs": [],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputMode": "full",
+        "env": [],
+        "persistent": false
+      },
       "my-app#build": {
         "outputs": [
           "apple.json",
@@ -61,13 +70,23 @@ Setup
     }
   }
 
+  $ cat tmpjson.log | jq 'keys'
+  [
+    "globalHashSummary",
+    "id",
+    "packages",
+    "tasks",
+    "turboVersion",
+    "version"
+  ]
+
 # Validate output of my-app#build task
   $ cat tmpjson.log | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "45ec4e15c3dcf5c2",
+    "hash": "2f192ed93e20f940",
     "cacheState": {
       "local": false,
       "remote": false
@@ -96,7 +115,7 @@ Setup
       "persistent": false
     },
     "expandedInputs": {
-      "package.json": "f2a5d2525f3996a57680180a7cd9ad7310e4dec0"
+      "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
@@ -104,8 +123,8 @@ Setup
       "configured": [],
       "inferred": [],
       "global": [
-        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "SOME_ENV_VAR=",
+        "VERCEL_ANALYTICS_ID="
       ]
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56"
@@ -117,7 +136,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "c36e55f947cd2d28",
+    "hash": "af2ba2d52192ee45",
     "cacheState": {
       "local": false,
       "remote": false
@@ -142,18 +161,18 @@ Setup
       "persistent": false
     },
     "expandedInputs": {
-      "package.json": "8d3e121335e16dbd8d99c03522b892ec52416dda"
+      "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "environmentVariables": {
       "configured": [
-        "NODE_ENV=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "NODE_ENV="
       ],
       "inferred": [],
       "global": [
-        "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        "SOME_ENV_VAR=",
+        "VERCEL_ANALYTICS_ID="
       ]
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56"
@@ -167,8 +186,8 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
     ],
     "inferred": [],
     "global": [
-      "SOME_ENV_VAR=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "VERCEL_ANALYTICS_ID=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "SOME_ENV_VAR=",
+      "VERCEL_ANALYTICS_ID="
     ]
   }
 

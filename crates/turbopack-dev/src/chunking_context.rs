@@ -9,9 +9,10 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkingContext, ChunkingContextVc},
+    chunk::{Chunk, ChunkVc, ChunkingContext, ChunkingContextVc},
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
+    resolve::ModulePart,
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc, EcmascriptChunkingContext,
@@ -40,6 +41,16 @@ impl DevChunkingContextBuilder {
         self
     }
 
+    pub fn reference_chunk_source_maps(mut self, source_maps: bool) -> Self {
+        self.context.reference_chunk_source_maps = source_maps;
+        self
+    }
+
+    pub fn reference_css_chunk_source_maps(mut self, source_maps: bool) -> Self {
+        self.context.reference_css_chunk_source_maps = source_maps;
+        self
+    }
+
     pub fn build(self) -> ChunkingContextVc {
         DevChunkingContextVc::new(Value::new(self.context)).into()
     }
@@ -59,8 +70,12 @@ pub struct DevChunkingContext {
     output_root: FileSystemPathVc,
     /// Chunks are placed at this path
     chunk_root_path: FileSystemPathVc,
+    /// Chunks reference source maps assets
+    reference_chunk_source_maps: bool,
     /// Css Chunks are placed at this path
     css_chunk_root_path: Option<FileSystemPathVc>,
+    /// Css chunks reference source maps assets
+    reference_css_chunk_source_maps: bool,
     /// Static assets are placed at this path
     asset_root_path: FileSystemPathVc,
     /// Layer name within this context
@@ -84,7 +99,9 @@ impl DevChunkingContextVc {
                 context_path,
                 output_root,
                 chunk_root_path,
+                reference_chunk_source_maps: true,
                 css_chunk_root_path: None,
+                reference_css_chunk_source_maps: true,
                 asset_root_path,
                 layer: None,
                 enable_hot_module_replacement: false,
@@ -104,6 +121,11 @@ impl DevChunkingContextVc {
 
 #[turbo_tasks::value_impl]
 impl ChunkingContext for DevChunkingContext {
+    #[turbo_tasks::function]
+    fn context_path(&self) -> FileSystemPathVc {
+        self.context_path
+    }
+
     #[turbo_tasks::function]
     fn output_root(&self) -> FileSystemPathVc {
         self.output_root
@@ -147,6 +169,7 @@ impl ChunkingContext for DevChunkingContext {
             fragment,
             assets,
             modifiers,
+            part,
         } = ident;
         if let Some(query) = query {
             0_u8.deterministic_hash(&mut hasher);
@@ -175,6 +198,25 @@ impl ChunkingContext for DevChunkingContext {
             modifier.deterministic_hash(&mut hasher);
             has_hash = true;
         }
+        if let Some(part) = part {
+            4_u8.deterministic_hash(&mut hasher);
+            match &*part.await? {
+                ModulePart::ModuleEvaluation => {
+                    1_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Export(export) => {
+                    2_u8.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Internal(id) => {
+                    3_u8.deterministic_hash(&mut hasher);
+                    id.deterministic_hash(&mut hasher);
+                }
+            }
+
+            has_hash = true;
+        }
+
         if has_hash {
             let hash = encode_hex(hasher.finish());
             let truncated_hash = &hash[..6];
@@ -225,6 +267,21 @@ impl ChunkingContext for DevChunkingContext {
             root_path
         };
         Ok(root_path.join(&name))
+    }
+
+    #[turbo_tasks::function]
+    async fn reference_chunk_source_maps(&self, chunk: ChunkVc) -> Result<BoolVc> {
+        let mut source_maps = self.reference_chunk_source_maps;
+        let path = chunk.path().await?;
+        let extension = path.extension().unwrap_or_default();
+        #[allow(clippy::single_match, reason = "future extensions")]
+        match extension {
+            ".css" => {
+                source_maps = self.reference_css_chunk_source_maps;
+            }
+            _ => {}
+        }
+        Ok(BoolVc::cell(source_maps))
     }
 
     #[turbo_tasks::function]

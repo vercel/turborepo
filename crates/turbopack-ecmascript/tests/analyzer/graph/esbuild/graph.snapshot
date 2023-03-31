@@ -28,7 +28,7 @@
                                         Variable(
                                             (
                                                 Atom('path2' type=inline),
-                                                #1,
+                                                #2,
                                             ),
                                         ),
                                         Constant(
@@ -40,7 +40,7 @@
                                         ),
                                         [
                                             FreeVar(
-                                                Dirname,
+                                                Atom('__dirname' type=dynamic),
                                             ),
                                             Constant(
                                                 Str(
@@ -79,7 +79,7 @@
                                 Variable(
                                     (
                                         Atom('generateBinPath' type=dynamic),
-                                        #1,
+                                        #2,
                                     ),
                                 ),
                                 [],
@@ -105,7 +105,7 @@
                 Variable(
                     (
                         Atom('esbuildCommandAndArgs' type=dynamic),
-                        #1,
+                        #2,
                     ),
                 ),
                 [],
@@ -129,7 +129,7 @@
                         Variable(
                             (
                                 Atom('binPath' type=inline),
-                                #4,
+                                #7,
                             ),
                         ),
                     ),
@@ -138,7 +138,7 @@
                 MemberCall(
                     7,
                     FreeVar(
-                        Require,
+                        Atom('require' type=static),
                     ),
                     Constant(
                         Str(
@@ -154,7 +154,7 @@
                                 Variable(
                                     (
                                         Atom('pkg' type=inline),
-                                        #4,
+                                        #7,
                                     ),
                                 ),
                                 Constant(
@@ -167,7 +167,7 @@
                                 Variable(
                                     (
                                         Atom('subpath' type=inline),
-                                        #4,
+                                        #7,
                                     ),
                                 ),
                             ],
@@ -177,21 +177,19 @@
                 Call(
                     4,
                     FreeVar(
-                        Other(
-                            Atom('downloadedBinPath' type=dynamic),
-                        ),
+                        Atom('downloadedBinPath' type=dynamic),
                     ),
                     [
                         Variable(
                             (
                                 Atom('pkg' type=inline),
-                                #4,
+                                #7,
                             ),
                         ),
                         Variable(
                             (
                                 Atom('subpath' type=inline),
-                                #4,
+                                #7,
                             ),
                         ),
                     ],
@@ -206,7 +204,7 @@
             Variable(
                 (
                     Atom('path' type=static),
-                    #1,
+                    #2,
                 ),
             ),
             Constant(
@@ -220,7 +218,7 @@
                 Variable(
                     (
                         Atom('esbuildLibDir' type=dynamic),
-                        #7,
+                        #16,
                     ),
                 ),
                 Concat(
@@ -236,7 +234,7 @@
                         Variable(
                             (
                                 Atom('pkg' type=inline),
-                                #4,
+                                #7,
                             ),
                         ),
                         Constant(
@@ -251,7 +249,7 @@
                             Variable(
                                 (
                                     Atom('path' type=static),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             Constant(
@@ -265,7 +263,7 @@
                                 Variable(
                                     (
                                         Atom('subpath' type=inline),
-                                        #4,
+                                        #7,
                                     ),
                                 ),
                             ],
@@ -284,7 +282,7 @@
                 Variable(
                     (
                         Atom('esbuildCommandAndArgs' type=dynamic),
-                        #1,
+                        #2,
                     ),
                 ),
                 [],
@@ -299,13 +297,13 @@
         ),
     ),
     (
-        "e#5",
+        "e#10",
         Unknown(
             Some(
                 Variable(
                     (
                         Atom('e' type=static),
-                        #5,
+                        #10,
                     ),
                 ),
             ),
@@ -313,13 +311,13 @@
         ),
     ),
     (
-        "e#6",
+        "e#15",
         Unknown(
             Some(
                 Variable(
                     (
                         Atom('e' type=static),
-                        #6,
+                        #15,
                     ),
                 ),
             ),
@@ -342,7 +340,7 @@
             Variable(
                 (
                     Atom('path' type=static),
-                    #1,
+                    #2,
                 ),
             ),
             Constant(
@@ -356,7 +354,7 @@
                 MemberCall(
                     4,
                     FreeVar(
-                        Require,
+                        Atom('require' type=static),
                     ),
                     Constant(
                         Str(
@@ -390,20 +388,18 @@
                         Undefined,
                     ),
                     FreeVar(
-                        Other(
-                            Atom('ESBUILD_BINARY_PATH' type=dynamic),
-                        ),
+                        Atom('ESBUILD_BINARY_PATH' type=dynamic),
                     ),
                     Variable(
                         (
                             Atom('binTargetPath' type=dynamic),
-                            #7,
+                            #16,
                         ),
                     ),
                     Variable(
                         (
                             Atom('binPath' type=inline),
-                            #4,
+                            #7,
                         ),
                     ),
                 ],
@@ -735,7 +731,7 @@
         Call(
             3,
             FreeVar(
-                Require,
+                Atom('require' type=static),
             ),
             [
                 Constant(
@@ -753,7 +749,7 @@
         Call(
             3,
             FreeVar(
-                Require,
+                Atom('require' type=static),
             ),
             [
                 Constant(
@@ -771,7 +767,7 @@
         Call(
             3,
             FreeVar(
-                Require,
+                Atom('require' type=static),
             ),
             [
                 Constant(
@@ -805,7 +801,7 @@
                     Variable(
                         (
                             Atom('knownWindowsPackages' type=dynamic),
-                            #1,
+                            #2,
                         ),
                     ),
                     Variable(
@@ -820,7 +816,7 @@
                     Variable(
                         (
                             Atom('knownUnixlikePackages' type=dynamic),
-                            #1,
+                            #2,
                         ),
                     ),
                     Variable(
@@ -834,7 +830,7 @@
         ),
     ),
     (
-        "pkg#4",
+        "pkg#7",
         Member(
             4,
             Call(
@@ -842,7 +838,7 @@
                 Variable(
                     (
                         Atom('pkgAndSubpathForCurrentPlatform' type=dynamic),
-                        #1,
+                        #2,
                     ),
                 ),
                 [],
@@ -915,7 +911,7 @@
                 Member(
                     3,
                     FreeVar(
-                        NodeProcess,
+                        Atom('process' type=static),
                     ),
                     Constant(
                         Str(
@@ -937,7 +933,7 @@
                     Variable(
                         (
                             Atom('os' type=inline),
-                            #1,
+                            #2,
                         ),
                     ),
                     Constant(
@@ -961,7 +957,7 @@
                     Variable(
                         (
                             Atom('os' type=inline),
-                            #1,
+                            #2,
                         ),
                     ),
                     Constant(
@@ -1010,7 +1006,7 @@
         ),
     ),
     (
-        "subpath#4",
+        "subpath#7",
         Member(
             4,
             Call(
@@ -1018,7 +1014,7 @@
                 Variable(
                     (
                         Atom('pkgAndSubpathForCurrentPlatform' type=dynamic),
-                        #1,
+                        #2,
                     ),
                 ),
                 [],
@@ -1039,7 +1035,7 @@
             Variable(
                 (
                     Atom('args' type=inline),
-                    #1,
+                    #2,
                 ),
             ),
             Constant(

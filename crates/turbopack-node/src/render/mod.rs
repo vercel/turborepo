@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
 
+pub(crate) mod error_page;
 pub mod issue;
 pub mod node_api_source;
 pub mod render_proxy;
@@ -34,15 +35,16 @@ enum RenderProxyOutgoingMessage<'a> {
     BodyEnd,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RenderProxyIncomingMessage {
     Headers { data: ResponseHeaders },
-    Body { data: Vec<u8> },
+    BodyChunk { data: Vec<u8> },
+    BodyEnd,
     Error(StructuredError),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RenderStaticIncomingMessage {
     #[serde(rename_all = "camelCase")]
@@ -51,6 +53,13 @@ enum RenderStaticIncomingMessage {
         headers: Vec<(String, String)>,
         body: String,
     },
+    Headers {
+        data: ResponseHeaders,
+    },
+    BodyChunk {
+        data: Vec<u8>,
+    },
+    BodyEnd,
     Rewrite {
         path: String,
     },

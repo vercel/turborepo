@@ -281,6 +281,15 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			); err != nil {
 				return errors.Wrap(err, "Failed copying patch file")
 			}
+			if opts.Docker {
+				jsonDir := outDir.Join(turbopath.RelativeSystemPath("json"))
+				if err := fs.CopyFile(
+					&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(patch.ToString())},
+					patch.ToSystemPath().RestoreAnchor(jsonDir).ToStringDuringMigration(),
+				); err != nil {
+					return errors.Wrap(err, "Failed copying patch file")
+				}
+			}
 		}
 	} else {
 		if err := fs.CopyFile(
