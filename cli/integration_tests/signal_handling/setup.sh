@@ -1,4 +1,6 @@
 #!/bin/bash
+# Enable jobcontrol as we need it for fg to work
+set -m
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
