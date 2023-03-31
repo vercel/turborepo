@@ -17,7 +17,7 @@ function set_package_manager() {
 
 # Set the packageManger version and install from lockfile
 NPM_PACKAGE_MANAGER_VALUE="npm@8.12.1"
-PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
+PNPM_PACKAGE_MANAGER_VALUE="pnpm@7.15.0"
 YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
 if [ "$pkgManager" == "npm" ]; then
   set_package_manager "$NPM_PACKAGE_MANAGER_VALUE"
