@@ -547,9 +547,7 @@ jobs:
           export TASKS_FS=$(printf 'patch."%s".%s.git="%s?rev=%s"' "$TURBOPACK_REMOTE" "turbo-tasks-fs" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
 
           cd packages/next-swc
-          cargo check --config $BINDING --config $TASKS --config $TASKS_FS --message-format short --quiet && \
-          cargo check --config $BINDING --config $TASKS --config $TASKS_FS -p next-swc-napi --features plugin,rustls-tls --message-format short --quiet && \
-          cargo check --config $BINDING --config $TASKS --config $TASKS_FS -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test --message-format short --quiet &> cargo_output.log
+          cargo check --config $BINDING --config $TASKS --config $TASKS_FS --all -p next-swc-api -p next-dev --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test --message-format short --quiet &> cargo_output.log
 
       - name: Post logs if there are errors
         run: |

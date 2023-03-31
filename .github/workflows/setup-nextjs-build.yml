@@ -13,6 +13,8 @@ jobs:
   build_nextjs:
     name: Build Next.js for the turbopack integration test
     runs-on: ubuntu-latest-16-core-oss
+    outputs:
+      output1: ${{ steps.build-next-swc-turbopack-patch.outputs.success }}
     env:
       # pnpm version should match to what upstream next.js uses
       PNPM_VERSION: 7.24.3
@@ -77,11 +79,35 @@ jobs:
           npm i -g pnpm@$PNPM_VERSION && pnpm --version
           pnpm install --loglevel error
 
-      - name: Build next.js volume
+      - name: Build next-swc with latest turbopack
+        id: build-next-swc-turbopack-patch
+        continue-on-error: true
         run: |
-          # Build next.js, next-swc
+          export TURBOPACK_REMOTE="https://github.com/vercel/turbo"
+          # Apply patches to the cargo to the latest turbopack's sha.
+          # Basic recipe to apply patch to cargo via cli looks like this:
+          # cargo check --config 'patch."https://github.com/vercel/turbo".$PKG_NAME.git="https://github.com/vercel/turbo.git?rev=$SHA"'
+          # Careful to preserve quote to allow dot expression can access git url based property key.
+          export BINDING=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-binding" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+          export TASKS=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-tasks" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+          export TASKS_FS=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-tasks-fs" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+
+          echo "Trying to build next-swc with turbopack $GITHUB_SHA"
+          echo "success=false" >> $GITHUB_OUTPUT
+          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release --cargo-flags="--config $BINDING --config $TASKS --config $TASKS_FS"'
+          echo "success=true" >> $GITHUB_OUTPUT
+          echo "Successfully built next-swc with turbopack $GITHUB_SHA"
+
+      - name: Build next-swc
+        if: steps.build-next-swc-turbopack-patch.outputs.success != true
+        run: |
+          echo "Looks like we could not apply latest turbopack to next-swc. Trying to build next-swc with published turbopack. This might happen when there is a breaking changes in turbopack, and next.js is not yet updated."
+          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release'
+          echo "Successfully built next-swc with published turbopack"
+
+      - name: Build next.js
+        run: |
           pnpm run build
-          hyperfine --min-runs 1 --style nocolor 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release --cargo-flags="--message-format short --quiet"'
           strip packages/next-swc/native/next-swc.*.node
           ls -al packages/next-swc/native
           # Reduce the size of the cache bit
