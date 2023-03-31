@@ -42,8 +42,8 @@ Setup
 # env var=true, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize > /dev/null
-  $ test -d .turbo/runs
-  [1]
+  $ /bin/ls .turbo/runs/*.json | wc -l
+  \s*1 (re)
 
 # env var=false, missing flag, no
   $ rm -rf .turbo/runs
@@ -63,8 +63,8 @@ Setup
 # env var=false, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize > /dev/null
-  $ test -d .turbo/runs
-  [1]
+  $ /bin/ls .turbo/runs/*.json | wc -l
+  \s*1 (re)
 
 # missing env var, missing flag: no
   $ rm -rf .turbo/runs
@@ -84,5 +84,5 @@ Setup
 # missing env var, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize > /dev/null
-  $ test -d .turbo/runs
-  [1]
+  $ /bin/ls .turbo/runs/*.json | wc -l
+  \s*1 (re)
