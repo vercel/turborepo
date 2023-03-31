@@ -43,7 +43,7 @@ impl Asset for ProcessEnvAsset {
         // values. We need to inject literal values (to emulate webpack's
         // DefinePlugin), so create a new regular object out of the old env.
         let mut code = RopeBuilder::default();
-        code.push_static_bytes(b"const env = process.env = {...process.env};\n\n");
+        code += "const env = process.env = {...process.env};\n\n";
 
         for (name, val) in &*env {
             // It's assumed the env has passed through an EmbeddableProcessEnv, so the value
