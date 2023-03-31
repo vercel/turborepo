@@ -47,6 +47,7 @@ pub struct DaemonServer<T: Watcher> {
 
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
+    shutdown_rx: Option<Receiver<()>>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -72,6 +73,8 @@ impl DaemonServer<notify::RecommendedWatcher> {
                 .to_path_buf(),
         )?);
 
+        let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
+
         Ok(Self {
             daemon_root,
             log_file,
@@ -81,28 +84,34 @@ impl DaemonServer<notify::RecommendedWatcher> {
             timeout,
 
             watcher,
-            shutdown: Mutex::new(None),
+            shutdown: Mutex::new(Some(send_shutdown)),
+            shutdown_rx: Some(recv_shutdown),
         })
     }
 }
 
 impl<T: Watcher + Send + 'static> DaemonServer<T> {
-    fn with_shutdown(mut self) -> (Self, Receiver<()>) {
-        let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
-        self.shutdown = Mutex::new(Some(send_shutdown));
-        (self, recv_shutdown)
-    }
-
     /// Serve the daemon server, while also watching for filesystem changes.
-    pub async fn serve(self, repo_root: AbsoluteNormalizedPathBuf) -> CloseReason {
-        let (server, shutdown_fut) = self.with_shutdown();
-
+    pub async fn serve(mut self, repo_root: AbsoluteNormalizedPathBuf) -> CloseReason {
         let stop = StopSource::new();
-        let watcher = server.watcher.clone();
+        let watcher = self.watcher.clone();
         let watcher_fut = watcher.watch(repo_root.to_path_buf(), stop.token());
 
-        let timer = server.timeout_time.clone();
+        let timer = self.timeout_time.clone();
         let timeout_fut = timer.wait();
+
+        // if shutdown is available, then listen. otherwise just wait forever
+        let shutdown_rx = self.shutdown_rx.take();
+        let shutdown_fut = async move {
+            match shutdown_rx {
+                Some(rx) => {
+                    rx.await.ok();
+                }
+                None => {
+                    futures::pending!();
+                }
+            }
+        };
 
         #[cfg(feature = "http")]
         let server_fut = {
@@ -115,24 +124,20 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
 
             Server::builder()
                 .add_service(reflection)
-                .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(
-                    server,
-                ))
+                .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(self))
                 .serve_with_shutdown("127.0.0.1:5000".parse().unwrap(), shutdown_fut)
         };
 
         #[cfg(not(feature = "http"))]
         let (_lock, server_fut) = {
-            let (lock, stream) = crate::daemon::endpoint::open_socket(server.daemon_root.clone())
+            let (lock, stream) = crate::daemon::endpoint::open_socket(self.daemon_root.clone())
                 .await
                 .unwrap();
 
             (
                 lock,
                 Server::builder()
-                    .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(
-                        server,
-                    ))
+                    .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(self))
                     .serve_with_incoming(stream),
             )
         };
