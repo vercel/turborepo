@@ -45,7 +45,7 @@ func RealRun(
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 ) error {
-	singlePackage := rs.Opts.runOpts.singlePackage
+	singlePackage := rs.Opts.runOpts.SinglePackage
 
 	if singlePackage {
 		base.UI.Output(fmt.Sprintf("%s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", ")))))
@@ -85,8 +85,8 @@ func RealRun(
 
 	// run the thing
 	execOpts := core.EngineExecutionOptions{
-		Parallel:    rs.Opts.runOpts.parallel,
-		Concurrency: rs.Opts.runOpts.concurrency,
+		Parallel:    rs.Opts.runOpts.Parallel,
+		Concurrency: rs.Opts.runOpts.Concurrency,
 	}
 
 	mu := sync.Mutex{}
@@ -149,7 +149,7 @@ func RealRun(
 
 	// When continue on error is enabled don't register failed tasks as errors
 	// and instead must inspect the task summaries.
-	if ec.rs.Opts.runOpts.continueOnError {
+	if ec.rs.Opts.runOpts.ContinueOnError {
 		for _, summary := range runSummary.RunSummary.Tasks {
 			if childExit := summary.Execution.ExitCode(); childExit != nil {
 				childExit := *childExit
@@ -163,7 +163,11 @@ func RealRun(
 		}
 	}
 
-	runSummary.Close(exitCode)
+	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
+		// We don't need to throw an error, but we can warn on this.
+		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
+		base.UI.Info(fmt.Sprintf("Failed to close Run Summary %v", err))
+	}
 
 	if exitCode != 0 {
 		return &process.ChildExit{
@@ -225,7 +229,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	var prefix string
 	var prettyPrefix string
-	if ec.rs.Opts.runOpts.logPrefix == "none" {
+	if ec.rs.Opts.runOpts.LogPrefix == "none" {
 		prefix = ""
 	} else {
 		prefix = packageTask.OutputPrefix(ec.isSinglePackage)
@@ -274,7 +278,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		tracer(runsummary.TargetBuildFailed, err, nil)
 
 		ec.logError(prettyPrefix, err)
-		if !ec.rs.Opts.runOpts.continueOnError {
+		if !ec.rs.Opts.runOpts.ContinueOnError {
 			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
 		}
 	}
@@ -335,7 +339,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
-		if !ec.rs.Opts.runOpts.continueOnError {
+		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
 		} else {
