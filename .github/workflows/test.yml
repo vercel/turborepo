@@ -517,7 +517,7 @@ jobs:
 
   next_dev_check:
     needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true'
     name: Check next-swc
     runs-on: ubuntu-latest-8-core-oss
     permissions:
