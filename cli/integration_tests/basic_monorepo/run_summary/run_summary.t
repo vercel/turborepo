@@ -34,19 +34,19 @@ Setup
   2
   $ cat $FIRST | jq '.version'
   "0"
-  $ cat $FIRST | jq '.executionSummary.exitCode'
+  $ cat $FIRST | jq '.execution.exitCode'
   0
-  $ cat $FIRST | jq '.executionSummary.attempted'
+  $ cat $FIRST | jq '.execution.attempted'
   2
-  $ cat $FIRST | jq '.executionSummary.cached'
+  $ cat $FIRST | jq '.execution.cached'
   0
-  $ cat $FIRST | jq '.executionSummary.failed'
+  $ cat $FIRST | jq '.execution.failed'
   0
-  $ cat $FIRST | jq '.executionSummary.success'
+  $ cat $FIRST | jq '.execution.success'
   2
-  $ cat $FIRST | jq '.executionSummary.startTime'
+  $ cat $FIRST | jq '.execution.startTime'
   [0-9]+ (re)
-  $ cat $FIRST | jq '.executionSummary.endTime'
+  $ cat $FIRST | jq '.execution.endTime'
   [0-9]+ (re)
 
 # Extract some task-specific summaries from each
@@ -59,11 +59,10 @@ Setup
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "built",
     "error": null,
     "exitCode": 0
   }
-  $ echo $FIRST_APP_BUILD | jq '.commandArguments'
+  $ echo $FIRST_APP_BUILD | jq '.cliArguments'
   [
     "someargs"
   ]
@@ -74,12 +73,12 @@ Setup
     "apps/my-app/.turbo/turbo-build.log"
   ]
 # validate that cache state updates in second run
-  $ echo $FIRST_APP_BUILD | jq '.cacheState'
+  $ echo $FIRST_APP_BUILD | jq '.cache'
   {
     "local": false,
     "remote": false
   }
-  $ echo $SECOND_APP_BUILD | jq '.cacheState'
+  $ echo $SECOND_APP_BUILD | jq '.cache'
   {
     "local": true,
     "remote": false
@@ -90,7 +89,6 @@ Setup
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "built",
     "error": null,
     "exitCode": 0
   }

@@ -14,7 +14,7 @@ Run a build to get a local cache.
   
 
 Validate cache state according to dry-run
-  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].cacheState'
+  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].cache'
   {
     "local": true,
     "remote": false

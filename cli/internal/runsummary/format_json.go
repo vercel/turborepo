@@ -19,7 +19,7 @@ func (rsm *Meta) FormatJSON() ([]byte, error) {
 
 func (rsm *Meta) normalize() {
 	for _, t := range rsm.RunSummary.Tasks {
-		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.EnvVars
+		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.envVars
 	}
 
 	// Remove execution summary for dry runs

@@ -54,9 +54,9 @@ type RunSummary struct {
 	ID                ksuid.KSUID        `json:"id"`
 	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
+	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages          []string           `json:"packages,omitempty"`
-	ExecutionSummary  *executionSummary  `json:"executionSummary,omitempty"`
+	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
 
