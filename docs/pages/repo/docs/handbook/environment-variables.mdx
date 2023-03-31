@@ -28,6 +28,23 @@ We're actively looking forward to improving the developer experience and ergonom
 }
 ```
 
+## Accessing root .env from sub-packages
+
+1. Place all of your variables into the root of your monorepo as a `.env` file.
+
+2. Install `dotenv-cli` into a sub-packge.
+
+```json
+{
+  "scripts": {
++.   "dev": "dotenv -e ../../.env start-server"
+  }
+  "devDependencies": {
++    "dotenv-cli": "latest"
+  },
+}
+```
+
 ## With global `turbo`
 
 If you're using `turbo` globally, you'll also need to install `dotenv-cli` globally so you can put `dotenv --` in front of the `turbo` command in your terminal.
