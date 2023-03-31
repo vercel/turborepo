@@ -569,6 +569,21 @@
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -622,15 +637,16 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc, AssetsVc},
     chunk::{
         availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
         ChunkableAssetVc, ChunkingContextVc,
     },
     compile_time_info::CompileTimeInfoVc,
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     reference::{AssetReferencesReadRef, AssetReferencesVc},
+    reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -1132,6 +1148,20 @@
         }
         .into())
     }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>process_runtime_entries(
+    context: AssetContextVc,
+    entries: AssetsVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceablesVc&gt; {
+    <span class="prelude-val">Ok</span>(EcmascriptChunkPlaceablesVc::cell(entries.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(|asset| <span class="kw">async move </span>{
+        <span class="kw">let </span>asset = context.process(asset, Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)));
+        <span class="kw">let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;{} is not placeable in a ecmascript chunk as runtime entry&quot;</span>, asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)
+        };
+        <span class="prelude-val">Ok</span>(placeable)
+    }).try_join().<span class="kw">await</span><span class="question-mark">?</span>))
 }
 
 <span class="kw">pub fn </span>register() {

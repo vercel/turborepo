@@ -207,20 +207,27 @@
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::introspect::{
-    asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
+<span class="kw">use </span>turbopack_core::{
+    asset::AssetsVc,
+    introspect::{
+        asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
+    },
 };
 <span class="kw">use </span>turbopack_dev_server::source::{
     specificity::SpecificityVc, ContentSource, ContentSourceContent, ContentSourceContentVc,
     ContentSourceData, ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult,
     ContentSourceResultVc, ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
 };
-<span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
+<span class="kw">use </span>turbopack_ecmascript::process_runtime_entries;
 
 <span class="kw">use super</span>::{render_proxy::render_proxy, RenderData};
 <span class="kw">use crate</span>::{
@@ -239,7 +246,7 @@
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: AssetsVc,
 ) -&gt; ContentSourceVc {
     NodeApiContentSource {
         cwd,
@@ -270,7 +277,7 @@
     pathname: StringVc,
     route_match: RouteMatcherVc,
     entry: NodeEntryVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: AssetsVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -349,7 +356,7 @@
             source.env,
             source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
-            source.runtime_entries,
+            process_runtime_entries(entry.context, source.runtime_entries),
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
@@ -406,9 +413,10 @@
             set.insert((
                 StringVc::cell(<span class="string">&quot;intermediate asset&quot;</span>.to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
-                    entry
-                        .module
-                        .as_evaluated_chunk(entry.chunking_context, <span class="prelude-val">Some</span>(<span class="self">self</span>.runtime_entries)),
+                    entry.module.as_evaluated_chunk(
+                        entry.chunking_context,
+                        <span class="prelude-val">Some</span>(process_runtime_entries(entry.context, <span class="self">self</span>.runtime_entries)),
+                    ),
                     entry.intermediate_output_path,
                 )),
             ));

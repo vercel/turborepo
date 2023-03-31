@@ -25,15 +25,17 @@
 <a href="#25" id="25">25</a>
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
+<span class="kw">use </span>turbopack_core::{chunk::ChunkingContextVc, context::AssetContextVc};
 <span class="kw">use </span>turbopack_dev_server::source::ContentSourceData;
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NodeRenderingEntry {
+    <span class="kw">pub </span>context: AssetContextVc,
     <span class="kw">pub </span>module: EcmascriptModuleAssetVc,
     <span class="kw">pub </span>chunking_context: ChunkingContextVc,
     <span class="kw">pub </span>intermediate_output_path: FileSystemPathVc,
