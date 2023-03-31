@@ -126,7 +126,7 @@ impl CodeGenerateable for CjsRequireAssetReference {
             }
             PatternMapping::Ignored => {
                 visitors.push(create_visitor!(path, visit_mut_expr(expr: &mut Expr) {
-                    // In Node.js, a require call that cannot be resolved will throw an error.
+                    // Ignored modules behave as if they have no code nor exports.
                     *expr = Expr::Object(ObjectLit {
                         span: DUMMY_SP,
                         props: vec![],
