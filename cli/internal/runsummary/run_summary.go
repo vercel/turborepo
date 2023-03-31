@@ -55,16 +55,9 @@ type RunSummary struct {
 	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
-	Packages          []string           `json:"packages"`
+	Packages          []string           `json:"packages,omitempty"`
 	ExecutionSummary  *executionSummary  `json:"executionSummary"`
 	Tasks             []*TaskSummary     `json:"tasks"`
-}
-
-// singlePackageRunSummary is the same as RunSummary with some adjustments
-// to the internal struct for a single package. It's likely that we can use the
-// same struct for Single Package repos in the future.
-type singlePackageRunSummary struct {
-	Tasks []singlePackageTaskSummary `json:"tasks"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -277,10 +270,4 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 	}
 	close(queue)
 	wg.Wait()
-}
-
-func (summary *RunSummary) normalize() {
-	for _, t := range summary.Tasks {
-		t.EnvVars.Global = summary.GlobalHashSummary.EnvVars
-	}
 }
