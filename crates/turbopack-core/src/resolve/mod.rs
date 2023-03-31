@@ -55,6 +55,8 @@ pub use alias_map::{
 };
 pub use exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
 
+use crate::issue::OptionIssueSourceVc;
+
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub enum PrimaryResolveResult {
@@ -784,6 +786,7 @@ async fn resolve_internal(
                      relative to the file you are importing from."
                         .to_string(),
                 ),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -797,6 +800,7 @@ async fn resolve_internal(
                 context,
                 resolve_options: options,
                 error_message: Some("windows imports are not implemented yet".to_string()),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -811,6 +815,7 @@ async fn resolve_internal(
                 context,
                 resolve_options: options,
                 error_message: Some("package internal imports are not implemented yet".to_string()),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -830,6 +835,7 @@ async fn resolve_internal(
                 context,
                 resolve_options: options,
                 error_message: None,
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -1096,6 +1102,7 @@ async fn resolve_alias_field_result(
         request: RequestVc::parse(Value::new(Pattern::Constant(issue_request.to_string()))),
         resolve_options,
         error_message: Some(format!("invalid alias field value: {}", result)),
+        source: OptionIssueSourceVc::none(),
     }
     .cell();
     issue.as_issue().emit();
@@ -1254,6 +1261,7 @@ pub async fn handle_resolve_error(
     origin_path: FileSystemPathVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
+    source: OptionIssueSourceVc,
 ) -> Result<ResolveResultVc> {
     Ok(match result.is_unresolveable().await {
         Ok(unresolveable) => {
@@ -1264,6 +1272,7 @@ pub async fn handle_resolve_error(
                     request,
                     resolve_options,
                     error_message: None,
+                    source,
                 }
                 .into();
                 issue.as_issue().emit();
@@ -1277,6 +1286,7 @@ pub async fn handle_resolve_error(
                 request,
                 resolve_options,
                 error_message: Some(err.to_string()),
+                source,
             }
             .into();
             issue.as_issue().emit();

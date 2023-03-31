@@ -9,7 +9,7 @@ use turbopack_core::{
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     environment::{Rendering, RenderingVc},
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueSeverity, IssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
     resolve::{
@@ -40,6 +40,7 @@ pub struct UrlAssetReference {
     request: RequestVc,
     rendering: RenderingVc,
     ast_path: AstPathVc,
+    issue_source: IssueSourceVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -50,12 +51,14 @@ impl UrlAssetReferenceVc {
         request: RequestVc,
         rendering: RenderingVc,
         ast_path: AstPathVc,
+        issue_source: IssueSourceVc,
     ) -> Self {
         UrlAssetReference {
             origin,
             request,
             rendering,
             ast_path,
+            issue_source,
         }
         .cell()
     }
@@ -64,11 +67,7 @@ impl UrlAssetReferenceVc {
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
         Ok(ReferencedAssetVc::from_resolve_result(
-            url_resolve(
-                this.origin,
-                this.request,
-                Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
-            ),
+            self.resolve_reference(),
             this.request,
         ))
     }
@@ -82,6 +81,7 @@ impl AssetReference for UrlAssetReference {
             self.origin,
             self.request,
             Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
+            self.issue_source,
         )
     }
 }

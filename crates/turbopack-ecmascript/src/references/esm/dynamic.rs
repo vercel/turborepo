@@ -9,6 +9,7 @@ use turbopack_core::{
         availability_info::AvailabilityInfo, ChunkableAssetReference, ChunkableAssetReferenceVc,
         ChunkingType, ChunkingTypeOptionVc,
     },
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -32,16 +33,23 @@ pub struct EsmAsyncAssetReference {
     pub origin: ResolveOriginVc,
     pub request: RequestVc,
     pub path: AstPathVc,
+    pub issue_source: IssueSourceVc,
 }
 
 #[turbo_tasks::value_impl]
 impl EsmAsyncAssetReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(origin: ResolveOriginVc, request: RequestVc, path: AstPathVc) -> Self {
+    pub fn new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        path: AstPathVc,
+        issue_source: IssueSourceVc,
+    ) -> Self {
         Self::cell(EsmAsyncAssetReference {
             origin,
             request,
             path,
+            issue_source,
         })
     }
 }
@@ -50,7 +58,12 @@ impl EsmAsyncAssetReferenceVc {
 impl AssetReference for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.origin, self.request, Default::default())
+        esm_resolve(
+            self.origin,
+            self.request,
+            Default::default(),
+            OptionIssueSourceVc::some(self.issue_source),
+        )
     }
 }
 
@@ -89,6 +102,7 @@ impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
                 self.origin,
                 self.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
+                OptionIssueSourceVc::some(self.issue_source),
             ),
             Value::new(EsmAsync(availability_info.into_value())),
         )

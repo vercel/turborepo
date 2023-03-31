@@ -29,6 +29,7 @@ use swc_core::{
         comments::CommentKind,
         errors::{DiagnosticId, Handler, HANDLER},
         pass::AstNodePath,
+        source_map::Pos,
         Span, Spanned, GLOBALS,
     },
     ecma::{
@@ -41,6 +42,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
@@ -622,6 +624,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 origin,
                                 RequestVc::parse(Value::new(pat)),
                                 AstPathVc::cell(ast_path.to_vec()),
+                                issue_source(source, span),
                             ));
                             return Ok(());
                         }
@@ -652,6 +655,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 origin,
                                 RequestVc::parse(Value::new(pat)),
                                 AstPathVc::cell(ast_path.to_vec()),
+                                issue_source(source, span),
                             ));
                             return Ok(());
                         }
@@ -666,6 +670,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     }
                     JsValue::WellKnownFunction(WellKnownFunctionKind::Define) => {
                         analyze_amd_define(
+                            source,
                             analysis,
                             origin,
                             handler,
@@ -694,6 +699,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 origin,
                                 RequestVc::parse(Value::new(pat)),
                                 AstPathVc::cell(ast_path.to_vec()),
+                                issue_source(source, span),
                             ));
                             return Ok(());
                         }
@@ -805,6 +811,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 analysis.add_reference(CjsAssetReferenceVc::new(
                                     origin,
                                     RequestVc::parse(Value::new(pat)),
+                                    issue_source(source, span),
                                 ));
                             }
                             if show_dynamic_warning || !pat.has_constant_parts() {
@@ -853,6 +860,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             analysis.add_reference(CjsAssetReferenceVc::new(
                                 origin,
                                 RequestVc::parse(Value::new(pat)),
+                                issue_source(source, span),
                             ));
                             return Ok(());
                         }
@@ -1017,6 +1025,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                                 analysis.add_reference(CjsAssetReferenceVc::new(
                                                     origin,
                                                     RequestVc::parse(Value::new(pat)),
+                                                    issue_source(source, span),
                                                 ));
                                             }
                                             return Ok(());
@@ -1084,6 +1093,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             analysis.add_reference(CjsAssetReferenceVc::new(
                                 origin,
                                 RequestVc::parse(Value::new(js_value_to_pattern(&args[1]))),
+                                issue_source(source, span),
                             ));
                             return Ok(());
                         }
@@ -1557,6 +1567,11 @@ pub(crate) async fn analyze_ecmascript_module(
                                     RequestVc::parse(Value::new(pat)),
                                     compile_time_info.environment().rendering(),
                                     AstPathVc::cell(ast_path),
+                                    IssueSourceVc::from_byte_offset(
+                                        source,
+                                        span.lo.to_usize(),
+                                        span.hi.to_usize(),
+                                    ),
                                 ));
                             }
                         }
@@ -1571,7 +1586,12 @@ pub(crate) async fn analyze_ecmascript_module(
     analysis.build().await
 }
 
+fn issue_source(source: AssetVc, span: Span) -> IssueSourceVc {
+    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize())
+}
+
 fn analyze_amd_define(
+    source: AssetVc,
     analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: &Handler,
@@ -1582,6 +1602,7 @@ fn analyze_amd_define(
     match &args[..] {
         [JsValue::Constant(id), JsValue::Array { items: deps, .. }, _] if id.as_str().is_some() => {
             analyze_amd_define_with_deps(
+                source,
                 analysis,
                 origin,
                 handler,
@@ -1592,7 +1613,9 @@ fn analyze_amd_define(
             );
         }
         [JsValue::Array { items: deps, .. }, _] => {
-            analyze_amd_define_with_deps(analysis, origin, handler, span, ast_path, None, deps);
+            analyze_amd_define_with_deps(
+                source, analysis, origin, handler, span, ast_path, None, deps,
+            );
         }
         [JsValue::Constant(id), JsValue::Function(..)] if id.as_str().is_some() => {
             analysis.add_code_gen(AmdDefineWithDependenciesCodeGenVc::new(
@@ -1604,6 +1627,7 @@ fn analyze_amd_define(
                 origin,
                 AstPathVc::cell(ast_path.to_vec()),
                 AmdDefineFactoryType::Function,
+                issue_source(source, span),
             ));
         }
         [JsValue::Constant(id), _] if id.as_str().is_some() => {
@@ -1616,6 +1640,7 @@ fn analyze_amd_define(
                 origin,
                 AstPathVc::cell(ast_path.to_vec()),
                 AmdDefineFactoryType::Unknown,
+                issue_source(source, span),
             ));
         }
         [JsValue::Function(..)] => {
@@ -1628,6 +1653,7 @@ fn analyze_amd_define(
                 origin,
                 AstPathVc::cell(ast_path.to_vec()),
                 AmdDefineFactoryType::Function,
+                issue_source(source, span),
             ));
         }
         [JsValue::Object { .. }] => {
@@ -1636,6 +1662,7 @@ fn analyze_amd_define(
                 origin,
                 AstPathVc::cell(ast_path.to_vec()),
                 AmdDefineFactoryType::Value,
+                issue_source(source, span),
             ));
         }
         [_] => {
@@ -1648,6 +1675,7 @@ fn analyze_amd_define(
                 origin,
                 AstPathVc::cell(ast_path.to_vec()),
                 AmdDefineFactoryType::Unknown,
+                issue_source(source, span),
             ));
         }
         _ => {
@@ -1661,6 +1689,7 @@ fn analyze_amd_define(
 }
 
 fn analyze_amd_define_with_deps(
+    source: AssetVc,
     analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: &Handler,
@@ -1691,7 +1720,8 @@ fn analyze_amd_define_with_deps(
                 }
                 _ => {
                     let request = RequestVc::parse_string(dep.to_string());
-                    let reference = AmdDefineAssetReferenceVc::new(origin, request);
+                    let reference =
+                        AmdDefineAssetReferenceVc::new(origin, request, issue_source(source, span));
                     requests.push(AmdDefineDependencyElement::Request(request));
                     analysis.add_reference(reference);
                 }
@@ -1720,6 +1750,7 @@ fn analyze_amd_define_with_deps(
         origin,
         AstPathVc::cell(ast_path.to_vec()),
         AmdDefineFactoryType::Function,
+        issue_source(source, span),
     ));
 }
 
@@ -1781,7 +1812,7 @@ async fn value_visitor_inner(
             if args.len() == 1 {
                 let pat = js_value_to_pattern(&args[0]);
                 let request = RequestVc::parse(Value::new(pat.clone()));
-                let resolved = cjs_resolve(origin, request).await?;
+                let resolved = cjs_resolve(origin, request, OptionIssueSourceVc::none()).await?;
                 let mut values = resolved
                     .primary
                     .iter()
