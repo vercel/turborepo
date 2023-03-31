@@ -80,7 +80,8 @@ func DryRun(
 	// Assign the Task Summaries to the main summary
 	summary.RunSummary.Tasks = taskSummaries
 
-	// This is terrible, but pass a 0 exitCode into Close()
+	// The exitCode isn't really used by the Run Summary Close() method for dry runs
+	// but we pass in a successful value to match Real Runs.
 	return summary.Close(0, g.WorkspaceInfos)
 }
 
