@@ -81,7 +81,7 @@ jobs:
         run: |
           # Build next.js, next-swc
           pnpm run build
-          hyperfine --min-runs 1 --style nocolor 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release --cargo-flags="--message-format short --quiet"'
+          hyperfine --min-runs 1 --style nocolor 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test,__internal_dhat-heap --release --cargo-flags="--message-format short --quiet --config profile.release.debug="1""'
           strip packages/next-swc/native/next-swc.*.node
           ls -al packages/next-swc/native
           # Reduce the size of the cache bit
