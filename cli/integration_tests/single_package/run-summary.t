@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Check
-  $ ${TURBO} run build --summarize=true > /dev/null
+  $ ${TURBO} run build --summarize > /dev/null
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)

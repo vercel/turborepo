@@ -6,7 +6,7 @@ Setup
 
 # Turbo exits early and doesn't generate run summaries on errors, so we need to use --continue for this test.
 The maybefails task fails for one workspace but not the other
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run maybefails --continue > /dev/null
+  $ ${TURBO} run --summarize maybefails --continue > /dev/null
   my-app:maybefails: command finished with error, but continuing...
    ERROR  run failed: command  exited (1)
   [1]
