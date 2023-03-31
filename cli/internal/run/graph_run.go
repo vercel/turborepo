@@ -13,15 +13,15 @@ import (
 // GraphRun generates a visualization of the task graph rather than executing it.
 func GraphRun(ctx gocontext.Context, rs *runSpec, engine *core.Engine, base *cmdutil.CmdBase) error {
 	graph := engine.TaskGraph
-	if rs.Opts.runOpts.singlePackage {
+	if rs.Opts.runOpts.SinglePackage {
 		graph = filterSinglePackageGraphForDisplay(engine.TaskGraph)
 	}
 	visualizer := graphvisualizer.New(base.RepoRoot, base.UI, graph)
 
-	if rs.Opts.runOpts.graphDot {
+	if rs.Opts.runOpts.GraphDot {
 		visualizer.RenderDotGraph()
 	} else {
-		err := visualizer.GenerateGraphFile(rs.Opts.runOpts.graphFile)
+		err := visualizer.GenerateGraphFile(rs.Opts.runOpts.GraphFile)
 		if err != nil {
 			return err
 		}

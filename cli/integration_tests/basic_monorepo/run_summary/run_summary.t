@@ -50,9 +50,10 @@ Setup
   [0-9]+ (re)
 
 # Extract some task-specific summaries from each
-  $ FIRST_APP_BUILD=$("$TESTDIR/get-build.sh" "$FIRST" "my-app")  
-  $ SECOND_APP_BUILD=$("$TESTDIR/get-build.sh" "$SECOND" "my-app")
-  $ FIRST_UTIL_BUILD=$("$TESTDIR/get-build.sh" "$FIRST" "util")
+  $ source "$TESTDIR/../../run-summary-utils.sh"
+  $ FIRST_APP_BUILD=$(getSummaryTaskId "$FIRST" "my-app#build")
+  $ SECOND_APP_BUILD=$(getSummaryTaskId "$SECOND" "my-app#build")
+  $ FIRST_UTIL_BUILD=$(getSummaryTaskId "$FIRST" "util#build")
 
   $ echo $FIRST_APP_BUILD | jq '.execution'
   {
@@ -95,5 +96,5 @@ Setup
   }
 
 # another#build is not in tasks, because it didn't execute (script was not implemented)
-  $ "$TESTDIR/get-build.sh" $FIRST "another"
+  $ getSummaryTaskId $FIRST "another#build"
   null

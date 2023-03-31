@@ -16,6 +16,9 @@ Check
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+  $ test -d .turbo/runs/
+  [1]
+
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)

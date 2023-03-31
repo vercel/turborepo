@@ -59,7 +59,7 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 		return err
 	}
 
-	opts.runOpts.passThroughArgs = passThroughArgs
+	opts.runOpts.PassThroughArgs = passThroughArgs
 	run := configureRun(base, opts, signalWatcher)
 	if err := run.run(ctx, tasks); err != nil {
 		base.LogError("run failed: %v", err)
@@ -80,9 +80,9 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
-	opts.runOpts.logPrefix = runPayload.LogPrefix
-	opts.runOpts.summarize = runPayload.Summarize
-	opts.runOpts.experimentalSpaceID = runPayload.ExperimentalSpaceID
+	opts.runOpts.LogPrefix = runPayload.LogPrefix
+	opts.runOpts.Summarize = runPayload.Summarize
+	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -101,33 +101,33 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		if err != nil {
 			return nil, err
 		}
-		opts.runOpts.concurrency = concurrency
+		opts.runOpts.Concurrency = concurrency
 	}
-	opts.runOpts.parallel = runPayload.Parallel
-	opts.runOpts.profile = runPayload.Profile
-	opts.runOpts.continueOnError = runPayload.ContinueExecution
-	opts.runOpts.only = runPayload.Only
-	opts.runOpts.noDaemon = runPayload.NoDaemon
-	opts.runOpts.singlePackage = args.Command.Run.SinglePackage
+	opts.runOpts.Parallel = runPayload.Parallel
+	opts.runOpts.Profile = runPayload.Profile
+	opts.runOpts.ContinueOnError = runPayload.ContinueExecution
+	opts.runOpts.Only = runPayload.Only
+	opts.runOpts.NoDaemon = runPayload.NoDaemon
+	opts.runOpts.SinglePackage = args.Command.Run.SinglePackage
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...
 	if runPayload.Graph != nil {
 		// If no value is attached, we print to stdout
 		if *runPayload.Graph == "" {
-			opts.runOpts.graphDot = true
+			opts.runOpts.GraphDot = true
 		} else {
 			// Otherwise, we emit to the file name attached as value
-			opts.runOpts.graphDot = false
-			opts.runOpts.graphFile = *runPayload.Graph
+			opts.runOpts.GraphDot = false
+			opts.runOpts.GraphFile = *runPayload.Graph
 		}
 	}
 
 	if runPayload.DryRun != "" {
-		opts.runOpts.dryRunJSON = runPayload.DryRun == _dryRunJSONValue
+		opts.runOpts.DryRunJSON = runPayload.DryRun == _dryRunJSONValue
 
 		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue {
-			opts.runOpts.dryRun = true
+			opts.runOpts.DryRun = true
 		} else {
 			return nil, fmt.Errorf("invalid dry-run mode: %v", runPayload.DryRun)
 		}
@@ -169,7 +169,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 
 	var pkgDepGraph *context.Context
-	if r.opts.runOpts.singlePackage {
+	if r.opts.runOpts.SinglePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
 	} else {
 		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON)
@@ -183,9 +183,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	if ui.IsCI && !r.opts.runOpts.noDaemon {
+	if ui.IsCI && !r.opts.runOpts.NoDaemon {
 		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
-	} else if !r.opts.runOpts.noDaemon {
+	} else if !r.opts.runOpts.NoDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
 			r.base.LogWarning("", errors.Wrap(err, "failed to contact turbod. Continuing in standalone mode"))
@@ -211,7 +211,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		RepoRoot:        r.base.RepoRoot,
 	}
 
-	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.singlePackage)
+	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.SinglePackage)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	engine, err := buildTaskGraphEngine(
 		g,
 		rs,
-		r.opts.runOpts.singlePackage,
+		r.opts.runOpts.SinglePackage,
 	)
 
 	if err != nil {
@@ -298,7 +298,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// CalculateFileHashes assigns PackageInputsExpandedHashes as a side-effect
 	err = taskHashTracker.CalculateFileHashes(
 		engine.TaskGraph.Vertices(),
-		rs.Opts.runOpts.concurrency,
+		rs.Opts.runOpts.Concurrency,
 		g.WorkspaceInfos,
 		g.TaskDefinitions,
 		r.base.RepoRoot,
@@ -311,7 +311,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// If we are running in parallel, then we remove all the edges in the graph
 	// except for the root. Rebuild the task graph for backwards compatibility.
 	// We still use dependencies specified by the pipeline configuration.
-	if rs.Opts.runOpts.parallel {
+	if rs.Opts.runOpts.Parallel {
 		for _, edge := range g.WorkspaceGraph.Edges() {
 			if edge.Target() != g.RootNode {
 				g.WorkspaceGraph.RemoveEdge(edge)
@@ -320,7 +320,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		engine, err = buildTaskGraphEngine(
 			g,
 			rs,
-			r.opts.runOpts.singlePackage,
+			r.opts.runOpts.SinglePackage,
 		)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
@@ -328,7 +328,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 
 	// Graph Run
-	if rs.Opts.runOpts.graphFile != "" || rs.Opts.runOpts.graphDot {
+	if rs.Opts.runOpts.GraphFile != "" || rs.Opts.runOpts.GraphDot {
 		return GraphRun(ctx, rs, engine, r.base)
 	}
 
@@ -353,9 +353,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
-		rs.Opts.runOpts.singlePackage,
-		rs.Opts.runOpts.profile,
 		r.base.TurboVersion,
+		r.base.APIClient,
+		rs.Opts.runOpts,
 		packagesInScope,
 		runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
@@ -364,13 +364,10 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
-		rs.Opts.runOpts.summarize,
-		r.base.APIClient,
-		rs.Opts.runOpts.experimentalSpaceID,
 	)
 
 	// Dry Run
-	if rs.Opts.runOpts.dryRun {
+	if rs.Opts.runOpts.DryRun {
 		return DryRun(
 			ctx,
 			g,
@@ -443,7 +440,7 @@ func buildTaskGraphEngine(
 	if err := engine.Prepare(&core.EngineBuildingOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
-		TasksOnly: rs.Opts.runOpts.only,
+		TasksOnly: rs.Opts.runOpts.Only,
 	}); err != nil {
 		return nil, err
 	}
@@ -454,7 +451,7 @@ func buildTaskGraphEngine(
 	}
 
 	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.concurrency); err != nil {
+	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
 		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
 	}
 
