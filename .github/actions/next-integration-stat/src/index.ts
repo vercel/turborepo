@@ -64,6 +64,8 @@ interface FailedJobResult {
 interface TestResultManifest {
   nextjsVersion: string;
   ref: string;
+  buildTime?: string;
+  buildSize?: string;
   result: Array<FailedJobResult>;
   flakyMonitorJobResults: Array<FailedJobResult>;
 }
@@ -448,6 +450,30 @@ async function getFailedJobResults(
     nextjsBuildSetupJob
   );
 
+  // Find out next-swc build workflow
+  const nextSwcBuildJob = jobs?.find((job) =>
+    job.name.includes("Build Next.js for the turbopack integration test")
+  );
+  const nextSwcBuildLogs = (
+    await fetchJobLogsFromWorkflow(octokit, token, nextSwcBuildJob)
+  ).logs.split("\n");
+  const buildTimeMatch = (
+    nextSwcBuildLogs.find((line) => line.includes("Time (abs ≡):")) ?? ""
+  ).match(/  ([+-]?(?=\.\d|\d)(?:\d+)?(?:\.?\d*))(?:[Ee]([+-]?\d+))? s/);
+  const buildTime = buildTimeMatch.length >= 2 ? buildTimeMatch[1] : undefined;
+  const nextSwcBuildSize = (
+    nextSwcBuildLogs.find(
+      (line) =>
+        line.includes("NEXT_SWC_FILESIZE:") &&
+        /NEXT_SWC_FILESIZE: (\d+)/.test(line)
+    ) ?? ""
+  ).match(/NEXT_SWC_FILESIZE: (\d+)/)[1];
+
+  console.log(`Found next-swc build information from build logs`, {
+    buildTime,
+    nextSwcBuildSize,
+  });
+
   // Filter out next.js integration test jobs
   const integrationTestJobs = jobs?.filter((job) =>
     /Next\.js integration test \([^)]*\) \([^)]*\)$/.test(job.name)
@@ -468,6 +494,8 @@ async function getFailedJobResults(
 
   const testResultManifest: TestResultManifest = {
     nextjsVersion,
+    buildTime,
+    buildSize: nextSwcBuildSize,
     ref: sha,
   } as any;
 

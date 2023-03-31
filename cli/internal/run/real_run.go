@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
@@ -46,7 +45,7 @@ func RealRun(
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
 ) error {
-	singlePackage := rs.Opts.runOpts.singlePackage
+	singlePackage := rs.Opts.runOpts.SinglePackage
 
 	if singlePackage {
 		base.UI.Output(fmt.Sprintf("%s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", ")))))
@@ -86,16 +85,14 @@ func RealRun(
 
 	// run the thing
 	execOpts := core.EngineExecutionOptions{
-		Parallel:    rs.Opts.runOpts.parallel,
-		Concurrency: rs.Opts.runOpts.concurrency,
+		Parallel:    rs.Opts.runOpts.Parallel,
+		Concurrency: rs.Opts.runOpts.Concurrency,
 	}
 
 	mu := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		// deps here are passed in to calculate the task hash
-		taskExecutionSummary, err := ec.exec(ctx, packageTask, deps)
+		taskExecutionSummary, err := ec.exec(ctx, packageTask)
 		if err != nil {
 			return err
 		}
@@ -152,7 +149,7 @@ func RealRun(
 
 	// When continue on error is enabled don't register failed tasks as errors
 	// and instead must inspect the task summaries.
-	if ec.rs.Opts.runOpts.continueOnError {
+	if ec.rs.Opts.runOpts.ContinueOnError {
 		for _, summary := range runSummary.RunSummary.Tasks {
 			if childExit := summary.Execution.ExitCode(); childExit != nil {
 				childExit := *childExit
@@ -166,7 +163,11 @@ func RealRun(
 		}
 	}
 
-	runSummary.Close(exitCode)
+	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
+		// We don't need to throw an error, but we can warn on this.
+		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
+		base.UI.Info(fmt.Sprintf("Failed to close Run Summary %v", err))
+	}
 
 	if exitCode != 0 {
 		return &process.ChildExit{
@@ -190,7 +191,7 @@ type execContext struct {
 	isSinglePackage bool
 }
 
-func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
+func (ec *execContext) logError(prefix string, err error) {
 	ec.logger.Error(prefix, "error", err)
 
 	if prefix != "" {
@@ -200,7 +201,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runsummary.TaskExecutionSummary, error) {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
 	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
@@ -228,7 +229,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	var prefix string
 	var prettyPrefix string
-	if ec.rs.Opts.runOpts.logPrefix == "none" {
+	if ec.rs.Opts.runOpts.LogPrefix == "none" {
 		prefix = ""
 	} else {
 		prefix = packageTask.OutputPrefix(ec.isSinglePackage)
@@ -276,8 +277,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err, nil)
 
-		ec.logError(progressLogger, prettyPrefix, err)
-		if !ec.rs.Opts.runOpts.continueOnError {
+		ec.logError(prettyPrefix, err)
+		if !ec.rs.Opts.runOpts.ContinueOnError {
 			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
 		}
 	}
@@ -338,7 +339,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
-		if !ec.rs.Opts.runOpts.continueOnError {
+		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
 		} else {
@@ -355,10 +356,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
-		ec.logError(progressLogger, "", err)
+		ec.logError("", err)
 	} else {
 		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(taskExecutionSummary.Duration.Milliseconds())); err != nil {
-			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
+			ec.logError("", fmt.Errorf("error caching output: %w", err))
 		} else {
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		}
