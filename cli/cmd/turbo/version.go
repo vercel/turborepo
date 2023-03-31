@@ -1,3 +1,3 @@
 package main
 
-const turboVersion = "1.8.6-canary.1"
+const turboVersion = "1.8.9-canary.0"

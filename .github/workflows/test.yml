@@ -258,18 +258,13 @@ jobs:
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli
         env:
-          GO_TAG: go
-
-      - name: Integration Tests (with Rust FFI)
-        run: pnpm -- turbo run integration-tests --filter=cli
-        env:
           GO_TAG: rust
 
   go_e2e:
     name: Go E2E Tests
     needs: determine_jobs
     if: needs.determine_jobs.outputs.go_e2e == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -538,7 +533,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
-          ref: ${{ env.NEXTJS_VERSION }}
 
       - name: Build next-swc
         continue-on-error: true

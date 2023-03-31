@@ -358,6 +358,14 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Opt in to using the turbo run summary.
+    #[clap(
+        long,
+        hide = true,
+        env = "TURBO_RUN_SUMMARY",
+        default_missing_value = "true"
+    )]
+    pub summarize: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Note that tasks running
     /// in parallel interleave their logs and prefix is the only way
     /// to identify which task produced a log.

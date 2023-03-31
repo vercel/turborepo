@@ -26,11 +26,12 @@ atty = { workspace = true }
 axum = "0.6.2"
 axum-server = "0.4.4"
 chrono = { workspace = true, features = ["serde"] }
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
 command-group = { version = "2.1.0", features = ["with-tokio"] }
 config = "0.13"
 console = { workspace = true }
+ctrlc = { version = "3.2.5", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
@@ -42,6 +43,7 @@ hostname = "0.3.1"
 humantime = "2.1.0"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
+libc = "0.2.140"
 log = { workspace = true }
 notify = { version = "5.1.0", default-features = false, features = [
   "macos_kqueue",
@@ -55,6 +57,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 sha2 = "0.10.6"
+shared_child = "1.0.0"
 sysinfo = "0.27.7"
 thiserror = "1.0.38"
 tiny-gradient = { workspace = true }
