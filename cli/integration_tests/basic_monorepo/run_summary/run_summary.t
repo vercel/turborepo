@@ -5,7 +5,7 @@ Setup
 # Delete all run summaries
   $ rm -rf .turbo/runs
 
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null # first run (should be cache miss)
+  $ ${TURBO} run build --summarize -- someargs > /dev/null # first run (should be cache miss)
 
 # HACK: Generated run summaries are named with a ksuid, which is a time-sorted ID. This _generally_ works
 # but we're seeing in this test that sometimes a summary file is not sorted (with /bin/ls) in the order we expect
@@ -17,7 +17,7 @@ Setup
 # If you find this sleep statement, try running this test 10 times in a row. If there are no
 # failures, it *should* be safe to remove.
   $ sleep 1
-  $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null # run again (expecting full turbo here)
+  $ ${TURBO} run build --summarize -- someargs > /dev/null # run again (expecting full turbo here)
 
 # no output, just check for 0 status code, which means the directory was created
   $ test -d .turbo/runs
