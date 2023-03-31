@@ -33,7 +33,7 @@ Check
   {
     "id": "[a-zA-Z0-9]+", (re)
     "version": "0",
-    "turboVersion": "[a-z0-9\.]+", (re)
+    "turboVersion": "[a-z0-9\.-]+", (re)
     "globalHashSummary": {
       "globalFileHashMap": {
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
