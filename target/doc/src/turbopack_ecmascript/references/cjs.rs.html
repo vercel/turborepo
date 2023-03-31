@@ -261,10 +261,22 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Callee, Expr, ExprOrSpread, Ident},
+    ecma::ast::{Callee, Expr, ExprOrSpread, Ident, ObjectLit},
 };
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
@@ -379,32 +391,44 @@
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if let </span>PatternMapping::Invalid = <span class="kw-2">&amp;*</span>pm {
-            <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-            visitors.push(<span class="macro">create_visitor!</span>(path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
-                <span class="comment">// In Node.js, a require call that cannot be resolved will throw an error.
-                </span><span class="kw-2">*</span>expr = throw_module_not_found_expr(<span class="kw-2">&amp;</span>request_string);
-            }));
-        } <span class="kw">else </span>{
-            visitors.push(
-                <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
-                    call_expr.callee = Callee::Expr(
-                        <span class="kw">box </span>Expr::Ident(Ident::new(
-                            <span class="kw">if </span>pm.is_internal_import() {
-                                <span class="string">&quot;__turbopack_require__&quot;
-                            </span>} <span class="kw">else </span>{
-                                <span class="string">&quot;__turbopack_external_require__&quot;
-                            </span>}.into(), DUMMY_SP
-                        ))
-                    );
-                    <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
-                    <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
-                        <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
-                        <span class="kw">_ </span>=&gt; pm.create(),
-                    };
-                    call_expr.args.push(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr });
-                }),
-            );
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>pm {
+            PatternMapping::Invalid =&gt; {
+                <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                visitors.push(<span class="macro">create_visitor!</span>(path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
+                    <span class="comment">// In Node.js, a require call that cannot be resolved will throw an error.
+                    </span><span class="kw-2">*</span>expr = throw_module_not_found_expr(<span class="kw-2">&amp;</span>request_string);
+                }));
+            }
+            PatternMapping::Ignored =&gt; {
+                visitors.push(<span class="macro">create_visitor!</span>(path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
+                    <span class="comment">// Ignored modules behave as if they have no code nor exports.
+                    </span><span class="kw-2">*</span>expr = Expr::Object(ObjectLit {
+                        span: DUMMY_SP,
+                        props: <span class="macro">vec!</span>[],
+                    });
+                }));
+            }
+            <span class="kw">_ </span>=&gt; {
+                visitors.push(
+                    <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
+                        call_expr.callee = Callee::Expr(
+                            <span class="kw">box </span>Expr::Ident(Ident::new(
+                                <span class="kw">if </span>pm.is_internal_import() {
+                                    <span class="string">&quot;__turbopack_require__&quot;
+                                </span>} <span class="kw">else </span>{
+                                    <span class="string">&quot;__turbopack_external_require__&quot;
+                                </span>}.into(), DUMMY_SP
+                            ))
+                        );
+                        <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
+                        <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
+                            <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
+                            <span class="kw">_ </span>=&gt; pm.create(),
+                        };
+                        call_expr.args.push(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr });
+                    }),
+                );
+            }
         }
 
         <span class="prelude-val">Ok</span>(CodeGeneration { visitors }.into())
