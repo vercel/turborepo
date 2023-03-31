@@ -13,7 +13,7 @@ use swc_core::{
 use turbo_tasks::Value;
 use turbopack_core::{
     asset::AssetVc,
-    issue::{IssueSourceVc, OptionIssueSourceVc},
+    issue::{IssueSeverity, IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{
@@ -191,6 +191,7 @@ pub async fn css_resolve(
         request,
         options,
         issue_source,
+        IssueSeverity::Error.cell(),
     )
     .await
 }

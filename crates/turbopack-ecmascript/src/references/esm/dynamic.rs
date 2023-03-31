@@ -24,7 +24,7 @@ use crate::{
     },
     create_visitor,
     references::AstPathVc,
-    resolve::esm_resolve,
+    resolve::{esm_resolve, try_to_severity},
 };
 
 #[turbo_tasks::value]
@@ -34,6 +34,7 @@ pub struct EsmAsyncAssetReference {
     pub request: RequestVc,
     pub path: AstPathVc,
     pub issue_source: IssueSourceVc,
+    pub in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -44,12 +45,14 @@ impl EsmAsyncAssetReferenceVc {
         request: RequestVc,
         path: AstPathVc,
         issue_source: IssueSourceVc,
+        in_try: bool,
     ) -> Self {
         Self::cell(EsmAsyncAssetReference {
             origin,
             request,
             path,
             issue_source,
+            in_try,
         })
     }
 }
@@ -63,6 +66,7 @@ impl AssetReference for EsmAsyncAssetReference {
             self.request,
             Default::default(),
             OptionIssueSourceVc::some(self.issue_source),
+            try_to_severity(self.in_try),
         )
     }
 }
@@ -103,6 +107,7 @@ impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
                 self.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
                 OptionIssueSourceVc::some(self.issue_source),
+                try_to_severity(self.in_try),
             ),
             Value::new(EsmAsync(availability_info.into_value())),
         )

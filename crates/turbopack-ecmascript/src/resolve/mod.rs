@@ -4,7 +4,7 @@ use anyhow::Result;
 use turbo_tasks::Value;
 use turbopack_core::{
     context::AssetContext,
-    issue::{IssueSourceVc, OptionIssueSourceVc},
+    issue::{IssueSeverity, IssueSeverityVc, IssueSourceVc, OptionIssueSourceVc},
     reference_type::{
         CommonJsReferenceSubType, EcmaScriptModulesReferenceSubType, ReferenceType,
         UrlReferenceSubType,
@@ -54,10 +54,11 @@ pub async fn esm_resolve(
     request: RequestVc,
     ty: Value<EcmaScriptModulesReferenceSubType>,
     issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
-    specific_resolve(origin, request, options, ty, issue_source).await
+    specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
 }
 
 #[turbo_tasks::function]
@@ -65,11 +66,12 @@ pub async fn cjs_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
     issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     // TODO pass CommonJsReferenceSubType
     let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
     let options = apply_cjs_specific_options(origin.resolve_options(ty.clone()));
-    specific_resolve(origin, request, options, ty, issue_source).await
+    specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
 }
 
 #[turbo_tasks::function]
@@ -78,6 +80,7 @@ pub async fn url_resolve(
     request: RequestVc,
     ty: Value<UrlReferenceSubType>,
     issue_source: IssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     let ty = Value::new(ReferenceType::Url(ty.into_value()));
     let resolve_options = origin.resolve_options(ty.clone());
@@ -97,6 +100,7 @@ pub async fn url_resolve(
         request,
         resolve_options,
         OptionIssueSourceVc::some(issue_source),
+        issue_severity,
     )
     .await?;
     Ok(origin.context().process_resolve_result(result, ty))
@@ -108,6 +112,7 @@ async fn specific_resolve(
     options: ResolveOptionsVc,
     reference_type: Value<ReferenceType>,
     issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     let result = origin.resolve_asset(request, options, reference_type.clone());
 
@@ -118,6 +123,15 @@ async fn specific_resolve(
         request,
         options,
         issue_source,
+        issue_severity,
     )
     .await
+}
+
+pub fn try_to_severity(in_try: bool) -> IssueSeverityVc {
+    if in_try {
+        IssueSeverity::Warning.cell()
+    } else {
+        IssueSeverity::Error.cell()
+    }
 }

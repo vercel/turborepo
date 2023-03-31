@@ -30,7 +30,7 @@ use crate::{
         pattern_mapping::{PatternMapping, PatternMappingReadRef},
         AstPathVc,
     },
-    resolve::cjs_resolve,
+    resolve::{cjs_resolve, try_to_severity},
 };
 
 #[turbo_tasks::value]
@@ -39,16 +39,23 @@ pub struct AmdDefineAssetReference {
     origin: ResolveOriginVc,
     request: RequestVc,
     issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
 impl AmdDefineAssetReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(origin: ResolveOriginVc, request: RequestVc, issue_source: IssueSourceVc) -> Self {
+    pub fn new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -> Self {
         Self::cell(AmdDefineAssetReference {
             origin,
             request,
             issue_source,
+            in_try,
         })
     }
 }
@@ -61,6 +68,7 @@ impl AssetReference for AmdDefineAssetReference {
             self.origin,
             self.request,
             OptionIssueSourceVc::some(self.issue_source),
+            try_to_severity(self.in_try),
         )
     }
 }
@@ -106,6 +114,7 @@ pub struct AmdDefineWithDependenciesCodeGen {
     path: AstPathVc,
     factory_type: AmdDefineFactoryType,
     issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 impl AmdDefineWithDependenciesCodeGenVc {
@@ -115,6 +124,7 @@ impl AmdDefineWithDependenciesCodeGenVc {
         path: AstPathVc,
         factory_type: AmdDefineFactoryType,
         issue_source: IssueSourceVc,
+        in_try: bool,
     ) -> Self {
         Self::cell(AmdDefineWithDependenciesCodeGen {
             dependencies_requests,
@@ -122,6 +132,7 @@ impl AmdDefineWithDependenciesCodeGenVc {
             path,
             factory_type,
             issue_source,
+            in_try,
         })
     }
 }
@@ -150,6 +161,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                                     self.origin,
                                     *request,
                                     OptionIssueSourceVc::some(self.issue_source),
+                                    try_to_severity(self.in_try),
                                 ),
                                 Value::new(Cjs),
                             )

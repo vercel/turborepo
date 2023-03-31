@@ -8,7 +8,7 @@ use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
-    issue::IssueSourceVc,
+    issue::{IssueSeverity, IssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
     resolve::{
@@ -83,6 +83,7 @@ impl AssetReference for UrlAssetReference {
             self.request,
             Value::new(UrlReferenceSubType::CssUrl),
             self.issue_source,
+            IssueSeverity::Error.cell(),
         )
     }
 }

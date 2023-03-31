@@ -12,7 +12,7 @@ use turbopack_core::{
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
         ModuleId,
     },
-    issue::OptionIssueSourceVc,
+    issue::{IssueSeverity, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{
@@ -156,6 +156,7 @@ impl AssetReference for EsmAssetReference {
             self.request,
             ty,
             OptionIssueSourceVc::none(),
+            IssueSeverity::Error.cell(),
         )
     }
 }

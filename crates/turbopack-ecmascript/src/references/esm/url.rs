@@ -25,7 +25,7 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
-    resolve::url_resolve,
+    resolve::{try_to_severity, url_resolve},
     utils::module_id_to_lit,
 };
 
@@ -41,6 +41,7 @@ pub struct UrlAssetReference {
     rendering: RenderingVc,
     ast_path: AstPathVc,
     issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -52,6 +53,7 @@ impl UrlAssetReferenceVc {
         rendering: RenderingVc,
         ast_path: AstPathVc,
         issue_source: IssueSourceVc,
+        in_try: bool,
     ) -> Self {
         UrlAssetReference {
             origin,
@@ -59,6 +61,7 @@ impl UrlAssetReferenceVc {
             rendering,
             ast_path,
             issue_source,
+            in_try,
         }
         .cell()
     }
@@ -82,6 +85,7 @@ impl AssetReference for UrlAssetReference {
             self.request,
             Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
             self.issue_source,
+            try_to_severity(self.in_try),
         )
     }
 }

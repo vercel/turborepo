@@ -6,12 +6,13 @@ use turbo_tasks_fs::FileSystemPathVc;
 
 use super::{Issue, IssueVc};
 use crate::{
-    issue::OptionIssueSourceVc,
+    issue::{IssueSeverityVc, OptionIssueSourceVc},
     resolve::{options::ResolveOptionsVc, parse::RequestVc},
 };
 
 #[turbo_tasks::value(shared)]
 pub struct ResolvingIssue {
+    pub severity: IssueSeverityVc,
     pub request_type: String,
     pub request: RequestVc,
     pub context: FileSystemPathVc,
@@ -22,6 +23,11 @@ pub struct ResolvingIssue {
 
 #[turbo_tasks::value_impl]
 impl Issue for ResolvingIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        self.severity
+    }
+
     #[turbo_tasks::function]
     fn title(&self) -> StringVc {
         StringVc::cell(format!(

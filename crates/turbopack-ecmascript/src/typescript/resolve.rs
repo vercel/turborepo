@@ -304,6 +304,7 @@ pub async fn type_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result
         request,
         options,
         OptionIssueSourceVc::none(),
+        IssueSeverity::Error.cell(),
     )
     .await
 }

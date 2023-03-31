@@ -55,7 +55,7 @@ pub use alias_map::{
 };
 pub use exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
 
-use crate::issue::OptionIssueSourceVc;
+use crate::issue::{IssueSeverity, IssueSeverityVc, OptionIssueSourceVc};
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
@@ -777,6 +777,7 @@ async fn resolve_internal(
             let relative = RequestVc::relative(Value::new(new_pat), true);
 
             let issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: "server relative import: not implemented yet".to_string(),
                 request,
                 context,
@@ -795,6 +796,7 @@ async fn resolve_internal(
         }
         Request::Windows { path: _ } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: "windows import: not implemented yet".to_string(),
                 request,
                 context,
@@ -810,6 +812,7 @@ async fn resolve_internal(
         Request::Empty => ResolveResult::unresolveable().into(),
         Request::PackageInternal { path: _ } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: "package internal import: not implemented yet".to_string(),
                 request,
                 context,
@@ -830,6 +833,7 @@ async fn resolve_internal(
         .into(),
         Request::Unknown { path } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: format!("unknown import: `{}`", path),
                 request,
                 context,
@@ -1097,6 +1101,7 @@ async fn resolve_alias_field_result(
         .add_references(refs));
     }
     let issue: ResolvingIssueVc = ResolvingIssue {
+        severity: IssueSeverity::Error.cell(),
         context: issue_context,
         request_type: format!("alias field ({field_name})"),
         request: RequestVc::parse(Value::new(Pattern::Constant(issue_request.to_string()))),
@@ -1262,11 +1267,13 @@ pub async fn handle_resolve_error(
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
     source: OptionIssueSourceVc,
+    severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     Ok(match result.is_unresolveable().await {
         Ok(unresolveable) => {
             if *unresolveable {
                 let issue: ResolvingIssueVc = ResolvingIssue {
+                    severity,
                     context: origin_path,
                     request_type: format!("{} request", reference_type.into_value()),
                     request,
@@ -1281,6 +1288,7 @@ pub async fn handle_resolve_error(
         }
         Err(err) => {
             let issue: ResolvingIssueVc = ResolvingIssue {
+                severity,
                 context: origin_path,
                 request_type: format!("{} request", reference_type.into_value()),
                 request,
