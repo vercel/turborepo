@@ -44,7 +44,7 @@ Test help flag
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
-        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
@@ -109,7 +109,7 @@ Test help flag
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
-        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
