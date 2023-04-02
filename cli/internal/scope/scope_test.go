@@ -84,8 +84,8 @@ func TestResolvePackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cwd: %v", err)
 	}
-	defaultUIFactory := ui.ColoredUiFactory{
-		Base: &ui.BasicUiFactory{},
+	defaultUIFactory := ui.ColoredUIFactory{
+		Base: &ui.BasicUIFactory{},
 	}
 	tui := defaultUIFactory.Build(os.Stdin, os.Stdout, os.Stderr)
 	logger := hclog.Default()

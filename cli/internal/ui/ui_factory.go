@@ -7,17 +7,17 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// UiFactory provides an interface for creating cli.Ui instances from input, output and error IOs
-type UiFactory interface {
+// UIFactory provides an interface for creating cli.Ui instances from input, output and error IOs
+type UIFactory interface {
 	Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui
 }
 
-// BasicUiFactory provides a method for creating a cli.BasicUi from input, output and error IOs
-type BasicUiFactory struct {
+// BasicUIFactory provides a method for creating a cli.BasicUi from input, output and error IOs
+type BasicUIFactory struct {
 }
 
 // Build builds a cli.BasicUi from input, output and error IOs
-func (factory *BasicUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
+func (factory *BasicUIFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
 	return &cli.BasicUi{
 		Reader:      in,
 		Writer:      out,
@@ -25,14 +25,14 @@ func (factory *BasicUiFactory) Build(in io.Reader, out io.Writer, err io.Writer)
 	}
 }
 
-// ColoredUiFactory provides a method for creating a cli.ColoredUi from input, output and error IOs
-type ColoredUiFactory struct {
+// ColoredUIFactory provides a method for creating a cli.ColoredUi from input, output and error IOs
+type ColoredUIFactory struct {
 	ColorMode ColorMode
-	Base      UiFactory
+	Base      UIFactory
 }
 
 // Build builds a cli.ColoredUi from input, output and error IOs
-func (factory *ColoredUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
+func (factory *ColoredUIFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
 	factory.ColorMode = applyColorMode(factory.ColorMode)
 
 	var outWriter, errWriter io.Writer
@@ -54,21 +54,21 @@ func (factory *ColoredUiFactory) Build(in io.Reader, out io.Writer, err io.Write
 	}
 }
 
-// ConcurrentUiFactory provides a method for creating a cli.ConcurrentUi from input, output and error IOs
-type ConcurrentUiFactory struct {
-	Base UiFactory
+// ConcurrentUIFactory provides a method for creating a cli.ConcurrentUi from input, output and error IOs
+type ConcurrentUIFactory struct {
+	Base UIFactory
 }
 
 // Build builds a cli.ConcurrentUi from input, output and error IOs
-func (factory *ConcurrentUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
+func (factory *ConcurrentUIFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
 	return &cli.ConcurrentUi{
 		Ui: factory.Base.Build(in, out, err),
 	}
 }
 
-// PrefixedUiFactory provides a method for creating a cli.PrefixedUi from input, output and error IOs
-type PrefixedUiFactory struct {
-	Base UiFactory
+// PrefixedUIFactory provides a method for creating a cli.PrefixedUi from input, output and error IOs
+type PrefixedUIFactory struct {
+	Base UIFactory
 
 	AskPrefix       string
 	AskSecretPrefix string
@@ -79,7 +79,7 @@ type PrefixedUiFactory struct {
 }
 
 // Build builds a cli.PrefixedUi from input, output and error IOs
-func (factory *PrefixedUiFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
+func (factory *PrefixedUIFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
 	return &cli.PrefixedUi{
 		AskPrefix:       factory.AskPrefix,
 		AskSecretPrefix: factory.AskSecretPrefix,

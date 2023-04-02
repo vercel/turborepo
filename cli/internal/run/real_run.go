@@ -73,7 +73,7 @@ func RealRun(
 
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 
-	concurrentUIFactory := ui.ConcurrentUiFactory{
+	concurrentUIFactory := ui.ConcurrentUIFactory{
 		Base: base.UIFactory,
 	}
 
