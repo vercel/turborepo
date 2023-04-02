@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -96,6 +97,8 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	var logMutex sync.Mutex
+
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 
@@ -126,9 +129,10 @@ func RealRun(
 		err := ec.exec(ctx, packageTask, deps, ui, outWriter, errWriter)
 
 		if grouped {
+			logMutex.Lock()
 			_, outErr := defaultOutWriter.Write(outBuf.Bytes())
 			_, errErr := defaultErrWriter.Write(errBuf.Bytes())
-
+			logMutex.Unlock()
 			if outErr != nil || errErr != nil {
 				base.UI.Error("Failed to write part of the output to terminal")
 			}
