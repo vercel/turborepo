@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
 use log::{debug, error, trace};
-use turborepo_lib::{Args, Payload};
+use turborepo_lib::{spawn_child, Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
     // canonicalize the binary path to ensure we can find go-turbo
@@ -49,28 +49,8 @@ fn run_go_binary(args: Args) -> Result<i32> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    let shared_child = shared_child::SharedChild::spawn(&mut command).unwrap();
-    let child_arc = std::sync::Arc::new(shared_child);
-
-    let child_arc_clone = child_arc.clone();
-    ctrlc::set_handler(move || {
-        // on windows, we can't send signals so just kill
-        // we are quiting anyways so just ignore
-        #[cfg(target_os = "windows")]
-        child_arc_clone.kill().ok();
-
-        // on unix, we should send a SIGTERM to the child
-        // so that go can gracefully shut down process groups
-        // SAFETY: we could pull in the nix crate to handle this
-        // 'safely' but nix::sys::signal::kill just calls libc::kill
-        #[cfg(not(target_os = "windows"))]
-        unsafe {
-            libc::kill(child_arc_clone.id() as i32, libc::SIGTERM);
-        }
-    })
-    .expect("handler set");
-
-    let exit_code = child_arc.wait()?.code().unwrap_or(2);
+    let child = spawn_child(command)?;
+    let exit_code = child.wait()?.code().unwrap_or(2);
 
     Ok(exit_code)
 }

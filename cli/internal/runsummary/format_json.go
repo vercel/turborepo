@@ -8,11 +8,7 @@ import (
 
 // FormatJSON returns a json string representing a RunSummary
 func (rsm *Meta) FormatJSON() ([]byte, error) {
-	rsm.RunSummary.normalize() // normalize data
-
-	if rsm.singlePackage {
-		return rsm.formatJSONSinglePackage()
-	}
+	rsm.normalize() // normalize data
 
 	bytes, err := json.MarshalIndent(rsm.RunSummary, "", "  ")
 	if err != nil {
@@ -21,19 +17,23 @@ func (rsm *Meta) FormatJSON() ([]byte, error) {
 	return bytes, nil
 }
 
-func (rsm *Meta) formatJSONSinglePackage() ([]byte, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(rsm.RunSummary.Tasks))
-
-	for i, task := range rsm.RunSummary.Tasks {
-		singlePackageTasks[i] = task.toSinglePackageTask()
+func (rsm *Meta) normalize() {
+	for _, t := range rsm.RunSummary.Tasks {
+		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.EnvVars
 	}
 
-	spSummary := &singlePackageRunSummary{Tasks: singlePackageTasks}
-
-	bytes, err := json.MarshalIndent(spSummary, "", "  ")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to render JSON")
+	// Remove execution summary for dry runs
+	if rsm.runType == runTypeDryJSON {
+		rsm.RunSummary.ExecutionSummary = nil
 	}
 
-	return bytes, nil
+	// For single packages, we don't need the Packages
+	// and each task summary needs some cleaning.
+	if rsm.singlePackage {
+		rsm.RunSummary.Packages = []string{}
+
+		for _, task := range rsm.RunSummary.Tasks {
+			task.cleanForSinglePackage()
+		}
+	}
 }

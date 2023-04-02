@@ -12,6 +12,8 @@ import (
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // MissingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
@@ -26,6 +28,14 @@ const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
 const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
+type runType int
+
+const (
+	runTypeReal runType = iota
+	runTypeDryText
+	runTypeDryJSON
+)
+
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
 type Meta struct {
@@ -36,6 +46,7 @@ type Meta struct {
 	shouldSave    bool
 	apiClient     *client.APIClient
 	spaceID       string
+	runType       runType
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -44,32 +55,35 @@ type RunSummary struct {
 	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalHashSummary"`
-	Packages          []string           `json:"packages"`
-	ExecutionSummary  *executionSummary  `json:"executionSummary"`
+	Packages          []string           `json:"packages,omitempty"`
+	ExecutionSummary  *executionSummary  `json:"executionSummary,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
-}
-
-// singlePackageRunSummary is the same as RunSummary with some adjustments
-// to the internal struct for a single package. It's likely that we can use the
-// same struct for Single Package repos in the future.
-type singlePackageRunSummary struct {
-	Tasks []singlePackageTaskSummary `json:"tasks"`
 }
 
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
 	startAt time.Time,
-	terminal cli.Ui,
+	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
-	singlePackage bool,
-	profile string,
 	turboVersion string,
+	apiClient *client.APIClient,
+	runOpts util.RunOpts,
 	packages []string,
 	globalHashSummary *GlobalHashSummary,
-	shouldSave bool,
-	apiClient *client.APIClient,
-	spaceID string,
 ) Meta {
+	singlePackage := runOpts.SinglePackage
+	profile := runOpts.Profile
+	shouldSave := runOpts.Summarize
+	spaceID := runOpts.ExperimentalSpaceID
+
+	runType := runTypeReal
+	if runOpts.DryRun {
+		runType = runTypeDryText
+		if runOpts.DryRunJSON {
+			runType = runTypeDryJSON
+		}
+	}
+
 	executionSummary := newExecutionSummary(startAt, profile)
 
 	return Meta{
@@ -82,7 +96,8 @@ func NewRunSummary(
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},
-		ui:            terminal,
+		ui:            ui,
+		runType:       runType,
 		repoRoot:      repoRoot,
 		singlePackage: singlePackage,
 		shouldSave:    shouldSave,
@@ -100,7 +115,11 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int) {
+func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
+		return rsm.closeDryRun(workspaceInfos)
+	}
+
 	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
@@ -131,6 +150,25 @@ func (rsm *Meta) Close(exitCode int) {
 		}
 	}
 
+	return nil
+}
+
+// closeDryRun wraps up the Run Summary at the end of `turbo run --dry`.
+// Ideally this should be inlined into Close(), but RunSummary doesn't currently
+// have context about whether a run was real or dry.
+func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
+	// Render the dry run as json
+	if rsm.runType == runTypeDryJSON {
+		rendered, err := rsm.FormatJSON()
+		if err != nil {
+			return err
+		}
+
+		rsm.ui.Output(string(rendered))
+		return nil
+	}
+
+	return rsm.FormatAndPrintText(workspaceInfos)
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
@@ -232,10 +270,4 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 	}
 	close(queue)
 	wg.Wait()
-}
-
-func (summary *RunSummary) normalize() {
-	for _, t := range summary.Tasks {
-		t.EnvVars.Global = summary.GlobalHashSummary.EnvVars
-	}
 }

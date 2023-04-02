@@ -295,7 +295,7 @@ pub struct RunArgs {
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
-    #[clap(long, action = ArgAction::Append)]
+    #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
     #[clap(long)]
@@ -358,9 +358,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
-    /// Opt in to using the turbo run summary.
-    #[clap(long, hide = true, env = "TURBO_RUN_SUMMARY")]
-    pub summarize: Option<bool>,
+    /// Generate a summary of the turbo run
+    #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
+    pub summarize: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Note that tasks running
     /// in parallel interleave their logs and prefix is the only way
     /// to identify which task produced a log.
@@ -705,6 +705,47 @@ mod test {
             Args::try_parse_from([
                 "turbo", "run", "build", "--filter", "water", "--filter", "earth", "--filter",
                 "fire", "--filter", "air"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    filter: vec![
+                        "water".to_string(),
+                        "earth".to_string(),
+                        "fire".to_string(),
+                        "air".to_string()
+                    ],
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo", "run", "build", "-F", "water", "-F", "earth", "-F", "fire", "-F", "air"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    filter: vec![
+                        "water".to_string(),
+                        "earth".to_string(),
+                        "fire".to_string(),
+                        "air".to_string()
+                    ],
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo", "run", "build", "--filter", "water", "-F", "earth", "--filter", "fire",
+                "-F", "air"
             ])
             .unwrap(),
             Args {
