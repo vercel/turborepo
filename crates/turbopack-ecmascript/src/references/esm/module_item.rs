@@ -9,9 +9,9 @@ use swc_core::{
     },
     quote,
 };
-use turbopack_core::chunk::ChunkingContextVc;
 
 use crate::{
+    chunk::EcmascriptChunkingContextVc,
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::AstPathVc,
@@ -37,7 +37,10 @@ impl EsmModuleItemVc {
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for EsmModuleItem {
     #[turbo_tasks::function]
-    async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        _context: EcmascriptChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
         let path = &self.path.await?;
@@ -48,7 +51,7 @@ impl CodeGenerateable for EsmModuleItem {
                     match module_decl {
                         ModuleDecl::ExportDefaultExpr(ExportDefaultExpr { box expr, .. }) => {
                             let stmt = quote!("const $name = $expr;" as Stmt,
-                                name = Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP),
+                                name = Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP),
                                 expr: Expr = expr
                             );
                             *module_item = ModuleItem::Stmt(stmt);
@@ -57,14 +60,14 @@ impl CodeGenerateable for EsmModuleItem {
                             match decl {
                                 DefaultDecl::Class(class) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
-                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP)),
+                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP)),
                                         declare: false,
                                         class: class.class
                                     })))
                                 }
                                 DefaultDecl::Fn(fn_expr) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl {
-                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP)),
+                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP)),
                                         declare: false,
                                         function: fn_expr.function
                                     })))

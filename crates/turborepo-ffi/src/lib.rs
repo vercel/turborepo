@@ -2,8 +2,11 @@
 //!
 //! Please read the notes about safety (marked with `SAFETY`) in both this file,
 //! and in ffi.go before modifying this file.
+mod lockfile;
 
 use std::{mem::ManuallyDrop, path::PathBuf};
+
+pub use lockfile::{npm_subgraph, npm_transitive_closure};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -74,9 +77,8 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
     let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match turborepo_scm::git::changed_files(
         req.repo_root.into(),
+        req.monorepo_root.into(),
         commit_range,
-        req.include_untracked,
-        req.relative_to.as_deref(),
     ) {
         Ok(files) => {
             let files: Vec<_> = files.into_iter().collect();

@@ -93,7 +93,17 @@ mod test {
 
     use super::*;
 
+    // We group these test functions under one test to
+    // avoid race conditions with environment variables
     #[test]
+    fn all_tests() -> Result<()> {
+        test_client_default()?;
+        test_client_arg_variable()?;
+        test_client_env_variable()?;
+
+        Ok(())
+    }
+
     fn test_client_default() -> Result<()> {
         let config = ClientConfigLoader::new().load()?;
 
@@ -102,7 +112,6 @@ mod test {
         Ok(())
     }
 
-    #[test]
     fn test_client_arg_variable() -> Result<()> {
         let arg_value = Some(1);
 
@@ -115,7 +124,6 @@ mod test {
         Ok(())
     }
 
-    #[test]
     fn test_client_env_variable() -> Result<()> {
         let env_value = String::from("2");
 

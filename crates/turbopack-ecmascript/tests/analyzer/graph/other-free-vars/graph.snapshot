@@ -2,7 +2,7 @@
     (
         "O",
         FreeVar(
-            Object,
+            Atom('Object' type=static),
         ),
     ),
     (
@@ -10,7 +10,7 @@
         MemberCall(
             4,
             FreeVar(
-                Object,
+                Atom('Object' type=static),
             ),
             Constant(
                 Str(
@@ -23,7 +23,7 @@
                 Variable(
                     (
                         Atom('O' type=inline),
-                        #1,
+                        #2,
                     ),
                 ),
             ],
@@ -36,7 +36,7 @@
             Variable(
                 (
                     Atom('O' type=inline),
-                    #1,
+                    #2,
                 ),
             ),
             Constant(
@@ -48,7 +48,7 @@
             ),
             [
                 FreeVar(
-                    Object,
+                    Atom('Object' type=static),
                 ),
             ],
         ),

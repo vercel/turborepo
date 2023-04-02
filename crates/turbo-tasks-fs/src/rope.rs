@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     cmp::min,
     fmt,
-    io::{self, BufRead, Read, Result as IoResult, Write},
+    io::{BufRead, Read, Result as IoResult, Write},
     mem,
     ops::{AddAssign, Deref},
     pin::Pin,
@@ -108,6 +108,11 @@ impl Rope {
     /// Returns a String instance of all bytes.
     pub fn to_str(&self) -> Result<Cow<'_, str>> {
         self.data.to_str()
+    }
+
+    /// Returns a slice of all bytes
+    pub fn to_bytes(&self) -> Result<Cow<'_, [u8]>> {
+        self.data.to_bytes()
     }
 }
 
@@ -451,6 +456,21 @@ impl InnerRope {
             }
         }
     }
+
+    /// Returns a slice of all bytes.
+    pub fn to_bytes(&self) -> Result<Cow<'_, [u8]>> {
+        match &self[..] {
+            [] => Ok(Cow::Borrowed(EMPTY_BUF)),
+            [Shared(inner)] => inner.to_bytes(),
+            [Local(bytes)] => Ok(Cow::Borrowed(bytes)),
+            _ => {
+                let mut read = RopeReader::new(self, 0);
+                let mut buf = Vec::with_capacity(self.len());
+                read.read_to_end(&mut buf)?;
+                Ok(Cow::Owned(buf))
+            }
+        }
+    }
 }
 
 impl Default for InnerRope {
@@ -620,7 +640,7 @@ impl Iterator for RopeReader {
 }
 
 impl Read for RopeReader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         Ok(self.read_internal(buf.len(), &mut ReadBuf::new(buf)))
     }
 }
@@ -630,7 +650,7 @@ impl AsyncRead for RopeReader {
         self: Pin<&mut Self>,
         _cx: &mut TaskContext<'_>,
         buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    ) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         this.read_internal(buf.remaining(), buf);
         Poll::Ready(Ok(()))
@@ -695,9 +715,12 @@ impl From<RopeElem> for StackElem {
 #[cfg(test)]
 mod test {
     use std::{
+        borrow::Cow,
         cmp::min,
         io::{BufRead, Read},
     };
+
+    use anyhow::Result;
 
     use super::{InnerRope, Rope, RopeBuilder, RopeElem};
 
@@ -888,7 +911,7 @@ mod test {
         let shared = Rope::from("def");
         let rope = Rope::new(vec!["abc".into(), shared.into(), "ghi".into()]);
 
-        let chunks = rope.read().into_iter().collect::<Vec<_>>();
+        let chunks = rope.read().collect::<Vec<_>>();
 
         assert_eq!(chunks, vec!["abc", "def", "ghi"]);
     }
@@ -951,5 +974,12 @@ mod test {
                 Vec::from(*b"i")
             ]
         );
+    }
+
+    #[test]
+    fn test_to_bytes() -> Result<()> {
+        let rope = Rope::from("abc");
+        assert_eq!(rope.to_bytes()?, Cow::Borrowed::<[u8]>(&[0x61, 0x62, 0x63]));
+        Ok(())
     }
 }

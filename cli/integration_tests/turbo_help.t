@@ -44,7 +44,7 @@ Test help flag
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
-        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
@@ -60,6 +60,7 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
+        --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Note that tasks running in parallel interleave their logs and prefix is the only way to identify which task produced a log [possible values: none]
 
 
@@ -109,7 +110,7 @@ Test help flag
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
-        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
@@ -125,6 +126,7 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
+        --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Note that tasks running in parallel interleave their logs and prefix is the only way to identify which task produced a log [possible values: none]
 
 Test help flag for link command

@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
+use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -13,7 +14,9 @@ use turbopack_core::{
     source_transform::SourceTransformsVc,
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
-use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+use turbopack_ecmascript::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
+};
 use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 use crate::evaluate_context::node_evaluate_asset_context;
@@ -63,7 +66,9 @@ impl ModuleOptionsVc {
             enable_styled_jsx,
             enable_styled_components,
             enable_types,
-            enable_typescript_transform,
+            enable_tree_shaking,
+            ref enable_typescript_transform,
+            ref decorators,
             enable_mdx,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
@@ -83,57 +88,117 @@ impl ModuleOptionsVc {
                 }
             }
         }
-        // We apply decorators _before_ any ts transforms, as some of decorator requires
-        // type information.
-        let mut transforms = vec![EcmascriptInputTransform::Decorators];
-        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
+        let mut transforms = custom_ecmascript_app_transforms.clone();
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         // Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won't be JSX nodes for Styled JSX to transform.
         if enable_styled_jsx {
-            transforms.push(EcmascriptInputTransform::StyledJsx)
+            transforms.push(EcmascriptInputTransform::StyledJsx);
         }
         if enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion)
+            transforms.push(EcmascriptInputTransform::Emotion);
         }
         if enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents)
+            transforms.push(EcmascriptInputTransform::StyledComponents);
         }
-        if enable_jsx {
+        if let Some(enable_jsx) = enable_jsx {
+            let jsx = enable_jsx.await?;
             transforms.push(EcmascriptInputTransform::React {
                 refresh: enable_react_refresh,
+                import_source: OptionStringVc::cell(jsx.import_source.clone()),
+                runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
         }
+
+        let ecmascript_options = EcmascriptOptions {
+            split_into_parts: enable_tree_shaking,
+            import_parts: enable_tree_shaking,
+        };
 
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
         }
 
-        let app_transforms = EcmascriptInputTransformsVc::cell(transforms);
+        let ts_transform = if let Some(options) = enable_typescript_transform {
+            let options = options.await?;
+            Some(EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields: options.use_define_for_class_fields,
+            })
+        } else {
+            None
+        };
+
+        let decorators_transform = if let Some(options) = &decorators {
+            let options = options.await?;
+            options
+                .decorators_kind
+                .as_ref()
+                .map(|kind| EcmascriptInputTransform::Decorators {
+                    is_legacy: kind == &DecoratorsKind::Legacy,
+                    is_ecma: kind == &DecoratorsKind::Ecma,
+                    emit_decorators_metadata: options.emit_decorators_metadata,
+                    use_define_for_class_fields: options.use_define_for_class_fields,
+                })
+        } else {
+            None
+        };
+
         let vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
-        let ts_app_transforms = if enable_typescript_transform {
-            let mut base_transforms = vec![EcmascriptInputTransform::TypeScript];
+        let ts_app_transforms = if let Some(transform) = &ts_transform {
+            let mut base_transforms = if let Some(decorators_transform) = &decorators_transform {
+                vec![decorators_transform.clone(), transform.clone()]
+            } else {
+                vec![transform.clone()]
+            };
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms
                     .iter()
                     .cloned()
-                    .chain(app_transforms.await?.iter().cloned())
+                    .chain(transforms.iter().cloned())
                     .collect(),
             )
         } else {
-            app_transforms
+            EcmascriptInputTransformsVc::cell(transforms.clone())
         };
 
         let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
         let mdx_transforms = EcmascriptInputTransformsVc::cell(
-            vec![EcmascriptInputTransform::TypeScript]
-                .iter()
-                .chain(app_transforms.await?.iter())
-                .cloned()
-                .collect(),
+            if let Some(transform) = &ts_transform {
+                if let Some(decorators_transform) = &decorators_transform {
+                    vec![decorators_transform.clone(), transform.clone()]
+                } else {
+                    vec![transform.clone()]
+                }
+            } else {
+                vec![]
+            }
+            .iter()
+            .cloned()
+            .chain(transforms.iter().cloned())
+            .collect(),
+        );
+
+        // Apply decorators transform for the ModuleType::Ecmascript as well after
+        // constructing ts_app_transforms. Ecmascript can have decorators for
+        // the cases of 1. using jsconfig, to enable ts-specific runtime
+        // decorators (i.e legacy) 2. ecma spec decorators
+        //
+        // Since typescript transform (`ts_app_transforms`) needs to apply decorators
+        // _before_ stripping types, we create ts_app_transforms first in a
+        // specific order with typescript, then apply decorators to app_transforms.
+        let app_transforms = EcmascriptInputTransformsVc::cell(
+            if let Some(decorators_transform) = &decorators_transform {
+                vec![decorators_transform.clone()]
+            } else {
+                vec![]
+            }
+            .iter()
+            .cloned()
+            .chain(transforms.iter().cloned())
+            .collect(),
         );
 
         let mut rules = vec![
@@ -147,7 +212,7 @@ impl ModuleOptionsVc {
                     if let Some(options) = enable_postcss_transform {
                         let execution_context = execution_context
                             .context("execution_context is required for the postcss_transform")?
-                            .join("postcss");
+                            .with_layer("postcss");
 
                         let import_map = if let Some(postcss_package) = options.postcss_package {
                             package_import_map_from_import_mapping("postcss", postcss_package)
@@ -187,21 +252,24 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
                 ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    app_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: app_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::any(vec![
@@ -237,9 +305,10 @@ impl ModuleOptionsVc {
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
-                ))],
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                    transforms: vendor_transforms,
+                    options: ecmascript_options.clone(),
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ReferenceType(ReferenceType::Url(
@@ -261,7 +330,7 @@ impl ModuleOptionsVc {
         if let Some(webpack_loaders_options) = enable_webpack_loaders {
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
-                .join("webpack_loaders");
+                .with_layer("webpack_loaders");
             let import_map = if let Some(loader_runner_package) =
                 webpack_loaders_options.loader_runner_package
             {
@@ -276,7 +345,10 @@ impl ModuleOptionsVc {
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     vec![
-                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: ecmascript_options.clone(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(

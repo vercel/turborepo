@@ -1,7 +1,57 @@
 [
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                40,
+            ),
+            hi: BytePos(
+                47,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -51,9 +101,59 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                93,
+            ),
+            hi: BytePos(
+                100,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -103,9 +203,100 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('process' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    2,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                122,
+            ),
+            hi: BytePos(
+                129,
+            ),
+            ctxt: #1,
+        },
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                149,
+            ),
+            hi: BytePos(
+                156,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: FreeVar(
-            NodeProcess,
+            Atom('process' type=static),
         ),
         prop: Constant(
             Str(
@@ -170,11 +361,77 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('process' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Tpl,
+            ),
+            Tpl(
+                Exprs(
+                    0,
+                ),
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                171,
+            ),
+            hi: BytePos(
+                178,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: Variable(
             (
                 Atom('platform' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -238,7 +495,7 @@
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -300,7 +557,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -317,7 +574,7 @@
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                Atom('process' type=static),
                             ),
                             Constant(
                                 Str(
@@ -339,7 +596,7 @@
                             Variable(
                                 (
                                     Atom('platform' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -356,7 +613,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -402,11 +659,61 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                236,
+            ),
+            hi: BytePos(
+                243,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: Variable(
             (
                 Atom('arch' type=inline),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -470,7 +777,7 @@
         func: Variable(
             (
                 Atom('platform' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -534,7 +841,7 @@
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -596,7 +903,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -615,7 +922,7 @@
                             Variable(
                                 (
                                     Atom('arch' type=inline),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -632,7 +939,7 @@
                             Variable(
                                 (
                                     Atom('platform' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -649,7 +956,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -695,11 +1002,61 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    5,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                313,
+            ),
+            hi: BytePos(
+                320,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: Variable(
             (
                 Atom('arch' type=inline),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -761,7 +1118,7 @@
     },
     Member {
         obj: FreeVar(
-            NodeProcess,
+            Atom('process' type=static),
         ),
         prop: Constant(
             Str(
@@ -826,11 +1183,77 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('process' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    5,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Tpl,
+            ),
+            Tpl(
+                Exprs(
+                    1,
+                ),
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                345,
+            ),
+            hi: BytePos(
+                352,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -892,7 +1315,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -911,7 +1334,7 @@
                             Variable(
                                 (
                                     Atom('arch' type=inline),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -926,7 +1349,7 @@
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                Atom('process' type=static),
                             ),
                             Constant(
                                 Str(
@@ -948,7 +1371,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -994,9 +1417,59 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                400,
+            ),
+            hi: BytePos(
+                407,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: FreeVar(
-            NodeProcess,
+            Atom('process' type=static),
         ),
         prop: Constant(
             Str(
@@ -1061,9 +1534,75 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('process' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Tpl,
+            ),
+            Tpl(
+                Exprs(
+                    0,
+                ),
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                419,
+            ),
+            hi: BytePos(
+                426,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: FreeVar(
-            NodeProcess,
+            Atom('process' type=static),
         ),
         prop: Constant(
             Str(
@@ -1128,11 +1667,77 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('process' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Tpl,
+            ),
+            Tpl(
+                Exprs(
+                    1,
+                ),
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                438,
+            ),
+            hi: BytePos(
+                445,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -1194,7 +1799,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -1211,7 +1816,7 @@
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                Atom('process' type=static),
                             ),
                             Constant(
                                 Str(
@@ -1231,7 +1836,7 @@
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                Atom('process' type=static),
                             ),
                             Constant(
                                 Str(
@@ -1253,7 +1858,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -1299,11 +1904,61 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    7,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                493,
+            ),
+            hi: BytePos(
+                500,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: Variable(
             (
                 Atom('p' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -1373,7 +2028,7 @@
         obj: Variable(
             (
                 Atom('p' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -1443,7 +2098,7 @@
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -1505,7 +2160,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -1524,7 +2179,7 @@
                             Variable(
                                 (
                                     Atom('p' type=static),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             Constant(
@@ -1547,7 +2202,7 @@
                             Variable(
                                 (
                                     Atom('p' type=static),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             Constant(
@@ -1570,7 +2225,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],
@@ -1616,11 +2271,61 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    8,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                570,
+            ),
+            hi: BytePos(
+                577,
+            ),
+            ctxt: #1,
+        },
+    },
     Member {
         obj: Variable(
             (
                 Atom('p' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -1690,7 +2395,7 @@
         func: Variable(
             (
                 Atom('endianness' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         args: [],
@@ -1752,7 +2457,7 @@
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -1771,7 +2476,7 @@
                             Variable(
                                 (
                                     Atom('p' type=static),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             Constant(
@@ -1792,7 +2497,7 @@
                         Variable(
                             (
                                 Atom('processPlatform' type=dynamic),
-                                #1,
+                                #2,
                             ),
                         ),
                         Constant(
@@ -1807,7 +2512,7 @@
                             Variable(
                                 (
                                     Atom('endianness' type=dynamic),
-                                    #1,
+                                    #2,
                                 ),
                             ),
                             [],

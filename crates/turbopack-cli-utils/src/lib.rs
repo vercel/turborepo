@@ -1,9 +1,9 @@
 #![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(round_char_boundary)]
-#![feature(main_separator_str)]
 
 pub mod issue;
+pub mod source_context;
 
 pub fn register() {
     turbo_tasks::register();

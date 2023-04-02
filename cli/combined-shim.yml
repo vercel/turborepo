@@ -6,7 +6,8 @@ builds:
   - id: turbo
     builder: prebuilt
     tags:
-      - go
+      - rust
+      - staticbinary
     goos:
       - linux
       - windows

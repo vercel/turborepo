@@ -7,7 +7,7 @@ use swc_core::{
         errors::{Handler, HANDLER},
         input::StringInput,
         source_map::SourceMapGenConfig,
-        BytePos, FileName, Globals, LineCol, Mark, SourceMap, GLOBALS,
+        BytePos, FileName, Globals, LineCol, Mark, GLOBALS,
     },
     ecma::{
         ast::{EsVersion, Program},
@@ -23,13 +23,12 @@ use turbo_tasks::{
     primitives::{StringVc, U64Vc},
     Value, ValueToString,
 };
-use turbo_tasks_fs::{FileContent, FileJsonContentVc, FileSystemPath};
+use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
-    resolve::{find_context_file, node::node_cjs_resolve_options, FindContextFileResult},
-    source_asset::SourceAssetVc,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    SOURCE_MAP_ROOT_NAME,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -37,7 +36,6 @@ use super::EcmascriptModuleAssetType;
 use crate::{
     analyzer::graph::EvalContext,
     transform::{EcmascriptInputTransformsVc, TransformContext},
-    typescript::resolve::{read_tsconfigs, tsconfig},
     utils::WrapFuture,
     EcmascriptInputTransform,
 };
@@ -53,9 +51,9 @@ pub enum ParseResult {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         eval_context: EvalContext,
         #[turbo_tasks(debug_ignore, trace_ignore)]
-        globals: Globals,
+        globals: Arc<Globals>,
         #[turbo_tasks(debug_ignore, trace_ignore)]
-        source_map: Arc<SourceMap>,
+        source_map: Arc<swc_core::common::SourceMap>,
     },
     Unparseable,
     NotFound,
@@ -76,7 +74,7 @@ pub struct ParseResultSourceMap {
     /// to source locations. I don't know what it is, really, but it's not
     /// that.
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    source_map: Arc<SourceMap>,
+    source_map: Arc<swc_core::common::SourceMap>,
 
     /// The position mappings that can generate a real source map given a (SWC)
     /// SourceMap.
@@ -91,7 +89,10 @@ impl PartialEq for ParseResultSourceMap {
 }
 
 impl ParseResultSourceMap {
-    pub fn new(source_map: Arc<SourceMap>, mappings: Vec<(BytePos, LineCol)>) -> Self {
+    pub fn new(
+        source_map: Arc<swc_core::common::SourceMap>,
+        mappings: Vec<(BytePos, LineCol)>,
+    ) -> Self {
         ParseResultSourceMap {
             source_map,
             mappings,
@@ -102,13 +103,15 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> SourceMapVc {
+    fn generate_source_map(&self) -> OptionSourceMapVc {
         let map = self.source_map.build_source_map_with_config(
             &self.mappings,
             None,
             InlineSourcesContentConfig {},
         );
-        SourceMapVc::new_regular(map)
+        OptionSourceMapVc::cell(Some(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
     }
 }
 
@@ -120,8 +123,9 @@ struct InlineSourcesContentConfig {}
 impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
-            // The Custom filename surrounds the name with <>.
-            FileName::Custom(s) => format!("/{}", s),
+            FileName::Custom(s) => {
+                format!("/{SOURCE_MAP_ROOT_NAME}/{s}")
+            }
             _ => f.to_string(),
         }
     }
@@ -139,21 +143,9 @@ pub async fn parse(
 ) -> Result<ParseResultVc> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
+    let ident = &*source.ident().to_string().await?;
     let file_path_hash = *hash_ident(source.ident().to_string()).await? as u128;
     let ty = ty.into_value();
-    let tsconfig = find_context_file(source.ident().path(), tsconfig());
-    let tsconfig = match *tsconfig.await? {
-        FindContextFileResult::Found(path, _) => Some(
-            read_tsconfigs(
-                path.read(),
-                SourceAssetVc::new(path).into(),
-                node_cjs_resolve_options(path.root()),
-            )
-            .await?,
-        ),
-        FindContextFileResult::NotFound(_) => None,
-    };
-
     Ok(match &*content.await? {
         AssetContent::File(file) => match &*file.await? {
             FileContent::NotFound => ParseResult::NotFound.cell(),
@@ -163,11 +155,11 @@ pub async fn parse(
                     match parse_content(
                         string.into_owned(),
                         fs_path,
+                        ident,
                         file_path_hash,
                         source,
                         ty,
                         transforms,
-                        tsconfig,
                     )
                     .await
                     {
@@ -191,13 +183,13 @@ pub async fn parse(
 async fn parse_content(
     string: String,
     fs_path: &FileSystemPath,
+    ident: &str,
     file_path_hash: u128,
     source: AssetVc,
     ty: EcmascriptModuleAssetType,
     transforms: &[EcmascriptInputTransform],
-    tsconfig: Option<Vec<(FileJsonContentVc, AssetVc)>>,
 ) -> Result<ParseResultVc> {
-    let source_map: Arc<SourceMap> = Default::default();
+    let source_map: Arc<swc_core::common::SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
         false,
@@ -207,7 +199,7 @@ async fn parse_content(
             title: Some("Parsing ecmascript source code failed".to_string()),
         },
     );
-    let globals = Globals::new();
+    let globals = Arc::new(Globals::new());
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
     let mut result = WrapFuture::new(
@@ -217,7 +209,7 @@ async fn parse_content(
             })
         },
         async {
-            let file_name = FileName::Custom(fs_path.path.clone());
+            let file_name = FileName::Custom(ident.to_string());
             let fm = source_map.new_source_file(file_name.clone(), string);
 
             let comments = SwcComments::default();
@@ -234,6 +226,7 @@ async fn parse_content(
                             import_assertions: true,
                             allow_super_outside_method: true,
                             allow_return_outside_function: true,
+                            auto_accessors: true,
                         }),
                         EcmascriptModuleAssetType::Typescript
                         | EcmascriptModuleAssetType::TypescriptWithTypes => {
@@ -242,6 +235,7 @@ async fn parse_content(
                                 dts: false,
                                 no_early_errors: true,
                                 tsx: true,
+                                disallow_ambiguous_jsx_like: false,
                             })
                         }
                         EcmascriptModuleAssetType::TypescriptDeclaration => {
@@ -250,6 +244,7 @@ async fn parse_content(
                                 dts: true,
                                 no_early_errors: true,
                                 tsx: true,
+                                disallow_ambiguous_jsx_like: false,
                             })
                         }
                     },
@@ -302,7 +297,6 @@ async fn parse_content(
                 file_path_str: &fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
-                tsconfig: &tsconfig,
             };
             for transform in transforms.iter() {
                 transform.apply(&mut parsed_program, &context).await?;
@@ -320,7 +314,7 @@ async fn parse_content(
                 eval_context,
                 // Temporary globals as the current one can't be moved yet, since they are
                 // borrowed
-                globals: Globals::new(),
+                globals: Arc::new(Globals::new()),
                 source_map,
             })
         },

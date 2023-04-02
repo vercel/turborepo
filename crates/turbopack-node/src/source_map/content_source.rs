@@ -8,6 +8,7 @@ use turbopack_dev_server::source::{
     wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
+    RewriteBuilder,
 };
 use url::Url;
 
@@ -65,10 +66,6 @@ impl ContentSource for NextSourceMapTraceContentSource {
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        let path = match file.path().strip_prefix('/') {
-            Some(p) => p,
-            _ => return Ok(ContentSourceResultVc::not_found()),
-        };
         let id = file.query_pairs().find_map(|(k, v)| {
             if k == "id" {
                 Some(v.into_owned())
@@ -79,9 +76,23 @@ impl ContentSource for NextSourceMapTraceContentSource {
 
         let wrapped = WrappedContentSourceVc::new(
             self_vc.await?.asset_source,
-            NextSourceMapTraceContentProcessorVc::new(id, line, column, frame.name).into(),
+            NextSourceMapTraceContentProcessorVc::new(
+                id,
+                line,
+                column,
+                frame.name.map(|c| c.to_string()),
+            )
+            .into(),
         );
-        Ok(wrapped.as_content_source().get(path, Default::default()))
+        Ok(ContentSourceResultVc::exact(
+            ContentSourceContent::Rewrite(
+                RewriteBuilder::new(file.path().to_string())
+                    .content_source(wrapped.as_content_source())
+                    .build(),
+            )
+            .cell()
+            .into(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -154,13 +165,13 @@ impl ContentSourceProcessor for NextSourceMapTraceContentProcessor {
         };
 
         let sm = if let Some(id) = &self.id {
-            let section = gen.by_section(id).await?;
-            match &*section {
-                Some(sm) => *sm,
-                None => return Ok(ContentSourceContentVc::not_found()),
-            }
+            gen.by_section(id).await?
         } else {
-            gen.generate_source_map()
+            gen.generate_source_map().await?
+        };
+        let sm = match &*sm {
+            Some(sm) => *sm,
+            None => return Ok(ContentSourceContentVc::not_found()),
         };
 
         let traced = SourceMapTraceVc::new(sm, self.line, self.column, self.name.clone());

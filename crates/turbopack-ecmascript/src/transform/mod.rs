@@ -1,93 +1,89 @@
 mod server_to_client_proxy;
 
-use std::{path::Path, sync::Arc};
+use std::{fmt::Debug, path::Path, sync::Arc};
 
 use anyhow::Result;
-use next_transform_dynamic::{next_dynamic, NextDynamicMode};
-use next_transform_strip_page_exports::{next_transform_strip_page_exports, ExportFilter};
-use serde::{Deserialize, Serialize};
 use swc_core::{
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program},
-        atoms::JsWord,
         preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
-            proposal::decorators,
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    trace::TraceRawVcs,
-};
-use turbo_tasks_fs::{
-    json::parse_json_with_source_context, FileJsonContent, FileJsonContentVc, FileSystemPathVc,
-};
-use turbopack_core::{asset::AssetVc, environment::EnvironmentVc};
+use turbo_tasks::primitives::{OptionStringVc, StringVc};
+use turbo_tasks_fs::json::parse_json_with_source_context;
+use turbopack_core::environment::EnvironmentVc;
 
 use self::server_to_client_proxy::{create_proxy_module, is_client_module};
 
-#[derive(
-    Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
-)]
-pub enum NextJsPageExportFilter {
-    /// Strip all data exports (getServerSideProps,
-    /// getStaticProps, getStaticPaths exports.) and their unique dependencies.
-    StripDataExports,
-    /// Strip default export and all its unique dependencies.
-    StripDefaultExport,
-}
-
-impl From<NextJsPageExportFilter> for ExportFilter {
-    fn from(val: NextJsPageExportFilter) -> Self {
-        match val {
-            NextJsPageExportFilter::StripDataExports => ExportFilter::StripDataExports,
-            NextJsPageExportFilter::StripDefaultExport => ExportFilter::StripDefaultExport,
-        }
-    }
-}
-
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmascriptInputTransform {
     ClientDirective(StringVc),
     CommonJs,
-    Custom,
+    Custom(CustomTransformVc),
     Emotion,
-    /// This enables a Next.js transform which will eliminate some exports
-    /// from a page file, as well as any imports exclusively used by these
-    /// exports.
-    ///
-    /// It also provides diagnostics for improper use of `getServerSideProps`.
-    NextJsStripPageExports(NextJsPageExportFilter),
-    /// Enables the Next.js transform for next/dynamic.
-    NextJsDynamic {
-        is_development: bool,
-        is_server: bool,
-        is_server_components: bool,
-        pages_dir: Option<FileSystemPathVc>,
-    },
-    NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
         refresh: bool,
+        // swc.jsc.transform.react.importSource
+        import_source: OptionStringVc,
+        // swc.jsc.transform.react.runtime,
+        runtime: OptionStringVc,
     },
     StyledComponents,
     StyledJsx,
-    TypeScript,
-    // Apply ecma decorators transform. This is not part of Typescript transform, even though
-    // decorators can be ts-specific (legacy decorartors) since there's ecma decorators for js.
-    Decorators,
+    // These options are subset of swc_core::ecma::transforms::typescript::Config, but
+    // it doesn't derive `Copy` so repeating values in here
+    TypeScript {
+        #[serde(default)]
+        use_define_for_class_fields: bool,
+    },
+    Decorators {
+        #[serde(default)]
+        is_legacy: bool,
+        #[serde(default)]
+        is_ecma: bool,
+        #[serde(default)]
+        emit_decorators_metadata: bool,
+        #[serde(default)]
+        use_define_for_class_fields: bool,
+    },
+}
+
+/// The CustomTransformer trait allows you to implement your own custom SWC
+/// transformer to run over all ECMAScript files imported in the graph.
+pub trait CustomTransformer: Debug {
+    fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program>;
+}
+
+/// A wrapper around a CustomTransformer instance, allowing it to operate with
+/// the turbo_task caching requirements.
+#[turbo_tasks::value(
+    transparent,
+    serialization = "none",
+    eq = "manual",
+    into = "new",
+    cell = "new"
+)]
+#[derive(Debug)]
+pub struct CustomTransform(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
+
+impl CustomTransformer for CustomTransform {
+    fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program> {
+        self.0.transform(program, ctx)
+    }
 }
 
 #[turbo_tasks::value(transparent, serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub struct EcmascriptInputTransforms(Vec<EcmascriptInputTransform>);
 
 #[turbo_tasks::value_impl]
@@ -95,7 +91,7 @@ impl EcmascriptInputTransformsVc {
     #[turbo_tasks::function]
     pub async fn extend(self, other: EcmascriptInputTransformsVc) -> Result<Self> {
         let mut transforms = self.await?.clone_value();
-        transforms.extend(&*other.await?);
+        transforms.extend(other.await?.clone_value());
         Ok(EcmascriptInputTransformsVc::cell(transforms))
     }
 }
@@ -108,41 +104,59 @@ pub struct TransformContext<'a> {
     pub file_path_str: &'a str,
     pub file_name_str: &'a str,
     pub file_name_hash: u128,
-    pub tsconfig: &'a Option<Vec<(FileJsonContentVc, AssetVc)>>,
 }
 
 impl EcmascriptInputTransform {
-    pub async fn apply(
-        &self,
-        program: &mut Program,
-        &TransformContext {
+    pub async fn apply(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
+        let &TransformContext {
             comments,
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_path_str,
             file_name_str,
             file_name_hash,
-            tsconfig,
-        }: &TransformContext<'_>,
-    ) -> Result<()> {
-        match *self {
-            EcmascriptInputTransform::React { refresh } => {
+            ..
+        } = ctx;
+        match self {
+            EcmascriptInputTransform::React {
+                refresh,
+                import_source,
+                runtime,
+            } => {
+                use swc_core::ecma::transforms::react::{Options, Runtime};
+                let runtime = if let Some(runtime) = &*runtime.await? {
+                    match runtime.as_str() {
+                        "classic" => Runtime::Classic,
+                        "automatic" => Runtime::Automatic,
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Invalid value for swc.jsc.transform.react.runtime: {}",
+                                runtime
+                            ))
+                        }
+                    }
+                } else {
+                    Runtime::Automatic
+                };
+
+                let config = Options {
+                    runtime: Some(runtime),
+                    development: Some(true),
+                    import_source: import_source.await?.clone_value(),
+                    refresh: if *refresh {
+                        Some(swc_core::ecma::transforms::react::RefreshOptions {
+                            ..Default::default()
+                        })
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                };
+
                 program.visit_mut_with(&mut react(
                     source_map.clone(),
                     Some(comments.clone()),
-                    swc_core::ecma::transforms::react::Options {
-                        runtime: Some(swc_core::ecma::transforms::react::Runtime::Automatic),
-                        development: Some(true),
-                        refresh: if refresh {
-                            Some(swc_core::ecma::transforms::react::RefreshOptions {
-                                ..Default::default()
-                            })
-                        } else {
-                            None
-                        },
-                        ..Default::default()
-                    },
+                    config,
                     top_level_mark,
                 ));
             }
@@ -206,63 +220,34 @@ impl EcmascriptInputTransform {
                     FileName::Anon,
                 ));
             }
-            EcmascriptInputTransform::Decorators => {
-                // TODO: Currently this only supports legacy decorators from tsconfig / jsconfig
-                // options.
-                if let Some(tsconfig) = tsconfig {
-                    // Selectively picks up tsconfig.json values to construct
-                    // swc transform's stripconfig. It doesn't account .swcrc config currently.
-                    for (value, _) in tsconfig {
-                        let value = &*value.await?;
-                        if let FileJsonContent::Content(value) = value {
-                            let legacy_decorators = value["compilerOptions"]
-                                ["experimentalDecorators"]
-                                .as_bool()
-                                .unwrap_or(false);
-
-                            if legacy_decorators {
-                                // TODO: `fn decorators` does not support visitMut yet
-                                let p =
-                                    std::mem::replace(program, Program::Module(Module::dummy()));
-                                *program = p.fold_with(&mut chain!(
-                                    decorators(decorators::Config {
-                                        legacy: true,
-                                        emit_metadata: true,
-                                        use_define_for_class_fields: value["compilerOptions"]
-                                            ["useDefineForClassFields"]
-                                            .as_bool()
-                                            .unwrap_or(false),
-                                    }),
-                                    inject_helpers(unresolved_mark),
-                                ));
-                            }
-                        }
-                    }
-                };
-            }
-            EcmascriptInputTransform::TypeScript => {
+            EcmascriptInputTransform::TypeScript {
+                use_define_for_class_fields,
+            } => {
                 use swc_core::ecma::transforms::typescript::{strip_with_config, Config};
-
-                let config = if let Some(tsconfig) = tsconfig {
-                    let mut config = Config {
-                        ..Default::default()
-                    };
-
-                    for (value, _) in tsconfig {
-                        let value = &*value.await?;
-                        if let FileJsonContent::Content(value) = value {
-                            let use_define_for_class_fields =
-                                &value["compilerOptions"]["useDefineForClassFields"];
-                            config.use_define_for_class_fields =
-                                use_define_for_class_fields.as_bool().unwrap_or(false);
-                        }
-                    }
-                    config
-                } else {
-                    Default::default()
+                let config = Config {
+                    use_define_for_class_fields: *use_define_for_class_fields,
+                    ..Default::default()
+                };
+                program.visit_mut_with(&mut strip_with_config(config, top_level_mark));
+            }
+            EcmascriptInputTransform::Decorators {
+                is_legacy,
+                is_ecma: _,
+                emit_decorators_metadata,
+                use_define_for_class_fields,
+            } => {
+                use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
+                let config = Config {
+                    legacy: *is_legacy,
+                    emit_metadata: *emit_decorators_metadata,
+                    use_define_for_class_fields: *use_define_for_class_fields,
                 };
 
-                program.visit_mut_with(&mut strip_with_config(config, top_level_mark));
+                let p = std::mem::replace(program, Program::Module(Module::dummy()));
+                *program = p.fold_with(&mut chain!(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
+                ));
             }
             EcmascriptInputTransform::ClientDirective(transition_name) => {
                 let transition_name = &*transition_name.await?;
@@ -271,53 +256,11 @@ impl EcmascriptInputTransform {
                     program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
                 }
             }
-            EcmascriptInputTransform::NextJsStripPageExports(export_type) => {
-                // TODO(alexkirsz) Connect the eliminated_packages to telemetry.
-                let eliminated_packages = Default::default();
-
-                let module_program = unwrap_module_program(program);
-
-                *program = module_program.fold_with(&mut next_transform_strip_page_exports(
-                    export_type.into(),
-                    eliminated_packages,
-                ));
-            }
-            EcmascriptInputTransform::NextJsDynamic {
-                is_development,
-                is_server,
-                is_server_components,
-                pages_dir,
-            } => {
-                let module_program = unwrap_module_program(program);
-
-                let pages_dir = if let Some(pages_dir) = pages_dir {
-                    Some(pages_dir.await?.path.clone().into())
-                } else {
-                    None
-                };
-
-                *program = module_program.fold_with(&mut next_dynamic(
-                    is_development,
-                    is_server,
-                    is_server_components,
-                    NextDynamicMode::Turbo,
-                    FileName::Real(file_path_str.into()),
-                    pages_dir,
-                ));
-            }
-            EcmascriptInputTransform::NextJsFont(font_loaders_vc) => {
-                let mut font_loaders = vec![];
-                for loader in &(*font_loaders_vc.await?) {
-                    font_loaders.push(std::convert::Into::<JsWord>::into(&**loader));
+            EcmascriptInputTransform::Custom(transform) => {
+                if let Some(output) = transform.await?.transform(program, ctx) {
+                    *program = output;
                 }
-                let mut next_font = next_font::next_font_loaders(next_font::Config {
-                    font_loaders,
-                    relative_file_path_from_root: file_name_str.into(),
-                });
-
-                program.visit_mut_with(&mut next_font);
             }
-            EcmascriptInputTransform::Custom => todo!(),
         }
         Ok(())
     }

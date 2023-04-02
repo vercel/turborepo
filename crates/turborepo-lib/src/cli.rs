@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -161,7 +161,7 @@ impl From<Verbosity> for u8 {
     }
 }
 
-#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "command")]
 pub enum DaemonCommand {
     /// Restarts the turbo daemon
@@ -309,7 +309,7 @@ pub struct RunArgs {
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
-    #[clap(long, action = ArgAction::Append)]
+    #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
     #[clap(long)]
@@ -377,6 +377,9 @@ pub struct RunArgs {
     /// to identify which packages have changed.
     #[clap(long)]
     pub since: Option<String>,
+    /// Generate a summary of the turbo run
+    #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
+    pub summarize: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Note that tasks running
     /// in parallel interleave their logs and prefix is the only way
     /// to identify which task produced a log.
@@ -388,6 +391,10 @@ pub struct RunArgs {
     pub tasks: Vec<String>,
     #[clap(last = true, hide = true)]
     pub pass_through_args: Vec<String>,
+
+    // Pass a string to enable posting Run Summaries to Vercel
+    #[clap(long, hide = true)]
+    pub experimental_space_id: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -525,9 +532,19 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon { .. } | Command::Prune { .. } | Command::Run(_) => {
-            Ok(Payload::Go(Box::new(clap_args)))
-        }
+        Command::Daemon {
+            command: Some(command),
+            ..
+        } => {
+            let command = *command;
+            let base = CommandBase::new(clap_args, repo_root)?;
+            daemon::main(&command, &base).await?;
+            Ok(Payload::Rust(Ok(0)))
+        },
+        Command::Prune { .. }
+        | Command::Run(_)
+        // the daemon itself still delegates to Go
+        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
@@ -707,6 +724,47 @@ mod test {
             Args::try_parse_from([
                 "turbo", "run", "build", "--filter", "water", "--filter", "earth", "--filter",
                 "fire", "--filter", "air"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    filter: vec![
+                        "water".to_string(),
+                        "earth".to_string(),
+                        "fire".to_string(),
+                        "air".to_string()
+                    ],
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo", "run", "build", "-F", "water", "-F", "earth", "-F", "fire", "-F", "air"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    filter: vec![
+                        "water".to_string(),
+                        "earth".to_string(),
+                        "fire".to_string(),
+                        "air".to_string()
+                    ],
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo", "run", "build", "--filter", "water", "-F", "earth", "--filter", "fire",
+                "-F", "air"
             ])
             .unwrap(),
             Args {

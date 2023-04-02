@@ -25,10 +25,9 @@ message GlobRespList {
 
 message ChangedFilesReq {
   string repo_root = 1;
-  optional string from_commit = 2;
-  optional string to_commit = 3;
-  bool include_untracked = 4;
-  optional string relative_to = 5;
+  string monorepo_root = 2;
+  optional string from_commit = 3;
+  optional string to_commit = 4;
 }
 
 message ChangedFilesResp {
@@ -51,6 +50,42 @@ message PreviousContentReq {
 message PreviousContentResp {
   oneof response {
     bytes content = 1;
+    string error = 2;
+  }
+}
+
+message TransitiveDepsRequest {
+  bytes contents = 1;
+  string workspace_dir = 2;
+  map<string, string> unresolved_deps = 3;
+}
+
+message TransitiveDepsResponse {
+  oneof response {
+    LockfilePackageList packages = 1;
+    string error = 2;
+  }
+}
+
+message LockfilePackage {
+  string key = 1;
+  string version = 2;
+  bool found = 3;
+}
+
+message LockfilePackageList {
+  repeated LockfilePackage list = 1;
+}
+
+message SubgraphRequest {
+  bytes contents = 1;
+  repeated string workspaces = 2;
+  repeated string packages = 3;
+}
+
+message SubgraphResponse {
+  oneof response {
+    bytes contents = 1;
     string error = 2;
   }
 }

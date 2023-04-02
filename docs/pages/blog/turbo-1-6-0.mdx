@@ -79,7 +79,7 @@ Try it out now by [starting from the example](https://github.com/vercel/turbo/tr
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
       "outputs": []

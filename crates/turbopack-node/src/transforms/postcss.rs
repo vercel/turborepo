@@ -5,9 +5,9 @@ use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
     CompletionVc, CompletionsVc, TryJoinIterExt, Value,
 };
+use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{
-    json::parse_json_rope_with_source_context, File, FileContent, FileSystemEntryType,
-    FileSystemPathVc,
+    json::parse_json_with_source_context, File, FileContent, FileSystemEntryType, FileSystemPathVc,
 };
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
@@ -29,7 +29,7 @@ use turbopack_ecmascript::{
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
     embed_js::embed_file,
-    evaluate::{evaluate, JavaScriptValue},
+    evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
 };
 
@@ -152,6 +152,7 @@ async fn extra_configs(
                             context,
                             Value::new(EcmascriptModuleAssetType::Ecmascript),
                             EcmascriptInputTransformsVc::cell(vec![]),
+                            Value::new(Default::default()),
                             context.compile_time_info(),
                         )
                         .into(),
@@ -183,7 +184,10 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+            use_define_for_class_fields: false,
+        }]),
+        Value::new(Default::default()),
         context.compile_time_info(),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
@@ -208,7 +212,7 @@ impl PostCssTransformedAssetVc {
 
         let ExecutionContext {
             project_path,
-            intermediate_output_path,
+            chunking_context,
             env,
         } = *this.execution_context.await?;
         let source_content = this.source.content();
@@ -230,14 +234,14 @@ impl PostCssTransformedAssetVc {
         let postcss_executor = postcss_executor(context, config_path);
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
+
         let config_value = evaluate(
-            project_path,
             postcss_executor,
             project_path,
             env,
             this.source.ident(),
             context,
-            intermediate_output_path,
+            chunking_context,
             None,
             vec![
                 JsonValueVc::cell(content.into()),
@@ -247,15 +251,17 @@ impl PostCssTransformedAssetVc {
             /* debug */ false,
         )
         .await?;
-        let JavaScriptValue::Value(val) = &*config_value else {
+
+        let SingleValue::Single(val) = config_value.try_into_single().await? else {
             // An error happened, which has already been converted into an issue.
             return Ok(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new()
             }.cell());
         };
-        let processed_css: PostCssProcessingResult = parse_json_rope_with_source_context(val)
+        let processed_css: PostCssProcessingResult = parse_json_with_source_context(val.to_str()?)
             .context("Unable to deserializate response from PostCSS transform operation")?;
+
         // TODO handle SourceMap
         let file = File::from(processed_css.css);
         let assets = emitted_assets_to_virtual_assets(processed_css.assets);

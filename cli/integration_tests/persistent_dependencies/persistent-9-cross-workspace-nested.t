@@ -13,8 +13,8 @@
 // 		 		 └── workspace-z#dev // this one is persistent
 //
   $ ${TURBO} run build
-   ERROR  run failed: error preparing engine: Invalid persistent task dependency:
+   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task dependency:
+  Turbo error: error preparing engine: Invalid persistent task configuration:
   "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
   [1]

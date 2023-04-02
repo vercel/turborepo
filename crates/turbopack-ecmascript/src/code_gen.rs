@@ -1,5 +1,9 @@
+use serde::{Deserialize, Serialize};
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
-use turbopack_core::chunk::ChunkingContextVc;
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Value};
+use turbopack_core::chunk::availability_info::AvailabilityInfo;
+
+use crate::chunk::EcmascriptChunkingContextVc;
 
 /// impl of code generation inferred from a AssetReference.
 /// This is rust only and can't be implemented by non-rust plugins.
@@ -22,11 +26,26 @@ pub trait VisitorFactory: Send + Sync {
 
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
-    fn code_generation(&self, context: ChunkingContextVc) -> CodeGenerationVc;
+    fn code_generation(&self, context: EcmascriptChunkingContextVc) -> CodeGenerationVc;
+}
+
+#[turbo_tasks::value_trait]
+pub trait CodeGenerateableWithAvailabilityInfo {
+    fn code_generation(
+        &self,
+        context: EcmascriptChunkingContextVc,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> CodeGenerationVc;
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]
+pub enum CodeGen {
+    CodeGenerateable(CodeGenerateableVc),
+    CodeGenerateableWithAvailabilityInfo(CodeGenerateableWithAvailabilityInfoVc),
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct CodeGenerateables(Vec<CodeGenerateableVc>);
+pub struct CodeGenerateables(Vec<CodeGen>);
 
 pub fn path_to(
     path: &[AstParentKind],

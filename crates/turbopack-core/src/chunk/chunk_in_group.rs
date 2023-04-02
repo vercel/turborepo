@@ -4,13 +4,14 @@ use turbo_tasks::{primitives::StringVc, ValueToString};
 use super::{Chunk, ChunkVc, ParallelChunkReferenceVc};
 use crate::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::ParallelChunkReference,
+    chunk::{ChunkingContextVc, ParallelChunkReference},
     ident::AssetIdentVc,
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::AssetReferencesVc,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     version::VersionedContentVc,
 };
 
@@ -37,7 +38,12 @@ impl ChunkInGroupVc {
 }
 
 #[turbo_tasks::value_impl]
-impl Chunk for ChunkInGroup {}
+impl Chunk for ChunkInGroup {
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.inner.chunking_context()
+    }
+}
 
 #[turbo_tasks::value_impl]
 impl Asset for ChunkInGroup {
@@ -69,6 +75,17 @@ impl Asset for ChunkInGroup {
     #[turbo_tasks::function]
     fn versioned_content(&self) -> VersionedContentVc {
         self.inner.versioned_content()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for ChunkInGroup {
+    #[turbo_tasks::function]
+    async fn generate_source_map(&self) -> Result<OptionSourceMapVc> {
+        let Some(inner) = GenerateSourceMapVc::resolve_from(self.inner).await? else {
+            return Ok(OptionSourceMapVc::cell(None))
+        };
+        Ok(inner.generate_source_map())
     }
 }
 

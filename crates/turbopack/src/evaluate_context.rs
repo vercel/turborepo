@@ -15,6 +15,16 @@ use crate::{
 };
 
 #[turbo_tasks::function]
+pub fn node_build_environment() -> EnvironmentVc {
+    EnvironmentVc::new(
+        Value::new(ExecutionEnvironment::NodeJsBuildTime(
+            NodeJsEnvironment::default().cell(),
+        )),
+        Value::new(EnvironmentIntention::Build),
+    )
+}
+
+#[turbo_tasks::function]
 pub async fn node_evaluate_asset_context(
     project_path: FileSystemPathVc,
     import_map: Option<ImportMapVc>,
@@ -22,22 +32,17 @@ pub async fn node_evaluate_asset_context(
 ) -> Result<AssetContextVc> {
     Ok(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
-        CompileTimeInfo {
-            environment: EnvironmentVc::new(
-                Value::new(ExecutionEnvironment::NodeJsBuildTime(
-                    NodeJsEnvironment::default().cell(),
-                )),
-                Value::new(EnvironmentIntention::Build),
-            ),
-            defines: compile_time_defines!(
-                process.turbopack = true,
-                process.env.NODE_ENV = "development",
+        CompileTimeInfo::builder(node_build_environment())
+            .defines(
+                compile_time_defines!(
+                    process.turbopack = true,
+                    process.env.NODE_ENV = "development",
+                )
+                .cell(),
             )
             .cell(),
-        }
-        .cell(),
         ModuleOptionsContext {
-            enable_typescript_transform: true,
+            enable_typescript_transform: Some(Default::default()),
             ..Default::default()
         }
         .cell(),

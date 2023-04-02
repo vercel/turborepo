@@ -97,6 +97,7 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 // TaskCache represents a single task's (package-task?) interface to the RunCache
 // and controls access to the task's outputs
 type TaskCache struct {
+	ExpandedOutputs   []turbopath.AnchoredSystemPath
 	rc                *RunCache
 	repoRelativeGlobs fs.TaskOutputs
 	hash              string
@@ -108,13 +109,14 @@ type TaskCache struct {
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns true if successful.
-func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (bool, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return false, nil
+		return cache.ItemStatus{Local: false, Remote: false}, nil
 	}
+
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
@@ -123,18 +125,26 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	}
 
 	hasChangedOutputs := len(changedOutputGlobs) > 0
+	var cacheStatus cache.ItemStatus
+
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		hit, _, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
+		itemStatus, restoredFiles, _, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
+		hit := itemStatus.Local || itemStatus.Remote
+		tc.ExpandedOutputs = restoredFiles
+		// Assign to this variable outside this closure so we can return at the end of the function
+		cacheStatus = itemStatus
 		if err != nil {
-			return false, err
+			// If there was an error fetching from cache, we'll say there was no cache hit
+			return cache.ItemStatus{Local: false, Remote: false}, err
 		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
-			return false, nil
+			// If there was no hit, we can also say there was no hit
+			return cache.ItemStatus{Local: false, Remote: false}, nil
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
@@ -142,6 +152,8 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
+		// If no outputs have changed, that means we have a local cache hit.
+		cacheStatus.Local = true
 		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
@@ -160,8 +172,7 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	default:
 		// NoLogs, do not output anything
 	}
-
-	return true, nil
+	return cacheStatus, nil
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal
@@ -236,7 +247,7 @@ func (tc TaskCache) OutputWriter(prefix string, ioWriter io.Writer) (io.WriteClo
 var _emptyIgnore []string
 
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nil
 	}
@@ -270,6 +281,9 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 	}
+
+	tc.ExpandedOutputs = relativePaths
+
 	return nil
 }
 
@@ -296,6 +310,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	}
 
 	return TaskCache{
+		ExpandedOutputs:   []turbopath.AnchoredSystemPath{},
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
 		hash:              hash,

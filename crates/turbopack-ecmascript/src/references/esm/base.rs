@@ -9,16 +9,20 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
-        ChunkingTypeOptionVc, ModuleId,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
+        ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
+    reference_type::EcmaScriptModulesReferenceSubType,
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, ModulePartVc, PrimaryResolveResult,
+        ResolveResultVc,
+    },
 };
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -37,7 +41,7 @@ impl ReferencedAsset {
         Ok(match self {
             ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
-                Some(magic_identifier::encode(&format!("external {}", request)))
+                Some(magic_identifier::mangle(&format!("external {}", request)))
             }
             ReferencedAsset::None => None,
         })
@@ -47,7 +51,7 @@ impl ReferencedAsset {
         asset: &EcmascriptChunkPlaceableVc,
     ) -> Result<String> {
         let path = asset.ident().to_string().await?;
-        Ok(magic_identifier::encode(&format!(
+        Ok(magic_identifier::mangle(&format!(
             "imported module {}",
             path
         )))
@@ -95,6 +99,8 @@ pub struct EsmAssetReference {
     pub origin: ResolveOriginVc,
     pub request: RequestVc,
     pub annotations: ImportAnnotations,
+
+    pub export_name: Option<ModulePartVc>,
 }
 
 impl EsmAssetReference {
@@ -112,8 +118,13 @@ impl EsmAssetReferenceVc {
     #[turbo_tasks::function]
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
+
+        let ty = Value::new(match &this.export_name {
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
+            None => EcmaScriptModulesReferenceSubType::Undefined,
+        });
         Ok(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request),
+            esm_resolve(this.get_origin(), this.request, ty),
             this.request,
         ))
     }
@@ -123,11 +134,13 @@ impl EsmAssetReferenceVc {
         origin: ResolveOriginVc,
         request: RequestVc,
         annotations: Value<ImportAnnotations>,
+        export_name: Option<ModulePartVc>,
     ) -> Self {
         Self::cell(EsmAssetReference {
             origin,
             request,
             annotations: annotations.into_value(),
+            export_name,
         })
     }
 }
@@ -136,7 +149,12 @@ impl EsmAssetReferenceVc {
 impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.get_origin(), self.request)
+        let ty = Value::new(match &self.export_name {
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
+            None => EcmaScriptModulesReferenceSubType::Undefined,
+        });
+
+        esm_resolve(self.get_origin(), self.request, ty)
     }
 }
 
@@ -155,12 +173,13 @@ impl ValueToString for EsmAssetReference {
 #[turbo_tasks::value_impl]
 impl ChunkableAssetReference for EsmAssetReference {
     #[turbo_tasks::function]
-    fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
+    fn chunking_type(&self) -> Result<ChunkingTypeOptionVc> {
         Ok(ChunkingTypeOptionVc::cell(
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
                     "separate" => Some(ChunkingType::Separate),
                     "parallel" => Some(ChunkingType::Parallel),
+                    "isolatedParallel" => Some(ChunkingType::IsolatedParallel),
                     "none" => None,
                     _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
                 }
@@ -176,11 +195,11 @@ impl CodeGenerateable for EsmAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmAssetReferenceVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
-        let chunking_type = self_vc.chunking_type(context).await?;
+        let chunking_type = self_vc.chunking_type().await?;
         let resolved = self_vc.resolve_reference().await?;
 
         // Insert code that throws immediately at time of import if a request is
@@ -241,7 +260,7 @@ impl CodeGenerateable for EsmAssetReference {
 }
 
 lazy_static! {
-    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::encode(
+    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::mangle(
         "ecmascript hoisting location"
     )));
 }

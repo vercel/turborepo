@@ -1,0 +1,6 @@
+{
+  "name": "test",
+  "scripts": {
+    "trap": "trap 'echo trap hit; sleep 1; echo trap finish' INT; sleep 5 && echo 'script finish'"
+  }
+}

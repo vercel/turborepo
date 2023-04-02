@@ -3,13 +3,13 @@
 #![feature(min_specialization)]
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
-#![feature(main_separator_str)]
 #![feature(box_syntax)]
 #![feature(round_char_boundary)]
 
 pub mod attach;
 pub mod embed;
 pub mod glob;
+mod invalidation;
 mod invalidator_map;
 pub mod json;
 mod mutex_map;
@@ -21,10 +21,11 @@ pub mod util;
 
 use std::{
     borrow::Cow,
+    cmp::min,
     collections::{HashMap, HashSet},
     fmt::{self, Debug, Display, Formatter},
     fs::FileType,
-    io::{self, ErrorKind},
+    io::{self, BufRead, ErrorKind},
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::{
@@ -47,20 +48,24 @@ use read_glob::read_glob;
 pub use read_glob::{ReadGlobResult, ReadGlobResultVc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{fs, io::AsyncReadExt};
+use tokio::{
+    fs,
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+};
 use turbo_tasks::{
     mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
-    CompletionVc, Invalidator, ValueToString, ValueToStringVc,
+    CompletionVc, InvalidationReason, Invalidator, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
-use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
+use util::{extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys};
 
-use self::{json::UnparseableJson, mutex_map::MutexMap};
+use self::{invalidation::WatchStart, json::UnparseableJson, mutex_map::MutexMap};
 use crate::{
     attach::AttachedFileSystemVc,
+    invalidation::WatchChange,
     retry::{retry_blocking, retry_future},
     rope::{Rope, RopeReadRef, RopeReader},
 };
@@ -94,7 +99,7 @@ impl DiskWatcher {
     fn restore_if_watching(&self, dir_path: &Path, root_path: &Path) -> Result<()> {
         if self.watching.contains(dir_path) {
             let mut watcher = self.watcher.lock().unwrap();
-            self.start_watching(&mut watcher, dir_path, &root_path)?;
+            self.start_watching(&mut watcher, dir_path, root_path)?;
         }
         Ok(())
     }
@@ -192,7 +197,28 @@ impl DiskFileSystem {
         }
     }
 
+    pub fn invalidate_with_reason<T: InvalidationReason + Clone>(&self, reason: T) {
+        for (_, invalidators) in take(&mut *self.invalidator_map.lock().unwrap()).into_iter() {
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate_with_reason(reason.clone()));
+        }
+        for (_, invalidators) in take(&mut *self.dir_invalidator_map.lock().unwrap()).into_iter() {
+            invalidators
+                .into_iter()
+                .for_each(|i| i.invalidate_with_reason(reason.clone()));
+        }
+    }
+
     pub fn start_watching(&self) -> Result<()> {
+        self.start_watching_internal(false)
+    }
+
+    pub fn start_watching_with_invalidation_reason(&self) -> Result<()> {
+        self.start_watching_internal(true)
+    }
+
+    fn start_watching_internal(&self, report_invalidation_reason: bool) -> Result<()> {
         let mut watcher_guard = self.watcher.watcher.lock().unwrap();
         if watcher_guard.is_some() {
             return Ok(());
@@ -200,6 +226,11 @@ impl DiskFileSystem {
         let invalidator_map = self.invalidator_map.clone();
         let dir_invalidator_map = self.dir_invalidator_map.clone();
         let root = self.root.clone();
+        let root_path = self.root_path().to_path_buf();
+
+        let report_invalidation_reason =
+            report_invalidation_reason.then(|| (self.name.clone(), root_path.clone()));
+
         // Create a channel to receive the events.
         let (tx, rx) = channel();
         // Create a watcher object, delivering debounced events.
@@ -208,7 +239,7 @@ impl DiskFileSystem {
         // Add a path to be watched. All files and directories at that path and
         // below will be monitored for changes.
         #[cfg(any(target_os = "macos", target_os = "windows"))]
-        watcher.watch(&root, RecursiveMode::Recursive)?;
+        watcher.watch(&root_path, RecursiveMode::Recursive)?;
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         for dir_path in self.watcher.watching.iter() {
             watcher.watch(&*dir_path, RecursiveMode::NonRecursive)?;
@@ -217,10 +248,26 @@ impl DiskFileSystem {
         // We need to invalidate all reads that happened before watching
         // Best is to start_watching before starting to read
         for (_, invalidators) in take(&mut *invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators.into_iter().for_each(|i| {
+                if report_invalidation_reason.is_some() {
+                    i.invalidate_with_reason(WatchStart {
+                        name: self.name.clone(),
+                    })
+                } else {
+                    i.invalidate();
+                }
+            });
         }
         for (_, invalidators) in take(&mut *dir_invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
+            invalidators.into_iter().for_each(|i| {
+                if report_invalidation_reason.is_some() {
+                    i.invalidate_with_reason(WatchStart {
+                        name: self.name.clone(),
+                    })
+                } else {
+                    i.invalidate();
+                }
+            });
         }
 
         watcher_guard.replace(watcher);
@@ -228,8 +275,6 @@ impl DiskFileSystem {
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         let disk_watcher = self.watcher.clone();
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        let root_path = self.root_path().to_path_buf();
 
         spawn_thread(move || {
             let mut batched_invalidate_path = HashSet::new();
@@ -312,54 +357,81 @@ impl DiskFileSystem {
                     }
                     event = rx.try_recv();
                 }
+                fn invalidate(
+                    report_invalidation_reason: &Option<(String, PathBuf)>,
+                    path: &Path,
+                    invalidator: Invalidator,
+                ) {
+                    if let Some((name, root_path)) = report_invalidation_reason {
+                        if let Some(path) = format_absolute_fs_path(path, name, root_path) {
+                            invalidator.invalidate_with_reason(WatchChange { path });
+                            return;
+                        }
+                    }
+                    invalidator.invalidate();
+                }
                 fn invalidate_path(
+                    report_invalidation_reason: &Option<(String, PathBuf)>,
                     invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
                     paths: impl Iterator<Item = PathBuf>,
                 ) {
                     for path in paths {
-                        let key = path_to_key(path);
+                        let key = path_to_key(&path);
                         if let Some(invalidators) = invalidator_map.remove(&key) {
-                            invalidators.into_iter().for_each(|i| i.invalidate());
+                            invalidators
+                                .into_iter()
+                                .for_each(|i| invalidate(report_invalidation_reason, &path, i));
                         }
                     }
                 }
                 fn invalidate_path_and_children_execute(
+                    report_invalidation_reason: &Option<(String, PathBuf)>,
                     invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
-                    paths: &mut HashSet<PathBuf>,
+                    paths: impl Iterator<Item = PathBuf>,
                 ) {
-                    for (_, invalidators) in invalidator_map.drain_filter(|key, _| {
-                        paths
-                            .iter()
-                            .any(|path_key| key.starts_with(&path_to_key(path_key)))
-                    }) {
-                        invalidators.into_iter().for_each(|i| i.invalidate());
+                    for path in paths {
+                        let path_key = path_to_key(&path);
+                        for (_, invalidators) in
+                            invalidator_map.drain_filter(|key, _| key.starts_with(&path_key))
+                        {
+                            invalidators
+                                .into_iter()
+                                .for_each(|i| invalidate(report_invalidation_reason, &path, i));
+                        }
                     }
-                    paths.clear()
                 }
-                {
-                    let mut invalidator_map = invalidator_map.lock().unwrap();
-                    invalidate_path(&mut invalidator_map, batched_invalidate_path.drain());
-                    invalidate_path_and_children_execute(
-                        &mut invalidator_map,
-                        &mut batched_invalidate_path_and_children,
-                    );
-                }
-                {
-                    let mut dir_invalidator_map = dir_invalidator_map.lock().unwrap();
-                    invalidate_path(
-                        &mut dir_invalidator_map,
-                        batched_invalidate_path_dir.drain(),
-                    );
-                    invalidate_path_and_children_execute(
-                        &mut dir_invalidator_map,
-                        &mut batched_invalidate_path_and_children_dir,
-                    );
-                }
+                // We need to start watching first before invalidating the changed paths
                 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                 {
                     for path in batched_new_paths.drain() {
                         let _ = disk_watcher.restore_if_watching(&path, &root_path);
                     }
+                }
+                {
+                    let mut invalidator_map = invalidator_map.lock().unwrap();
+                    invalidate_path(
+                        &report_invalidation_reason,
+                        &mut invalidator_map,
+                        batched_invalidate_path.drain(),
+                    );
+                    invalidate_path_and_children_execute(
+                        &report_invalidation_reason,
+                        &mut invalidator_map,
+                        batched_invalidate_path_and_children.drain(),
+                    );
+                }
+                {
+                    let mut dir_invalidator_map = dir_invalidator_map.lock().unwrap();
+                    invalidate_path(
+                        &report_invalidation_reason,
+                        &mut dir_invalidator_map,
+                        batched_invalidate_path_dir.drain(),
+                    );
+                    invalidate_path_and_children_execute(
+                        &report_invalidation_reason,
+                        &mut dir_invalidator_map,
+                        batched_invalidate_path_and_children_dir.drain(),
+                    );
                 }
             }
         });
@@ -383,6 +455,21 @@ impl DiskFileSystem {
             path.join(&*unix_to_sys(&fs_path.path))
         })
     }
+}
+
+fn format_absolute_fs_path(path: &Path, name: &str, root_path: &PathBuf) -> Option<String> {
+    let path = if let Ok(rel_path) = path.strip_prefix(root_path) {
+        let path = if MAIN_SEPARATOR != '/' {
+            let rel_path = rel_path.to_string_lossy().replace(MAIN_SEPARATOR, "/");
+            format!("[{name}]/{}", rel_path)
+        } else {
+            format!("[{name}]/{}", rel_path.display())
+        };
+        Some(path)
+    } else {
+        None
+    };
+    path
 }
 
 pub fn path_to_key(path: impl AsRef<Path>) -> String {
@@ -416,18 +503,6 @@ impl Debug for DiskFileSystem {
     }
 }
 
-/// Reads the file from disk, without converting the contents into a Vc.
-async fn read_file(path: PathBuf, mutex_map: &MutexMap<PathBuf>) -> Result<FileContent> {
-    let _lock = mutex_map.lock(path.clone()).await;
-    Ok(match retry_future(|| File::from_path(path.clone())).await {
-        Ok(file) => FileContent::new(file),
-        Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
-        Err(e) => {
-            bail!(anyhow!(e).context(format!("reading file {}", path.display())))
-        }
-    })
-}
-
 #[turbo_tasks::value_impl]
 impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
@@ -435,7 +510,14 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
-        let content = read_file(full_path, &self.mutex_map).await?;
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let content = match retry_future(|| File::from_path(full_path.clone())).await {
+            Ok(file) => FileContent::new(file),
+            Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
+            Err(e) => {
+                bail!(anyhow!(e).context(format!("reading file {}", full_path.display())))
+            }
+        };
         Ok(content.cell())
     }
 
@@ -594,19 +676,19 @@ impl FileSystem for DiskFileSystem {
         // Track the file, so that we will rewrite it if it ever changes.
         fs_path.track().await?;
 
-        // We perform an untracked read here, so that this write is not dependent on the
-        // read's FileContent value (and the memory it holds). Our untracked read can be
-        // freed immediately. Given this is an output file, it's unlikely any Turbo code
-        // will need to read the file from disk into a FileContentVc, so we're not
-        // wasting cycles.
-        let old_content = read_file(full_path.clone(), &self.mutex_map).await?;
-
-        if *content == old_content {
-            return Ok(CompletionVc::unchanged());
-        }
         let _lock = self.mutex_map.lock(full_path.clone()).await;
 
-        let create_directory = old_content == FileContent::NotFound;
+        // We perform an untracked comparison here, so that this write is not dependent
+        // on a read's FileContentVc (and the memory it holds). Our untracked read can
+        // be freed immediately. Given this is an output file, it's unlikely any Turbo
+        // code will need to read the file from disk into a FileContentVc, so we're not
+        // wasting cycles.
+        let compare = content.streaming_compare(full_path.clone()).await?;
+        if compare == FileComparison::Equal {
+            return Ok(CompletionVc::unchanged());
+        }
+
+        let create_directory = compare == FileComparison::Create;
         match &*content {
             FileContent::Content(file) => {
                 if create_directory {
@@ -1297,6 +1379,69 @@ impl From<File> for FileContent {
 impl From<File> for FileContentVc {
     fn from(file: File) -> Self {
         FileContent::Content(file).cell()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum FileComparison {
+    Create,
+    Equal,
+    NotEqual,
+}
+
+impl FileContent {
+    /// Performs a comparison of self's data against a disk file's streamed
+    /// read.
+    async fn streaming_compare(&self, path: PathBuf) -> Result<FileComparison> {
+        let old_file = extract_disk_access(retry_future(|| fs::File::open(&path)).await, &path)?;
+        let Some(mut old_file) = old_file else {
+            return Ok(match self {
+                FileContent::NotFound => FileComparison::Equal,
+                _ => FileComparison::Create,
+            });
+        };
+        // We know old file exists, does the new file?
+        let FileContent::Content(new_file) = self else {
+            return Ok(FileComparison::NotEqual);
+        };
+
+        let old_meta = extract_disk_access(retry_future(|| old_file.metadata()).await, &path)?;
+        let Some(old_meta) = old_meta else {
+            // If we failed to get meta, then the old file has been deleted between the handle open.
+            // In which case, we just pretend the file never existed.
+            return Ok(FileComparison::Create);
+        };
+        // If the meta is different, we need to rewrite the file to update it.
+        if new_file.meta != old_meta.into() {
+            return Ok(FileComparison::NotEqual);
+        }
+
+        // So meta matches, and we have a file handle. Let's stream the contents to see
+        // if they match.
+        let mut new_contents = new_file.read();
+        let mut old_contents = BufReader::new(&mut old_file);
+        Ok(loop {
+            let new_chunk = new_contents.fill_buf()?;
+            let Ok(old_chunk) = old_contents.fill_buf().await else {
+                break FileComparison::NotEqual;
+            };
+
+            let len = min(new_chunk.len(), old_chunk.len());
+            if len == 0 {
+                if new_chunk.len() == old_chunk.len() {
+                    break FileComparison::Equal;
+                } else {
+                    break FileComparison::NotEqual;
+                }
+            }
+
+            if new_chunk[0..len] != old_chunk[0..len] {
+                break FileComparison::NotEqual;
+            }
+
+            new_contents.consume(len);
+            old_contents.consume(len);
+        })
     }
 }
 

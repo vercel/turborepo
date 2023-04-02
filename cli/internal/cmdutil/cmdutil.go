@@ -224,7 +224,7 @@ type CmdBase struct {
 	UIFactory    ui.UIFactory
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
-	APIClient    *client.ApiClient
+	APIClient    *client.APIClient
 	RepoConfig   *config.RepoConfig
 	UserConfig   *config.UserConfig
 	RemoteConfig client.RemoteConfig

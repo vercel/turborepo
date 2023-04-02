@@ -59,7 +59,7 @@ with a single `turbo.json` at the root like this:
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**", ".svelte-kit/**"],
+      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"],
     }
   }
 }
@@ -87,8 +87,8 @@ and remove the config from the root configuration:
 {
   "pipeline": {
     "build": {
--      "outputs": [".next/**", ".svelte-kit/**"]
-+      "outputs": [".next/**"]
+-      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
++      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }
@@ -166,7 +166,7 @@ app again. Without a Workspace-specific task, you might configure your root
     "build": {
       "outputMode": "hash-only",
       "inputs": ["src/**"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "my-sveltekit-app#build": {
       "outputMode": "hash-only", // must duplicate this

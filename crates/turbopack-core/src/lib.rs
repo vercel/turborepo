@@ -12,6 +12,7 @@ pub mod code_builder;
 pub mod compile_time_info;
 pub mod context;
 pub mod environment;
+pub mod error;
 pub mod ident;
 pub mod introspect;
 pub mod issue;
@@ -27,6 +28,9 @@ pub mod target;
 mod utils;
 pub mod version;
 pub mod virtual_asset;
+
+pub const PROJECT_FILESYSTEM_NAME: &str = "project";
+pub const SOURCE_MAP_ROOT_NAME: &str = "turbopack";
 
 pub fn register() {
     turbo_tasks::register();

@@ -21,7 +21,7 @@ GO_FLAGS += -trimpath
 CLI_DIR = $(shell pwd)
 
 # allow opting in to the rust codepaths
-GO_TAG ?= go
+GO_TAG ?= rust
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
@@ -30,8 +30,11 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
+turbo-prod: go-turbo$(EXT)
+	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
+
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
@@ -87,11 +90,11 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target x86_64-linux-musl" cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
 
 #
 # end
@@ -165,6 +168,9 @@ build: install
 	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo build --filter=create-turbo...
 	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo build --filter=@turbo/codemod...
 	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo build --filter=turbo-ignore...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo build --filter=@turbo/workspaces...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo build --filter=eslint-plugin-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo build --filter=eslint-config-turbo...
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
@@ -229,6 +235,9 @@ stage-release: cmd/turbo/version.go
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
@@ -253,6 +262,9 @@ publish-turbo: clean build
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 ifneq ($(SKIP_PUBLISH),--skip-publish)
 	# Publish the remaining JS packages in order to avoid race conditions.
@@ -261,6 +273,9 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
 endif
 
 demo/lage: install
@@ -307,14 +322,21 @@ CRAM_ENV := .cram_env
 
 $(CRAM_ENV)/bin/pip:
 	python3 -m venv $(CRAM_ENV)
+	.cram_env/bin/python3 -m pip install --quiet --upgrade pip
 
 $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 	$(CRAM_ENV)/bin/pip install prysk
 
+$(CRAM_ENV)/bin/pytest: $(CRAM_ENV)/bin/pip
+	$(CRAM_ENV)/bin/pip3 install --quiet pytest "prysk[pytest-plugin]" pytest-xdist
+
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
+integration-tests-serial: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
+
+integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRATION_TEST_FILES) corepack turbo
+	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES) --prysk-shell=`which bash`
 
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)

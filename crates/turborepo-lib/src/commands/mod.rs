@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
 };
 
 pub(crate) mod bin;
+pub(crate) mod daemon;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
@@ -131,5 +133,45 @@ impl CommandBase {
         let api_url = repo_config.api_url();
         let timeout = client_config.remote_cache_timeout();
         APIClient::new(api_url, timeout)
+    }
+
+    pub fn daemon_file_root(&self) -> turborepo_paths::AbsoluteNormalizedPathBuf {
+        turborepo_paths::AbsoluteNormalizedPathBuf::new(std::env::temp_dir())
+            .expect("temp dir is valid")
+            .join(turborepo_paths::ForwardRelativePath::new("turbod").expect("turbod is valid"))
+            .join(
+                turborepo_paths::ForwardRelativePath::new(&self.repo_hash())
+                    .expect("hash is valid"),
+            )
+            .into()
+    }
+
+    fn repo_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(self.repo_root.to_str().unwrap().as_bytes());
+        hex::encode(&hasher.finalize()[..8])
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
+    #[test_case("", "e3b0c44298fc1c14"; "empty string ok")]
+    fn test_repo_hash(path: &str, expected_hash: &str) {
+        use std::path::PathBuf;
+
+        use super::CommandBase;
+        use crate::Args;
+
+        let args = Args::default();
+        let repo_root = PathBuf::from(path);
+        let command_base = CommandBase::new(args, repo_root).unwrap();
+
+        let hash = command_base.repo_hash();
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
     }
 }

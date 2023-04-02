@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
 use log::{debug, error, trace};
-use turborepo_lib::{Args, Payload};
+use turborepo_lib::{spawn_child, Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
     // canonicalize the binary path to ensure we can find go-turbo
@@ -43,14 +43,14 @@ fn run_go_binary(args: Args) -> Result<i32> {
 
     let serialized_args = serde_json::to_string(&args)?;
     trace!("Invoking go binary with {}", serialized_args);
-    let mut command = process::Command::new(go_binary_path)
+    let mut command = process::Command::new(go_binary_path);
+    command
         .arg(serialized_args)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to execute turbo.");
+        .stderr(Stdio::inherit());
 
-    let exit_code = command.wait()?.code().unwrap_or(2);
+    let child = spawn_child(command)?;
+    let exit_code = child.wait()?.code().unwrap_or(2);
 
     Ok(exit_code)
 }

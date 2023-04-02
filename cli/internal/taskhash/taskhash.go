@@ -1,6 +1,4 @@
-// package taskhash handles calculating dependency hashes for nodes in the task execution
-// graph.
-
+// Package taskhash handles calculating dependency hashes for nodes in the task execution graph.
 package taskhash
 
 import (
@@ -12,6 +10,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
+	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -43,21 +42,25 @@ type Tracker struct {
 
 	// mu is a mutex that we can lock/unlock to read/write from maps
 	// the fields below should be protected by the mutex.
-	mu                   sync.RWMutex
-	packageTaskEnvVars   map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
-	packageTaskHashes    map[string]string          // taskID -> hash
-	packageTaskFramework map[string]string          // taskID -> inferred framework for package
+	mu                     sync.RWMutex
+	packageTaskEnvVars     map[string]env.DetailedMap // taskId -> envvar pairs that affect the hash.
+	packageTaskHashes      map[string]string          // taskID -> hash
+	packageTaskFramework   map[string]string          // taskID -> inferred framework for package
+	packageTaskOutputs     map[string][]turbopath.AnchoredSystemPath
+	packageTaskCacheStatus map[string]cache.ItemStatus
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Tracker {
 	return &Tracker{
-		rootNode:             rootNode,
-		globalHash:           globalHash,
-		pipeline:             pipeline,
-		packageTaskHashes:    make(map[string]string),
-		packageTaskFramework: make(map[string]string),
-		packageTaskEnvVars:   make(map[string]env.DetailedMap),
+		rootNode:               rootNode,
+		globalHash:             globalHash,
+		pipeline:               pipeline,
+		packageTaskHashes:      make(map[string]string),
+		packageTaskFramework:   make(map[string]string),
+		packageTaskEnvVars:     make(map[string]env.DetailedMap),
+		packageTaskOutputs:     make(map[string][]turbopath.AnchoredSystemPath),
+		packageTaskCacheStatus: make(map[string]cache.ItemStatus),
 	}
 }
 
@@ -129,14 +132,28 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		return nil, err
 	}
 
+	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration())
 	includePattern := ""
+	excludePattern := ""
 	if len(inputs) > 0 {
-		includePattern = "{" + strings.Join(inputs, ",") + "}"
+		var includePatterns []string
+		var excludePatterns []string
+		for _, pattern := range inputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				excludePatterns = append(excludePatterns, pathPrefix.UntypedJoin(pattern[1:]).ToString())
+			} else {
+				includePatterns = append(includePatterns, pathPrefix.UntypedJoin(pattern).ToString())
+			}
+		}
+		if len(includePatterns) > 0 {
+			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
+		}
+		if len(excludePatterns) > 0 {
+			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
+		}
 	}
 
-	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration()).ToString()
-	convertedPathPrefix := turbopath.AbsoluteSystemPathFromUpstream(pathPrefix)
-	fs.Walk(pathPrefix, func(name string, isDir bool) error {
+	err = fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
 		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
@@ -151,12 +168,21 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 						return nil
 					}
 				}
+				if excludePattern != "" {
+					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if val {
+						return nil
+					}
+				}
 				hash, err := fs.GitLikeHashFile(convertedName.ToString())
 				if err != nil {
 					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
 
-				relativePath, err := convertedName.RelativeTo(convertedPathPrefix)
+				relativePath, err := convertedName.RelativeTo(pathPrefix)
 				if err != nil {
 					return fmt.Errorf("File path cannot be made relative: %w", err)
 				}
@@ -165,6 +191,9 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return hashObject, nil
 }
 
@@ -374,4 +403,42 @@ func (th *Tracker) GetFramework(taskID string) string {
 	th.mu.RLock()
 	defer th.mu.RUnlock()
 	return th.packageTaskFramework[taskID]
+}
+
+// GetExpandedOutputs returns a list of outputs for a given taskID
+func (th *Tracker) GetExpandedOutputs(taskID string) []turbopath.AnchoredSystemPath {
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	outputs, ok := th.packageTaskOutputs[taskID]
+
+	if !ok {
+		return []turbopath.AnchoredSystemPath{}
+	}
+
+	return outputs
+}
+
+// SetExpandedOutputs a list of outputs for a given taskID so it can be read later
+func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.AnchoredSystemPath) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.packageTaskOutputs[taskID] = outputs
+}
+
+// SetCacheStatus records the task status for the given taskID
+func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.packageTaskCacheStatus[taskID] = cacheStatus
+}
+
+// GetCacheStatus records the task status for the given taskID
+func (th *Tracker) GetCacheStatus(taskID string) cache.ItemStatus {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	status, ok := th.packageTaskCacheStatus[taskID]
+	if !ok {
+		return cache.ItemStatus{Local: false, Remote: false}
+	}
+	return status
 }

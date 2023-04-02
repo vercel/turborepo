@@ -3,7 +3,7 @@
         obj: Variable(
             (
                 Atom('exports' type=inline),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -93,7 +93,7 @@
         obj: Variable(
             (
                 Atom('exports' type=inline),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -183,7 +183,7 @@
         obj: Variable(
             (
                 Atom('exports' type=inline),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -273,7 +273,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -403,7 +403,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -418,7 +418,7 @@
                 Variable(
                     (
                         Atom('__webpack_exports__' type=dynamic),
-                        #2,
+                        #4,
                     ),
                 ),
             ),
@@ -534,7 +534,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -664,7 +664,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -679,7 +679,7 @@
                 Variable(
                     (
                         Atom('__webpack_exports__' type=dynamic),
-                        #2,
+                        #4,
                     ),
                 ),
             ),
@@ -814,9 +814,137 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Paren,
+            ),
+            ParenExpr(
+                Expr,
+            ),
+            Expr(
+                Arrow,
+            ),
+            ArrowExpr(
+                Body,
+            ),
+            BlockStmtOrExpr(
+                BlockStmt,
+            ),
+            BlockStmt(
+                Stmts(
+                    3,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Assign,
+            ),
+            AssignExpr(
+                Right,
+            ),
+            Expr(
+                Object,
+            ),
+            ObjectLit(
+                Props(
+                    0,
+                ),
+            ),
+            PropOrSpread(
+                Prop,
+            ),
+            Prop(
+                KeyValue,
+            ),
+            KeyValueProp(
+                Value,
+            ),
+            Expr(
+                Arrow,
+            ),
+            ArrowExpr(
+                Body,
+            ),
+            BlockStmtOrExpr(
+                BlockStmt,
+            ),
+            BlockStmt(
+                Stmts(
+                    2,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                515,
+            ),
+            hi: BytePos(
+                522,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -948,7 +1076,7 @@
         obj: Variable(
             (
                 Atom('promises_namespaceObject' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -1123,7 +1251,7 @@
         obj: Variable(
             (
                 Atom('promises_namespaceObject' type=dynamic),
-                #2,
+                #4,
             ),
         ),
         prop: Constant(
@@ -1297,7 +1425,7 @@
             Variable(
                 (
                     Atom('res' type=inline),
-                    #4,
+                    #5,
                 ),
             ),
             Constant(
@@ -1461,7 +1589,7 @@
         obj: Variable(
             (
                 Atom('res' type=inline),
-                #4,
+                #5,
             ),
         ),
         prop: Constant(
@@ -1623,7 +1751,7 @@
         obj: Variable(
             (
                 Atom('res' type=inline),
-                #4,
+                #5,
             ),
         ),
         prop: Constant(
@@ -1789,7 +1917,7 @@
             Variable(
                 (
                     Atom('res' type=inline),
-                    #4,
+                    #5,
                 ),
             ),
             Constant(
@@ -1832,7 +1960,7 @@
                             Variable(
                                 (
                                     Atom('users' type=inline),
-                                    #2,
+                                    #4,
                                 ),
                             ),
                         ),
@@ -1847,7 +1975,7 @@
                             Variable(
                                 (
                                     Atom('hello' type=inline),
-                                    #4,
+                                    #5,
                                 ),
                             ),
                         ),
@@ -1980,9 +2108,94 @@
             ctxt: #0,
         },
     },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Paren,
+            ),
+            ParenExpr(
+                Expr,
+            ),
+            Expr(
+                Arrow,
+            ),
+            ArrowExpr(
+                Body,
+            ),
+            BlockStmtOrExpr(
+                BlockStmt,
+            ),
+            BlockStmt(
+                Stmts(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1113,
+            ),
+            hi: BytePos(
+                1120,
+            ),
+            ctxt: #1,
+        },
+    },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -2071,7 +2284,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -2158,7 +2371,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -2173,7 +2386,7 @@
                 Variable(
                     (
                         Atom('exports' type=inline),
-                        #1,
+                        #3,
                     ),
                 ),
             ),
@@ -2246,7 +2459,7 @@
         obj: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #1,
+                #3,
             ),
         ),
         prop: Constant(
@@ -2370,7 +2583,7 @@
         func: Variable(
             (
                 Atom('__webpack_require__' type=dynamic),
-                #1,
+                #3,
             ),
         ),
         args: [
@@ -2466,7 +2679,7 @@
         func: Variable(
             (
                 Atom('__webpack_exec__' type=dynamic),
-                #1,
+                #3,
             ),
         ),
         args: [
@@ -2554,9 +2767,7 @@
     },
     Member {
         obj: FreeVar(
-            Other(
-                Atom('module' type=static),
-            ),
+            Atom('module' type=static),
         ),
         prop: Constant(
             Str(
@@ -2639,6 +2850,92 @@
                 1356,
             ),
             ctxt: #0,
+        },
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('module' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Paren,
+            ),
+            ParenExpr(
+                Expr,
+            ),
+            Expr(
+                Arrow,
+            ),
+            ArrowExpr(
+                Body,
+            ),
+            BlockStmtOrExpr(
+                BlockStmt,
+            ),
+            BlockStmt(
+                Stmts(
+                    8,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Assign,
+            ),
+            AssignExpr(
+                Left,
+            ),
+            PatOrExpr(
+                Pat,
+            ),
+            Pat(
+                Expr,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1342,
+            ),
+            hi: BytePos(
+                1348,
+            ),
+            ctxt: #1,
         },
     },
 ]
