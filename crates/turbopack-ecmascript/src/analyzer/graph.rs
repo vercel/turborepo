@@ -619,12 +619,14 @@ pub fn as_parent_path_with(
 pub fn is_in_try(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> bool {
     ast_path
         .iter()
-        .fold(false, |in_try, ast_ref| match ast_ref.kind() {
-            AstParentKind::ArrowExpr(ArrowExprField::Body) => false,
-            AstParentKind::Function(FunctionField::Body) => false,
-            AstParentKind::TryStmt(TryStmtField::Block) => true,
-            _ => in_try,
+        .rev()
+        .find_map(|ast_ref| match ast_ref.kind() {
+            AstParentKind::ArrowExpr(ArrowExprField::Body) => Some(false),
+            AstParentKind::Function(FunctionField::Body) => Some(false),
+            AstParentKind::TryStmt(TryStmtField::Block) => Some(true),
+            _ => None,
         })
+        .unwrap_or(false)
 }
 
 impl Analyzer<'_> {
