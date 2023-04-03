@@ -6,6 +6,7 @@ mod lockfile;
 
 use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 
+use globwalk::globwalk;
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -286,4 +287,41 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
         }
     };
     response.into()
+}
+
+#[no_mangle]
+pub extern "C" fn glob(buffer: Buffer) -> Buffer {
+    let req: proto::GlobReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+    let walk_type = match req.files_only {
+        true => globwalk::WalkType::Files,
+        false => globwalk::WalkType::All,
+    };
+
+    let response = match globwalk(
+        AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
+        &req.include_patterns,
+        &req.exclude_patterns,
+        walk_type,
+    ) {
+        Ok(files) => proto::glob_resp::Response::Files(proto::GlobRespList {
+            files: files
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
+        }),
+        Err(e) => proto::glob_resp::Response::Error(e.to_string()),
+    };
+
+    proto::GlobResp {
+        response: Some(response),
+    }
+    .into()
 }
