@@ -70,9 +70,7 @@ impl fmt::Display for BerryPackage {
         let space = " ";
         let newline = "\n";
         write_line("version", space, &wrap_string(self.version.as_ref()))?;
-        if let Some(resolution) = &self.resolution {
-            write_line("resolution", space, &wrap_string(resolution))?;
-        }
+        write_line("resolution", space, &wrap_string(&self.resolution))?;
         // deps, peer deps, deps meta, peer deps meta, bin
         if let Some(deps) = &self.dependencies {
             write_line(
