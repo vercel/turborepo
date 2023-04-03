@@ -22,7 +22,9 @@ export interface TransformInput {
 }
 
 export interface TransformResponse {
-  result: "not-applicable" | "error" | "success";
+  // errors should be thrown as instances of TransformError
+  result: "not-applicable" | "success";
+  name: string;
 }
 
 export type TransformResult = Promise<TransformResponse>;

@@ -4,18 +4,23 @@ import semverPrerelease from "semver/functions/prerelease";
 import cliPkgJson from "../../package.json";
 import { isDefaultExample } from "../utils/isDefaultExample";
 import { TransformInput, TransformResult } from "./types";
+import { TransformError } from "./errors";
 
-// applied to "local" examples (those hosted within vercel/turbo/examples)
+const meta = {
+  name: "official-starter",
+};
+
+// applied to "official starter" examples (those hosted within vercel/turbo/examples)
 export async function transform(args: TransformInput): TransformResult {
   const { prompts, example } = args;
 
   const defaultExample = isDefaultExample(example.name);
-  const isTurboExample =
+  const isOfficialStarter =
     !example.repo ||
     (example.repo?.username === "vercel" && example.repo?.name === "turbo");
 
-  if (!isTurboExample) {
-    return { result: "not-applicable" };
+  if (!isOfficialStarter) {
+    return { result: "not-applicable", ...meta };
   }
 
   // paths
@@ -33,7 +38,10 @@ export async function transform(args: TransformInput): TransformResult {
     try {
       packageJsonContent = fs.readJsonSync(rootPackageJsonPath);
     } catch {
-      return { result: "error" };
+      throw new TransformError("Unable to read package.json", {
+        transform: meta.name,
+        fatal: false,
+      });
     }
 
     // if using the basic example, set the name to the project name (legacy behavior)
@@ -53,10 +61,13 @@ export async function transform(args: TransformInput): TransformResult {
           spaces: 2,
         });
       } catch (err) {
-        return { result: "error" };
+        throw new TransformError("Unable to write package.json", {
+          transform: meta.name,
+          fatal: false,
+        });
       }
     }
   }
 
-  return { result: "success" };
+  return { result: "success", ...meta };
 }

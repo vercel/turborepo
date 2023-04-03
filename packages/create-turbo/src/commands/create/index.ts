@@ -15,9 +15,15 @@ import { tryGitCommit, tryGitInit } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { turboGradient, turboLoader, info, error, warn } from "../../logger";
+import { TransformError } from "../../transforms/errors";
 
-function handleWorkspaceErrors(err: unknown) {
-  if (err instanceof ConvertError && err.type !== "unknown") {
+function handleErrors(err: unknown) {
+  if (err instanceof TransformError) {
+    error(chalk.bold(err.transform), chalk.red(err.message));
+    if (err.fatal) {
+      process.exit(1);
+    }
+  } else if (err instanceof ConvertError && err.type !== "unknown") {
     error(chalk.red(err.message));
     process.exit(1);
   } else {
@@ -43,8 +49,11 @@ export async function create(
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
   console.log();
 
-  const availablePackageManagers = await getAvailablePackageManagers();
-  const online = await isOnline();
+  const [online, availablePackageManagers] = await Promise.all([
+    isOnline(),
+    getAvailablePackageManagers(),
+  ]);
+
   if (!online) {
     error(
       "You appear to be offline. Please check your network connection and try again."
@@ -78,18 +87,19 @@ export async function create(
   // create a new git repo after creating the project
   tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
 
+  // read the project after creating it to get details about workspaces, package manager, etc.
   let project: Project = {} as Project;
   try {
     project = await getWorkspaceDetails({ root });
   } catch (err) {
-    handleWorkspaceErrors(err);
+    handleErrors(err);
   }
 
-  let successfulTransforms = 0;
+  // run any required transforms
   if (!skipTransforms) {
     for (const transform of transforms) {
       try {
-        const result = await transform({
+        const transformResult = await transform({
           example: {
             repo: repoInfo,
             name: exampleName,
@@ -102,18 +112,15 @@ export async function create(
           },
           opts,
         });
-        if (result.result === "success") {
-          successfulTransforms += 1;
+        if (transformResult.result === "success") {
+          tryGitCommit(
+            `feat(create-turbo): apply ${transformResult.name} transform`
+          );
         }
       } catch (err) {
-        handleWorkspaceErrors(err);
+        handleErrors(err);
       }
     }
-  }
-
-  if (successfulTransforms > 0) {
-    // create a second commit after running transforms
-    tryGitCommit("feat(create-turbo): apply transforms");
   }
 
   // if the user opted out of transforms, the package manager will be the same as the example
@@ -151,8 +158,11 @@ export async function create(
     console.log(` - ${chalk.bold(projectName)}`);
   }
 
+  // run install
   console.log();
   if (hasPackageJson && !skipInstall) {
+    // in the case when the user opted out of transforms, but not install, we need to make sure the package manager is available
+    // before we attempt an install
     if (
       opts.skipTransforms &&
       !availablePackageManagers[project.packageManager].available
@@ -196,14 +206,14 @@ export async function create(
     );
   }
 
-  // find the right package manager details to display in log messages
+  // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
-    if (projectDirIsCurrentDir) {
-      console.log("Inside this directory, you can run several commands:");
-    } else {
-      console.log("Inside that directory, you can run several commands:");
-    }
+    console.log(
+      `Inside ${
+        projectDirIsCurrentDir ? "this" : "that"
+      } directory, you can run several commands:`
+    );
     console.log();
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])

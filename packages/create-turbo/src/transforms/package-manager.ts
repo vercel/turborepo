@@ -1,6 +1,10 @@
 import { convert } from "@turbo/workspaces";
 import { TransformInput, TransformResult } from "./types";
 
+const meta = {
+  name: "package-manager",
+};
+
 export async function transform(args: TransformInput): TransformResult {
   const { project, prompts } = args;
   const { root, packageManager } = prompts;
@@ -14,7 +18,9 @@ export async function transform(args: TransformInput): TransformResult {
         skipInstall: true,
       },
     });
+  } else {
+    return { result: "not-applicable", ...meta };
   }
 
-  return { result: "success" };
+  return { result: "success", ...meta };
 }

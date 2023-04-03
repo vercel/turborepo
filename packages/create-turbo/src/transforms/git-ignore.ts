@@ -2,6 +2,11 @@ import path from "path";
 import fs from "fs-extra";
 import { DEFAULT_IGNORE } from "../utils/git";
 import { TransformInput, TransformResult } from "./types";
+import { TransformError } from "./errors";
+
+const meta = {
+  name: "git-ignore",
+};
 
 export async function transform(args: TransformInput): TransformResult {
   const { prompts } = args;
@@ -10,11 +15,16 @@ export async function transform(args: TransformInput): TransformResult {
     if (!fs.existsSync(ignorePath)) {
       fs.writeFileSync(ignorePath, DEFAULT_IGNORE);
     } else {
-      return { result: "not-applicable" };
+      return { result: "not-applicable", ...meta };
     }
   } catch (err) {
-    return { result: "error" };
+    // existsSync cannot throw, so we don't need to narrow here and can
+    // assume this came from writeFileSync
+    throw new TransformError("Unable to write .gitignore", {
+      transform: meta.name,
+      fatal: false,
+    });
   }
 
-  return { result: "success" };
+  return { result: "success", ...meta };
 }
