@@ -1314,6 +1314,39 @@
 <a href="#1314" id="1314">1314</a>
 <a href="#1315" id="1315">1315</a>
 <a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -2241,6 +2274,39 @@
     path: <span class="kw-2">&amp;</span>Pattern,
     <span class="kw">_</span>: <span class="kw-2">&amp;</span>QueryMapVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="comment">// Check alias field for module aliases first
+    </span><span class="kw">for </span>in_package <span class="kw">in </span>options_value.in_package.iter() {
+        <span class="kw">match </span>in_package {
+            ResolveInPackage::AliasField(field) =&gt; {
+                <span class="kw">if let </span>FindContextFileResult::Found(package_json, refs) =
+                    <span class="kw-2">&amp;*</span>find_context_file(context, package_json()).<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    <span class="kw">if let </span>FileJsonContent::Content(package) = <span class="kw-2">&amp;*</span>package_json.read_json().<span class="kw">await</span><span class="question-mark">? </span>{
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package[field].as_object() {
+                            <span class="kw">let </span>package_path = package_json.parent();
+                            <span class="kw">let </span>full_pattern =
+                                Pattern::concat([module.to_string().into(), path.clone()]);
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = full_pattern.into_string() {
+                                <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = field_value.get(<span class="kw-2">&amp;</span>request) {
+                                    <span class="kw">return </span>resolve_alias_field_result(
+                                        value,
+                                        refs.clone(),
+                                        package_path,
+                                        options,
+                                        <span class="kw-2">*</span>package_json,
+                                        <span class="kw-2">&amp;</span>request,
+                                        field,
+                                    )
+                                    .<span class="kw">await</span>;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     <span class="kw">let </span>result = find_package(
         context,
         module.to_string(),

@@ -1022,6 +1022,15 @@
 <a href="#1022" id="1022">1022</a>
 <a href="#1023" id="1023">1023</a>
 <a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Display, mem::take};
 
 <span class="kw">use </span>anyhow::Result;
@@ -1177,6 +1186,15 @@
             }
         }
         <span class="self">Self</span>::Alternatives(list)
+    }
+
+    <span class="kw">pub fn </span>concat(items: <span class="kw">impl </span>IntoIterator&lt;Item = Pattern&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>items = items.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>current = items.next().unwrap_or_default();
+        <span class="kw">for </span>item <span class="kw">in </span>items {
+            current.push(item);
+        }
+        current
     }
 
     <span class="doccomment">/// Order into Alternatives -&gt; Concatenation -&gt; Constant/Dynamic
