@@ -2702,6 +2702,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "globwalk"
+version = "0.1.0"
+dependencies = [
+ "glob-match 0.2.1",
+ "turbopath",
+ "walkdir",
+]
+
+[[package]]
 name = "globwatch"
 version = "0.1.0"
 dependencies = [
@@ -9222,6 +9231,7 @@ version = "0.1.0"
 dependencies = [
  "cbindgen",
  "directories 4.0.1",
+ "globwalk",
  "prost",
  "prost-build",
  "thiserror",
