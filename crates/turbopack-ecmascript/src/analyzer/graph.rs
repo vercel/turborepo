@@ -249,7 +249,6 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
             current_value: Default::default(),
             cur_fn_return_values: Default::default(),
             cur_fn_ident: Default::default(),
-            cur_in_try: false,
         },
         &mut Default::default(),
     );
@@ -600,13 +599,12 @@ struct Analyzer<'a> {
     cur_fn_return_values: Option<Vec<JsValue>>,
 
     cur_fn_ident: u32,
-
-    cur_in_try: bool,
 }
 
 pub fn as_parent_path(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
 }
+
 pub fn as_parent_path_with(
     ast_path: &AstNodePath<AstParentNodeRef<'_>>,
     additional: AstParentKind,
@@ -616,6 +614,17 @@ pub fn as_parent_path_with(
         .map(|n| n.kind())
         .chain([additional].into_iter())
         .collect()
+}
+
+pub fn is_in_try(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> bool {
+    ast_path
+        .iter()
+        .fold(false, |in_try, ast_ref| match ast_ref.kind() {
+            AstParentKind::ArrowExpr(ArrowExprField::Body) => false,
+            AstParentKind::Function(FunctionField::Body) => false,
+            AstParentKind::TryStmt(TryStmtField::Block) => true,
+            _ => in_try,
+        })
 }
 
 impl Analyzer<'_> {
@@ -852,7 +861,7 @@ impl Analyzer<'_> {
                     args,
                     ast_path: as_parent_path(ast_path),
                     span: n.span(),
-                    in_try: self.cur_in_try,
+                    in_try: is_in_try(ast_path),
                 });
             }
             Callee::Expr(box expr) => {
@@ -874,7 +883,7 @@ impl Analyzer<'_> {
                         args,
                         ast_path: as_parent_path(ast_path),
                         span: n.span(),
-                        in_try: self.cur_in_try,
+                        in_try: is_in_try(ast_path),
                     });
                 } else {
                     let fn_value = self.eval_context.eval(expr);
@@ -883,7 +892,7 @@ impl Analyzer<'_> {
                         args,
                         ast_path: as_parent_path(ast_path),
                         span: n.span(),
-                        in_try: self.cur_in_try,
+                        in_try: is_in_try(ast_path),
                     });
                 }
             }
@@ -910,7 +919,7 @@ impl Analyzer<'_> {
             prop: prop_value,
             ast_path: as_parent_path(ast_path),
             span: member_expr.span(),
-            in_try: self.cur_in_try,
+            in_try: is_in_try(ast_path),
         });
     }
 
@@ -1093,7 +1102,7 @@ impl VisitAstPath for Analyzer<'_> {
                                     input: self.eval_context.eval(&args[0].expr),
                                     ast_path: as_parent_path(ast_path),
                                     span: new_expr.span(),
-                                    in_try: self.cur_in_try,
+                                    in_try: is_in_try(ast_path),
                                 });
                             }
                         }
@@ -1426,14 +1435,14 @@ impl VisitAstPath for Analyzer<'_> {
                 export,
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
-                in_try: self.cur_in_try,
+                in_try: is_in_try(ast_path),
             })
         } else if is_unresolved(ident, self.eval_context.unresolved_mark) {
             self.add_effect(Effect::FreeVar {
                 var: JsValue::FreeVar(ident.sym.clone()),
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
-                in_try: self.cur_in_try,
+                in_try: is_in_try(ast_path),
             })
         }
     }
@@ -1449,7 +1458,7 @@ impl VisitAstPath for Analyzer<'_> {
             self.add_effect(Effect::ImportMeta {
                 span: expr.span,
                 ast_path: as_parent_path(ast_path),
-                in_try: self.cur_in_try,
+                in_try: is_in_try(ast_path),
             })
         }
     }
@@ -1462,42 +1471,6 @@ impl VisitAstPath for Analyzer<'_> {
         self.effects = take(&mut self.data.effects);
         program.visit_children_with_path(self, ast_path);
         self.data.effects = take(&mut self.effects);
-    }
-
-    fn visit_try_stmt<'ast: 'r, 'r>(
-        &mut self,
-        stmt: &'ast TryStmt,
-        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
-    ) {
-        ast_path.with(
-            AstParentNodeRef::TryStmt(stmt, TryStmtField::Block),
-            |ast_path| {
-                let was_in_try = self.cur_in_try;
-                self.cur_in_try = true;
-
-                stmt.block.visit_with_path(self, ast_path);
-
-                self.cur_in_try = was_in_try;
-            },
-        );
-
-        if let Some(handler) = &stmt.handler {
-            ast_path.with(
-                AstParentNodeRef::TryStmt(stmt, TryStmtField::Handler),
-                |ast_path| {
-                    handler.visit_with_path(self, ast_path);
-                },
-            )
-        }
-
-        if let Some(finalizer) = &stmt.finalizer {
-            ast_path.with(
-                AstParentNodeRef::TryStmt(stmt, TryStmtField::Finalizer),
-                |ast_path| {
-                    finalizer.visit_with_path(self, ast_path);
-                },
-            )
-        }
     }
 
     fn visit_if_stmt<'ast: 'r, 'r>(
@@ -1597,7 +1570,7 @@ impl<'a> Analyzer<'a> {
                 kind: box cond_kind,
                 ast_path: as_parent_path_with(ast_path, ast_kind),
                 span,
-                in_try: self.cur_in_try,
+                in_try: is_in_try(ast_path),
             });
         }
     }
