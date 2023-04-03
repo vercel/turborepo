@@ -3,17 +3,28 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
-use crate::{absolute_system_path::AbsoluteSystemPath, IntoSystem, PathValidationError};
+use crate::{
+    absolute_system_path::AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem,
+    PathValidationError,
+};
+
 pub struct AbsoluteSystemPathBuf(PathBuf);
 
 impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: PathBuf) -> Result<Self, PathValidationError> {
         if !unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotAbsolute);
+            return Err(PathValidationError::NotAbsolute(unchecked_path));
         }
 
         let system_path = unchecked_path.into_system()?;
         Ok(AbsoluteSystemPathBuf(system_path))
+    }
+
+    pub fn anchor_at(
+        &self,
+        root: &AbsoluteSystemPath,
+    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
+        AnchoredSystemPathBuf::strip_root(root, &self.as_absolute_path())
     }
 
     pub fn new_unchecked(path: PathBuf) -> Self {
@@ -46,8 +57,8 @@ impl AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path))
     }
 
-    pub fn to_str(&self) -> Option<&str> {
-        self.0.to_str()
+    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+        self.0.to_str().ok_or(PathValidationError::NonUtf8)
     }
 
     pub fn file_name(&self) -> Option<&str> {

@@ -1,12 +1,19 @@
 mod absolute_system_path;
 mod absolute_system_path_buf;
+mod anchored_system_path_buf;
 mod relative_system_path;
 mod relative_system_path_buf;
 mod relative_unix_path_buf;
 
 use std::path::{Path, PathBuf};
 
+pub use absolute_system_path::AbsoluteSystemPath;
+pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
+pub use anchored_system_path_buf::AnchoredSystemPathBuf;
 use path_slash::{PathBufExt, PathExt};
+pub use relative_system_path::RelativeSystemPath;
+pub use relative_system_path_buf::RelativeSystemPathBuf;
+pub use relative_unix_path_buf::RelativeUnixPathBuf;
 use thiserror::Error;
 
 // Custom error type for path validation errors
@@ -14,10 +21,12 @@ use thiserror::Error;
 pub enum PathValidationError {
     #[error("Path is non-UTF-8")]
     NonUtf8,
-    #[error("Path is not absolute")]
-    NotAbsolute,
-    #[error("Path is not relative")]
-    NotRelative,
+    #[error("Path is not absolute: {0}")]
+    NotAbsolute(PathBuf),
+    #[error("Path is not relative: {0}")]
+    NotRelative(PathBuf),
+    #[error("Path {0} is not parent of {1}")]
+    NotParent(String, String),
 }
 
 trait IntoSystem {
@@ -37,6 +46,9 @@ impl IntoSystem for Path {
 }
 
 impl IntoUnix for Path {
+    /// NOTE: `into_unix` *only* converts Windows paths to Unix paths *on* a
+    /// Windows system. Do not pass a Windows path on a Unix system and
+    /// assume it'll be converted.
     fn into_unix(&self) -> Result<PathBuf, PathValidationError> {
         Ok(PathBuf::from(
             self.to_slash()

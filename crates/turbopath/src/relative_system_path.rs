@@ -8,6 +8,10 @@ use crate::relative_system_path_buf::RelativeSystemPathBuf;
 pub struct RelativeSystemPath<'a>(&'a Path);
 
 impl<'a> RelativeSystemPath<'a> {
+    /// Creates a `RelativeSystemPath` from a `Path` with *no* validation
+    /// Note that there is no safe way to create an `RelativeSystemPath`
+    /// because if the path separators need to be replaced, that would
+    /// require allocating a new `PathBuf`, which we cannot do.
     pub fn new_unchecked(path: &'a Path) -> Self {
         RelativeSystemPath(path)
     }

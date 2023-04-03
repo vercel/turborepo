@@ -5,12 +5,13 @@ use std::{
 
 use crate::{relative_system_path::RelativeSystemPath, IntoSystem, PathValidationError};
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeSystemPathBuf(PathBuf);
 
 impl RelativeSystemPathBuf {
     pub fn new(unchecked_path: PathBuf) -> Result<Self, PathValidationError> {
         if unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotRelative);
+            return Err(PathValidationError::NotRelative(unchecked_path));
         }
 
         let system_path = unchecked_path.into_system()?;
@@ -67,17 +68,5 @@ impl RelativeSystemPathBuf {
 impl fmt::Display for RelativeSystemPathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.display().fmt(f)
-    }
-}
-
-impl fmt::Debug for RelativeSystemPathBuf {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl PartialEq for RelativeSystemPathBuf {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }

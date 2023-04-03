@@ -5,8 +5,10 @@ use std::{
 
 use crate::{
     absolute_system_path_buf::AbsoluteSystemPathBuf, relative_system_path::RelativeSystemPath,
+    AnchoredSystemPathBuf, PathValidationError,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AbsoluteSystemPath<'a>(&'a Path);
 
 impl<'a> AbsoluteSystemPath<'a> {
@@ -25,6 +27,7 @@ impl<'a> AbsoluteSystemPath<'a> {
     ///
     /// ```
     ///  use std::path::Path;
+    /// use turbopath::AbsoluteSystemPath;
     ///  let path = AbsoluteSystemPath::new_unchecked(Path::new("/foo/bar"));
     ///  assert_eq!(path.to_str(), Some("/foo/bar"));
     ///  assert_eq!(path.file_name(), Some("bar"));
@@ -34,6 +37,19 @@ impl<'a> AbsoluteSystemPath<'a> {
     /// ```
     pub fn new_unchecked(path: &'a Path) -> Self {
         AbsoluteSystemPath(path)
+    }
+
+    pub fn anchor_at(
+        &self,
+        root: &AbsoluteSystemPath,
+    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
+        AnchoredSystemPathBuf::strip_root(root, self)
+    }
+
+    pub fn resolve(&self, anchored_path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
+        let new_path = self.0.join(anchored_path.as_path());
+
+        AbsoluteSystemPathBuf::new_unchecked(new_path)
     }
 
     pub fn as_path(&self) -> &Path {
@@ -62,8 +78,8 @@ impl<'a> AbsoluteSystemPath<'a> {
         AbsoluteSystemPathBuf::new_unchecked(new_path)
     }
 
-    pub fn to_str(&self) -> Option<&str> {
-        self.0.to_str()
+    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+        self.0.to_str().ok_or(PathValidationError::NonUtf8)
     }
 
     pub fn file_name(&self) -> Option<&str> {
@@ -78,17 +94,5 @@ impl<'a> AbsoluteSystemPath<'a> {
 impl<'a> fmt::Display for AbsoluteSystemPath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.display().fmt(f)
-    }
-}
-
-impl<'a> fmt::Debug for AbsoluteSystemPath<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl<'a> PartialEq for AbsoluteSystemPath<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }
