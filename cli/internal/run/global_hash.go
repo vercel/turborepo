@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
@@ -163,7 +163,7 @@ func getGlobalHashInputs(
 			return GlobalHashableInputs{}, err
 		}
 
-		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
+		f, err := ffi.Glob(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores, true)
 		if err != nil {
 			return GlobalHashableInputs{}, err
 		}

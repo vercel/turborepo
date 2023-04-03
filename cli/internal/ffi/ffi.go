@@ -336,3 +336,27 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 	hashes := resp.GetHashes()
 	return hashes.GetHashes(), nil
 }
+
+
+func Glob(basePath string, include []string, exclude []string, filesOnly bool) ([]string, error) {
+	req := ffi_proto.GlobReq{
+		BasePath:        basePath,
+		IncludePatterns: include,
+		ExcludePatterns: exclude,
+		FilesOnly:       filesOnly,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.glob(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GlobResp{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	return resp.GetFiles().Files, nil
+}

@@ -4,9 +4,13 @@
 package doublestar
 
 import (
+	"path"
 	"path/filepath"
 	"unicode/utf8"
 )
+
+// ErrBadPattern indicates a pattern was malformed.
+var ErrBadPattern = path.ErrBadPattern
 
 // Match reports whether name matches the shell pattern.
 // The pattern syntax is:
@@ -371,6 +375,26 @@ func indexMatchedClosingAlt(s string, allowEscaping bool) int {
 			if alts--; alts == 0 {
 				return i
 			}
+		}
+	}
+	return -1
+}
+
+// Finds the next comma, but ignores any commas that appear inside nested `{}`.
+// Assumes that each opening bracket has a corresponding closing bracket.
+func indexNextAlt(s string, allowEscaping bool) int {
+	alts := 1
+	l := len(s)
+	for i := 0; i < l; i++ {
+		if allowEscaping && s[i] == '\\' {
+			// skip next byte
+			i++
+		} else if s[i] == '{' {
+			alts++
+		} else if s[i] == '}' {
+			alts--
+		} else if s[i] == ',' && alts == 1 {
+			return i
 		}
 	}
 	return -1

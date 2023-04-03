@@ -13,8 +13,8 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -155,7 +155,7 @@ func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packa
 			prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
 		}
 	}
-	absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
+	absoluteFilesToHash, err := ffi.Glob(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns, true)
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)

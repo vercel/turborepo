@@ -14,8 +14,8 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -249,8 +249,6 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 	return fwc, nil
 }
 
-var _emptyIgnore []string
-
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
 func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
@@ -259,7 +257,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	filesToBeCached, err := globby.GlobAll(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions)
+	filesToBeCached, err := ffi.Glob(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions, false)
 	if err != nil {
 		return err
 	}

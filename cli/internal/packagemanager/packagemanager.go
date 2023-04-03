@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -101,7 +101,7 @@ func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsoluteSystemPath) ([
 		return nil, err
 	}
 
-	f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), justJsons, ignores)
+	f, err := ffi.Glob(rootpath.ToStringDuringMigration(), justJsons, ignores, true)
 	if err != nil {
 		return nil, err
 	}
