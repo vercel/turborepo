@@ -1,8 +1,6 @@
 use std::path::{Components, Path, PathBuf};
 
-use path_slash::PathBufExt;
-
-use crate::PathValidationError;
+use crate::{IntoUnix, PathValidationError};
 
 pub struct RelativeUnixPathBuf(PathBuf);
 
@@ -12,8 +10,7 @@ impl RelativeUnixPathBuf {
             return Err(PathValidationError::NotRelative);
         }
 
-        let path = path.to_slash().ok_or(PathValidationError::NonUtf8)?;
-        Ok(RelativeUnixPathBuf(PathBuf::from(path.to_string())))
+        Ok(RelativeUnixPathBuf(path.into_unix()?))
     }
 
     pub fn new_unchecked(path: PathBuf) -> Self {

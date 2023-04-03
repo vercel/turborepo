@@ -3,19 +3,26 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
+use crate::{relative_system_path::RelativeSystemPath, IntoSystem, PathValidationError};
+
 pub struct RelativeSystemPathBuf(PathBuf);
 
 impl RelativeSystemPathBuf {
-    pub fn new(path: PathBuf) -> Option<Self> {
-        if !path.is_absolute() {
-            Some(RelativeSystemPathBuf(path))
-        } else {
-            None
+    pub fn new(unchecked_path: PathBuf) -> Result<Self, PathValidationError> {
+        if unchecked_path.is_absolute() {
+            return Err(PathValidationError::NotRelative);
         }
+
+        let system_path = unchecked_path.into_system()?;
+        Ok(RelativeSystemPathBuf(system_path))
     }
 
     pub fn new_unchecked(path: PathBuf) -> Self {
         RelativeSystemPathBuf(path)
+    }
+
+    pub fn as_relative_path(&self) -> RelativeSystemPath {
+        RelativeSystemPath::new_unchecked(&self.0)
     }
 
     pub fn as_path(&self) -> &Path {

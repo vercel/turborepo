@@ -3,12 +3,12 @@ use std::{
     path::{Components, Path},
 };
 
-use crate::{relative_system_path_buf::RelativeSystemPathBuf, PathValidationError};
+use crate::relative_system_path_buf::RelativeSystemPathBuf;
 
 pub struct RelativeSystemPath<'a>(&'a Path);
 
 impl<'a> RelativeSystemPath<'a> {
-    fn new_unchecked(path: &'a Path) -> Self {
+    pub fn new_unchecked(path: &'a Path) -> Self {
         RelativeSystemPath(path)
     }
 

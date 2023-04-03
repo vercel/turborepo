@@ -3,23 +3,17 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
-use path_slash::PathBufExt;
-
-use crate::{absolute_system_path::AbsoluteSystemPath, PathValidationError};
-
+use crate::{absolute_system_path::AbsoluteSystemPath, IntoSystem, PathValidationError};
 pub struct AbsoluteSystemPathBuf(PathBuf);
 
 impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: PathBuf) -> Result<Self, PathValidationError> {
-        let path_str = unchecked_path
-            .to_str()
-            .ok_or(PathValidationError::NonUtf8)?;
-        let path = PathBuf::from_slash(path_str);
-        if path.is_absolute() {
-            Ok(AbsoluteSystemPathBuf(path))
-        } else {
-            Err(PathValidationError::NotAbsolute)
+        if !unchecked_path.is_absolute() {
+            return Err(PathValidationError::NotAbsolute);
         }
+
+        let system_path = unchecked_path.into_system()?;
+        Ok(AbsoluteSystemPathBuf(system_path))
     }
 
     pub fn new_unchecked(path: PathBuf) -> Self {
