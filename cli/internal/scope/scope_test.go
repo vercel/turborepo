@@ -507,7 +507,7 @@ func TestResolvePackages(t *testing.T) {
 			for _, path := range systemSeparatorChanged {
 				scm.contents[path] = nil
 			}
-			readLockfile := func(contents []byte) (lockfile.Lockfile, error) {
+			readLockfile := func(_rootPackageJSON *fs.PackageJSON, content []byte) (lockfile.Lockfile, error) {
 				return tc.prevLockfile, nil
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
