@@ -2,7 +2,6 @@ import retry from "async-retry";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
-import semverPrerelease from "semver/functions/prerelease";
 
 import {
   downloadAndExtractExample,
@@ -12,32 +11,30 @@ import {
   hasRepo,
   RepoInfo,
 } from "../../utils/examples";
-import { addGitIgnore } from "../../utils/git";
 import { isFolderEmpty } from "../../utils/isFolderEmpty";
 import { isWriteable } from "../../utils/isWriteable";
 import { turboLoader, error } from "../../logger";
-import cliPkgJson from "../../../package.json";
+import { isDefaultExample } from "../../utils/isDefaultExample";
 
 export class DownloadError extends Error {}
 
 export async function createProject({
   appPath,
-  projectName,
   example,
   examplePath,
 }: {
   appPath: string;
-  projectName: string;
   example: string;
   examplePath?: string;
 }): Promise<{
   cdPath: string;
   hasPackageJson: boolean;
   availableScripts: Array<string>;
+  repoInfo?: RepoInfo;
 }> {
   let repoInfo: RepoInfo | undefined;
   let repoUrl: URL | undefined;
-  const isDefaultExample = example === "basic" || example === "default";
+  const defaultExample = isDefaultExample(example);
 
   try {
     repoUrl = new URL(example);
@@ -62,7 +59,7 @@ export async function createProject({
 
     if (!repoInfo) {
       error(
-        `Found invalid GitHub URL: ${chalk.red(
+        `Unable to fetch repository information from: ${chalk.red(
           `"${example}"`
         )}. Please fix the URL and try again.`
       );
@@ -133,7 +130,6 @@ export async function createProject({
   const loader = turboLoader("Downloading files...");
   try {
     if (repoInfo) {
-      const repoInfo2 = repoInfo;
       console.log(
         `\nDownloading files from repo ${chalk.cyan(
           example
@@ -141,13 +137,13 @@ export async function createProject({
       );
       console.log();
       loader.start();
-      await retry(() => downloadAndExtractRepo(root, repoInfo2), {
+      await retry(() => downloadAndExtractRepo(root, repoInfo as RepoInfo), {
         retries: 3,
       });
     } else {
       console.log(
         `\nDownloading files${
-          !isDefaultExample ? ` for example ${chalk.cyan(example)}` : ""
+          !defaultExample ? ` for example ${chalk.cyan(example)}` : ""
         }. This might take a moment.`
       );
       console.log();
@@ -170,21 +166,8 @@ export async function createProject({
   }
 
   const rootPackageJsonPath = path.join(root, "package.json");
-  const rootMetaJsonPath = path.join(root, "meta.json");
-  const ignorePath = path.join(root, ".gitignore");
   const hasPackageJson = fs.existsSync(rootPackageJsonPath);
-  const isTurboExample =
-    repoInfo && repoInfo.username === "vercel" && repoInfo.name === "turbo";
   const availableScripts = [];
-
-  // remove the meta file from turbo examples
-  if (isTurboExample || !repoInfo) {
-    try {
-      fs.rmSync(rootMetaJsonPath, { force: true });
-    } catch (err) {
-      //  ignore
-    }
-  }
 
   if (hasPackageJson) {
     let packageJsonContent;
@@ -194,38 +177,16 @@ export async function createProject({
       // ignore
     }
 
-    // if using the basic example, set the name to the project name (legacy behavior)
     if (packageJsonContent) {
-      if (isDefaultExample) {
-        packageJsonContent.name = projectName;
-      }
-
-      // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
-      const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
-      if (shouldUsePreRelease && packageJsonContent?.devDependencies?.turbo) {
-        packageJsonContent.devDependencies.turbo = "canary";
-      }
-
-      try {
-        fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
-          spaces: 2,
-        });
-      } catch (err) {
-        // ignore
-      }
-
       // read the scripts from the package.json
       availableScripts.push(...Object.keys(packageJsonContent.scripts || {}));
     }
   }
-
-  // Copy `.gitignore` if the application did not provide one
-  addGitIgnore(ignorePath);
 
   let cdPath: string = appPath;
   if (path.join(originalDirectory, appName) === appPath) {
     cdPath = appName;
   }
 
-  return { cdPath, hasPackageJson, availableScripts };
+  return { cdPath, hasPackageJson, availableScripts, repoInfo };
 }

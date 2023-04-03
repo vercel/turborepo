@@ -6,7 +6,6 @@ import {
   isInGitRepository,
   isInMercurialRepository,
   tryGitInit,
-  addGitIgnore,
 } from "../src/utils/git";
 import childProcess from "child_process";
 import { setupTestFixtures } from "turbo-test-utils";
@@ -135,7 +134,7 @@ describe("git", () => {
         })
         .mockReturnValue("success");
 
-      const result = tryGitInit(root);
+      const result = tryGitInit(root, "test commit");
       expect(result).toBe(true);
 
       const calls = [
@@ -143,7 +142,7 @@ describe("git", () => {
         "git init",
         "git checkout -b main",
         "git add -A",
-        'git commit -m "Initial commit from create-turbo"',
+        'git commit -m "test commit"',
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);
       calls.forEach((call) => {
@@ -162,7 +161,7 @@ describe("git", () => {
         .mockReturnValueOnce("true")
         .mockReturnValue("success");
 
-      const result = tryGitInit(root);
+      const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
       const calls = ["git --version"];
@@ -185,7 +184,7 @@ describe("git", () => {
           throw new Error("fatal: unknown command git");
         });
 
-      const result = tryGitInit(root);
+      const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
       const calls = ["git --version"];
@@ -218,7 +217,7 @@ describe("git", () => {
           throw new Error("fatal: could not add files");
         });
 
-      const result = tryGitInit(root);
+      const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
       const calls = [
@@ -235,19 +234,6 @@ describe("git", () => {
         });
       });
       mockExecSync.mockRestore();
-    });
-  });
-
-  describe("addGitIgnore", () => {
-    const { useFixture } = setupTestFixtures({
-      directory: path.join(__dirname, "../"),
-    });
-
-    it("adds git ignore when it doesn't exist", async () => {
-      const { root, read } = useFixture({ fixture: `git` });
-      expect(read(".gitignore")).toEqual(undefined);
-      addGitIgnore(path.join(root, ".gitignore"));
-      expect(read(".gitignore")).toMatch(DEFAULT_IGNORE);
     });
   });
 });

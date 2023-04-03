@@ -28,7 +28,8 @@ export async function getRepoInfo(
   url: URL,
   examplePath?: string
 ): Promise<RepoInfo | undefined> {
-  const [, username, name, t, _branch, ...file] = url.pathname.split("/");
+  const [, username, name, tree, sourceBranch, ...file] =
+    url.pathname.split("/");
   const filePath = examplePath
     ? examplePath.replace(/^\//, "")
     : file.join("/");
@@ -36,11 +37,11 @@ export async function getRepoInfo(
   if (
     // Support repos whose entire purpose is to be a Turborepo example, e.g.
     // https://github.com/:username/:my-cool-turborepo-example-repo-name.
-    t === undefined ||
+    tree === undefined ||
     // Support GitHub URL that ends with a trailing slash, e.g.
     // https://github.com/:username/:my-cool-turborepo-example-repo-name/
     // In this case "t" will be an empty string while the turbo part "_branch" will be undefined
-    (t === "" && _branch === undefined)
+    (tree === "" && sourceBranch === undefined)
   ) {
     try {
       const infoResponse = await got(
@@ -55,10 +56,13 @@ export async function getRepoInfo(
 
   // If examplePath is available, the branch name takes the entire path
   const branch = examplePath
-    ? `${_branch}/${file.join("/")}`.replace(new RegExp(`/${filePath}|/$`), "")
-    : _branch;
+    ? `${sourceBranch}/${file.join("/")}`.replace(
+        new RegExp(`/${filePath}|/$`),
+        ""
+      )
+    : sourceBranch;
 
-  if (username && name && branch && t === "tree") {
+  if (username && name && branch && tree === "tree") {
     return { username, name, branch, filePath };
   }
 }

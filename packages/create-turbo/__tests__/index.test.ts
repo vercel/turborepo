@@ -1,5 +1,6 @@
 import path from "path";
 import chalk from "chalk";
+import childProcess from "child_process";
 import { setupTestFixtures, spyConsole } from "turbo-test-utils";
 import { create } from "../src/commands/create";
 import type { CreateCommandArgument } from "../src/commands/create/types";
@@ -51,6 +52,12 @@ describe("create-turbo", () => {
           })
         );
 
+      const mockExecSync = jest
+        .spyOn(childProcess, "execSync")
+        .mockImplementation(() => {
+          return "success";
+        });
+
       await create(
         root as CreateCommandArgument,
         packageManager as CreateCommandArgument,
@@ -77,6 +84,7 @@ describe("create-turbo", () => {
 
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
+      mockExecSync.mockRestore();
     }
   );
 });

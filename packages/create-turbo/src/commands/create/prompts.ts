@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs-extra";
 import chalk from "chalk";
 import type { PackageManager } from "@turbo/workspaces";
-import type { CreateCommandArgument } from "./types";
+import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 import { getAvailablePackageManagers } from "turbo-utils";
 import { isFolderEmpty } from "../../utils/isFolderEmpty";
 import inquirer from "inquirer";
@@ -77,9 +77,16 @@ export async function directory({
 
 export async function packageManager({
   packageManager,
+  skipTransforms,
 }: {
   packageManager: CreateCommandArgument;
+  skipTransforms?: boolean;
 }) {
+  // if skip transforms is passed, we don't need to ask about the package manager (because that requires a transform)
+  if (skipTransforms) {
+    return undefined;
+  }
+
   const availablePackageManagers = await getAvailablePackageManagers();
   const packageManagerAnswer = await inquirer.prompt<{
     packageManagerInput?: PackageManager;
@@ -98,6 +105,7 @@ export async function packageManager({
         : `not installed`,
     })),
   });
+
   const {
     packageManagerInput:
       selectedPackageManager = packageManager as PackageManager,

@@ -19,7 +19,12 @@ createTurboCli
   .argument("[package-manager]")
   .option(
     "--skip-install",
-    "Do not run a package manager install after conversion",
+    "Do not run a package manager install after creating the project",
+    false
+  )
+  .option(
+    "--skip-transforms",
+    "Do not run any code transformation after creating the project",
     false
   )
   .option(
@@ -31,7 +36,7 @@ createTurboCli
 `
   )
   .option(
-    "--example-path <path-to-example>",
+    "-p, --example-path <path-to-example>",
     `
   In a rare case, your GitHub URL might contain a branch name with
   a slash (e.g. bug/fix-1) and the path to the example (e.g. foo/bar).

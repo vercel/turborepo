@@ -2,18 +2,19 @@ import path from "path";
 import chalk from "chalk";
 import type { Project } from "@turbo/workspaces";
 import {
-  convert,
   getWorkspaceDetails,
   install,
   getPackageManagerMeta,
   ConvertError,
 } from "@turbo/workspaces";
+import { getAvailablePackageManagers } from "turbo-utils";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 import * as prompts from "./prompts";
 import { createProject } from "./createProject";
-import { tryGitInit } from "../../utils/git";
+import { tryGitCommit, tryGitInit } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
-import { turboGradient, turboLoader, info, error } from "../../logger";
+import { transforms } from "../../transforms";
+import { turboGradient, turboLoader, info, error, warn } from "../../logger";
 
 function handleWorkspaceErrors(err: unknown) {
   if (err instanceof ConvertError && err.type !== "unknown") {
@@ -37,11 +38,12 @@ export async function create(
   packageManager: CreateCommandArgument,
   opts: CreateCommandOptions
 ) {
-  const { skipInstall } = opts;
+  const { skipInstall, skipTransforms } = opts;
   console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
   console.log();
 
+  const availablePackageManagers = await getAvailablePackageManagers();
   const online = await isOnline();
   if (!online) {
     error(
@@ -53,18 +55,28 @@ export async function create(
   const relativeProjectDir = path.relative(process.cwd(), root);
   const projectDirIsCurrentDir = relativeProjectDir === "";
 
+  // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
     packageManager,
+    skipTransforms,
   });
+
+  if (packageManager && opts.skipTransforms) {
+    warn(
+      '"--skip-transforms" flag conflicts with the package manager argument. The package manager argument will be ignored.'
+    );
+  }
 
   const { example, examplePath } = opts;
-
-  const { hasPackageJson, availableScripts } = await createProject({
+  const exampleName = example && example !== "default" ? example : "basic";
+  const { hasPackageJson, availableScripts, repoInfo } = await createProject({
     appPath: root,
-    projectName,
-    example: example && example !== "default" ? example : "basic",
+    example: exampleName,
     examplePath,
   });
+
+  // create a new git repo after creating the project
+  tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
 
   let project: Project = {} as Project;
   try {
@@ -73,20 +85,45 @@ export async function create(
     handleWorkspaceErrors(err);
   }
 
-  if (project.packageManager !== selectedPackageManagerDetails.name) {
-    try {
-      await convert({
-        root,
-        to: selectedPackageManagerDetails.name,
-        options: {
-          // skip install after conversion- we will do it later
-          skipInstall: true,
-        },
-      });
-    } catch (err) {
-      handleWorkspaceErrors(err);
+  let successfulTransforms = 0;
+  if (!skipTransforms) {
+    for (const transform of transforms) {
+      try {
+        const result = await transform({
+          example: {
+            repo: repoInfo,
+            name: exampleName,
+          },
+          project,
+          prompts: {
+            projectName,
+            root,
+            packageManager: selectedPackageManagerDetails,
+          },
+          opts,
+        });
+        if (result.result === "success") {
+          successfulTransforms += 1;
+        }
+      } catch (err) {
+        handleWorkspaceErrors(err);
+      }
     }
   }
+
+  if (successfulTransforms > 0) {
+    // create a second commit after running transforms
+    tryGitCommit("feat(create-turbo): apply transforms");
+  }
+
+  // if the user opted out of transforms, the package manager will be the same as the example
+  const projectPackageManager =
+    skipTransforms || !selectedPackageManagerDetails
+      ? {
+          name: project.packageManager,
+          version: availablePackageManagers[project.packageManager].version,
+        }
+      : selectedPackageManagerDetails;
 
   info("Created a new Turborepo with the following:");
   console.log();
@@ -115,24 +152,35 @@ export async function create(
   }
 
   console.log();
-
   if (hasPackageJson && !skipInstall) {
-    console.log("Installing packages. This might take a couple of minutes.");
-    console.log();
+    if (
+      opts.skipTransforms &&
+      !availablePackageManagers[project.packageManager].available
+    ) {
+      warn(
+        `Unable to install dependencies - "${exampleName}" uses "${project.packageManager}" which could not be found.`
+      );
+      warn(
+        `Try running without "--skip-transforms" to convert "${exampleName}" to a package manager that is available on your system.`
+      );
+      console.log();
+    } else if (selectedPackageManagerDetails) {
+      console.log("Installing packages. This might take a couple of minutes.");
+      console.log();
 
-    const loader = turboLoader("Installing dependencies...").start();
-    await install({
-      project,
-      to: selectedPackageManagerDetails,
-      options: {
-        interactive: false,
-      },
-    });
-    loader.stop();
+      const loader = turboLoader("Installing dependencies...").start();
+      await install({
+        project,
+        to: selectedPackageManagerDetails,
+        options: {
+          interactive: false,
+        },
+      });
+
+      tryGitCommit("feat(create-turbo): install dependencies");
+      loader.stop();
+    }
   }
-
-  // once we're done moving things around, init a new repo
-  tryGitInit(root);
 
   if (projectDirIsCurrentDir) {
     console.log(
@@ -140,20 +188,22 @@ export async function create(
         turboGradient(">>> Success!")
       )} Your new Turborepo is ready.`
     );
-    console.log("Inside this directory, you can run several commands:");
   } else {
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Created a new Turborepo at "${relativeProjectDir}".`
     );
-    console.log("Inside that directory, you can run several commands:");
   }
 
-  const packageManagerMeta = getPackageManagerMeta(
-    selectedPackageManagerDetails
-  );
+  // find the right package manager details to display in log messages
+  const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
+    if (projectDirIsCurrentDir) {
+      console.log("Inside this directory, you can run several commands:");
+    } else {
+      console.log("Inside that directory, you can run several commands:");
+    }
     console.log();
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])

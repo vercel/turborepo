@@ -49,7 +49,7 @@ export function isInMercurialRepository(): boolean {
   return false;
 }
 
-export function tryGitInit(root: string): boolean {
+export function tryGitInit(root: string, message: string): boolean {
   let didInit = false;
   try {
     execSync("git --version", { stdio: "ignore" });
@@ -63,7 +63,7 @@ export function tryGitInit(root: string): boolean {
     execSync("git checkout -b main", { stdio: "ignore" });
 
     execSync("git add -A", { stdio: "ignore" });
-    execSync('git commit -m "Initial commit from create-turbo"', {
+    execSync(`git commit -m "${message}"`, {
       stdio: "ignore",
     });
     return true;
@@ -77,12 +77,14 @@ export function tryGitInit(root: string): boolean {
   }
 }
 
-export function addGitIgnore(ignorePath: string): void {
+export function tryGitCommit(message: string): boolean {
   try {
-    if (!fs.existsSync(ignorePath)) {
-      fs.writeFileSync(ignorePath, DEFAULT_IGNORE);
-    }
+    execSync("git add -A", { stdio: "ignore" });
+    execSync(`git commit -m "${message}"`, {
+      stdio: "ignore",
+    });
+    return true;
   } catch (err) {
-    // ignore
+    return false;
   }
 }
