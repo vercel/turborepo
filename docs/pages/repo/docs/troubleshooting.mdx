@@ -23,9 +23,10 @@ the hood.
 You can [get started][7] with Turborepo with minimal configuration -- that's one
 of the things people love about Turborepo! But when you omit configuration,
 Turborepo internally uses a default value. Additionally, when using
-[Workspace Configurations][d-config-workspaces] in a monorepo, it can be confusing to understand
-how Turborepo interpreted your `turbo.json`. You can use the `--dry` or `--dry=json` to
-get a "resolved" task configuration for any task. For example:
+[Workspace Configurations][d-config-workspaces] in a monorepo, it can be
+confusing to understand how Turborepo interpreted your `turbo.json`. You can use
+the `--dry` or `--dry=json` to get a "resolved" task configuration for any task.
+For example:
 
 ```bash
 turbo run build --dry=json
@@ -68,7 +69,7 @@ directions even if you aren't planning to make a contribution.
 
 ## Common Pitfalls
 
-### `.turbo`
+### The `.turbo` directory
 
 One of the [core concepts][2] behind Turbo is that when a declared input
 changes, the cached outputs for that task are invalidated. As part of running any task,
@@ -90,31 +91,36 @@ the latter.
 ### I'm not seeing any cache hits
 
 - Is any source code being generated during the build that isn't checked into git?
-  - This would change the fingerprint Turborepo uses to store build outputs.
+
+  This would change the fingerprint Turborepo uses to store build outputs.
+
 - Are [cache outputs correctly specified][d-config-outputs] in your Turborepo [pipeline][d-def-pipeline]?
-  - Pipeline settings are not inherited or merged, so they need to be
-    re-specified in [workspace-specific tasks][d-workspace-tasks] (e.g. `web#build` does
-    **not** inherit pipeline settings from `build`).
+
+  Pipeline settings are not inherited or merged, so they need to be
+  re-specified in [workspace-specific tasks][d-workspace-tasks] (e.g. `web#build` does
+  **not** inherit pipeline settings from `build`).
+
 - [Are relevant inlined environment variables accounted for?][12]
-  - To verify, run `turbo` in verbose mode by adding `-vvv` to
-    `turbo run <task>` and look at which environment variables are included in
-    the hashes.
+
+  To verify, run `turbo` in verbose mode by adding `-vvv` to
+  `turbo run <task>` and look at which environment variables are included in
+  the hashes.
 
 ### I'm seeing cache hits, but my build is broken
 
 - Are [cache outputs properly specified][d-config-outputs] in your Turborepo [pipeline][d-def-pipeline]?
-  - Pipeline settings are not inherited or merged, so they need to be
-    re-specified in [workspace-specific tasks][d-workspace-tasks] (e.g. `web#build` does
-    **not** inherit pipeline settings from `build`).
+
+  Pipeline settings are not inherited or merged, so they need to be
+  re-specified in [workspace-specific tasks][d-workspace-tasks] (e.g. `web#build` does
+  **not** inherit pipeline settings from `build`).
 
 ### My build is caching the wrong environment variables
 
 - [Are relevant inlined environment variables accounted for?][12]
-  - To verify, run `turbo` in verbose mode by adding `-vvv` to
-    `turbo run <task>` and look at which environment variables are included in
-    the hashes.
+  - To verify, [enable verbose logging][5], and look at which environment variables
+    are included in the hashes.
 
-## General Monorepo Questions
+## Common Monorepo Questions
 
 ### My dependency isn't being built correctly
 
@@ -137,6 +143,7 @@ the latter.
 [2]: /repo/docs/core-concepts/caching
 [3]: #build-from-source
 [4]: https://github.com/vercel/turbo/blob/main/CONTRIBUTING.md
+[5]: #enable-verbose-logs
 [7]: /repo/docs/getting-started
 [9]: /repo/docs/reference/command-line-reference#turbo-link
 [12]: /repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables
