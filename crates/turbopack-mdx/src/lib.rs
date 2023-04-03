@@ -1,8 +1,11 @@
 #![feature(min_specialization)]
 
 use anyhow::{anyhow, Result};
-use mdxjs::compile;
-use turbo_tasks::{primitives::StringVc, Value};
+use mdxjs::{compile, Options};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    Value,
+};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
@@ -31,12 +34,37 @@ fn modifier() -> StringVc {
     StringVc::cell("mdx".to_string())
 }
 
+/// Subset of mdxjs::Options to allow to inherit turbopack's jsx-related configs
+/// into mdxjs.
+#[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+pub struct MdxTransformOptions {
+    pub development: bool,
+    pub preserve_jsx: bool,
+    pub jsx_runtime: OptionStringVc,
+    pub jsx_import_source: OptionStringVc,
+    pub filepath: Option<FileSystemPathVc>,
+}
+
+impl Default for MdxTransformOptions {
+    fn default() -> Self {
+        Self {
+            development: true,
+            preserve_jsx: false,
+            jsx_runtime: OptionStringVc::cell(None),
+            jsx_import_source: OptionStringVc::cell(None),
+            filepath: None,
+        }
+    }
+}
+
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
 pub struct MdxModuleAsset {
     source: AssetVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
+    options: MdxTransformOptions,
 }
 
 /// MDX components should be treated as normal j|tsx components to analyze
@@ -49,6 +77,7 @@ async fn into_ecmascript_module_asset(
 ) -> Result<EcmascriptModuleAssetVc> {
     let content = current_context.content();
     let this = current_context.await?;
+    let transform_options = this.options;
 
     let AssetContent::File(file) = &*content.await? else {
         anyhow::bail!("Unexpected mdx asset content");
@@ -58,9 +87,35 @@ async fn into_ecmascript_module_asset(
         anyhow::bail!("Not able to read mdx file content");
     };
 
+    let jsx_runtime = if let Some(runtime) = &*transform_options.jsx_runtime.await? {
+        match runtime.as_str() {
+            "automatic" => Some(mdxjs::JsxRuntime::Automatic),
+            "classic" => Some(mdxjs::JsxRuntime::Classic),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    let filepath = if let Some(filepath) = transform_options.filepath {
+        Some(filepath.await?.path.clone())
+    } else {
+        None
+    };
+
+    let options = Options {
+        development: transform_options.development,
+        jsx: transform_options.preserve_jsx, // true means 'preserve' jsx syntax.
+        jsx_runtime,
+        jsx_import_source: transform_options.jsx_import_source.await?.clone_value(),
+        filepath,
+        ..Default::default()
+    };
     // TODO: upstream mdx currently bubbles error as string
     let mdx_jsx_component =
-        compile(&file.content().to_str()?, &Default::default()).map_err(|e| anyhow!("{}", e))?;
+        compile(&file.content().to_str()?, &options).map_err(|e| anyhow!("{}", e))?;
+
+    println!("MDX JSX: {:#?} {}", options, mdx_jsx_component);
 
     let source = VirtualAssetVc::new_with_ident(
         this.source.ident(),
@@ -83,11 +138,13 @@ impl MdxModuleAssetVc {
         source: AssetVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
+        options: Value<MdxTransformOptions>,
     ) -> Self {
         Self::cell(MdxModuleAsset {
             source,
             context,
             transforms,
+            options: options.into_value(),
         })
     }
 
