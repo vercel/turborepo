@@ -58,7 +58,7 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn to_str(&self) -> Result<&str, PathValidationError> {
-        self.0.to_str().ok_or(PathValidationError::NonUtf8)
+        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 
     pub fn file_name(&self) -> Option<&str> {

@@ -52,8 +52,8 @@ impl RelativeSystemPathBuf {
         RelativeSystemPathBuf(self.0.join(path))
     }
 
-    pub fn to_str(&self) -> Option<&str> {
-        self.0.to_str()
+    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 
     pub fn file_name(&self) -> Option<&str> {

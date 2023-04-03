@@ -20,7 +20,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum PathValidationError {
     #[error("Path is non-UTF-8")]
-    NonUtf8,
+    InvalidUnicode,
     #[error("Path is not absolute: {0}")]
     NotAbsolute(PathBuf),
     #[error("Path is not relative: {0}")]
@@ -39,7 +39,7 @@ trait IntoUnix {
 
 impl IntoSystem for Path {
     fn into_system(&self) -> Result<PathBuf, PathValidationError> {
-        let path_str = self.to_str().ok_or(PathValidationError::NonUtf8)?;
+        let path_str = self.to_str().ok_or(PathValidationError::InvalidUnicode)?;
 
         Ok(PathBuf::from_slash(path_str))
     }
@@ -52,7 +52,7 @@ impl IntoUnix for Path {
     fn into_unix(&self) -> Result<PathBuf, PathValidationError> {
         Ok(PathBuf::from(
             self.to_slash()
-                .ok_or(PathValidationError::NonUtf8)?
+                .ok_or(PathValidationError::InvalidUnicode)?
                 .as_ref(),
         ))
     }

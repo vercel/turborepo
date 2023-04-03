@@ -3,7 +3,7 @@ use std::{
     path::{Components, Path},
 };
 
-use crate::relative_system_path_buf::RelativeSystemPathBuf;
+use crate::{relative_system_path_buf::RelativeSystemPathBuf, PathValidationError};
 
 pub struct RelativeSystemPath<'a>(&'a Path);
 
@@ -40,8 +40,8 @@ impl<'a> RelativeSystemPath<'a> {
         RelativeSystemPathBuf::new_unchecked(self.0.join(path.as_ref().as_path()))
     }
 
-    pub fn to_str(&self) -> Option<&str> {
-        self.0.to_str()
+    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 
     pub fn file_name(&self) -> Option<&str> {
