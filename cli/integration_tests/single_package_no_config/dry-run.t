@@ -34,14 +34,14 @@ Check
     "id": "[a-zA-Z0-9]+", (re)
     "version": "0",
     "turboVersion": "[a-z0-9\.-]+", (re)
-    "globalHashSummary": {
-      "globalFileHashMap": {
+    "globalCacheInputs": {
+      "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+      "files": {
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
         "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
       },
-      "rootExternalDepsHash": "",
-      "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
-      "pipeline": {
+      "hashOfExternalDependencies": "",
+      "rootPipeline": {
         "//#build": {
           "outputs": [],
           "cache": false,
@@ -57,12 +57,18 @@ Check
       {
         "task": "build",
         "hash": "c7223f212c321d3b",
-        "cacheState": {
+        "inputs": {
+          ".gitignore": "38548b0538f2fc563d6bacf70dd42798c6fd9a35",
+          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
+        },
+        "hashOfExternalDependencies": "",
+        "cache": {
           "local": false,
           "remote": false
         },
         "command": "echo 'building'",
-        "commandArguments": [],
+        "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
@@ -77,11 +83,6 @@ Check
           "env": [],
           "persistent": false
         },
-        "expandedInputs": {
-          ".gitignore": "38548b0538f2fc563d6bacf70dd42798c6fd9a35",
-          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
-          "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
-        },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "environmentVariables": {
@@ -90,8 +91,7 @@ Check
           "global": [
             "VERCEL_ANALYTICS_ID="
           ]
-        },
-        "hashOfExternalDependencies": ""
+        }
       }
     ]
   }
