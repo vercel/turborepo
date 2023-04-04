@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use git2::{DiffFormat, DiffOptions, Repository};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::Error;
 
@@ -29,18 +29,13 @@ pub fn changed_files(
     let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(
-        &git_root.as_absolute_path(),
-        &repo,
-        &turbo_root.as_absolute_path(),
-        &mut files,
-    )?;
+    add_changed_files_from_unstaged_changes(&git_root, &repo, &turbo_root, &mut files)?;
 
     if let Some((from_commit, to_commit)) = commit_range {
         add_changed_files_from_commits(
-            &git_root.as_absolute_path(),
+            &git_root,
             &repo,
-            &turbo_root.as_absolute_path(),
+            &turbo_root,
             &mut files,
             from_commit,
             to_commit,
@@ -51,16 +46,16 @@ pub fn changed_files(
 }
 
 fn add_changed_files_from_unstaged_changes(
-    repo_root: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
-    turbo_root: &AbsoluteSystemPath,
+    turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
 ) -> Result<(), Error> {
     let mut options = DiffOptions::new();
     options.include_untracked(true);
     options.recurse_untracked_dirs(true);
 
-    let anchored_turbo_root = turbo_root.anchor_at(repo_root)?;
+    let anchored_turbo_root = repo_root.anchor(turbo_root)?;
     options.pathspec(anchored_turbo_root.to_str()?.to_string());
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
@@ -70,7 +65,7 @@ fn add_changed_files_from_unstaged_changes(
         if let Some(file_path) = file.path() {
             let anchored_to_repo_root_file_path: AnchoredSystemPathBuf = file_path.try_into()?;
             let absolute_file_path = repo_root.resolve(&anchored_to_repo_root_file_path);
-            let anchored_to_turbo_root_file_path = absolute_file_path.anchor_at(turbo_root)?;
+            let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
             files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
         }
     }
@@ -79,9 +74,9 @@ fn add_changed_files_from_unstaged_changes(
 }
 
 fn add_changed_files_from_commits(
-    repo_root: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
-    turbo_root: &AbsoluteSystemPath,
+    turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
     from_commit: &str,
     to_commit: &str,
@@ -94,7 +89,7 @@ fn add_changed_files_from_commits(
     let to_tree = to_commit.tree()?;
 
     let mut options = DiffOptions::new();
-    let anchored_turbo_root = turbo_root.anchor_at(repo_root)?;
+    let anchored_turbo_root = repo_root.anchor(turbo_root)?;
     options.pathspec(anchored_turbo_root.to_str()?);
 
     let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
@@ -105,7 +100,7 @@ fn add_changed_files_from_commits(
         if let Some(file_path) = file.path() {
             let anchored_to_repo_root_file_path: AnchoredSystemPathBuf = file_path.try_into()?;
             let absolute_file_path = repo_root.resolve(&anchored_to_repo_root_file_path);
-            let anchored_to_turbo_root_file_path = absolute_file_path.anchor_at(turbo_root)?;
+            let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
             files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
         }
     }
@@ -135,7 +130,7 @@ pub fn previous_content(
     let from_commit = from_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
 
-    let relative_path = file_path.anchor_at(&repo_root.as_absolute_path())?;
+    let relative_path = repo_root.anchor(&file_path)?;
 
     let file = from_tree.get_path(relative_path.as_path())?;
     let blob = repo.find_blob(file.id())?;

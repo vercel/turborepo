@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::{absolute_system_path::AbsoluteSystemPath, IntoSystem, PathValidationError};
+use crate::{AbsoluteSystemPathBuf, IntoSystem, PathValidationError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct AnchoredSystemPathBuf(PathBuf);
@@ -19,8 +19,8 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
 
 impl AnchoredSystemPathBuf {
     pub fn strip_root(
-        root: &AbsoluteSystemPath,
-        path: &AbsoluteSystemPath,
+        root: &AbsoluteSystemPathBuf,
+        path: &AbsoluteSystemPathBuf,
     ) -> Result<Self, PathValidationError> {
         let stripped_path = path
             .as_path()
@@ -31,8 +31,8 @@ impl AnchoredSystemPathBuf {
         Ok(AnchoredSystemPathBuf(stripped_path))
     }
 
-    pub fn new_unchecked(path: PathBuf) -> Self {
-        AnchoredSystemPathBuf(path)
+    pub fn new_unchecked(path: impl Into<PathBuf>) -> Self {
+        AnchoredSystemPathBuf(path.into())
     }
 
     pub fn as_path(&self) -> &Path {

@@ -3,15 +3,13 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
-use crate::{
-    absolute_system_path::AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem,
-    PathValidationError,
-};
+use crate::{AnchoredSystemPathBuf, IntoSystem, PathValidationError};
 
 pub struct AbsoluteSystemPathBuf(PathBuf);
 
 impl AbsoluteSystemPathBuf {
-    pub fn new(unchecked_path: PathBuf) -> Result<Self, PathValidationError> {
+    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
+        let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
             return Err(PathValidationError::NotAbsolute(unchecked_path));
         }
@@ -20,19 +18,48 @@ impl AbsoluteSystemPathBuf {
         Ok(AbsoluteSystemPathBuf(system_path))
     }
 
-    pub fn anchor_at(
-        &self,
-        root: &AbsoluteSystemPath,
-    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
-        AnchoredSystemPathBuf::strip_root(root, &self.as_absolute_path())
-    }
-
-    pub fn new_unchecked(path: PathBuf) -> Self {
+    pub fn new_unchecked(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
         AbsoluteSystemPathBuf(path)
     }
 
-    pub fn as_absolute_path(&self) -> AbsoluteSystemPath {
-        AbsoluteSystemPath::new_unchecked(self.0.as_path())
+    /// Resolves `path` with `self` as anchor.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to be anchored at `self`
+    ///
+    /// returns: AbsoluteSystemPathBuf
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// ```
+    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf(self.0.join(path.as_path()))
+    }
+
+    /// Anchors `path` at `self`.
+    ///
+    /// # Arguments
+    ///
+    /// * `root`:
+    ///
+    /// returns: Result<AnchoredSystemPathBuf, PathValidationError>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// ```
+    pub fn anchor(
+        &self,
+        path: &AbsoluteSystemPathBuf,
+    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
+        AnchoredSystemPathBuf::strip_root(&self, path)
+    }
+
+    pub fn as_path(&self) -> &Path {
+        self.0.as_path()
     }
 
     pub fn components(&self) -> Components<'_> {

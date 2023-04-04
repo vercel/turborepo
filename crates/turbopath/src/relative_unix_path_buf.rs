@@ -22,7 +22,8 @@ impl RelativeUnixPathBuf {
     ///
     /// ```
     /// ```
-    pub fn new(path: PathBuf) -> Result<Self, PathValidationError> {
+    pub fn new(path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
+        let path = path.into();
         if path.is_absolute() {
             return Err(PathValidationError::NotRelative(path));
         }
@@ -30,7 +31,8 @@ impl RelativeUnixPathBuf {
         Ok(RelativeUnixPathBuf(path.into_unix()?))
     }
 
-    pub fn new_unchecked(path: PathBuf) -> Self {
+    pub fn new_unchecked(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
         RelativeUnixPathBuf(path)
     }
 
@@ -86,7 +88,7 @@ mod tests {
         assert!(path.starts_with("foo"));
         assert!(path.ends_with("bar"));
         assert_eq!(path.join("baz").as_path(), Path::new("foo/bar/baz"));
-        assert_eq!(path.to_str(), Some("foo/bar"));
+        assert_eq!(path.to_str().unwrap(), "foo/bar");
         assert_eq!(path.file_name(), Some("bar"));
         assert_eq!(path.extension(), None);
     }
@@ -100,7 +102,7 @@ mod tests {
         assert!(path.starts_with("foo"));
         assert!(path.ends_with("bar.txt"));
         assert_eq!(path.join("baz").as_path(), Path::new("foo/bar.txt/baz"));
-        assert_eq!(path.to_str(), Some("foo/bar.txt"));
+        assert_eq!(path.to_str().unwrap(), "foo/bar.txt");
         assert_eq!(path.file_name(), Some("bar.txt"));
         assert_eq!(path.extension(), Some("txt"));
     }
