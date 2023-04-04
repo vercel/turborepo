@@ -98,7 +98,7 @@ mod tests {
         assert!(path.ends_with("bar"));
         assert_eq!(path.join("baz").as_path(), Path::new("foo/bar/baz"));
         assert_eq!(path.to_str().unwrap(), "foo/bar");
-        assert_eq!(path.file_name(), Some("bar"));
+        assert_eq!(path.file_name(), Some(OsStr::new("bar")));
         assert_eq!(path.extension(), None);
     }
 
@@ -112,8 +112,8 @@ mod tests {
         assert!(path.ends_with("bar.txt"));
         assert_eq!(path.join("baz").as_path(), Path::new("foo/bar.txt/baz"));
         assert_eq!(path.to_str().unwrap(), "foo/bar.txt");
-        assert_eq!(path.file_name(), Some("bar.txt"));
-        assert_eq!(path.extension(), Some("txt"));
+        assert_eq!(path.file_name(), Some(OsStr::new("bar.txt")));
+        assert_eq!(path.extension(), Some(OsStr::new("txt")));
     }
 
     #[test]
