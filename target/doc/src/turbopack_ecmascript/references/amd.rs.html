@@ -264,6 +264,35 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::Result;
@@ -282,6 +311,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
@@ -295,7 +325,7 @@
         pattern_mapping::{PatternMapping, PatternMappingReadRef},
         AstPathVc,
     },
-    resolve::cjs_resolve,
+    resolve::{cjs_resolve, try_to_severity},
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -303,13 +333,25 @@
 </span><span class="kw">pub struct </span>AmdDefineAssetReference {
     origin: ResolveOriginVc,
     request: RequestVc,
+    issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>AmdDefineAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(AmdDefineAssetReference { origin, request })
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(AmdDefineAssetReference {
+            origin,
+            request,
+            issue_source,
+            in_try,
+        })
     }
 }
 
@@ -317,7 +359,12 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>AmdDefineAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        cjs_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+            try_to_severity(<span class="self">self</span>.in_try),
+        )
     }
 }
 
@@ -361,6 +408,8 @@
     origin: ResolveOriginVc,
     path: AstPathVc,
     factory_type: AmdDefineFactoryType,
+    issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 <span class="kw">impl </span>AmdDefineWithDependenciesCodeGenVc {
@@ -369,12 +418,16 @@
         origin: ResolveOriginVc,
         path: AstPathVc,
         factory_type: AmdDefineFactoryType,
+        issue_source: IssueSourceVc,
+        in_try: bool,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(AmdDefineWithDependenciesCodeGen {
             dependencies_requests,
             origin,
             path,
             factory_type,
+            issue_source,
+            in_try,
         })
     }
 }
@@ -399,7 +452,12 @@
                                 <span class="kw-2">*</span>request,
                                 <span class="self">self</span>.origin,
                                 context.into(),
-                                cjs_resolve(<span class="self">self</span>.origin, <span class="kw-2">*</span>request),
+                                cjs_resolve(
+                                    <span class="self">self</span>.origin,
+                                    <span class="kw-2">*</span>request,
+                                    OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+                                    try_to_severity(<span class="self">self</span>.in_try),
+                                ),
                                 Value::new(Cjs),
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>,

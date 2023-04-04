@@ -201,6 +201,10 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
@@ -212,7 +216,7 @@
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     environment::{Rendering, RenderingVc},
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueSeverity, IssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
     resolve::{
@@ -228,7 +232,7 @@
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
-    resolve::url_resolve,
+    resolve::{try_to_severity, url_resolve},
     utils::module_id_to_lit,
 };
 
@@ -243,6 +247,8 @@
     request: RequestVc,
     rendering: RenderingVc,
     ast_path: AstPathVc,
+    issue_source: IssueSourceVc,
+    in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -253,12 +259,16 @@
         request: RequestVc,
         rendering: RenderingVc,
         ast_path: AstPathVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
     ) -&gt; <span class="self">Self </span>{
         UrlAssetReference {
             origin,
             request,
             rendering,
             ast_path,
+            issue_source,
+            in_try,
         }
         .cell()
     }
@@ -267,11 +277,7 @@
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>get_referenced_asset(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ReferencedAssetVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ReferencedAssetVc::from_resolve_result(
-            url_resolve(
-                this.origin,
-                this.request,
-                Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
-            ),
+            <span class="self">self</span>.resolve_reference(),
             this.request,
         ))
     }
@@ -285,6 +291,8 @@
             <span class="self">self</span>.origin,
             <span class="self">self</span>.request,
             Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
+            <span class="self">self</span>.issue_source,
+            try_to_severity(<span class="self">self</span>.in_try),
         )
     }
 }

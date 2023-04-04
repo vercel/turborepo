@@ -1347,6 +1347,24 @@
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
 <a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1403,6 +1421,8 @@
     AliasMap, AliasMapIntoIter, AliasMapLookupIterator, AliasMatch, AliasPattern, AliasTemplate,
 };
 <span class="kw">pub use </span>exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
+
+<span class="kw">use </span><span class="kw">crate</span>::issue::{IssueSeverity, IssueSeverityVc, OptionIssueSourceVc};
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
@@ -2124,6 +2144,7 @@
             <span class="kw">let </span>relative = RequestVc::relative(Value::new(new_pat), <span class="bool-val">true</span>);
 
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: <span class="string">&quot;server relative import: not implemented yet&quot;</span>.to_string(),
                 request,
                 context,
@@ -2133,6 +2154,7 @@
                      relative to the file you are importing from.&quot;
                         </span>.to_string(),
                 ),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -2141,11 +2163,13 @@
         }
         Request::Windows { path: <span class="kw">_ </span>} =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: <span class="string">&quot;windows import: not implemented yet&quot;</span>.to_string(),
                 request,
                 context,
                 resolve_options: options,
                 error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;windows imports are not implemented yet&quot;</span>.to_string()),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -2155,11 +2179,13 @@
         Request::Empty =&gt; ResolveResult::unresolveable().into(),
         Request::PackageInternal { path: <span class="kw">_ </span>} =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: <span class="string">&quot;package internal import: not implemented yet&quot;</span>.to_string(),
                 request,
                 context,
                 resolve_options: options,
                 error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;package internal imports are not implemented yet&quot;</span>.to_string()),
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -2174,11 +2200,13 @@
         .into(),
         Request::Unknown { path } =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                severity: IssueSeverity::Error.cell(),
                 request_type: <span class="macro">format!</span>(<span class="string">&quot;unknown import: `{}`&quot;</span>, path),
                 request,
                 context,
                 resolve_options: options,
                 error_message: <span class="prelude-val">None</span>,
+                source: OptionIssueSourceVc::none(),
             }
             .into();
             issue.as_issue().emit();
@@ -2473,11 +2501,13 @@
         .add_references(refs));
     }
     <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+        severity: IssueSeverity::Error.cell(),
         context: issue_context,
         request_type: <span class="macro">format!</span>(<span class="string">&quot;alias field ({field_name})&quot;</span>),
         request: RequestVc::parse(Value::new(Pattern::Constant(issue_request.to_string()))),
         resolve_options,
         error_message: <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">&quot;invalid alias field value: {}&quot;</span>, result)),
+        source: OptionIssueSourceVc::none(),
     }
     .cell();
     issue.as_issue().emit();
@@ -2636,16 +2666,20 @@
     origin_path: FileSystemPathVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
+    source: OptionIssueSourceVc,
+    severity: IssueSeverityVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>result.is_unresolveable().<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(unresolveable) =&gt; {
             <span class="kw">if </span><span class="kw-2">*</span>unresolveable {
                 <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                    severity,
                     context: origin_path,
                     request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                     request,
                     resolve_options,
                     error_message: <span class="prelude-val">None</span>,
+                    source,
                 }
                 .into();
                 issue.as_issue().emit();
@@ -2654,11 +2688,13 @@
         }
         <span class="prelude-val">Err</span>(err) =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                severity,
                 context: origin_path,
                 request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                 request,
                 resolve_options,
                 error_message: <span class="prelude-val">Some</span>(err.to_string()),
+                source,
             }
             .into();
             issue.as_issue().emit();

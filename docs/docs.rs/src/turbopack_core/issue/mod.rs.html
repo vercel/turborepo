@@ -666,6 +666,19 @@
 <a href="#666" id="666">666</a>
 <a href="#667" id="667">667</a>
 <a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>analyze;
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">pub mod </span>package_json;
@@ -791,7 +804,7 @@
     /// should point at the offending character. Displayed to the user alongside
     /// the title/description.
     </span><span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionIssueSourceVc {
-        OptionIssueSourceVc::cell(<span class="prelude-val">None</span>)
+        OptionIssueSourceVc::none()
     }
 
     <span class="kw">fn </span>sub_issues(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IssuesVc {
@@ -1140,6 +1153,19 @@
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>OptionIssueSource(<span class="prelude-ty">Option</span>&lt;IssueSourceVc&gt;);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OptionIssueSourceVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>some(source: IssueSourceVc) -&gt; <span class="self">Self </span>{
+        OptionIssueSourceVc::cell(<span class="prelude-val">Some</span>(source))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>none() -&gt; <span class="self">Self </span>{
+        OptionIssueSourceVc::cell(<span class="prelude-val">None</span>)
+    }
+}
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
 #[derive(Clone, Debug)]

@@ -51,10 +51,16 @@
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
 <a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    issue::OptionIssueSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     reference_type::CssReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -87,6 +93,10 @@
             <span class="self">self</span>.origin,
             <span class="self">self</span>.request,
             Value::new(CssReferenceSubType::Compose),
+            <span class="comment">// TODO: add real issue source, currently impossible because `CssClassName` doesn&#39;t
+            // contain the source span
+            // https://docs.rs/swc_css_modules/0.21.16/swc_css_modules/enum.CssClassName.html
+            </span>OptionIssueSourceVc::none(),
         )
     }
 }

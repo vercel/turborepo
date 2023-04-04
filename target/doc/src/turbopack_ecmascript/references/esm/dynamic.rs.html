@@ -173,6 +173,25 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Callee, ExprOrSpread},
@@ -184,6 +203,7 @@
         availability_info::AvailabilityInfo, ChunkableAssetReference, ChunkableAssetReferenceVc,
         ChunkingType, ChunkingTypeOptionVc,
     },
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -198,7 +218,7 @@
     },
     create_visitor,
     references::AstPathVc,
-    resolve::esm_resolve,
+    resolve::{esm_resolve, try_to_severity},
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -207,16 +227,26 @@
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>path: AstPathVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
+    <span class="kw">pub </span>in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EsmAsyncAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc, path: AstPathVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        path: AstPathVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(EsmAsyncAssetReference {
             origin,
             request,
             path,
+            issue_source,
+            in_try,
         })
     }
 }
@@ -225,7 +255,13 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>EsmAsyncAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        esm_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request, Default::default())
+        esm_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            Default::default(),
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+            try_to_severity(<span class="self">self</span>.in_try),
+        )
     }
 }
 
@@ -264,6 +300,8 @@
                 <span class="self">self</span>.origin,
                 <span class="self">self</span>.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
+                OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+                try_to_severity(<span class="self">self</span>.in_try),
             ),
             Value::new(EsmAsync(availability_info.into_value())),
         )

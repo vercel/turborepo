@@ -263,6 +263,11 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -277,6 +282,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::CssReferenceSubType,
     resolve::{
@@ -455,6 +461,7 @@
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>path: AstPathVc,
     <span class="kw">pub </span>attributes: ImportAttributesVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -465,12 +472,14 @@
         request: RequestVc,
         path: AstPathVc,
         attributes: ImportAttributesVc,
+        issue_source: IssueSourceVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(ImportAssetReference {
             origin,
             request,
             path,
             attributes,
+            issue_source,
         })
     }
 }
@@ -483,6 +492,7 @@
             <span class="self">self</span>.origin,
             <span class="self">self</span>.request,
             Value::new(CssReferenceSubType::AtImport),
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
         )
     }
 }

@@ -111,12 +111,37 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>node_native_binding;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
     context::AssetContext,
+    issue::{IssueSeverity, IssueSeverityVc, IssueSourceVc, OptionIssueSourceVc},
     reference_type::{
         CommonJsReferenceSubType, EcmaScriptModulesReferenceSubType, ReferenceType,
         UrlReferenceSubType,
@@ -165,18 +190,25 @@
     origin: ResolveOriginVc,
     request: RequestVc,
     ty: Value&lt;EcmaScriptModulesReferenceSubType&gt;,
+    issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     <span class="kw">let </span>options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
-    specific_resolve(origin, request, options, ty).<span class="kw">await
+    specific_resolve(origin, request, options, ty, issue_source, issue_severity).<span class="kw">await
 </span>}
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>cjs_resolve(origin: ResolveOriginVc, request: RequestVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+</span><span class="kw">pub async fn </span>cjs_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+    issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="comment">// TODO pass CommonJsReferenceSubType
     </span><span class="kw">let </span>ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
     <span class="kw">let </span>options = apply_cjs_specific_options(origin.resolve_options(ty.clone()));
-    specific_resolve(origin, request, options, ty).<span class="kw">await
+    specific_resolve(origin, request, options, ty, issue_source, issue_severity).<span class="kw">await
 </span>}
 
 <span class="attr">#[turbo_tasks::function]
@@ -184,6 +216,8 @@
     origin: ResolveOriginVc,
     request: RequestVc,
     ty: Value&lt;UrlReferenceSubType&gt;,
+    issue_source: IssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>ty = Value::new(ReferenceType::Url(ty.into_value()));
     <span class="kw">let </span>resolve_options = origin.resolve_options(ty.clone());
@@ -202,6 +236,8 @@
         origin.origin_path(),
         request,
         resolve_options,
+        OptionIssueSourceVc::some(issue_source),
+        issue_severity,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(origin.context().process_resolve_result(result, ty))
@@ -212,6 +248,8 @@
     request: RequestVc,
     options: ResolveOptionsVc,
     reference_type: Value&lt;ReferenceType&gt;,
+    issue_source: OptionIssueSourceVc,
+    issue_severity: IssueSeverityVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>result = origin.resolve_asset(request, options, reference_type.clone());
 
@@ -221,8 +259,18 @@
         origin.origin_path(),
         request,
         options,
+        issue_source,
+        issue_severity,
     )
     .<span class="kw">await
 </span>}
+
+<span class="kw">pub fn </span>try_to_severity(in_try: bool) -&gt; IssueSeverityVc {
+    <span class="kw">if </span>in_try {
+        IssueSeverity::Warning.cell()
+    } <span class="kw">else </span>{
+        IssueSeverity::Error.cell()
+    }
+}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_ecmascript" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

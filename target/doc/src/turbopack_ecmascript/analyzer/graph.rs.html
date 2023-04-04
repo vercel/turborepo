@@ -1720,8 +1720,6 @@
 <a href="#1720" id="1720">1720</a>
 <a href="#1721" id="1721">1721</a>
 <a href="#1722" id="1722">1722</a>
-<a href="#1723" id="1723">1723</a>
-<a href="#1724" id="1724">1724</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -1839,6 +1837,7 @@
         <span class="doccomment">/// The ast path to the condition.
         </span>ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A function call.
     </span>Call {
@@ -1846,6 +1845,7 @@
         args: Vec&lt;EffectArg&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A function call of a property of an object.
     </span>MemberCall {
@@ -1854,6 +1854,7 @@
         args: Vec&lt;EffectArg&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A property access.
     </span>Member {
@@ -1861,6 +1862,7 @@
         prop: JsValue,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A reference to an imported binding.
     </span>ImportedBinding {
@@ -1868,24 +1870,28 @@
         export: <span class="prelude-ty">Option</span>&lt;String&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A reference to a free var access.
     </span>FreeVar {
         var: JsValue,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="comment">// TODO ImportMeta should be replaced with Member
     </span><span class="doccomment">/// A reference to `import.meta`.
     </span>ImportMeta {
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
     <span class="doccomment">/// A reference to `new URL(..., import.meta.url)`.
     </span>Url {
         input: JsValue,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
+        in_try: bool,
     },
 }
 
@@ -1894,31 +1900,19 @@
     </span><span class="kw">pub fn </span>normalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">match </span><span class="self">self </span>{
             Effect::Conditional {
-                condition,
-                kind,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
+                condition, kind, ..
             } =&gt; {
                 condition.normalize();
                 kind.normalize();
             }
-            Effect::Call {
-                func,
-                args,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {
+            Effect::Call { func, args, .. } =&gt; {
                 func.normalize();
                 <span class="kw">for </span>arg <span class="kw">in </span>args.iter_mut() {
                     arg.normalize();
                 }
             }
             Effect::MemberCall {
-                obj,
-                prop,
-                args,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
+                obj, prop, args, ..
             } =&gt; {
                 obj.normalize();
                 prop.normalize();
@@ -1926,37 +1920,16 @@
                     arg.normalize();
                 }
             }
-            Effect::Member {
-                obj,
-                prop,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {
+            Effect::Member { obj, prop, .. } =&gt; {
                 obj.normalize();
                 prop.normalize();
             }
-            Effect::FreeVar {
-                var,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {
+            Effect::FreeVar { var, .. } =&gt; {
                 var.normalize();
             }
-            Effect::ImportedBinding {
-                esm_reference_index: <span class="kw">_</span>,
-                export: <span class="kw">_</span>,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {}
-            Effect::ImportMeta {
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {}
-            Effect::Url {
-                input,
-                ast_path: <span class="kw">_</span>,
-                span: <span class="kw">_</span>,
-            } =&gt; {
+            Effect::ImportedBinding { .. } =&gt; {}
+            Effect::ImportMeta { .. } =&gt; {}
+            Effect::Url { input, .. } =&gt; {
                 input.normalize();
             }
         }
@@ -2353,6 +2326,7 @@
 <span class="kw">pub fn </span>as_parent_path(ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;) -&gt; Vec&lt;AstParentKind&gt; {
     ast_path.iter().map(|n| n.kind()).collect()
 }
+
 <span class="kw">pub fn </span>as_parent_path_with(
     ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;,
     additional: AstParentKind,
@@ -2362,6 +2336,19 @@
         .map(|n| n.kind())
         .chain([additional].into_iter())
         .collect()
+}
+
+<span class="kw">pub fn </span>is_in_try(ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;) -&gt; bool {
+    ast_path
+        .iter()
+        .rev()
+        .find_map(|ast_ref| <span class="kw">match </span>ast_ref.kind() {
+            AstParentKind::ArrowExpr(ArrowExprField::Body) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
+            AstParentKind::Function(FunctionField::Body) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
+            AstParentKind::TryStmt(TryStmtField::Block) =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        })
+        .unwrap_or(<span class="bool-val">false</span>)
 }
 
 <span class="kw">impl </span>Analyzer&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -2598,6 +2585,7 @@
                     args,
                     ast_path: as_parent_path(ast_path),
                     span: n.span(),
+                    in_try: is_in_try(ast_path),
                 });
             }
             Callee::Expr(<span class="kw">box </span>expr) =&gt; {
@@ -2619,6 +2607,7 @@
                         args,
                         ast_path: as_parent_path(ast_path),
                         span: n.span(),
+                        in_try: is_in_try(ast_path),
                     });
                 } <span class="kw">else </span>{
                     <span class="kw">let </span>fn_value = <span class="self">self</span>.eval_context.eval(expr);
@@ -2627,6 +2616,7 @@
                         args,
                         ast_path: as_parent_path(ast_path),
                         span: n.span(),
+                        in_try: is_in_try(ast_path),
                     });
                 }
             }
@@ -2653,6 +2643,7 @@
             prop: prop_value,
             ast_path: as_parent_path(ast_path),
             span: member_expr.span(),
+            in_try: is_in_try(ast_path),
         });
     }
 
@@ -2835,6 +2826,7 @@
                                     input: <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>args[<span class="number">0</span>].expr),
                                     ast_path: as_parent_path(ast_path),
                                     span: new_expr.span(),
+                                    in_try: is_in_try(ast_path),
                                 });
                             }
                         }
@@ -3167,12 +3159,14 @@
                 export,
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
+                in_try: is_in_try(ast_path),
             })
         } <span class="kw">else if </span>is_unresolved(ident, <span class="self">self</span>.eval_context.unresolved_mark) {
             <span class="self">self</span>.add_effect(Effect::FreeVar {
                 var: JsValue::FreeVar(ident.sym.clone()),
                 ast_path: as_parent_path(ast_path),
                 span: ident.span(),
+                in_try: is_in_try(ast_path),
             })
         }
     }
@@ -3188,6 +3182,7 @@
             </span><span class="self">self</span>.add_effect(Effect::ImportMeta {
                 span: expr.span,
                 ast_path: as_parent_path(ast_path),
+                in_try: is_in_try(ast_path),
             })
         }
     }
@@ -3299,6 +3294,7 @@
                 kind: <span class="kw">box </span>cond_kind,
                 ast_path: as_parent_path_with(ast_path, ast_kind),
                 span,
+                in_try: is_in_try(ast_path),
             });
         }
     }

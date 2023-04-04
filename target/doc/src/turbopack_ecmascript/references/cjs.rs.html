@@ -273,6 +273,64 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -281,6 +339,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
@@ -291,7 +350,7 @@
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::{util::throw_module_not_found_expr, AstPathVc},
-    resolve::cjs_resolve,
+    resolve::{cjs_resolve, try_to_severity},
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -299,13 +358,25 @@
 </span><span class="kw">pub struct </span>CjsAssetReference {
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
+    <span class="kw">pub </span>in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CjsAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(CjsAssetReference { origin, request })
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(CjsAssetReference {
+            origin,
+            request,
+            issue_source,
+            in_try,
+        })
     }
 }
 
@@ -313,7 +384,12 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>CjsAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        cjs_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+            try_to_severity(<span class="self">self</span>.in_try),
+        )
     }
 }
 
@@ -337,16 +413,26 @@
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>path: AstPathVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
+    <span class="kw">pub </span>in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CjsRequireAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc, path: AstPathVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        path: AstPathVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(CjsRequireAssetReference {
             origin,
             request,
             path,
+            issue_source,
+            in_try,
         })
     }
 }
@@ -355,7 +441,12 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>CjsRequireAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        cjs_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+            try_to_severity(<span class="self">self</span>.in_try),
+        )
     }
 }
 
@@ -384,7 +475,12 @@
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
             context.into(),
-            cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
+            cjs_resolve(
+                <span class="self">self</span>.origin,
+                <span class="self">self</span>.request,
+                OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+                try_to_severity(<span class="self">self</span>.in_try),
+            ),
             Value::new(Cjs),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -441,16 +537,26 @@
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>path: AstPathVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
+    <span class="kw">pub </span>in_try: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CjsRequireResolveAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc, path: AstPathVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        path: AstPathVc,
+        issue_source: IssueSourceVc,
+        in_try: bool,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(CjsRequireResolveAssetReference {
             origin,
             request,
             path,
+            issue_source,
+            in_try,
         })
     }
 }
@@ -459,7 +565,12 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>CjsRequireResolveAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        cjs_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+            try_to_severity(<span class="self">self</span>.in_try),
+        )
     }
 }
 
@@ -488,7 +599,12 @@
             <span class="self">self</span>.request,
             <span class="self">self</span>.origin,
             context.into(),
-            cjs_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request),
+            cjs_resolve(
+                <span class="self">self</span>.origin,
+                <span class="self">self</span>.request,
+                OptionIssueSourceVc::some(<span class="self">self</span>.issue_source),
+                try_to_severity(<span class="self">self</span>.in_try),
+            ),
             Value::new(Cjs),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;

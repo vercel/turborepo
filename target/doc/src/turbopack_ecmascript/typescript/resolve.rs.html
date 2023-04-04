@@ -396,6 +396,15 @@
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
 <a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -411,7 +420,7 @@
     asset::{Asset, AssetVc},
     context::AssetContext,
     ident::AssetIdentVc,
-    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
@@ -695,7 +704,16 @@
         resolve(context_path, request, options)
     };
     <span class="kw">let </span>result = origin.context().process_resolve_result(result, ty.clone());
-    handle_resolve_error(result, ty, origin.origin_path(), request, options).<span class="kw">await
+    handle_resolve_error(
+        result,
+        ty,
+        origin.origin_path(),
+        request,
+        options,
+        OptionIssueSourceVc::none(),
+        IssueSeverity::Error.cell(),
+    )
+    .<span class="kw">await
 </span>}
 
 <span class="attr">#[turbo_tasks::value]

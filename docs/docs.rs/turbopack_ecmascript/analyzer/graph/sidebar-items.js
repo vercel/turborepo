@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ConditionalKind","Effect","EffectArg"],"fn":["as_parent_path","as_parent_path_with","create_graph"],"struct":["EffectsBlock","EvalContext","VarGraph"]};
+window.SIDEBAR_ITEMS = {"enum":["ConditionalKind","Effect","EffectArg"],"fn":["as_parent_path","as_parent_path_with","create_graph","is_in_try"],"struct":["EffectsBlock","EvalContext","VarGraph"]};

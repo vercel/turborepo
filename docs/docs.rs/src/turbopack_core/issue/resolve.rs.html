@@ -80,6 +80,21 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -87,19 +102,29 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use super</span>::{Issue, IssueVc};
-<span class="kw">use </span><span class="kw">crate</span>::resolve::{options::ResolveOptionsVc, parse::RequestVc};
+<span class="kw">use crate</span>::{
+    issue::{IssueSeverityVc, OptionIssueSourceVc},
+    resolve::{options::ResolveOptionsVc, parse::RequestVc},
+};
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ResolvingIssue {
+    <span class="kw">pub </span>severity: IssueSeverityVc,
     <span class="kw">pub </span>request_type: String,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>context: FileSystemPathVc,
     <span class="kw">pub </span>resolve_options: ResolveOptionsVc,
     <span class="kw">pub </span>error_message: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>source: OptionIssueSourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Issue <span class="kw">for </span>ResolvingIssue {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>severity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IssueSeverityVc {
+        <span class="self">self</span>.severity
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
         StringVc::cell(<span class="macro">format!</span>(
@@ -157,6 +182,11 @@
             <span class="macro">writeln!</span>(detail, <span class="string">&quot;Import map: {}&quot;</span>, result.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(StringVc::cell(detail))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionIssueSourceVc {
+        <span class="self">self</span>.source
     }
 
     <span class="comment">// TODO add sub_issue for a description of resolve_options

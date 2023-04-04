@@ -131,6 +131,16 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -141,6 +151,7 @@
     asset::{Asset, AssetVc},
     chunk::{ChunkingContext, ChunkingContextVc},
     ident::AssetIdentVc,
+    issue::{IssueSeverity, IssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
     resolve::{
@@ -170,16 +181,23 @@
     <span class="kw">pub </span>origin: ResolveOriginVc,
     <span class="kw">pub </span>request: RequestVc,
     <span class="kw">pub </span>path: AstPathVc,
+    <span class="kw">pub </span>issue_source: IssueSourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>UrlAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, request: RequestVc, path: AstPathVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        origin: ResolveOriginVc,
+        request: RequestVc,
+        path: AstPathVc,
+        issue_source: IssueSourceVc,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(UrlAssetReference {
             origin,
             request,
             path,
+            issue_source,
         })
     }
 
@@ -207,6 +225,8 @@
             <span class="self">self</span>.origin,
             <span class="self">self</span>.request,
             Value::new(UrlReferenceSubType::CssUrl),
+            <span class="self">self</span>.issue_source,
+            IssueSeverity::Error.cell(),
         )
     }
 }

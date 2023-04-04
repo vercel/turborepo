@@ -319,6 +319,9 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -333,6 +336,7 @@
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
         ModuleId,
     },
+    issue::{IssueSeverity, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{
@@ -440,12 +444,8 @@
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>get_referenced_asset(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ReferencedAssetVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>ty = Value::new(<span class="kw">match </span><span class="kw-2">&amp;</span>this.export_name {
-            <span class="prelude-val">Some</span>(part) =&gt; EcmaScriptModulesReferenceSubType::ImportPart(<span class="kw-2">*</span>part),
-            <span class="prelude-val">None </span>=&gt; EcmaScriptModulesReferenceSubType::Undefined,
-        });
         <span class="prelude-val">Ok</span>(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request, ty),
+            <span class="self">self</span>.resolve_reference(),
             this.request,
         ))
     }
@@ -475,7 +475,13 @@
             <span class="prelude-val">None </span>=&gt; EcmaScriptModulesReferenceSubType::Undefined,
         });
 
-        esm_resolve(<span class="self">self</span>.get_origin(), <span class="self">self</span>.request, ty)
+        esm_resolve(
+            <span class="self">self</span>.get_origin(),
+            <span class="self">self</span>.request,
+            ty,
+            OptionIssueSourceVc::none(),
+            IssueSeverity::Error.cell(),
+        )
     }
 }
 
