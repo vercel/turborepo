@@ -80,7 +80,7 @@ impl AbsoluteSystemPathBuf {
         &self,
         path: &AbsoluteSystemPathBuf,
     ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
-        AnchoredSystemPathBuf::strip_root(&self, path)
+        AnchoredSystemPathBuf::strip_root(self, path)
     }
 
     /// Resolves `path` with `self` as anchor.

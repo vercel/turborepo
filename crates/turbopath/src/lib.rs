@@ -26,26 +26,26 @@ pub enum PathValidationError {
 }
 
 trait IntoSystem {
-    fn into_system(&self) -> Result<PathBuf, PathValidationError>;
+    fn into_system(self) -> Result<PathBuf, PathValidationError>;
 }
 
 trait IntoUnix {
-    fn into_unix(&self) -> Result<PathBuf, PathValidationError>;
+    fn into_unix(self) -> Result<PathBuf, PathValidationError>;
 }
 
-impl IntoSystem for Path {
-    fn into_system(&self) -> Result<PathBuf, PathValidationError> {
+impl IntoSystem for &Path {
+    fn into_system(self) -> Result<PathBuf, PathValidationError> {
         let path_str = self.to_str().ok_or(PathValidationError::InvalidUnicode)?;
 
         Ok(PathBuf::from_slash(path_str))
     }
 }
 
-impl IntoUnix for Path {
+impl IntoUnix for &Path {
     /// NOTE: `into_unix` *only* converts Windows paths to Unix paths *on* a
     /// Windows system. Do not pass a Windows path on a Unix system and
     /// assume it'll be converted.
-    fn into_unix(&self) -> Result<PathBuf, PathValidationError> {
+    fn into_unix(self) -> Result<PathBuf, PathValidationError> {
         Ok(PathBuf::from(
             self.to_slash()
                 .ok_or(PathValidationError::InvalidUnicode)?

@@ -144,9 +144,8 @@ impl CommandBase {
                 turbopath::RelativeSystemPathBuf::new("turbod").expect("turbod is valid"),
             )
             .join_relative(
-                turbopath::RelativeSystemPathBuf::new(&self.repo_hash()).expect("hash is valid"),
+                turbopath::RelativeSystemPathBuf::new(self.repo_hash()).expect("hash is valid"),
             )
-            .into()
     }
 
     fn repo_hash(&self) -> String {

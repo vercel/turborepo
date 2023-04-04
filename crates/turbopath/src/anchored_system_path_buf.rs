@@ -46,8 +46,6 @@ impl AnchoredSystemPathBuf {
     }
 
     pub fn to_str(&self) -> Result<&str, PathValidationError> {
-        self.0
-            .to_str()
-            .ok_or_else(|| PathValidationError::InvalidUnicode)
+        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 }
