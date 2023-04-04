@@ -2,8 +2,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use turbo_tasks::{primitives::StringVc, TraitRef, TryJoinIterExt};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
-
-use crate::version::{Version, VersionVc, VersionedContentMergerVc};
+use turbopack_core::version::{Version, VersionVc, VersionedContentMergerVc};
 
 /// The version of a [`ChunkListContent`].
 ///

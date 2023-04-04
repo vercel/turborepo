@@ -4,12 +4,12 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use serde::Serialize;
 use turbo_tasks::{IntoTraitRef, TraitRef};
-
-use super::{content::ChunkListContentVc, version::ChunkListVersionVc};
-use crate::version::{
+use turbopack_core::version::{
     MergeableVersionedContent, MergeableVersionedContentVc, PartialUpdate, TotalUpdate, Update,
     UpdateVc, VersionVc, VersionedContent, VersionedContentMerger, VersionedContentsVc,
 };
+
+use super::{content::ChunkListContentVc, version::ChunkListVersionVc};
 
 /// Update of a chunk list from one version to another.
 #[derive(Serialize)]

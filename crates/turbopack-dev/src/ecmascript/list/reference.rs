@@ -1,16 +1,17 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
-
-use super::asset::ChunkListAssetVc;
-use crate::{
+use turbopack_core::{
+    asset::{Asset, AssetsVc},
     chunk::{
-        ChunkGroupVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType,
+        ChunkVc, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType,
         ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
+
+use super::asset::ChunkListAssetVc;
+use crate::DevChunkingContextVc;
 
 /// A reference to a [`ChunkListAsset`].
 ///
@@ -20,18 +21,24 @@ use crate::{
 /// [`ChunkListAsset`]: super::asset::ChunkListAsset
 #[turbo_tasks::value]
 pub struct ChunkListReference {
-    server_root: FileSystemPathVc,
-    chunk_group: ChunkGroupVc,
+    chunking_context: DevChunkingContextVc,
+    entry_chunk: ChunkVc,
+    other_chunks: AssetsVc,
 }
 
 #[turbo_tasks::value_impl]
 impl ChunkListReferenceVc {
     /// Creates a new [`ChunkListReference`].
     #[turbo_tasks::function]
-    pub fn new(server_root: FileSystemPathVc, chunk_group: ChunkGroupVc) -> Self {
+    pub fn new(
+        chunking_context: DevChunkingContextVc,
+        entry_chunk: ChunkVc,
+        other_chunks: AssetsVc,
+    ) -> Self {
         ChunkListReference {
-            server_root,
-            chunk_group,
+            chunking_context,
+            entry_chunk,
+            other_chunks,
         }
         .cell()
     }
@@ -43,7 +50,10 @@ impl ValueToString for ChunkListReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "referenced chunk list {}",
-            self.chunk_group.chunk_list_path().to_string().await?
+            self.chunking_context
+                .chunk_list_path(self.entry_chunk.ident())
+                .to_string()
+                .await?
         )))
     }
 }
@@ -52,8 +62,11 @@ impl ValueToString for ChunkListReference {
 impl AssetReference for ChunkListReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(ChunkListAssetVc::new(self.server_root, self.chunk_group).into())
-            .cell()
+        ResolveResult::asset(
+            ChunkListAssetVc::new(self.chunking_context, self.entry_chunk, self.other_chunks)
+                .into(),
+        )
+        .cell()
     }
 }
 

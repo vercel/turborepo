@@ -1,14 +1,15 @@
 use anyhow::Result;
-use turbo_tasks_fs::FileSystemPathVc;
-
-use super::content::ChunkListContentVc;
-use crate::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkGroupVc, ChunkReferenceVc, ChunksVc},
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString};
+use turbopack_core::{
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    chunk::{Chunk, ChunkVc, ChunkingContext},
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{VersionedContent, VersionedContentVc},
 };
+
+use super::content::ChunkListContentVc;
+use crate::DevChunkingContextVc;
 
 /// An asset that represents a list of chunks that exist together in a chunk
 /// group, and should be *updated* together.
@@ -20,54 +21,65 @@ use crate::{
 /// * changing a chunk's path.
 #[turbo_tasks::value(shared)]
 pub(super) struct ChunkListAsset {
-    server_root: FileSystemPathVc,
-    chunk_group: ChunkGroupVc,
+    chunking_context: DevChunkingContextVc,
+    entry_chunk: ChunkVc,
+    other_chunks: AssetsVc,
 }
 
 #[turbo_tasks::value_impl]
 impl ChunkListAssetVc {
     /// Creates a new [`ChunkListAsset`].
     #[turbo_tasks::function]
-    pub fn new(server_root: FileSystemPathVc, chunk_group: ChunkGroupVc) -> Self {
+    pub fn new(
+        chunking_context: DevChunkingContextVc,
+        entry_chunk: ChunkVc,
+        other_chunks: AssetsVc,
+    ) -> Self {
         ChunkListAsset {
-            server_root,
-            chunk_group,
+            chunking_context,
+            entry_chunk,
+            other_chunks,
         }
         .cell()
-    }
-
-    #[turbo_tasks::function]
-    async fn get_chunks(self) -> Result<ChunksVc> {
-        Ok(self.await?.chunk_group.chunks())
     }
 
     #[turbo_tasks::function]
     async fn content(self) -> Result<ChunkListContentVc> {
         let this = &*self.await?;
         Ok(ChunkListContentVc::new(
-            this.server_root,
-            this.chunk_group.chunks(),
+            this.chunking_context.output_root(),
+            this.other_chunks,
         ))
     }
+}
+
+#[turbo_tasks::function]
+fn chunk_list_chunk_reference_description() -> StringVc {
+    StringVc::cell("chunk list chunk".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for ChunkListAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        AssetIdentVc::from_path(self.chunk_group.chunk_list_path())
+    async fn ident(&self) -> Result<AssetIdentVc> {
+        Ok(AssetIdentVc::from_path(
+            self.chunking_context
+                .chunk_list_path(self.entry_chunk.ident()),
+        ))
     }
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<AssetReferencesVc> {
-        let chunks = self.chunk_group.chunks().await?;
-
-        let mut references = Vec::with_capacity(chunks.len());
-        for chunk in chunks.iter() {
-            references.push(ChunkReferenceVc::new(*chunk).into());
-        }
-
-        Ok(AssetReferencesVc::cell(references))
+        Ok(AssetReferencesVc::cell(
+            self.other_chunks
+                .await?
+                .iter()
+                .map(|chunk| {
+                    SingleAssetReferenceVc::new(*chunk, chunk_list_chunk_reference_description())
+                        .into()
+                })
+                .collect(),
+        ))
     }
 
     #[turbo_tasks::function]

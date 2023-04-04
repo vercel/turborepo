@@ -1,19 +1,18 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::{IntoTraitRef, TryJoinIterExt};
+use turbo_tasks::{IntoTraitRef, TryJoinIterExt, ValueToString};
 use turbo_tasks_fs::{FileContent, FileSystemPathReadRef, FileSystemPathVc};
-
-use super::{
-    update::update_chunk_list,
-    version::{ChunkListVersion, ChunkListVersionVc},
-};
-use crate::{
-    asset::{Asset, AssetContent, AssetContentVc},
-    chunk::ChunksVc,
+use turbopack_core::{
+    asset::{Asset, AssetContent, AssetContentVc, AssetsVc},
     version::{
         MergeableVersionedContent, MergeableVersionedContentVc, UpdateVc, VersionVc,
         VersionedContent, VersionedContentMerger, VersionedContentVc, VersionedContentsVc,
     },
+};
+
+use super::{
+    update::update_chunk_list,
+    version::{ChunkListVersion, ChunkListVersionVc},
 };
 
 /// Contents of a [`super::asset::ChunkListAsset`].
@@ -27,7 +26,7 @@ pub(super) struct ChunkListContent {
 impl ChunkListContentVc {
     /// Creates a new [`ChunkListContent`].
     #[turbo_tasks::function]
-    pub async fn new(server_root: FileSystemPathVc, chunks: ChunksVc) -> Result<Self> {
+    pub async fn new(server_root: FileSystemPathVc, chunks: AssetsVc) -> Result<Self> {
         let server_root = server_root.await?;
         Ok(ChunkListContent {
             server_root: server_root.clone(),
