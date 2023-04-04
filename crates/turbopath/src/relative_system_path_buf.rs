@@ -9,6 +9,27 @@ use crate::{IntoSystem, PathValidationError};
 pub struct RelativeSystemPathBuf(PathBuf);
 
 impl RelativeSystemPathBuf {
+    /// Create a new RelativeSystemPathBuf from `unchecked_path`.
+    /// Validates that `unchecked_path` is relative and converts it to a system
+    /// path
+    ///
+    /// # Arguments
+    ///
+    /// * `unchecked_path`: Path to be converted to a RelativeSystemPathBuf
+    ///
+    /// returns: Result<RelativeSystemPathBuf, PathValidationError>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::{Path, PathBuf};
+    /// use turbopath::RelativeSystemPathBuf;
+    /// let path = PathBuf::from("Users/user");
+    /// let relative_path = RelativeSystemPathBuf::new(path).unwrap();
+    /// #[cfg(windows)]
+    /// assert_eq!(relative_path.as_path(), Path::new("Users\\user"));
+    /// assert_eq!(relative_path.as_path(), Path::new("Users/user"));
+    /// ```
     pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
         let unchecked_path = unchecked_path.into();
         if unchecked_path.is_absolute() {
