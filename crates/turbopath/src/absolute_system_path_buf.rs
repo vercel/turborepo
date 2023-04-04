@@ -1,11 +1,15 @@
 use std::{
+    borrow::Cow,
+    ffi::OsStr,
     fmt,
     path::{Components, Path, PathBuf},
 };
 
-use crate::{AnchoredSystemPathBuf, IntoSystem, PathValidationError};
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+use crate::{AnchoredSystemPathBuf, IntoSystem, PathValidationError, RelativeSystemPathBuf};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(PathBuf);
 
 impl AbsoluteSystemPathBuf {
@@ -129,16 +133,32 @@ impl AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path))
     }
 
+    pub fn join_relative(&self, path: RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf(self.0.join(path.as_path()))
+    }
+
     pub fn to_str(&self) -> Result<&str, PathValidationError> {
         self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 
-    pub fn file_name(&self) -> Option<&str> {
-        self.0.file_name().and_then(|s| s.to_str())
+    pub fn to_string_lossy(&self) -> Cow<'_, str> {
+        self.0.to_string_lossy()
     }
 
-    pub fn extension(&self) -> Option<&str> {
-        self.0.extension().and_then(|s| s.to_str())
+    pub fn file_name(&self) -> Option<&OsStr> {
+        self.0.file_name()
+    }
+
+    pub fn exists(&self) -> bool {
+        self.0.exists()
+    }
+
+    pub fn into_path_buf(self) -> PathBuf {
+        self.0
+    }
+
+    pub fn extension(&self) -> Option<&OsStr> {
+        self.0.extension()
     }
 }
 

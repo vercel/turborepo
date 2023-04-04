@@ -1,11 +1,14 @@
 use std::{
+    ffi::OsStr,
     fmt,
     path::{Components, Path, PathBuf},
 };
 
+use serde::Serialize;
+
 use crate::{IntoSystem, PathValidationError};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct RelativeSystemPathBuf(PathBuf);
 
 impl RelativeSystemPathBuf {
@@ -74,12 +77,16 @@ impl RelativeSystemPathBuf {
         self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
     }
 
-    pub fn file_name(&self) -> Option<&str> {
-        self.0.file_name().and_then(|s| s.to_str())
+    pub fn file_name(&self) -> Option<&OsStr> {
+        self.0.file_name()
     }
 
-    pub fn extension(&self) -> Option<&str> {
-        self.0.extension().and_then(|s| s.to_str())
+    pub fn into_path_buf(self) -> PathBuf {
+        self.0
+    }
+
+    pub fn extension(&self) -> Option<&OsStr> {
+        self.0.extension()
     }
 }
 

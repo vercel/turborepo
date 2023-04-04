@@ -59,8 +59,8 @@ pub struct DaemonConnector {
     /// Whether the connector is allowed to kill a running daemon (for example,
     /// in the event of a version mismatch).
     pub can_kill_server: bool,
-    pub pid_file: turborepo_paths::AbsoluteNormalizedPathBuf,
-    pub sock_file: turborepo_paths::AbsoluteNormalizedPathBuf,
+    pub pid_file: turbopath::AbsoluteSystemPathBuf,
+    pub sock_file: turbopath::AbsoluteSystemPathBuf,
 }
 
 impl DaemonConnector {
@@ -163,7 +163,7 @@ impl DaemonConnector {
     /// platform and retry in case of error.
     async fn get_connection(
         &self,
-        path: turborepo_paths::AbsoluteNormalizedPathBuf,
+        path: turbopath::AbsoluteSystemPathBuf,
     ) -> Result<TurbodClient<tonic::transport::Channel>, DaemonConnectorError> {
         // windows doesn't treat sockets as files, so don't attempt to wait
         #[cfg(not(target_os = "windows"))]
@@ -261,7 +261,7 @@ impl DaemonConnector {
 
 #[cfg(target_os = "windows")]
 fn win(
-    path: Arc<turborepo_paths::AbsoluteNormalizedPathBuf>,
+    path: Arc<turbopath::AbsoluteSystemPathBuf>,
 ) -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite, std::io::Error> {
     use tokio_util::compat::FuturesAsyncReadCompatExt;
     uds_windows::UnixStream::connect(&*path)
@@ -276,7 +276,7 @@ pub enum FileWaitError {
     #[error("failed to wait for event {0}")]
     Io(#[from] std::io::Error),
     #[error("invalid path {0}")]
-    InvalidPath(turborepo_paths::AbsoluteNormalizedPathBuf),
+    InvalidPath(turbopath::AbsoluteSystemPathBuf),
 }
 
 /// Waits for a file at some path on the filesystem to be created or deleted.
@@ -284,7 +284,7 @@ pub enum FileWaitError {
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
 async fn wait_for_file(
-    path: &turborepo_paths::AbsoluteNormalizedPath,
+    path: &turbopath::AbsoluteSystemPathBuf,
     action: WaitAction,
 ) -> Result<(), FileWaitError> {
     let parent = path
@@ -318,11 +318,10 @@ async fn wait_for_file(
                 }),
                 WaitAction::Deleted,
             ) => {
-                if paths.iter().any(|p| {
-                    p.file_name()
-                        .map(|f| file_name.as_os_str().eq(f))
-                        .unwrap_or_default()
-                }) {
+                if paths
+                    .iter()
+                    .any(|p| p.file_name().map(|f| file_name.eq(f)).unwrap_or_default())
+                {
                     futures::executor::block_on(async {
                         // if the receiver is dropped, it is because the future has
                         // been cancelled, so we don't need to do anything
@@ -336,10 +335,10 @@ async fn wait_for_file(
     )?;
 
     debug!("creating {:?}", parent);
-    std::fs::create_dir_all(parent)?;
+    std::fs::create_dir_all(parent.as_path())?;
 
     debug!("watching {:?}", parent);
-    watcher.watch(parent, notify::RecursiveMode::NonRecursive)?;
+    watcher.watch(parent.as_path(), notify::RecursiveMode::NonRecursive)?;
 
     match (action, path.exists()) {
         (WaitAction::Exists, false) => {}
@@ -375,7 +374,7 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
-    use turborepo_paths::AbsoluteNormalizedPathBuf;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
     use crate::daemon::client::proto;
