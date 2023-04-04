@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["DevChunkingContext","DevChunkingContextBuilder","DevChunkingContextVc"]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["ChunkListReference","ChunkListReferenceVc","DevChunkingContext","DevChunkingContextBuilder","DevChunkingContextVc"]};

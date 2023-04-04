@@ -367,6 +367,7 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -380,14 +381,14 @@
 <span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc},
-    chunk::ChunkingContextVc,
+    chunk::{ChunkingContextVc, EvaluatableAssetsVc},
     error::PrettyPrintError,
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
 };
-<span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
+<span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="kw">use super</span>::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
@@ -438,7 +439,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -563,7 +564,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -623,7 +624,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -640,8 +641,9 @@
 
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
         <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
-            module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
-            intermediate_output_path,
+            chunking_context,
+            module.into(),
+            runtime_entries,
         );
         <span class="kw">let </span>renderer_pool = get_renderer_pool(
             cwd,

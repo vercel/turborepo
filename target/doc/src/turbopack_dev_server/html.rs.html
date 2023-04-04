@@ -206,6 +206,14 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
@@ -213,9 +221,9 @@
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
+    chunk::ChunkGroupVc,
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
 
@@ -228,6 +236,11 @@
     path: FileSystemPathVc,
     chunk_groups: Vec&lt;ChunkGroupVc&gt;,
     body: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>dev_html_chunk_reference_description() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;dev html chunk&quot;</span>.to_string())
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -248,7 +261,10 @@
         <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.chunk_groups {
             <span class="kw">let </span>chunks = chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
-                references.push(ChunkReferenceVc::new(<span class="kw-2">*</span>chunk).into());
+                references.push(
+                    SingleAssetReferenceVc::new(<span class="kw-2">*</span>chunk, dev_html_chunk_reference_description())
+                        .into(),
+                );
             }
         }
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
@@ -313,7 +329,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>chunk_paths = <span class="macro">vec!</span>[];
         <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span>this.chunk_groups {
             <span class="kw">for </span>chunk <span class="kw">in </span>chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(relative_path) = context_path.get_path_to(chunk_path) {
                     chunk_paths.push(<span class="macro">format!</span>(<span class="string">&quot;/{relative_path}&quot;</span>));
                 }

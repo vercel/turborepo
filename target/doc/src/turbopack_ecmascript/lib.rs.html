@@ -536,54 +536,6 @@
 <a href="#536" id="536">536</a>
 <a href="#537" id="537">537</a>
 <a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
-<a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
-<a href="#580" id="580">580</a>
-<a href="#581" id="581">581</a>
-<a href="#582" id="582">582</a>
-<a href="#583" id="583">583</a>
-<a href="#584" id="584">584</a>
-<a href="#585" id="585">585</a>
-<a href="#586" id="586">586</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -609,10 +561,9 @@
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>webpack;
 
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>chunk::{
-    EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc,
-    EcmascriptChunkRuntimeVc, EcmascriptChunkVc, EcmascriptChunkingContext,
+    EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     EcmascriptChunkingContextVc,
 };
 <span class="kw">use </span>code_gen::CodeGenerateableVc;
@@ -637,16 +588,15 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
         availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        ChunkableAssetVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
     },
     compile_time_info::CompileTimeInfoVc,
-    context::{AssetContext, AssetContextVc},
+    context::AssetContextVc,
     ident::AssetIdentVc,
     reference::{AssetReferencesReadRef, AssetReferencesVc},
-    reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -773,47 +723,12 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>as_evaluated_chunk(
-        self_vc: EcmascriptModuleAssetVc,
-        context: ChunkingContextVc,
-        other_evaluated_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkVc&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(context) = EcmascriptChunkingContextVc::resolve_from(<span class="kw-2">&amp;</span>context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Ecmascript runtime not found&quot;</span>);
-        };
-
-        <span class="kw">let </span><span class="kw-2">mut </span>evaluated_entries = <span class="macro">vec!</span>[];
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(other_evaluated_entries) = other_evaluated_entries {
-            evaluated_entries.extend(other_evaluated_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
-        }
-        evaluated_entries.push(self_vc.into());
-
-        <span class="kw">let </span>evaluated_entries = EcmascriptChunkPlaceablesVc::cell(evaluated_entries);
-        <span class="prelude-val">Ok</span>(self_vc.as_chunk_with_runtime(
-            context,
-            other_evaluated_entries,
-            context.evaluated_ecmascript_runtime(evaluated_entries),
-        ))
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>as_chunk_with_runtime(
+    </span><span class="kw">pub fn </span>as_root_chunk_with_entries(
         self_vc: EcmascriptModuleAssetVc,
         context: EcmascriptChunkingContextVc,
-        runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
-        runtime: EcmascriptChunkRuntimeVc,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkVc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>main_entries = <span class="macro">vec!</span>[];
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime_entries) = runtime_entries {
-            main_entries.extend(runtime_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
-        }
-        <span class="prelude-val">Ok</span>(EcmascriptChunkVc::new_with_entries_and_runtime(
-            context,
-            self_vc.into(),
-            EcmascriptChunkPlaceablesVc::cell(main_entries),
-            runtime,
-        )
-        .into())
+        other_entries: EcmascriptChunkPlaceablesVc,
+    ) -&gt; ChunkVc {
+        EcmascriptChunkVc::new_root_with_entries(context, self_vc.into(), other_entries).into()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -934,6 +849,9 @@
         <span class="prelude-val">Ok</span>(self_vc.failsafe_analyze().<span class="kw">await</span><span class="question-mark">?</span>.exports)
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EvaluatableAsset <span class="kw">for </span>EcmascriptModuleAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ResolveOrigin <span class="kw">for </span>EcmascriptModuleAsset {
@@ -1148,20 +1066,6 @@
         }
         .into())
     }
-}
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>process_runtime_entries(
-    context: AssetContextVc,
-    entries: AssetsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceablesVc&gt; {
-    <span class="prelude-val">Ok</span>(EcmascriptChunkPlaceablesVc::cell(entries.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(|asset| <span class="kw">async move </span>{
-        <span class="kw">let </span>asset = context.process(asset, Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)));
-        <span class="kw">let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;{} is not placeable in a ecmascript chunk as runtime entry&quot;</span>, asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)
-        };
-        <span class="prelude-val">Ok</span>(placeable)
-    }).try_join().<span class="kw">await</span><span class="question-mark">?</span>))
 }
 
 <span class="kw">pub fn </span>register() {

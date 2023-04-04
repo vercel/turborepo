@@ -105,8 +105,6 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, Value};
@@ -120,9 +118,7 @@
 };
 
 <span class="kw">use super</span>::{
-    context::EcmascriptChunkingContextVc,
-    manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
-    placeable::EcmascriptChunkPlaceableVc,
+    context::EcmascriptChunkingContextVc, placeable::EcmascriptChunkPlaceableVc,
     EcmascriptChunkPlaceable, EcmascriptChunkingContext,
 };
 <span class="kw">use </span><span class="kw">crate</span>::ParseResultSourceMapVc;
@@ -204,10 +200,10 @@
                 current_availability_root: asset.as_asset(),
             },
         };
-        <span class="kw">let </span>manifest_asset =
-            ManifestChunkAssetVc::new(asset, context, Value::new(next_availability_info));
-        <span class="kw">let </span>manifest_loader = ManifestLoaderItemVc::new(manifest_asset);
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(manifest_loader.into()))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(context.manifest_loader_item(
+            asset,
+            Value::new(next_availability_info),
+        )))
     }
 }
 

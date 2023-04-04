@@ -348,6 +348,38 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -358,18 +390,25 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
-    chunk::{Chunk, ChunkVc, ChunkingContext, ChunkingContextVc},
+    asset::{Asset, AssetVc, AssetsVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkVc, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc, EvaluatableAssetsVc, EvaluateChunkingContext, EvaluateChunkingContextVc,
+    },
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
     resolve::ModulePart,
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
-    EcmascriptChunkPlaceablesVc, EcmascriptChunkRuntimeVc, EcmascriptChunkingContext,
+    EcmascriptChunkItemVc, EcmascriptChunkVc, EcmascriptChunkingContext,
     EcmascriptChunkingContextVc,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::ecmascript::runtime::EcmascriptDevChunkRuntimeVc;
+<span class="kw">use </span><span class="kw">crate</span>::ecmascript::{
+    chunk::EcmascriptDevChunkVc,
+    evaluate::chunk::EcmascriptDevEvaluateChunkVc,
+    manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+};
 
 <span class="kw">pub struct </span>DevChunkingContextBuilder {
     context: DevChunkingContext,
@@ -461,11 +500,25 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>chunk_list_modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;chunk list&quot;</span>.to_string())
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>DevChunkingContextVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>new(this: Value&lt;DevChunkingContext&gt;) -&gt; <span class="self">Self </span>{
         this.into_value().cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>chunk_list_path(
+        <span class="self">self</span>,
+        entry_chunk_ident: AssetIdentVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
+        <span class="kw">let </span>ident = entry_chunk_ident.with_modifier(chunk_list_modifier());
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.chunk_path(ident, <span class="string">&quot;.json&quot;</span>))
     }
 }
 
@@ -620,9 +673,9 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>reference_chunk_source_maps(<span class="kw-2">&amp;</span><span class="self">self</span>, chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+    </span><span class="kw">async fn </span>reference_chunk_source_maps(<span class="kw-2">&amp;</span><span class="self">self</span>, chunk: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>source_maps = <span class="self">self</span>.reference_chunk_source_maps;
-        <span class="kw">let </span>path = chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>path = chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>extension = path.extension().unwrap_or_default();
         <span class="attr">#[allow(clippy::single_match, reason = <span class="string">&quot;future extensions&quot;</span>)]
         </span><span class="kw">match </span>extension {
@@ -632,17 +685,6 @@
             <span class="kw">_ </span>=&gt; {}
         }
         <span class="prelude-val">Ok</span>(BoolVc::cell(source_maps))
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_list_path(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        entry_chunk_path: FileSystemPathVc,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FileSystemPathVc&gt; {
-        <span class="prelude-val">Ok</span>(entry_chunk_path.parent().join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-            <span class="string">&quot;{}.chunk-list.json&quot;</span>,
-            entry_chunk_path.<span class="kw">await</span><span class="question-mark">?</span>.file_name()
-        )))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -681,21 +723,43 @@
         context.layer = (!layer.is_empty()).then(|| layer.to_string());
         <span class="prelude-val">Ok</span>(DevChunkingContextVc::new(Value::new(context)).into())
     }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>generate_chunk(self_vc: DevChunkingContextVc, chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+        <span class="prelude-val">Ok</span>(
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+                EcmascriptDevChunkVc::new(self_vc, ecmascript_chunk).into()
+            } <span class="kw">else </span>{
+                chunk.into()
+            },
+        )
+    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkingContext <span class="kw">for </span>DevChunkingContext {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>ecmascript_runtime(self_vc: EcmascriptChunkingContextVc) -&gt; EcmascriptChunkRuntimeVc {
-        EcmascriptDevChunkRuntimeVc::new(self_vc, <span class="prelude-val">None</span>).into()
+    </span><span class="kw">fn </span>manifest_loader_item(
+        self_vc: DevChunkingContextVc,
+        asset: ChunkableAssetVc,
+        availability_info: Value&lt;AvailabilityInfo&gt;,
+    ) -&gt; EcmascriptChunkItemVc {
+        <span class="kw">let </span>manifest_asset = DevManifestChunkAssetVc::new(asset, self_vc, availability_info);
+        DevManifestLoaderItemVc::new(manifest_asset).into()
     }
+}
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EvaluateChunkingContext <span class="kw">for </span>DevChunkingContext {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>evaluated_ecmascript_runtime(
-        self_vc: EcmascriptChunkingContextVc,
-        evaluated_entries: EcmascriptChunkPlaceablesVc,
-    ) -&gt; EcmascriptChunkRuntimeVc {
-        EcmascriptDevChunkRuntimeVc::new(self_vc, <span class="prelude-val">Some</span>(evaluated_entries)).into()
+    </span><span class="kw">fn </span>evaluate_chunk(
+        self_vc: DevChunkingContextVc,
+        entry_chunk: ChunkVc,
+        other_chunks: AssetsVc,
+        evaluatable_assets: EvaluatableAssetsVc,
+    ) -&gt; AssetVc {
+        EcmascriptDevEvaluateChunkVc::new(self_vc, entry_chunk, other_chunks, evaluatable_assets)
+            .into()
     }
 }
 </code></pre></div>

@@ -288,11 +288,6 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -310,15 +305,16 @@
 };
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
-<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
-    chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
+    chunk::{
+        ChunkGroupVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+    },
     reference::primary_referenced_assets,
     source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
 };
-<span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
+<span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="kw">use </span><span class="self">self</span>::{
     bootstrap::NodeJsBootstrapAsset,
@@ -409,17 +405,14 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>external_asset_entrypoints(
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsSetVc&gt; {
     <span class="prelude-val">Ok</span>(separate_assets(
-        get_intermediate_asset(
-            module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
-            intermediate_output_path,
-        )
-        .resolve()
-        .<span class="kw">await</span><span class="question-mark">?</span>,
+        get_intermediate_asset(chunking_context, module.into(), runtime_entries)
+            .resolve()
+            .<span class="kw">await</span><span class="question-mark">?</span>,
         intermediate_output_path,
     )
     .strongly_consistent()
@@ -557,16 +550,13 @@
 <span class="doccomment">/// Converts a module graph into node.js executable assets
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>get_intermediate_asset(
-    entry_chunk: ChunkVc,
-    intermediate_output_path: FileSystemPathVc,
+    chunking_context: ChunkingContextVc,
+    main_entry: EvaluatableAssetVc,
+    other_entries: EvaluatableAssetsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
-    <span class="kw">let </span>chunk_group = ChunkGroupVc::from_chunk(entry_chunk);
-    <span class="kw">let </span><span class="kw-2">mut </span>hash = encode_hex(hash_xxh3_hash64(
-        entry_chunk.ident().path().to_string().<span class="kw">await</span><span class="question-mark">?</span>.as_str(),
-    ));
-    hash.push_str(<span class="string">&quot;.js&quot;</span>);
+    <span class="kw">let </span>chunk_group = ChunkGroupVc::evaluated(chunking_context, main_entry, other_entries);
     <span class="prelude-val">Ok</span>(NodeJsBootstrapAsset {
-        path: intermediate_output_path.join(<span class="kw-2">&amp;</span>hash),
+        path: chunking_context.chunk_path(main_entry.ident(), <span class="string">&quot;.js&quot;</span>),
         chunk_group,
     }
     .cell()

@@ -437,14 +437,6 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -458,10 +450,7 @@
     ChunkGroupVc, ChunkVc, ChunksVc,
 };
 
-<span class="kw">use super</span>::{
-    runtime::EcmascriptChunkRuntime, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
-    EcmascriptChunkingContextVc,
-};
+<span class="kw">use super</span>::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc};
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptChunkOptimizer(EcmascriptChunkingContextVc);
@@ -513,14 +502,10 @@
         </span>.iter()
         .flat_map(|e| e.iter().copied())
         .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>runtime = first
-        .runtime
-        .merge(chunks.iter().skip(<span class="number">1</span>).map(|chunk| chunk.runtime).collect());
     <span class="prelude-val">Ok</span>(EcmascriptChunkVc::new_normalized(
         first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         <span class="prelude-val">None</span>,
-        runtime,
         Value::new(first.availability_info),
     ))
 }
@@ -830,7 +815,7 @@
 </span><span class="kw">async fn </span>optimize_ecmascript(
     local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
     children: Vec&lt;ChunksVc&gt;,
-    chunk_group: ChunkGroupVc,
+    _chunk_group: ChunkGroupVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::&lt;(EcmascriptChunkVc, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;)&gt;::new();
     <span class="comment">// TODO optimize
@@ -847,7 +832,6 @@
                 content.context,
                 content.main_entries,
                 content.omit_entries,
-                content.runtime.with_chunk_group(chunk_group),
                 Value::new(content.availability_info),
             )
         }

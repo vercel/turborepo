@@ -297,19 +297,13 @@
 <a href="#297" id="297">297</a>
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetsSetVc, AssetsVc},
+    asset::{Asset, AssetsSetVc},
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
@@ -329,7 +323,6 @@
         ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc, ProxyResult,
     },
 };
-<span class="kw">use </span>turbopack_ecmascript::process_runtime_entries;
 
 <span class="kw">use super</span>::{
     render_static::{render_static, StaticResult},
@@ -356,7 +349,6 @@
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
-    runtime_entries: AssetsVc,
     fallback_page: DevHtmlAssetVc,
 ) -&gt; ContentSourceVc {
     <span class="kw">let </span>source = NodeRenderContentSource {
@@ -367,7 +359,6 @@
         route_match,
         pathname,
         entry,
-        runtime_entries,
         fallback_page,
     }
     .cell();
@@ -392,7 +383,6 @@
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
-    runtime_entries: AssetsVc,
     fallback_page: DevHtmlAssetVc,
 }
 
@@ -433,7 +423,7 @@
             set.extend(
                 external_asset_entrypoints(
                     entry.module,
-                    process_runtime_entries(entry.context, <span class="self">self</span>.runtime_entries),
+                    entry.runtime_entries,
                     entry.chunking_context,
                     entry.intermediate_output_path,
                 )
@@ -515,7 +505,7 @@
             source.env,
             source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
             entry.module,
-            process_runtime_entries(entry.context, source.runtime_entries),
+            entry.runtime_entries,
             source.fallback_page,
             entry.chunking_context,
             entry.intermediate_output_path,
@@ -597,11 +587,9 @@
             set.insert((
                 StringVc::cell(<span class="string">&quot;intermediate asset&quot;</span>.to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
-                    entry.module.as_evaluated_chunk(
-                        entry.chunking_context,
-                        <span class="prelude-val">Some</span>(process_runtime_entries(entry.context, <span class="self">self</span>.runtime_entries)),
-                    ),
-                    entry.intermediate_output_path,
+                    entry.chunking_context,
+                    entry.module.into(),
+                    entry.runtime_entries,
                 )),
             ));
         }

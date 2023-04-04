@@ -648,6 +648,8 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -674,7 +676,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkGroupVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkGroupVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -682,8 +684,8 @@
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -754,7 +756,7 @@
     env: ProcessEnvVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    runtime_entries: <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
@@ -818,22 +820,24 @@
             Value::new(Default::default()),
             context.compile_time_info(),
         )
-        .as_ecmascript_chunk_placeable();
+        .as_evaluatable_asset();
 
         <span class="kw">let </span><span class="kw-2">mut </span>entries = <span class="macro">vec!</span>[globals_module];
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(other_entries) = runtime_entries {
-            <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>other_entries.<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime_entries) = runtime_entries {
+            <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>runtime_entries.<span class="kw">await</span><span class="question-mark">? </span>{
                 entries.push(<span class="kw-2">*</span>entry)
             }
-        };
+        }
 
-        <span class="prelude-val">Some</span>(EcmascriptChunkPlaceablesVc::cell(entries))
+        EvaluatableAssetsVc::cell(entries)
     };
 
     <span class="kw">let </span>bootstrap = NodeJsBootstrapAsset {
         path,
-        chunk_group: ChunkGroupVc::from_chunk(
-            entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
+        chunk_group: ChunkGroupVc::evaluated(
+            chunking_context,
+            entry_module.into(),
+            runtime_entries,
         ),
     }
     .cell()
@@ -894,7 +898,7 @@
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    runtime_entries: <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
     args: Vec&lt;JsonValueVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,
@@ -958,7 +962,7 @@
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    runtime_entries: <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
     args: Vec&lt;JsonValueVc&gt;,
     additional_invalidation: CompletionVc,
     debug: bool,

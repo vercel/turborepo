@@ -53,15 +53,28 @@
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
+    chunk::ChunkGroupVc,
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::utils::StringifyJs;
 
@@ -69,6 +82,11 @@
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>NodeJsBootstrapAsset {
     <span class="kw">pub</span>(<span class="kw">super</span>) path: FileSystemPathVc,
     <span class="kw">pub</span>(<span class="kw">super</span>) chunk_group: ChunkGroupVc,
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>node_js_bootstrap_chunk_reference_description() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;node.js bootstrap chunk&quot;</span>.to_string())
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -87,7 +105,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>output = <span class="string">&quot;Error.stackTraceLimit = 100;\nglobal.self = global;\n&quot;</span>.to_string();
 
         <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">let </span>path = <span class="kw-2">&amp;*</span>chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = context_path.get_relative_path_to(path) {
                 <span class="kw">if </span>p.ends_with(<span class="string">&quot;.js&quot;</span>) {
                     <span class="macro">writeln!</span>(<span class="kw-2">&amp;mut </span>output, <span class="string">&quot;require({});&quot;</span>, StringifyJs(<span class="kw-2">&amp;</span>p))<span class="question-mark">?</span>;
@@ -103,7 +121,13 @@
         <span class="kw">let </span>chunks = <span class="self">self</span>.chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
-            references.push(ChunkReferenceVc::new(<span class="kw-2">*</span>chunk).into());
+            references.push(
+                SingleAssetReferenceVc::new(
+                    <span class="kw-2">*</span>chunk,
+                    node_js_bootstrap_chunk_reference_description(),
+                )
+                .into(),
+            );
         }
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }

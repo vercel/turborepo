@@ -29,13 +29,13 @@
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::{chunk::ChunkingContextVc, context::AssetContextVc};
+<span class="kw">use </span>turbopack_core::chunk::{ChunkingContextVc, EvaluatableAssetsVc};
 <span class="kw">use </span>turbopack_dev_server::source::ContentSourceData;
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>NodeRenderingEntry {
-    <span class="kw">pub </span>context: AssetContextVc,
+    <span class="kw">pub </span>runtime_entries: EvaluatableAssetsVc,
     <span class="kw">pub </span>module: EcmascriptModuleAssetVc,
     <span class="kw">pub </span>chunking_context: ChunkingContextVc,
     <span class="kw">pub </span>intermediate_output_path: FileSystemPathVc,

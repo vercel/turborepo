@@ -310,6 +310,10 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -321,9 +325,12 @@
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::{chunk::ChunkingContextVc, error::PrettyPrintError};
+<span class="kw">use </span>turbopack_core::{
+    chunk::{ChunkingContextVc, EvaluatableAssetsVc},
+    error::PrettyPrintError,
+};
 <span class="kw">use </span>turbopack_dev_server::source::{Body, BodyVc, ProxyResult, ProxyResultVc};
-<span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
+<span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="kw">use super</span>::{
     issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
@@ -341,7 +348,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -457,7 +464,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -517,7 +524,7 @@
     env: ProcessEnvVc,
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -534,8 +541,9 @@
 
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
         <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
-            module.as_evaluated_chunk(chunking_context, <span class="prelude-val">Some</span>(runtime_entries)),
-            intermediate_output_path,
+            chunking_context,
+            module.into(),
+            runtime_entries,
         );
         <span class="kw">let </span>pool = get_renderer_pool(
             cwd,

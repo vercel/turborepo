@@ -257,6 +257,7 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -265,7 +266,8 @@
 <span class="kw">use </span>turbo_tasks::{IntoTraitRef, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::{
-    chunk::{Chunk, ChunkingContext, ModuleId, ModuleIdReadRef},
+    asset::Asset,
+    chunk::{ChunkingContext, ModuleId, ModuleIdReadRef},
     code_builder::CodeReadRef,
     version::{PartialUpdate, TotalUpdate, Update, VersionVc},
 };
@@ -421,7 +423,7 @@
         .map(|content| <span class="kw">async move </span>{
             <span class="kw">let </span>content_ref = content.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>output_root = content_ref.chunking_context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>path = content_ref.chunk.path().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>path = content_ref.chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>content, content_ref, output_root, path))
         })
         .try_join()
