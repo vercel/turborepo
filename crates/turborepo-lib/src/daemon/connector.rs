@@ -384,12 +384,12 @@ mod test {
     #[cfg(target_os = "windows")]
     const NODE_EXE: &str = "node.exe";
 
-    fn pid_path(tmp_path: &Path) -> AbsoluteNormalizedPathBuf {
-        AbsoluteNormalizedPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
+    fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.pid")).unwrap()
     }
 
-    fn sock_path(tmp_path: &Path) -> AbsoluteNormalizedPathBuf {
-        AbsoluteNormalizedPathBuf::try_from(tmp_path.join("turbod.sock")).unwrap()
+    fn sock_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.sock")).unwrap()
     }
 
     #[tokio::test]
@@ -622,13 +622,13 @@ mod test {
 
         let (pid_file, sock_file) = if cfg!(windows) {
             (
-                AbsoluteNormalizedPathBuf::new(PathBuf::from("C:\\pid")).unwrap(),
-                AbsoluteNormalizedPathBuf::new(PathBuf::from("C:\\sock")).unwrap(),
+                AbsoluteSystemPathBuf::new(PathBuf::from("C:\\pid")).unwrap(),
+                AbsoluteSystemPathBuf::new(PathBuf::from("C:\\sock")).unwrap(),
             )
         } else {
             (
-                AbsoluteNormalizedPathBuf::new(PathBuf::from("/pid")).unwrap(),
-                AbsoluteNormalizedPathBuf::new(PathBuf::from("/sock")).unwrap(),
+                AbsoluteSystemPathBuf::new(PathBuf::from("/pid")).unwrap(),
+                AbsoluteSystemPathBuf::new(PathBuf::from("/sock")).unwrap(),
             )
         };
 
