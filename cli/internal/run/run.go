@@ -256,6 +256,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
+		turboJSON.GlobalPassthroughEnv,
+		r.opts.runOpts.EnvMode,
 		r.base.Logger,
 	)
 
@@ -263,11 +265,20 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := fs.HashObject(getGlobalHashable(globalHashable)); err == nil {
-		r.base.Logger.Debug("global hash", "value", globalHash)
-		g.GlobalHash = globalHash
+	if globalHashable.envMode == util.Infer && globalHashable.envVarPassthroughs == nil {
+		if globalHash, err := fs.HashObject(getOldGlobalHashable(globalHashable)); err == nil {
+			r.base.Logger.Debug("global hash", "value", globalHash)
+			g.GlobalHash = globalHash
+		} else {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
+		}
 	} else {
-		return fmt.Errorf("failed to calculate global hash: %v", err)
+		if globalHash, err := fs.HashObject(globalHashable); err == nil {
+			r.base.Logger.Debug("global hash", "value", globalHash)
+			g.GlobalHash = globalHash
+		} else {
+			return fmt.Errorf("failed to calculate global hash: %v", err)
+		}
 	}
 
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
