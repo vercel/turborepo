@@ -6,7 +6,6 @@ import (
 	gocontext "context"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -32,6 +31,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // RealRun executes a set of tasks
@@ -283,7 +283,21 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// What are we sending in?
 	fileName := "turbo.env"
-	strict := true
+
+	strict := false
+	switch ec.rs.Opts.runOpts.EnvMode {
+	case util.Infer:
+		globalStrict := false
+		taskStrict := packageTask.TaskDefinition.PassthroughEnv != nil
+		inferredStrict := taskStrict || globalStrict
+
+		strict = inferredStrict
+	case util.Loose:
+		strict = false
+	case util.Strict:
+		strict = true
+	}
+
 	if strict {
 		rootPassthrough := env.EnvironmentVariableMap{}
 		projectPassthrough := env.EnvironmentVariableMap{}

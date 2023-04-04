@@ -50,11 +50,22 @@ A list of environment variables for implicit global hash dependencies. The conte
 ```jsonc
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    // ... omitted for brevity
-  },
+  "globalEnv": ["VERCEL_ANALYTICS_ID"] // value will impact the hashes of all tasks
+}
+```
 
-  "globalEnv": ["GITHUB_TOKEN"] // value will impact the hashes of all tasks
+## `globalPassthroughEnv`
+
+`type: string[]`
+
+An allowlist of environment variables that should be made available to all tasks but should not contribute to the task's cache key. Using this key opts all tasks into strict environment variable mode.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalPassthroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
 }
 ```
 
@@ -175,6 +186,27 @@ The list of environment variables a task depends on.
   on them automatically. See more in the [docs on
   caching](/repo/docs/core-concepts/caching#automatic-environment-variable-inclusion).
 </Callout>
+
+## `passthroughEnv`
+
+`type: string[]`
+
+An allowlist of environment variables that should be made available to this task but should not contribute to the task's cache key. Using this key opts this task into strict environment variable mode.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "passthroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
+    },
+  }
+}
+```
 
 ### `outputs`
 

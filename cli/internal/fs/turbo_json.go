@@ -27,6 +27,10 @@ type rawTurboJSON struct {
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
 	// Global env
 	GlobalEnv []string `json:"globalEnv,omitempty"`
+
+	// Global passthrough env
+	GlobalPassthroughEnv []string `json:"globalPassthroughEnv,omitempty"`
+
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline `json:"pipeline"`
@@ -41,19 +45,21 @@ type rawTurboJSON struct {
 // Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition
 // instead of BookkeepingTaskDefinition.)
 type pristineTurboJSON struct {
-	GlobalDependencies []string           `json:"globalDependencies,omitempty"`
-	GlobalEnv          []string           `json:"globalEnv,omitempty"`
-	Pipeline           PristinePipeline   `json:"pipeline"`
-	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
-	Extends            []string           `json:"extends,omitempty"`
+	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
+	GlobalEnv            []string           `json:"globalEnv,omitempty"`
+	GlobalPassthroughEnv []string           `json:"globalPassthroughEnv,omitempty"`
+	Pipeline             PristinePipeline   `json:"pipeline"`
+	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
+	Extends              []string           `json:"extends,omitempty"`
 }
 
 // TurboJSON represents a turbo.json configuration file
 type TurboJSON struct {
-	GlobalDeps         []string
-	GlobalEnv          []string
-	Pipeline           Pipeline
-	RemoteCacheOptions RemoteCacheOptions
+	GlobalDeps           []string
+	GlobalEnv            []string
+	GlobalPassthroughEnv []string
+	Pipeline             Pipeline
+	RemoteCacheOptions   RemoteCacheOptions
 
 	// A list of Workspace names
 	Extends []string
@@ -69,25 +75,27 @@ type RemoteCacheOptions struct {
 // We use this for printing ResolvedTaskConfiguration, because we _want_ to show
 // the user the default values for key they have not configured.
 type rawTaskWithDefaults struct {
-	Outputs    []string            `json:"outputs"`
-	Cache      *bool               `json:"cache"`
-	DependsOn  []string            `json:"dependsOn"`
-	Inputs     []string            `json:"inputs"`
-	OutputMode util.TaskOutputMode `json:"outputMode"`
-	Env        []string            `json:"env"`
-	Persistent bool                `json:"persistent"`
+	Outputs        []string            `json:"outputs"`
+	Cache          *bool               `json:"cache"`
+	DependsOn      []string            `json:"dependsOn"`
+	Inputs         []string            `json:"inputs"`
+	OutputMode     util.TaskOutputMode `json:"outputMode"`
+	PassthroughEnv []string            `json:"passthroughEnv"`
+	Env            []string            `json:"env"`
+	Persistent     bool                `json:"persistent"`
 }
 
 // rawTask exists to Unmarshal from json. When fields are omitted, we _want_
 // them to be missing, so that we can distinguish missing from empty value.
 type rawTask struct {
-	Outputs    []string             `json:"outputs,omitempty"`
-	Cache      *bool                `json:"cache,omitempty"`
-	DependsOn  []string             `json:"dependsOn,omitempty"`
-	Inputs     []string             `json:"inputs,omitempty"`
-	OutputMode *util.TaskOutputMode `json:"outputMode,omitempty"`
-	Env        []string             `json:"env,omitempty"`
-	Persistent *bool                `json:"persistent,omitempty"`
+	Outputs        []string             `json:"outputs,omitempty"`
+	Cache          *bool                `json:"cache,omitempty"`
+	DependsOn      []string             `json:"dependsOn,omitempty"`
+	Inputs         []string             `json:"inputs,omitempty"`
+	OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
+	Env            []string             `json:"env,omitempty"`
+	PassthroughEnv []string             `json:"passthroughEnv,omitempty"`
+	Persistent     *bool                `json:"persistent,omitempty"`
 }
 
 // PristinePipeline contains original TaskDefinitions without the bookkeeping
@@ -110,6 +118,9 @@ type TaskDefinition struct {
 
 	// This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
 	EnvVarDependencies []string
+
+	// rawTask.PassthroughEnv
+	PassthroughEnv []string
 
 	// TopologicalDependencies are tasks from package dependencies.
 	// E.g. "build" is a topological dependency in:
@@ -358,6 +369,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
 
+		if bookkeepingTaskDef.hasField("PassthroughEnv") {
+			mergedTaskDefinition.PassthroughEnv = taskDef.PassthroughEnv
+		}
+
 		if bookkeepingTaskDef.hasField("DependsOn") {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
@@ -429,6 +444,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	envVarDependencies := make(util.Set)
+	envVarPassthroughs := make(util.Set)
 
 	btd.TaskDefinition.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	btd.TaskDefinition.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
@@ -473,6 +489,23 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 
 	sort.Strings(btd.TaskDefinition.EnvVarDependencies)
 
+	if task.PassthroughEnv != nil {
+		btd.definedFields.Add("PassthroughEnv")
+		for _, value := range task.PassthroughEnv {
+			if strings.HasPrefix(value, envPipelineDelimiter) {
+				// Hard error to help people specify this correctly during migration.
+				// TODO: Remove this error after we have run summary.
+				return fmt.Errorf("You specified \"%s\" in the \"passthroughEnv\" key. You should not prefix your environment variables with \"$\"", value)
+			}
+
+			envVarPassthroughs.Add(value)
+		}
+	}
+
+	btd.TaskDefinition.PassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+
+	sort.Strings(btd.TaskDefinition.PassthroughEnv)
+
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
@@ -504,10 +537,11 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTaskWithDefaults{
-		Outputs:   []string{},
-		Inputs:    []string{},
-		Env:       []string{},
-		DependsOn: []string{},
+		Outputs:        []string{},
+		Inputs:         []string{},
+		Env:            []string{},
+		PassthroughEnv: []string{},
+		DependsOn:      []string{},
 	}
 
 	task.Persistent = c.Persistent
@@ -520,6 +554,10 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 
 	if len(c.EnvVarDependencies) > 0 {
 		task.Env = append(task.Env, c.EnvVarDependencies...)
+	}
+
+	if len(c.PassthroughEnv) > 0 {
+		task.PassthroughEnv = append(task.PassthroughEnv, c.PassthroughEnv...)
 	}
 
 	if len(c.Outputs.Inclusions) > 0 {
@@ -544,6 +582,7 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 	sort.Strings(task.DependsOn)
 	sort.Strings(task.Outputs)
 	sort.Strings(task.Env)
+	sort.Strings(task.PassthroughEnv)
 	sort.Strings(task.Inputs)
 
 	return json.Marshal(task)
@@ -557,16 +596,27 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	}
 
 	envVarDependencies := make(util.Set)
+	envVarPassthroughs := make(util.Set)
 	globalFileDependencies := make(util.Set)
 
 	for _, value := range raw.GlobalEnv {
 		if strings.HasPrefix(value, envPipelineDelimiter) {
 			// Hard error to help people specify this correctly during migration.
 			// TODO: Remove this error after we have run summary.
-			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
+			return fmt.Errorf("You specified \"%s\" in the \"globalEnv\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
 		}
 
 		envVarDependencies.Add(value)
+	}
+
+	for _, value := range raw.GlobalPassthroughEnv {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"globalPassthroughEnv\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
+		}
+
+		envVarPassthroughs.Add(value)
 	}
 
 	// TODO: In the rust port, warnings should be refactored to a post-parse validation step
@@ -585,6 +635,8 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	// turn the set into an array and assign to the TurboJSON struct fields.
 	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalEnv)
+	c.GlobalPassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+	sort.Strings(c.GlobalPassthroughEnv)
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalDeps)
 
@@ -602,6 +654,7 @@ func (c *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw := pristineTurboJSON{}
 	raw.GlobalDependencies = c.GlobalDeps
 	raw.GlobalEnv = c.GlobalEnv
+	raw.GlobalPassthroughEnv = c.GlobalPassthroughEnv
 	raw.Pipeline = c.Pipeline.Pristine()
 	raw.RemoteCacheOptions = c.RemoteCacheOptions
 

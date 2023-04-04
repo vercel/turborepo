@@ -80,9 +80,12 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
+
+	// Run flags
 	opts.runOpts.LogPrefix = runPayload.LogPrefix
 	opts.runOpts.Summarize = runPayload.Summarize
 	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
+	opts.runOpts.EnvMode = runPayload.EnvMode
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force

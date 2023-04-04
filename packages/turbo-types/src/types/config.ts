@@ -72,6 +72,18 @@ export interface RootSchema extends BaseSchema {
   globalEnv?: string[];
 
   /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Only applies in `--env=strict` mode.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   *
+   * @default []
+   */
+  globalPassthroughEnv?: string[];
+
+  /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
    * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
@@ -113,6 +125,19 @@ export interface Pipeline {
    * @default []
    */
   env?: string[];
+
+  /**
+   * An allowlist of environment variables that should be made available in this
+   * task's environment, but should not contribute to the task's cache key,
+   * e.g. `AWS_SECRET_KEY`.
+   *
+   * Only applies in `--env=strict` mode.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   *
+   * @default []
+   */
+  passthroughEnv?: string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.

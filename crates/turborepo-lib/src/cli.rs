@@ -52,6 +52,19 @@ pub enum DryRunMode {
     Json,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum EnvMode {
+    Infer,
+    Loose,
+    Strict,
+}
+
+impl Default for EnvMode {
+    fn default() -> EnvMode {
+        EnvMode::Infer
+    }
+}
+
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
@@ -309,6 +322,11 @@ pub struct RunArgs {
     /// .html). Outputs dot graph to stdout when if no filename is provided
     #[clap(long, num_args = 0..=1, default_missing_value = "")]
     pub graph: Option<String>,
+    /// Environment variable mode.
+    /// Loose passes the entire environment.
+    /// Strict uses an allowlist specified in turbo.json.
+    #[clap(long = "env", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
+    pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
     #[clap(long)]
@@ -603,7 +621,7 @@ mod test {
 
     use anyhow::Result;
 
-    use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
+    use crate::cli::{Args, Command, DryRunMode, EnvMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
     fn test_parse_run() -> Result<()> {
@@ -616,6 +634,71 @@ mod test {
                 }))),
                 ..Args::default()
             }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: default infer"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--env"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: not fully-specified"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--env", "infer"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified infer"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--env", "loose"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Loose,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified loose"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--env", "strict"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Strict,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified strict"
         );
 
         assert_eq!(
