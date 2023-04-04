@@ -205,7 +205,6 @@ pub extern "C" fn verify_signature(buffer: Buffer) -> Buffer {
     }
 }
 
-
 #[no_mangle]
 pub extern "C" fn glob(buffer: Buffer) -> Buffer {
     let req: proto::GlobReq = match buffer.into_proto() {
@@ -223,24 +222,20 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         false => globwalk::WalkType::All,
     };
 
-    let response = match globwalk(
-        AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
+    let response = globwalk(
+        &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
         &req.include_patterns,
         &req.exclude_patterns,
         walk_type,
-    ) {
-        Ok(files) => proto::glob_resp::Response::Files(proto::GlobRespList {
-            files: files
-                .iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect(),
-        }),
-        Err(e) => proto::glob_resp::Response::Error(e.to_string()),
-    };
+    )
+    .map(|res| res.map(|p| p.to_string_lossy().to_string()))
+    .collect();
 
     proto::GlobResp {
-        response: Some(response),
+        response: Some(match response {
+            Ok(files) => proto::glob_resp::Response::Files(proto::GlobRespList { files }),
+            Err(e) => proto::glob_resp::Response::Error(e.to_string()),
+        }),
     }
     .into()
 }
-
