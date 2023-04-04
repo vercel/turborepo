@@ -31,7 +31,7 @@ pub async fn snapshot_issues<
     let expected_issues = expected(issues_path).await?;
     let mut seen = HashSet::new();
     for (plain_issue, debug_string) in captured_issues.into_iter() {
-        let hash = encode_hex(plain_issue.internal_hash());
+        let hash = encode_hex(plain_issue.internal_hash(true));
 
         let path = issues_path.join(&format!(
             "{}-{}.txt",
