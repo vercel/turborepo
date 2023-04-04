@@ -16,6 +16,9 @@ pub struct DotenvProcessEnv {
     path: FileSystemPathVc,
 }
 
+/// Dotenv loading depends on prior state to resolve the current state. This
+/// exposes the origin of a failed parse, so that callers can determine if the
+/// prior state failed, or parsing of the current dotenv failed.
 pub enum DotenvReadResult {
     /// A PriorError is an error that happens during the read_all of the prior
     /// [ProcessEnvVc].
@@ -29,6 +32,11 @@ pub enum DotenvReadResult {
 }
 
 impl DotenvProcessEnv {
+    /// Attempts to assemble the EnvMapVc for our dotenv file. If either the
+    /// prior fails to read, or the current dotenv can't be parsed, an
+    /// appropriate Ok(DotenvReadResult) will be returned. If an unexpected
+    /// error (like disk reading or remote cache access) fails, then a regular
+    /// Err() will be returned.
     pub async fn try_read_all(&self) -> Result<DotenvReadResult> {
         let prior = match self.prior {
             None => None,
