@@ -3,7 +3,7 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import notifyUpdate from "./utils/notifyUpdate";
-import { turboGradient } from "./logger";
+import { turboGradient, error } from "./logger";
 
 import { create } from "./commands";
 import cliPkg from "../package.json";
@@ -54,9 +54,9 @@ createTurboCli
   .catch(async (reason) => {
     console.log();
     if (reason.command) {
-      console.log(`  ${chalk.cyan(reason.command)} has failed.`);
+      error(`${chalk.bold(reason.command)} has failed.`);
     } else {
-      console.log(chalk.red("Unexpected error. Please report it as a bug:"));
+      error("Unexpected error. Please report it as a bug:");
       console.log(reason);
     }
     console.log();

@@ -18,16 +18,18 @@ import { turboGradient, turboLoader, info, error, warn } from "../../logger";
 import { TransformError } from "../../transforms/errors";
 
 function handleErrors(err: unknown) {
+  // handle errors from ../../transforms
   if (err instanceof TransformError) {
     error(chalk.bold(err.transform), chalk.red(err.message));
     if (err.fatal) {
       process.exit(1);
     }
+    // handle errors from @turbo/workspaces
   } else if (err instanceof ConvertError && err.type !== "unknown") {
     error(chalk.red(err.message));
     process.exit(1);
+    // handle unknown errors (no special handling, just re-throw to catch at root)
   } else {
-    // if it's an unknown error type, re-throw to root
     throw err;
   }
 }
@@ -72,7 +74,7 @@ export async function create(
 
   if (packageManager && opts.skipTransforms) {
     warn(
-      '"--skip-transforms" flag conflicts with the package manager argument. The package manager argument will be ignored.'
+      "--skip-transforms conflicts with <package-manager>. The package manager argument will be ignored."
     );
   }
 
@@ -123,7 +125,7 @@ export async function create(
     }
   }
 
-  // if the user opted out of transforms, the package manager will be the same as the example
+  // if the user opted out of transforms, the package manager will be the same as the source example
   const projectPackageManager =
     skipTransforms || !selectedPackageManagerDetails
       ? {
@@ -174,14 +176,14 @@ export async function create(
         `Try running without "--skip-transforms" to convert "${exampleName}" to a package manager that is available on your system.`
       );
       console.log();
-    } else if (selectedPackageManagerDetails) {
+    } else if (projectPackageManager) {
       console.log("Installing packages. This might take a couple of minutes.");
       console.log();
 
       const loader = turboLoader("Installing dependencies...").start();
       await install({
         project,
-        to: selectedPackageManagerDetails,
+        to: projectPackageManager,
         options: {
           interactive: false,
         },
