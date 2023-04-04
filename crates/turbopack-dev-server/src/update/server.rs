@@ -77,7 +77,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                                     streams.insert(resource, stream);
                                 }
                                 Err(err) => {
-                                    println!("Failed to create update stream for {resource}: {}", PrettyPrintError(&err));
+                                    eprintln!("Failed to create update stream for {resource}: {}", PrettyPrintError(&err));
                                     client
                                         .send(ClientUpdateInstruction::not_found(&resource))
                                         .await?;
