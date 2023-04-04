@@ -37,11 +37,12 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn", "PassthroughEnv"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
+				PassthroughEnv:          []string{"GITHUB_TOKEN"},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
@@ -53,6 +54,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{"MY_VAR"},
+				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
@@ -64,6 +66,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{},
+				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             false,
 				OutputMode:              util.FullTaskOutput,
@@ -75,6 +78,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
 				EnvVarDependencies:      []string{},
+				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{"admin#lint", "build"},
 				ShouldCache:             false,
 				Inputs:                  []string{"build/**/*"},
@@ -125,6 +129,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
+				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
@@ -157,7 +162,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
 	_, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
-	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"globalEnv\" key. You should not prefix your environment variables with \"$\""
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
@@ -229,6 +234,7 @@ func validatePipeline(t *testing.T, actual Pipeline, expected Pipeline) {
 		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
 		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
 		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
+		assertIsSorted(t, actualTaskDefinition.PassthroughEnv, "Task env vars")
 		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
 		assert.EqualValuesf(t, expectedTaskDefinition, bookkeepingTaskDef, "task definition mismatch for %v", taskName)
