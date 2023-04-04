@@ -1,6 +1,6 @@
 use std::{env, sync::MutexGuard};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Error, Result};
 use indexmap::IndexMap;
 use turbo_tasks::ValueToString;
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
@@ -16,22 +16,26 @@ pub struct DotenvProcessEnv {
     path: FileSystemPathVc,
 }
 
-#[turbo_tasks::value_impl]
-impl DotenvProcessEnvVc {
-    #[turbo_tasks::function]
-    pub fn new(prior: Option<ProcessEnvVc>, path: FileSystemPathVc) -> Self {
-        DotenvProcessEnv { prior, path }.cell()
-    }
+pub enum DotenvReadResult {
+    /// A PriorError is an error that happens during the read_all of the prior
+    /// [ProcessEnvVc].
+    PriorError(Error),
+
+    /// A CurrentError is an error that happens during the read/parse of the
+    /// `.env` file.
+    CurrentError(Error),
+
+    Ok(EnvMapVc),
 }
 
-#[turbo_tasks::value_impl]
-impl ProcessEnv for DotenvProcessEnv {
-    #[turbo_tasks::function]
-    async fn read_all(&self) -> Result<EnvMapVc> {
-        let prior = if let Some(p) = self.prior {
-            Some(p.read_all().await?)
-        } else {
-            None
+impl DotenvProcessEnv {
+    pub async fn try_read_all(&self) -> Result<DotenvReadResult> {
+        let prior = match self.prior {
+            None => None,
+            Some(p) => match p.read_all().await {
+                Ok(p) => Some(p),
+                Err(e) => return Ok(DotenvReadResult::PriorError(e)),
+            },
         };
         let empty = IndexMap::new();
         let prior = prior.as_deref().unwrap_or(&empty);
@@ -59,16 +63,37 @@ impl ProcessEnv for DotenvProcessEnv {
                 restore_env(&vars, &initial, &lock);
             }
 
-            if res.is_err() {
-                res.context(anyhow!(
+            if let Err(e) = res {
+                return Ok(DotenvReadResult::CurrentError(anyhow!(e).context(anyhow!(
                     "unable to read {} for env vars",
                     self.path.to_string().await?
-                ))?;
+                ))));
             }
 
-            Ok(EnvMapVc::cell(vars))
+            Ok(DotenvReadResult::Ok(EnvMapVc::cell(vars)))
         } else {
-            Ok(EnvMapVc::cell(prior.clone()))
+            Ok(DotenvReadResult::Ok(EnvMapVc::cell(prior.clone())))
+        }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl DotenvProcessEnvVc {
+    #[turbo_tasks::function]
+    pub fn new(prior: Option<ProcessEnvVc>, path: FileSystemPathVc) -> Self {
+        DotenvProcessEnv { prior, path }.cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ProcessEnv for DotenvProcessEnv {
+    #[turbo_tasks::function]
+    async fn read_all(self_vc: DotenvProcessEnvVc) -> Result<EnvMapVc> {
+        let this = self_vc.await?;
+        match this.try_read_all().await? {
+            DotenvReadResult::Ok(v) => Ok(v),
+            DotenvReadResult::PriorError(e) => Err(e),
+            DotenvReadResult::CurrentError(e) => Err(e),
         }
     }
 }

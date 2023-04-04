@@ -44,7 +44,9 @@ pub async fn snapshot_issues<
                 .replace('?', "__q__"),
             &hash[0..6]
         ));
-        seen.insert(path);
+        if !seen.insert(path) {
+            continue;
+        }
 
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
         // PlainAsset.path -> FileSystemPath.fs -> DiskFileSystem.root changes
