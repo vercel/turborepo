@@ -102,9 +102,7 @@ so that `.turbo` is not included in the cache inputs.
 
 - [Are relevant inlined environment variables accounted for?][12]
 
-  To verify, run `turbo` in verbose mode by adding `-vvv` to
-  `turbo run <task>` and look at which environment variables are included in
-  the hashes.
+  [Enable verbose mode][5] to see which environment variables are included in the hashes.
 
 ### I'm seeing cache hits, but my build is broken
 
@@ -117,24 +115,28 @@ so that `.turbo` is not included in the cache inputs.
 ### My build is caching the wrong environment variables
 
 - [Are relevant inlined environment variables accounted for?][12]
-  - To verify, [enable verbose logging][5], and look at which environment variables
-    are included in the hashes.
+
+  [Enable verbose mode][5] to see which environment variables are included in the hashes.
 
 ## Common Monorepo Questions
 
 ### My dependency isn't being built correctly
 
 - Are you properly bundling and transpiling the dependency before building the application?
-  - For example, libraries like `tsc`, `tsup`, `esbuild`, `babel`, and `swc`
-    will convert newer JavaScript features back to “pure” JavaScript.
-  - If you are using Next.js, you might be using `transpilePackages`. Ensure you
-    add the name of the dependency inside `next.config.js` ([example][17]).
+
+  For example, libraries like `tsc`, `tsup`, `esbuild`, `babel`, and `swc`
+  will convert newer JavaScript features back to “pure” JavaScript.
+
+  If you are using Next.js, you might be using `transpilePackages`. Ensure you
+  add the name of the dependency inside `next.config.js` ([example][17]).
+
 - Have you listed `files` in the dependency's `package.json` to point to the correct files?
 
 ### My types are not being found
 
 - Did you specify `types` or `typing` inside the dependency's `package.json` to
   point to the `.d.ts` file?
+
 - Have you altered or set custom `tsconfig.json` `paths`?
   - Do they have the correct folder structure for your application?
   - Are they properly configured for the meta framework, bundler, or transpilation tool?
