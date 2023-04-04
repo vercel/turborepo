@@ -82,9 +82,9 @@ Turborepo creates the following directories:
 Because the first two directories are not git-ignored by default, you may see an
 issue where you run the same task twice and get a cache missing, even though you
 didn't change anything, because the generated `.turbo` directories are getting included as
-the task _inputs_, and invalidating cache. To avoid this problem, you can limit your
-[`inputs` configuration][r-inputs-config], or add `.turbo/` to your `.gitignore` file. We recommend
-the latter.
+the task _inputs_, and invalidating cache. To avoid this problem, add `.turbo` to your
+`.gitignore` file. Alternatively, you can also limit your [`inputs` configuration][r-inputs-config]
+so that `.turbo` is not included in the cache inputs.
 
 ## Common Questions
 
