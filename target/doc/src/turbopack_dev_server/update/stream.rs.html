@@ -223,6 +223,43 @@
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -238,7 +275,10 @@
     },
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::source::resolve::{ResolveSourceRequestResult, ResolveSourceRequestResultVc};
+<span class="kw">use </span><span class="kw">crate</span>::source::{
+    resolve::{ResolveSourceRequestResult, ResolveSourceRequestResultVc},
+    ProxyResultVc,
+};
 
 <span class="kw">type </span>GetContentFn = Box&lt;<span class="kw">dyn </span>Fn() -&gt; ResolveSourceRequestResultVc + Send + Sync&gt;;
 
@@ -265,7 +305,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStreamItemVc&gt; {
     <span class="kw">let </span>content = get_content();
 
-    <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">match </span><span class="kw-2">*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
         ResolveSourceRequestResult::Static(static_content_vc, <span class="kw">_</span>) =&gt; {
             <span class="kw">let </span>static_content = static_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -289,6 +329,36 @@
             }
             .cell())
         }
+        ResolveSourceRequestResult::HttpProxy(proxy_result) =&gt; {
+            <span class="kw">let </span>proxy_result_value = proxy_result.<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">if </span>proxy_result_value.status == <span class="number">404 </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamItem::NotFound.cell());
+            }
+
+            <span class="kw">let </span>plain_issues = peek_issues(proxy_result).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>from = from.get();
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(from) = ProxyResultVc::resolve_from(from).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">if </span>from.<span class="kw">await</span><span class="question-mark">? </span>== proxy_result_value {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamItem::Found {
+                        update: Update::None.cell().<span class="kw">await</span><span class="question-mark">?</span>,
+                        issues: plain_issues,
+                    }
+                    .cell());
+                }
+            }
+
+            <span class="prelude-val">Ok</span>(UpdateStreamItem::Found {
+                update: Update::Total(TotalUpdate {
+                    to: proxy_result.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
+                })
+                .cell()
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+                issues: plain_issues,
+            }
+            .cell())
+        }
         <span class="kw">_ </span>=&gt; {
             <span class="kw">let </span>plain_issues = peek_issues(content).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -298,7 +368,10 @@
                 // TODO add special instructions for removed assets to handled it in a better
                 // way
                 </span>Update::Total(TotalUpdate {
-                    to: NotFoundVersionVc::new().into(),
+                    to: NotFoundVersionVc::new()
+                        .as_version()
+                        .into_trait_ref()
+                        .<span class="kw">await</span><span class="question-mark">?</span>,
                 })
                 .cell()
             } <span class="kw">else </span>{
@@ -348,15 +421,15 @@
 }
 
 <span class="kw">impl </span>VersionStateVc {
-    <span class="kw">async fn </span>new(version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">async fn </span>new(version: TraitRef&lt;VersionVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(VersionState {
-            version: State::new(version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>),
+            version: State::new(version),
         }))
     }
 
-    <span class="kw">async fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, new_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, new_version: TraitRef&lt;VersionVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        this.version.set(new_version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>);
+        this.version.set(new_version);
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -370,13 +443,14 @@
         <span class="kw">let </span>content = get_content();
         <span class="comment">// We can ignore issues reported in content here since [compute_update_stream]
         // will handle them
-        </span><span class="kw">let </span>version = <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+        </span><span class="kw">let </span>version = <span class="kw">match </span><span class="kw-2">*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
             ResolveSourceRequestResult::Static(static_content, <span class="kw">_</span>) =&gt; {
                 static_content.<span class="kw">await</span><span class="question-mark">?</span>.content.version()
             }
+            ResolveSourceRequestResult::HttpProxy(proxy_result) =&gt; proxy_result.into(),
             <span class="kw">_ </span>=&gt; NotFoundVersionVc::new().into(),
         };
-        <span class="kw">let </span>version_state = VersionStateVc::new(version).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>version_state = VersionStateVc::new(version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         compute_update_stream(version_state, get_content, TransientInstance::new(sx));
 
@@ -404,7 +478,7 @@
                             Update::Partial(PartialUpdate { to, .. })
                             | Update::Total(TotalUpdate { to }) =&gt; {
                                 version_state
-                                    .set(<span class="kw-2">*</span>to)
+                                    .set(to.clone())
                                     .<span class="kw">await
                                     </span>.expect(<span class="string">&quot;failed to update version&quot;</span>);
 

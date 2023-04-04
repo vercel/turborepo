@@ -538,6 +538,25 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -556,12 +575,13 @@
 <span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>futures::stream::Stream <span class="kw">as </span>StreamTrait;
+<span class="kw">use </span>futures::{stream::Stream <span class="kw">as </span>StreamTrait, TryStreamExt};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{trace::TraceRawVcs, util::SharedError, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, util::SharedError, Value};
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::version::VersionedContentVc;
+<span class="kw">use </span>turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
+<span class="kw">use </span>turbopack_core::version::{Version, VersionVc, VersionedContentVc};
 
 <span class="kw">use </span><span class="self">self</span>::{
     headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
@@ -577,6 +597,24 @@
     </span><span class="kw">pub </span>headers: Vec&lt;(String, String)&gt;,
     <span class="doccomment">/// The body to return.
     </span><span class="kw">pub </span>body: Body,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Version <span class="kw">for </span>ProxyResult {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>hash = Xxh3Hash64Hasher::new();
+        hash.write_u16(<span class="self">self</span>.status);
+        <span class="kw">for </span>(name, value) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.headers {
+            name.deterministic_hash(<span class="kw-2">&amp;mut </span>hash);
+            value.deterministic_hash(<span class="kw-2">&amp;mut </span>hash);
+        }
+        <span class="kw">let </span><span class="kw-2">mut </span>read = <span class="self">self</span>.body.read();
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(chunk) = read.try_next().<span class="kw">await</span><span class="question-mark">? </span>{
+            hash.write_bytes(<span class="kw-2">&amp;</span>chunk);
+        }
+        <span class="prelude-val">Ok</span>(StringVc::cell(hash.finish().to_string()))
+    }
 }
 
 <span class="doccomment">/// The return value of a content source when getting a path. A specificity is

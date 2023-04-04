@@ -264,6 +264,15 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -278,7 +287,7 @@
 <span class="kw">use </span>tokio_stream::StreamMap;
 <span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi};
 <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
-<span class="kw">use </span>turbopack_core::{issue::IssueReporterVc, version::Update};
+<span class="kw">use </span>turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
 
 <span class="kw">use super</span>::{
     protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
@@ -338,8 +347,17 @@
                                     )
                                 }
                             };
-                            <span class="kw">let </span>stream = UpdateStream::new(TransientInstance::new(Box::new(get_content))).<span class="kw">await</span><span class="question-mark">?</span>;
-                            streams.insert(resource, stream);
+                            <span class="kw">match </span>UpdateStream::new(TransientInstance::new(Box::new(get_content))).<span class="kw">await </span>{
+                                <span class="prelude-val">Ok</span>(stream) =&gt; {
+                                    streams.insert(resource, stream);
+                                }
+                                <span class="prelude-val">Err</span>(err) =&gt; {
+                                    <span class="macro">eprintln!</span>(<span class="string">&quot;Failed to create update stream for {resource}: {}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>err));
+                                    client
+                                        .send(ClientUpdateInstruction::not_found(<span class="kw-2">&amp;</span>resource))
+                                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                                }
+                            }
                         }
                         <span class="prelude-val">Some</span>(ClientMessage::Unsubscribe { resource }) =&gt; {
                             streams.remove(<span class="kw-2">&amp;</span>resource);
@@ -382,11 +400,11 @@
                     .collect::&lt;Vec&lt;Issue&lt;<span class="lifetime">&#39;_</span>&gt;&gt;&gt;();
                 <span class="kw">match </span><span class="kw-2">&amp;**</span>update {
                     Update::Partial(partial) =&gt; {
-                        <span class="kw">let </span>partial_instruction = partial.instruction.<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>partial_instruction = <span class="kw-2">&amp;</span>partial.instruction;
                         client
                             .send(ClientUpdateInstruction::partial(
                                 <span class="kw-2">&amp;</span>resource,
-                                <span class="kw-2">&amp;</span>partial_instruction,
+                                <span class="kw-2">&amp;**</span>partial_instruction,
                                 <span class="kw-2">&amp;</span>issues,
                             ))
                             .<span class="kw">await</span><span class="question-mark">?</span>;

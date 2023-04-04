@@ -255,10 +255,14 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>turbo_tasks::{primitives::JsonValueVc, TryJoinIterExt};
+<span class="kw">use </span>turbo_tasks::{IntoTraitRef, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::{
     chunk::{Chunk, ChunkingContext, ModuleId, ModuleIdReadRef},
@@ -388,7 +392,7 @@
         } <span class="kw">else </span>{
             <span class="comment">// It&#39;s likely `from_version` is `NotFoundVersion`.
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
-                to: to_merged_version.into(),
+                to: to_merged_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
             }));
         };
 
@@ -505,8 +509,8 @@
         Update::None
     } <span class="kw">else </span>{
         Update::Partial(PartialUpdate {
-            to: to_merged_version.into(),
-            instruction: JsonValueVc::cell(serde_json::to_value(<span class="kw-2">&amp;</span>merged_update)<span class="question-mark">?</span>),
+            to: to_merged_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
+            instruction: Arc::new(serde_json::to_value(<span class="kw-2">&amp;</span>merged_update)<span class="question-mark">?</span>),
         })
     };
 

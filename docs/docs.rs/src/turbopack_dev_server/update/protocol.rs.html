@@ -169,7 +169,19 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, ops::Deref, path::PathBuf};
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, fmt::Display, ops::Deref, path::PathBuf};
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
@@ -184,6 +196,18 @@
 </span><span class="kw">pub struct </span>ResourceIdentifier {
     <span class="kw">pub </span>path: String,
     <span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;String, String&gt;&gt;,
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>ResourceIdentifier {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.path)<span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span><span class="self">self</span>.headers {
+            <span class="kw">for </span>(key, value) <span class="kw">in </span>headers.iter() {
+                <span class="macro">write!</span>(f, <span class="string">&quot; [{}: {}]&quot;</span>, key, value)<span class="question-mark">?</span>;
+            }
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
 }
 
 <span class="attr">#[derive(Deserialize)]

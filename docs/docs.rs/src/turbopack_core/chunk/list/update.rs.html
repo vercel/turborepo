@@ -164,14 +164,12 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>turbo_tasks::{
-    primitives::{JsonValueReadRef, JsonValueVc},
-    TraitRef,
-};
+<span class="kw">use </span>turbo_tasks::{IntoTraitRef, TraitRef};
 
 <span class="kw">use super</span>::{content::ChunkListContentVc, version::ChunkListVersionVc};
 <span class="kw">use </span><span class="kw">crate</span>::version::{
@@ -189,7 +187,7 @@
     </span>chunks: IndexMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, ChunkUpdate&gt;,
     <span class="doccomment">/// List of merged updates since the last version.
     </span><span class="attr">#[serde(skip_serializing_if = <span class="string">&quot;Vec::is_empty&quot;</span>)]
-    </span>merged: Vec&lt;JsonValueReadRef&gt;,
+    </span>merged: Vec&lt;Arc&lt;serde_json::Value&gt;&gt;,
 }
 
 <span class="doccomment">/// Update of a chunk from one version to another.
@@ -200,7 +198,7 @@
     <span class="doccomment">/// The chunk was updated and must be reloaded.
     </span>Total,
     <span class="doccomment">/// The chunk was updated and can be merged with the previous version.
-    </span>Partial { instruction: JsonValueReadRef },
+    </span>Partial { instruction: Arc&lt;serde_json::Value&gt; },
     <span class="doccomment">/// The chunk was added.
     </span>Added,
     <span class="doccomment">/// The chunk was deleted.
@@ -227,7 +225,7 @@
     } <span class="kw">else </span>{
         <span class="comment">// It&#39;s likely `from_version` is `NotFoundVersion`.
         </span><span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
-            to: to_version.into(),
+            to: to_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
         })
         .cell());
     };
@@ -279,7 +277,7 @@
                     chunks.insert(
                         chunk_path.as_ref(),
                         ChunkUpdate::Partial {
-                            instruction: partial.instruction.<span class="kw">await</span><span class="question-mark">?</span>,
+                            instruction: partial.instruction.clone(),
                         },
                     );
                 }
@@ -308,12 +306,12 @@
                 // the update.
                 </span>Update::Total(<span class="kw">_</span>) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
-                        to: to_version.into(),
+                        to: to_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
                     })
                     .cell());
                 }
                 Update::Partial(partial) =&gt; {
-                    merged.push(partial.instruction.<span class="kw">await</span><span class="question-mark">?</span>);
+                    merged.push(partial.instruction.clone());
                 }
                 Update::None =&gt; {}
             }
@@ -325,8 +323,8 @@
         Update::None
     } <span class="kw">else </span>{
         Update::Partial(PartialUpdate {
-            to: to_version.into(),
-            instruction: JsonValueVc::cell(serde_json::to_value(<span class="kw-2">&amp;</span>update)<span class="question-mark">?</span>),
+            to: to_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
+            instruction: Arc::new(serde_json::to_value(<span class="kw-2">&amp;</span>update)<span class="question-mark">?</span>),
         })
     };
 

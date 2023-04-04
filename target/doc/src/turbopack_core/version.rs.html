@@ -231,13 +231,14 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
-    debug::ValueDebugFormat,
-    primitives::{JsonValueVc, StringVc},
-    trace::TraceRawVcs,
-    IntoTraitRef,
+    debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, IntoTraitRef, TraitRef,
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef, LinkType};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
@@ -279,7 +280,7 @@
         <span class="prelude-val">Ok</span>(<span class="kw">if </span><span class="kw-2">*</span>from_id == <span class="kw-2">*</span>to_id {
             Update::None.into()
         } <span class="kw">else </span>{
-            Update::Total(TotalUpdate { to }).into()
+            Update::Total(TotalUpdate { to: to_ref }).into()
         })
     }
 }
@@ -419,17 +420,20 @@
 </span><span class="attr">#[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>TotalUpdate {
     <span class="doccomment">/// The version this update will bring the object to.
-    </span><span class="kw">pub </span>to: VersionVc,
+    </span><span class="attr">#[turbo_tasks(trace_ignore)]
+    </span><span class="kw">pub </span>to: TraitRef&lt;VersionVc&gt;,
 }
 
 <span class="doccomment">/// A partial update to a versioned object.
 </span><span class="attr">#[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PartialUpdate {
     <span class="doccomment">/// The version this update will bring the object to.
-    </span><span class="kw">pub </span>to: VersionVc,
+    </span><span class="attr">#[turbo_tasks(trace_ignore)]
+    </span><span class="kw">pub </span>to: TraitRef&lt;VersionVc&gt;,
     <span class="doccomment">/// The instructions to be passed to a remote system in order to update the
     /// versioned object.
-    </span><span class="kw">pub </span>instruction: JsonValueVc,
+    </span><span class="attr">#[turbo_tasks(trace_ignore)]
+    </span><span class="kw">pub </span>instruction: Arc&lt;serde_json::Value&gt;,
 }
 
 <span class="doccomment">/// [`Version`] implementation that hashes a file at a given path and returns
