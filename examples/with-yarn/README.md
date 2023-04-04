@@ -2,6 +2,10 @@
 
 This is an official starter Turborepo.
 
+```sh
+npx create-turbo@latest -e with-yarn
+```
+
 ## What's inside?
 
 This Turborepo uses [yarn](https://classic.yarnpkg.com/lang/en/) as a packages manager. It includes the following packages/apps:
@@ -24,16 +28,12 @@ This Turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
 
-## Setup
+## Using this example
 
-This repository can be used by running `npx create-turbo@latest`, and selecting `yarn` in the terminal prompt,
-or you can also download this folder like all the other examples with:
+Run the following command:
 
 ```sh
-npx degit vercel/turbo/examples/with-yarn with-yarn
-cd with-yarn
-yarn
-git init . && git add . && git commit -m "Init"
+npx create-turbo@latest -e with-yarn
 ```
 
 ### Build

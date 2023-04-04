@@ -2,6 +2,10 @@
 
 This is an official starter Turborepo.
 
+```sh
+npx create-turbo@latest -e with-create-react-app
+```
+
 ## What's inside?
 
 This Turborepo includes the following packages/apps:
@@ -30,8 +34,5 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turbo/examples/with-create-react-app with-create-react-app
-cd with-create-react-app
-pnpm install
-git init . && git add . && git commit -m "Init"
+npx create-turbo@latest -e with-create-react-app
 ```

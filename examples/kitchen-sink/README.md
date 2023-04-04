@@ -2,6 +2,10 @@
 
 This is an official starter Turborepo with multiple meta-frameworks all working in harmony and sharing packages.
 
+```sh
+npx create-turbo@latest -e kitchen-sink
+```
+
 ## What's inside?
 
 This Turborepo includes the following packages and apps:
@@ -33,8 +37,5 @@ This Turborepo has some additional tools already setup for you:
 Run the following command:
 
 ```sh
-npx degit vercel/turbo/examples/kitchen-sink kitchen-sink
-cd kitchen-sink
-pnpm install
-git init . && git add . && git commit -m "Init"
+npx create-turbo@latest -e kitchen-sink
 ```
