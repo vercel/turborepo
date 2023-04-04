@@ -35,6 +35,8 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
+	assert.EqualValues(t, []string{"AWS_SECRET_KEY"}, turboJSON.GlobalPassthroughEnv)
+
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
 			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn", "PassthroughEnv"}),
