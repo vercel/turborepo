@@ -95,3 +95,9 @@ impl fmt::Display for RelativeSystemPathBuf {
         self.0.display().fmt(f)
     }
 }
+
+impl AsRef<Path> for RelativeSystemPathBuf {
+    fn as_ref(&self) -> &Path {
+        self.0.as_ref()
+    }
+}
