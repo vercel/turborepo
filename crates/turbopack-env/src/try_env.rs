@@ -29,7 +29,7 @@ impl TryDotenvProcessEnv {
 
                 ProcessEnvIssue {
                     path: self.path,
-                    description: StringVc::cell(e.to_string()),
+                    description: StringVc::cell(e.root_cause().to_string()),
                 }
                 .cell()
                 .as_issue()
