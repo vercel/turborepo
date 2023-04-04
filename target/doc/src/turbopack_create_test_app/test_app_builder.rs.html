@@ -550,14 +550,33 @@
 <a href="#550" id="550">550</a>
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
     io::prelude::<span class="kw-2">*</span>,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
-<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::{formatdoc, indoc};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tempfile::TempDir;
@@ -592,14 +611,30 @@
 }
 
 <span class="doccomment">/// How to run effects in components.
-</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+</span><span class="attr">#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>EffectMode {
+    <span class="doccomment">/// No effects at all.
+    </span><span class="attr">#[default]
+    </span><span class="prelude-val">None</span>,
     <span class="doccomment">/// As a direct `useEffect` hook in the component&#39;s body.
     </span>Hook,
     <span class="doccomment">/// Rendering an &lt;Effect /&gt; client-side component that has the `useEffect`
     /// hook instead. Good for testing React Server Components, as they can&#39;t
     /// use `useEffect` hooks directly.
     </span>Component,
+}
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>EffectMode {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="kw">match </span>s {
+            <span class="string">&quot;none&quot; </span>=&gt; <span class="prelude-val">Ok</span>(EffectMode::None),
+            <span class="string">&quot;hook&quot; </span>=&gt; <span class="prelude-val">Ok</span>(EffectMode::Hook),
+            <span class="string">&quot;component&quot; </span>=&gt; <span class="prelude-val">Ok</span>(EffectMode::Component),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unknown effect mode: {}&quot;</span>, s)),
+        }
+    }
 }
 
 <span class="attr">#[derive(Debug)]
@@ -673,6 +708,7 @@ React.useEffect(() =&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>is_root = <span class="bool-val">true</span>;
 
         <span class="kw">let </span>(additional_body, additional_elements) = <span class="kw">match </span><span class="self">self</span>.effect_mode {
+            EffectMode::None =&gt; (<span class="string">&quot;&quot;</span>, <span class="string">&quot;&quot;</span>),
             EffectMode::Component =&gt; (<span class="string">&quot;&quot;</span>, EFFECT_ELEMENT),
             EffectMode::Hook =&gt; (USE_EFFECT, <span class="string">&quot;&quot;</span>),
         };
@@ -681,7 +717,7 @@ React.useEffect(() =&gt; {
             modules.push((file.clone(), depth));
 
             <span class="kw">let </span>setup_imports = <span class="kw">match </span><span class="self">self</span>.effect_mode {
-                EffectMode::Hook =&gt; SETUP_IMPORTS.to_string(),
+                EffectMode::Hook | EffectMode::None =&gt; SETUP_IMPORTS.to_string(),
                 EffectMode::Component =&gt; {
                     <span class="kw">let </span>relative_effect = <span class="kw">if </span>src == file.parent().unwrap() {
                         <span class="string">&quot;./effect.jsx&quot;</span>.to_string()
