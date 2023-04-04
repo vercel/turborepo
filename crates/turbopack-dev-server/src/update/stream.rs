@@ -8,7 +8,7 @@ use turbo_tasks::{CollectiblesSource, IntoTraitRef, State, TraitRef, TransientIn
 use turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
     version::{
-        NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, Version, VersionVc,
+        NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc,
         VersionedContent,
     },
 };
