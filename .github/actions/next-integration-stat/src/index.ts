@@ -691,7 +691,7 @@ async function getTestResultDiffBase(
     }
 
     return acc.date >= date ? acc : { date, value };
-  }, null as any as { date: Date; value: typeof testResultJsonTree[0] });
+  }, null as any as { date: Date; value: (typeof testResultJsonTree)[0] });
 
   if (!actualTestResultTree || !actualTestResultTree?.value?.sha) {
     console.log("There is no test results json stored in the base yet");

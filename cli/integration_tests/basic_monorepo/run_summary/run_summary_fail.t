@@ -16,7 +16,6 @@ The maybefails task fails for one workspace but not the other
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "buildFailed",
     "error": {},
     "exitCode": 1
   }
@@ -26,7 +25,6 @@ The maybefails task fails for one workspace but not the other
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "built",
     "error": null,
     "exitCode": 0
   }

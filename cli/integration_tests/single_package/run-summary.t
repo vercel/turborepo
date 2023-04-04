@@ -16,7 +16,7 @@ Check
   1
   $ cat $SUMMARY | jq '.version'
   "0"
-  $ cat $SUMMARY | jq '.executionSummary | keys'
+  $ cat $SUMMARY | jq '.execution | keys'
   [
     "attempted",
     "cached",
@@ -27,36 +27,36 @@ Check
     "success"
   ]
 
-  $ cat $SUMMARY | jq '.executionSummary.exitCode'
+  $ cat $SUMMARY | jq '.execution.exitCode'
   0
-  $ cat $SUMMARY | jq '.executionSummary.attempted'
+  $ cat $SUMMARY | jq '.execution.attempted'
   1
-  $ cat $SUMMARY | jq '.executionSummary.cached'
+  $ cat $SUMMARY | jq '.execution.cached'
   0
-  $ cat $SUMMARY | jq '.executionSummary.failed'
+  $ cat $SUMMARY | jq '.execution.failed'
   0
-  $ cat $SUMMARY | jq '.executionSummary.success'
+  $ cat $SUMMARY | jq '.execution.success'
   1
-  $ cat $SUMMARY | jq '.executionSummary.startTime'
+  $ cat $SUMMARY | jq '.execution.startTime'
   [0-9]+ (re)
-  $ cat $SUMMARY | jq '.executionSummary.endTime'
+  $ cat $SUMMARY | jq '.execution.endTime'
   [0-9]+ (re)
 
   $ echo $TASK_SUMMARY | jq 'keys'
   [
-    "cacheState",
+    "cache",
+    "cliArguments",
     "command",
-    "commandArguments",
     "dependencies",
     "dependents",
     "environmentVariables",
     "excludedOutputs",
     "execution",
-    "expandedInputs",
     "expandedOutputs",
     "framework",
     "hash",
     "hashOfExternalDependencies",
+    "inputs",
     "logFile",
     "outputs",
     "resolvedTaskDefinition",
@@ -67,18 +67,17 @@ Check
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "built",
     "error": null,
     "exitCode": 0
   }
-  $ echo $TASK_SUMMARY | jq '.commandArguments'
+  $ echo $TASK_SUMMARY | jq '.cliArguments'
   []
   $ echo $TASK_SUMMARY | jq '.expandedOutputs'
   [
     ".turbo/turbo-build.log",
     "foo"
   ]
-  $ echo $TASK_SUMMARY | jq '.cacheState'
+  $ echo $TASK_SUMMARY | jq '.cache'
   {
     "local": false,
     "remote": false

@@ -76,15 +76,13 @@ type TaskExecutionSummary struct {
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
 func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 	serializable := struct {
-		Start    int64  `json:"startTime"`
-		End      int64  `json:"endTime"`
-		Status   string `json:"status"`
-		Err      error  `json:"error"`
-		ExitCode *int   `json:"exitCode"`
+		Start    int64 `json:"startTime"`
+		End      int64 `json:"endTime"`
+		Err      error `json:"error"`
+		ExitCode *int  `json:"exitCode"`
 	}{
 		Start:    ts.startAt.UnixMilli(),
 		End:      ts.startAt.Add(ts.Duration).UnixMilli(),
-		Status:   ts.status.toString(),
 		Err:      ts.err,
 		ExitCode: ts.exitCode,
 	}

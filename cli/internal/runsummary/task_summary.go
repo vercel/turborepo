@@ -16,9 +16,11 @@ type TaskSummary struct {
 	Task                   string                                `json:"task"`
 	Package                string                                `json:"package,omitempty"`
 	Hash                   string                                `json:"hash"`
-	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"inputs"`
+	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
+	CacheState             cache.ItemStatus                      `json:"cache"`
 	Command                string                                `json:"command"`
-	CommandArguments       []string                              `json:"commandArguments"`
+	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFile                string                                `json:"logFile"`
@@ -26,12 +28,10 @@ type TaskSummary struct {
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
-	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
