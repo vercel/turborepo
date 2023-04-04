@@ -1,4 +1,7 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use git2::{DiffFormat, DiffOptions, Repository};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -45,8 +48,19 @@ pub fn changed_files(
     Ok(files)
 }
 
+fn reanchor_path_from_git_root_to_turbo_root(
+    git_root: &AbsoluteSystemPathBuf,
+    turbo_root: &AbsoluteSystemPathBuf,
+    path: &Path,
+) -> Result<AnchoredSystemPathBuf, Error> {
+    let anchored_to_git_root_file_path: AnchoredSystemPathBuf = path.try_into()?;
+    let absolute_file_path = git_root.resolve(&anchored_to_git_root_file_path);
+    let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
+    Ok(anchored_to_turbo_root_file_path)
+}
+
 fn add_changed_files_from_unstaged_changes(
-    repo_root: &AbsoluteSystemPathBuf,
+    git_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
     turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
@@ -55,7 +69,7 @@ fn add_changed_files_from_unstaged_changes(
     options.include_untracked(true);
     options.recurse_untracked_dirs(true);
 
-    let anchored_turbo_root = repo_root.anchor(turbo_root)?;
+    let anchored_turbo_root = git_root.anchor(turbo_root)?;
     options.pathspec(anchored_turbo_root.to_str()?.to_string());
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
@@ -63,9 +77,8 @@ fn add_changed_files_from_unstaged_changes(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
-            let anchored_to_repo_root_file_path: AnchoredSystemPathBuf = file_path.try_into()?;
-            let absolute_file_path = repo_root.resolve(&anchored_to_repo_root_file_path);
-            let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
+            let anchored_to_turbo_root_file_path =
+                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
             files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
         }
     }
@@ -74,7 +87,7 @@ fn add_changed_files_from_unstaged_changes(
 }
 
 fn add_changed_files_from_commits(
-    repo_root: &AbsoluteSystemPathBuf,
+    git_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
     turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
@@ -89,7 +102,7 @@ fn add_changed_files_from_commits(
     let to_tree = to_commit.tree()?;
 
     let mut options = DiffOptions::new();
-    let anchored_turbo_root = repo_root.anchor(turbo_root)?;
+    let anchored_turbo_root = git_root.anchor(turbo_root)?;
     options.pathspec(anchored_turbo_root.to_str()?);
 
     let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
@@ -98,9 +111,8 @@ fn add_changed_files_from_commits(
     for delta in diff.deltas() {
         let file = delta.old_file();
         if let Some(file_path) = file.path() {
-            let anchored_to_repo_root_file_path: AnchoredSystemPathBuf = file_path.try_into()?;
-            let absolute_file_path = repo_root.resolve(&anchored_to_repo_root_file_path);
-            let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
+            let anchored_to_turbo_root_file_path =
+                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
             files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
         }
     }
@@ -113,24 +125,24 @@ fn add_changed_files_from_commits(
 ///
 /// # Arguments
 ///
-/// * `repo_root`: The root of the repository
+/// * `git_root`: The root of the repository
 /// * `from_commit`: The commit hash to checkout
 /// * `file_path`: The path to the file
 ///
 /// returns: Result<String, Error>
 pub fn previous_content(
-    repo_root: PathBuf,
+    git_root: PathBuf,
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let repo = Repository::open(&repo_root)?;
-    let repo_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(repo_root)?)?;
+    let repo = Repository::open(&git_root)?;
+    let git_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(git_root)?)?;
     let file_path = AbsoluteSystemPathBuf::new(dunce::canonicalize(file_path)?)?;
     let from_commit_ref = repo.revparse_single(from_commit)?;
     let from_commit = from_commit_ref.peel_to_commit()?;
     let from_tree = from_commit.tree()?;
 
-    let relative_path = repo_root.anchor(&file_path)?;
+    let relative_path = git_root.anchor(&file_path)?;
 
     let file = from_tree.get_path(relative_path.as_path())?;
     let blob = repo.find_blob(file.id())?;
@@ -151,7 +163,7 @@ mod tests {
     use git2::{Oid, Repository};
 
     use super::previous_content;
-    use crate::Error;
+    use crate::{git::changed_files, Error};
 
     fn commit_file(
         repo: &Repository,
@@ -181,10 +193,54 @@ mod tests {
         )?)
     }
 
+    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Result<Oid, Error> {
+        let mut index = repo.index()?;
+        index.remove_path(path)?;
+        let tree_oid = index.write_tree()?;
+        index.write()?;
+        let tree = repo.find_tree(tree_oid)?;
+        let previous_commit = repo.find_commit(previous_commit)?;
+
+        Ok(repo.commit(
+            Some("HEAD"),
+            &repo.signature()?,
+            &repo.signature()?,
+            "Commit",
+            &tree,
+            std::slice::from_ref(&&previous_commit),
+        )?)
+    }
+
+    #[test]
+    fn test_deleted_files() -> Result<(), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        let file = repo_root.path().join("foo.js");
+        let file_path = Path::new("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, &file_path, None)?;
+
+        fs::remove_file(&file)?;
+        let _second_commit_oid = commit_delete(&repo, &file_path, first_commit_oid)?;
+
+        let first_commit_sha = first_commit_oid.to_string();
+        let git_root = repo_root.path().to_owned();
+        let turborepo_root = repo_root.path().to_owned();
+        let files = changed_files(git_root, turborepo_root, Some((&first_commit_sha, "HEAD")))?;
+        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
+        Ok(())
+    }
+
     #[test]
     fn test_changed_files() -> Result<(), Error> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path())?;
+        let mut index = repo.index()?;
         let turbo_root = repo_root.path();
         let mut config = repo.config()?;
         config.set_str("user.name", "test")?;
@@ -200,7 +256,19 @@ mod tests {
         fs::write(new_file, "let y = 1;")?;
 
         // Test that uncommitted file is marked as changed
-        let files = super::changed_files(
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            None,
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        // Add file to index
+        index.add_path(Path::new("bar.js"))?;
+        index.write()?;
+
+        // Test that uncommitted file in index is still marked as changed
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
             None,
@@ -211,7 +279,7 @@ mod tests {
         let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
 
         // Test that only second file is marked as changed when we check commit range
-        let files = super::changed_files(
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
             Some((
@@ -259,7 +327,7 @@ mod tests {
 
         // Test that uncommitted file is marked as changed with the parameters that Go
         // will pass
-        let files = super::changed_files(
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
             None,
@@ -291,7 +359,7 @@ mod tests {
         let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
-        let files = super::changed_files(
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
             None,
@@ -309,7 +377,7 @@ mod tests {
 
         commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit))?;
 
-        let files = super::changed_files(
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
             Some((
