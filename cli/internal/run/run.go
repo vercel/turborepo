@@ -274,7 +274,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	} else {
 		if globalHash, err := fs.HashObject(globalHashable); err == nil {
-			r.base.Logger.Debug("global hash", "value", globalHash)
+			r.base.Logger.Debug("new global hash", "value", globalHash)
 			g.GlobalHash = globalHash
 		} else {
 			return fmt.Errorf("failed to calculate global hash: %v", err)

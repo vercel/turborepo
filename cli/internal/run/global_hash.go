@@ -122,6 +122,11 @@ func calculateGlobalHash(
 		return GlobalHashable{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
+	// Remove the passthroughs from hash consideration if we're explicitly loose.
+	if envMode == util.Loose {
+		envVarPassthroughs = nil
+	}
+
 	return GlobalHashable{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,

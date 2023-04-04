@@ -635,8 +635,12 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	// turn the set into an array and assign to the TurboJSON struct fields.
 	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalEnv)
-	c.GlobalPassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
-	sort.Strings(c.GlobalPassthroughEnv)
+
+	if raw.GlobalPassthroughEnv != nil {
+		c.GlobalPassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+		sort.Strings(c.GlobalPassthroughEnv)
+	}
+
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalDeps)
 
