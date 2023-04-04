@@ -416,6 +416,17 @@ turbo run build --since=origin/main
   input files for a workspace exist inside their respective workspace folders.
 </Callout>
 
+#### `--summarize`
+
+Generates a JSON file in `.turbo/runs` containing metadata about the run, including affected workspaces,
+executed tasks (including their timings and hashes), expanded to the cache key based on your config
+and all the files included in the cached artifact. This flag can be helpful to determine, among other
+things:
+
+- How turbo interpreted your glob syntax for `inputs` and `outputs`
+- What inputs changed between two task runs to produce a cache hit or miss
+- How task timings changed over time
+
 #### `--token`
 
 A bearer token for remote caching. Useful for running in non-interactive shells (e.g. CI/CD) in combination with `--team` flags.
