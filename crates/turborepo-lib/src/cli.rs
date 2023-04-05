@@ -243,9 +243,9 @@ pub enum Command {
     Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
-        /// Set the idle timeout for turbod (default 4h0m0s)
-        #[clap(long)]
-        idle_time: Option<String>,
+        /// Set the idle timeout for turbod
+        #[clap(long, default_value_t = String::from("4h0m0s"))]
+        idle_time: String,
         #[clap(subcommand)]
         #[serde(flatten)]
         command: Option<DaemonCommand>,

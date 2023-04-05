@@ -62,10 +62,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     Ok(())
 }
 
-pub async fn daemon_server(
-    base: &CommandBase,
-    idle_time: &Option<String>,
-) -> Result<(), DaemonError> {
+pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(), DaemonError> {
     let log_file = {
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");
@@ -84,14 +81,9 @@ pub async fn daemon_server(
     let repo_root =
         turborepo_paths::AbsoluteNormalizedPathBuf::new(base.repo_root.clone()).expect("absolute");
 
-    let timeout = idle_time
-        .as_ref()
-        .map(|s| {
-            go_parse_duration::parse_duration(s).map_err(|_| DaemonError::InvalidTimeout(s.clone()))
-        })
-        .transpose()?
-        .map(|d| Duration::from_nanos(d as u64))
-        .unwrap_or_else(|| Duration::from_secs(60 * 60 * 4));
+    let timeout = go_parse_duration::parse_duration(idle_time)
+        .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
+        .map(|d| Duration::from_nanos(d as u64))?;
 
     let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
     server.serve(repo_root).await;
