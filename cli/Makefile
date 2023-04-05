@@ -42,7 +42,7 @@ turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
+	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
 
 .PHONY: turborepo-ffi-copy-bindings
 turborepo-ffi-copy-bindings:
