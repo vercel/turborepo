@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --minify",
-    "prepare": "npm run build"
+    "prepare": "pnpm run build"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
