@@ -115,7 +115,10 @@ mod tests {
 
     #[test]
     fn test_relative_unix_path_buf_errors() {
+        #[cfg(not(windows))]
         assert!(RelativeUnixPathBuf::new(PathBuf::from("/foo/bar")).is_err());
+        #[cfg(windows)]
+        assert!(RelativeUnixPathBuf::new(PathBuf::from("C:\\foo\\bar")).is_err());
     }
 
     #[cfg(windows)]
