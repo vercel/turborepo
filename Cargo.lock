@@ -7937,6 +7937,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-api-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "reqwest",
+ "rustc_version_runtime",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "turborepo-ffi"
 version = "0.1.0"
 dependencies = [
@@ -8007,6 +8019,7 @@ dependencies = [
  "tonic-build",
  "tower",
  "turbo-updater",
+ "turborepo-api-client",
  "turborepo-paths",
  "uds_windows",
  "url",
