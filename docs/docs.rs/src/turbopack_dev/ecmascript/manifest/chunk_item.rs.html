@@ -102,10 +102,6 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::formatdoc;
@@ -157,16 +153,12 @@
             // item is one of several that are contained in that chunk file.
             </span><span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="comment">// The pathname is the file path necessary to load the chunk from the server.
-            </span><span class="kw">let </span>chunk_server_path = <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(chunk_path) {
-                path
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(chunk_path) {
+                chunk_server_paths.insert(path.to_string());
             } <span class="kw">else </span>{
-                <span class="macro">bail!</span>(
-                    <span class="string">&quot;chunk path {} is not in output root {}&quot;</span>,
-                    chunk.ident().path().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
-                    <span class="self">self</span>.context.output_root().to_string().<span class="kw">await</span><span class="question-mark">?
-                </span>);
-            };
-            chunk_server_paths.insert(chunk_server_path.to_string());
+                <span class="comment">// ignore all chunks that are not in the output root
+                // they need to be handled by some external mechanism
+            </span>};
         }
 
         <span class="kw">let </span>chunk_list_path = <span class="self">self
