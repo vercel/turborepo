@@ -64,10 +64,21 @@ impl AbsoluteSystemPathBuf {
     /// ```
     /// use std::path::Path;
     /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-    /// let base = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
-    /// let anchored_path = AbsoluteSystemPathBuf::new("/Users/user/Documents").unwrap();
-    /// let anchored_path = base.anchor(&anchored_path).unwrap();
-    /// assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    /// #[cfg(not(windows))]
+    /// {
+    ///   let base = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
+    ///   let anchored_path = AbsoluteSystemPathBuf::new("/Users/user/Documents").unwrap();
+    ///   let anchored_path = base.anchor(&anchored_path).unwrap();
+    ///   assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    /// }
+    ///
+    /// #[cfg(windows)]
+    /// {
+    ///   let base = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
+    ///   let anchored_path = AbsoluteSystemPathBuf::new("C:\\Users\\user\\Documents").unwrap();
+    ///   let anchored_path = base.anchor(&anchored_path).unwrap();
+    ///  assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    /// }
     /// ```
     pub fn anchor(
         &self,
@@ -89,11 +100,15 @@ impl AbsoluteSystemPathBuf {
     /// ```
     /// use std::path::Path;
     /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    /// #[cfg(not(windows))]
     /// let absolute_path = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
+    ///
+    /// #[cfg(windows)]
+    /// let absolute_path = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
     /// let anchored_path = Path::new("Documents").try_into().unwrap();
     /// let resolved_path = absolute_path.resolve(&anchored_path);
     /// #[cfg(windows)]
-    /// assert_eq!(resolved_path.as_path(), Path::new("\\Users\\user\\Documents"));
+    /// assert_eq!(resolved_path.as_path(), Path::new("C:\\Users\\user\\Documents"));
     /// assert_eq!(resolved_path.as_path(), Path::new("/Users/user/Documents"));
     /// ```
     pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
@@ -169,11 +184,11 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, path::Path};
+    use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathValidationError};
+    use crate::{AbsoluteSystemPathBuf, PathValidationError};
 
-    #[cfg(unix)]
+    #[cfg(not(windows))]
     #[test]
     fn test_absolute_system_path_buf_on_unix() {
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
