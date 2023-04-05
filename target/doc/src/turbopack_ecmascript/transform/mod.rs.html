@@ -291,25 +291,6 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{fmt::Debug, path::Path, sync::Arc};
@@ -340,12 +321,7 @@
     ClientDirective(StringVc),
     CommonJs,
     Custom(CustomTransformVc),
-    Emotion {
-        <span class="attr">#[serde(default)]
-        </span>sourcemap: bool,
-        label_format: OptionStringVc,
-        auto_label: <span class="prelude-ty">Option</span>&lt;bool&gt;,
-    },
+    Emotion,
     PresetEnv(EnvironmentVc),
     React {
         <span class="attr">#[serde(default)]
@@ -491,24 +467,10 @@
                     <span class="prelude-val">Some</span>(comments.clone()),
                 ));
             }
-            EcmascriptInputTransform::Emotion {
-                sourcemap,
-                label_format,
-                auto_label,
-            } =&gt; {
-                <span class="kw">let </span>options = swc_emotion::EmotionOptions {
-                    <span class="comment">// this should be always enabled if match arrives here:
-                    // since moduleoptions expect to push emotion transform only if
-                    // there are valid, enabled config values.
-                    </span>enabled: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
-                    sourcemap: <span class="prelude-val">Some</span>(<span class="kw-2">*</span>sourcemap),
-                    label_format: label_format.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
-                    auto_label: <span class="kw-2">*</span>auto_label,
-                    ..Default::default()
-                };
+            EcmascriptInputTransform::Emotion =&gt; {
                 <span class="kw">let </span>p = std::mem::replace(program, Program::Module(Module::dummy()));
                 <span class="kw-2">*</span>program = p.fold_with(<span class="kw-2">&amp;mut </span>swc_emotion::emotion(
-                    options,
+                    Default::default(),
                     Path::new(file_name_str),
                     source_map.clone(),
                     comments.clone(),
