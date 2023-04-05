@@ -176,7 +176,7 @@ async fn apply_module_type(
         ModuleType::Mdx {
             transforms,
             options,
-        } => MdxModuleAssetVc::new(source, context.into(), *transforms, (*options).into()).into(),
+        } => MdxModuleAssetVc::new(source, context.into(), *transforms, *options).into(),
         ModuleType::Custom(_) => todo!(),
     })
 }

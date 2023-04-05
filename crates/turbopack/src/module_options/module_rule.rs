@@ -7,7 +7,7 @@ use turbopack_core::{
 };
 use turbopack_css::CssInputTransformsVc;
 use turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
-use turbopack_mdx::MdxTransformOptions;
+use turbopack_mdx::MdxTransformOptionsVc;
 
 use super::ModuleRuleCondition;
 
@@ -60,8 +60,7 @@ pub enum ModuleType {
     Raw,
     Mdx {
         transforms: EcmascriptInputTransformsVc,
-        #[turbo_tasks(trace_ignore)]
-        options: MdxTransformOptions,
+        options: MdxTransformOptionsVc,
     },
     Css(CssInputTransformsVc),
     CssModule(CssInputTransformsVc),
