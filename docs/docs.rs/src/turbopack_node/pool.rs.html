@@ -725,9 +725,6 @@
 <a href="#725" id="725">725</a>
 <a href="#726" id="726">726</a>
 <a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::HashMap,
@@ -1154,13 +1151,11 @@
                         <span class="kw">match </span>status {
                             <span class="prelude-val">Ok</span>(status) =&gt; {
                                 <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
-                                <span class="macro">println!</span>(<span class="string">&quot;node process exited before we could connect to it with {status}Process output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                                 <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it with {status}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                             }
                             <span class="prelude-val">Err</span>(err) =&gt; {
                                 <span class="kw">let _ </span>= child.start_kill();
                                 <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
-                                <span class="macro">println!</span>(<span class="string">&quot;node process exited before we could connect to it: {err:?}Process output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                                 <span class="macro">bail!</span>(<span class="string">&quot;node process exited before we could connect to it: {err:?}\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                             },
                         }
@@ -1168,7 +1163,6 @@
                     <span class="kw">_ </span>= sleep(timeout) =&gt; {
                         <span class="kw">let _ </span>= child.start_kill();
                         <span class="kw">let </span>(stdout, stderr) = get_output(<span class="kw-2">&amp;mut </span>child).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="macro">println!</span>(<span class="string">&quot;timed out waiting for the Node.js process to connect ({timeout:?})Process output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                         <span class="macro">bail!</span>(<span class="string">&quot;timed out waiting for the Node.js process to connect ({timeout:?} timeout)\nProcess output:\n{stdout}\nProcess error output:\n{stderr}&quot;</span>);
                     },
                 };
