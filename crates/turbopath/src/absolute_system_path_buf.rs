@@ -166,3 +166,43 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
         self.0.as_path()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{assert_matches::assert_matches, path::Path};
+
+    use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+
+    #[cfg(unix)]
+    #[test]
+    fn test_absolute_system_path_buf_on_unix() {
+        assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
+        assert_matches!(
+            AbsoluteSystemPathBuf::new("./Users/user/"),
+            Err(PathValidationError::NotAbsolute(_))
+        );
+
+        assert_matches!(
+            AbsoluteSystemPathBuf::new("Users"),
+            Err(PathValidationError::NotAbsolute(_))
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_absolute_system_path_buf_on_windows() {
+        assert!(AbsoluteSystemPathBuf::new("C:\\Users\\user").is_ok());
+        assert_matches!(
+            AbsoluteSystemPathBuf::new(".\\Users\\user\\"),
+            Err(PathValidationError::NotAbsolute(_))
+        );
+        assert_matches!(
+            AbsoluteSystemPathBuf::new("Users"),
+            Err(PathValidationError::NotAbsolute(_))
+        );
+        assert_matches!(
+            AbsoluteSystemPathBuf::new("/Users/home"),
+            Err(PathValidationError::NotAbsolute(_))
+        )
+    }
+}

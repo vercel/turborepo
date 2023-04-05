@@ -1,3 +1,5 @@
+#![feature(assert_matches)]
+
 mod absolute_system_path_buf;
 mod anchored_system_path_buf;
 mod relative_system_path_buf;
