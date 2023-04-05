@@ -15,8 +15,8 @@ use thiserror::Error;
 // Custom error type for path validation errors
 #[derive(Debug, Error)]
 pub enum PathValidationError {
-    #[error("Path is non-UTF-8")]
-    InvalidUnicode,
+    #[error("Path is non-UTF-8: {0}")]
+    InvalidUnicode(PathBuf),
     #[error("Path is not absolute: {0}")]
     NotAbsolute(PathBuf),
     #[error("Path is not relative: {0}")]
@@ -35,7 +35,9 @@ trait IntoUnix {
 
 impl IntoSystem for &Path {
     fn into_system(self) -> Result<PathBuf, PathValidationError> {
-        let path_str = self.to_str().ok_or(PathValidationError::InvalidUnicode)?;
+        let path_str = self
+            .to_str()
+            .ok_or_else(|| PathValidationError::InvalidUnicode(self.to_owned()))?;
 
         Ok(PathBuf::from_slash(path_str))
     }
@@ -48,7 +50,7 @@ impl IntoUnix for &Path {
     fn into_unix(self) -> Result<PathBuf, PathValidationError> {
         Ok(PathBuf::from(
             self.to_slash()
-                .ok_or(PathValidationError::InvalidUnicode)?
+                .ok_or_else(|| PathValidationError::InvalidUnicode(self.to_owned()))?
                 .as_ref(),
         ))
     }

@@ -20,7 +20,7 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
 }
 
 impl AnchoredSystemPathBuf {
-    pub fn strip_root(
+    pub fn new(
         root: &AbsoluteSystemPathBuf,
         path: &AbsoluteSystemPathBuf,
     ) -> Result<Self, PathValidationError> {
@@ -33,7 +33,7 @@ impl AnchoredSystemPathBuf {
         Ok(AnchoredSystemPathBuf(stripped_path))
     }
 
-    pub fn new_unchecked(path: impl Into<PathBuf>) -> Self {
+    pub unsafe fn new_unchecked(path: impl Into<PathBuf>) -> Self {
         AnchoredSystemPathBuf(path.into())
     }
 
@@ -41,11 +41,15 @@ impl AnchoredSystemPathBuf {
         self.0.as_path()
     }
 
-    pub fn into_path_buf(self) -> PathBuf {
-        self.0
-    }
-
     pub fn to_str(&self) -> Result<&str, PathValidationError> {
-        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
+        self.0
+            .to_str()
+            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()))
+    }
+}
+
+impl Into<PathBuf> for AnchoredSystemPathBuf {
+    fn into(self) -> PathBuf {
+        self.0
     }
 }

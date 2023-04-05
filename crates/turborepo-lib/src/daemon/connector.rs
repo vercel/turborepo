@@ -255,7 +255,7 @@ impl DaemonConnector {
     }
 
     fn pid_lock(&self) -> pidlock::Pidlock {
-        pidlock::Pidlock::new(self.pid_file.clone().into_path_buf())
+        pidlock::Pidlock::new(self.pid_file.clone().into())
     }
 }
 

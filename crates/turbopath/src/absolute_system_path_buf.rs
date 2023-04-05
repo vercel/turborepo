@@ -29,10 +29,16 @@ impl AbsoluteSystemPathBuf {
     /// ```
     /// use std::path::{Path, PathBuf};
     /// use turbopath::AbsoluteSystemPathBuf;
-    /// let path = PathBuf::from("/Users/user");
-    /// let absolute_path = AbsoluteSystemPathBuf::new(path).unwrap();
     /// #[cfg(windows)]
-    /// assert_eq!(absolute_path.as_path(), Path::new("\\Users\\user"));
+    /// let path = PathBuf::from("C:/Users/user");
+    /// #[cfg(not(windows))]
+    /// let path = PathBuf::from("/Users/user");
+    ///
+    /// let absolute_path = AbsoluteSystemPathBuf::new(path).unwrap();
+    ///
+    /// #[cfg(windows)]
+    /// assert_eq!(absolute_path.as_path(), Path::new("C:\\Users\\user"));
+    /// #[cfg(not(windows))]
     /// assert_eq!(absolute_path.as_path(), Path::new("/Users/user"));
     /// ```
     pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
@@ -43,19 +49,6 @@ impl AbsoluteSystemPathBuf {
 
         let system_path = unchecked_path.into_system()?;
         Ok(AbsoluteSystemPathBuf(system_path))
-    }
-
-    /// Converts `path` to an `AbsoluteSystemPathBuf` without validating that
-    /// it is either absolute or a system path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path`: The path to be converted to an `AbsoluteSystemPathBuf`.
-    ///
-    /// returns: AbsoluteSystemPathBuf
-    pub fn new_unchecked(path: impl Into<PathBuf>) -> Self {
-        let path = path.into();
-        AbsoluteSystemPathBuf(path)
     }
 
     /// Anchors `path` at `self`.
@@ -80,7 +73,7 @@ impl AbsoluteSystemPathBuf {
         &self,
         path: &AbsoluteSystemPathBuf,
     ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
-        AnchoredSystemPathBuf::strip_root(self, path)
+        AnchoredSystemPathBuf::new(self, path)
     }
 
     /// Resolves `path` with `self` as anchor.
@@ -129,16 +122,14 @@ impl AbsoluteSystemPathBuf {
         self.0.ends_with(child.as_ref())
     }
 
-    pub fn join<P: AsRef<Path>>(&self, path: P) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path))
-    }
-
     pub fn join_relative(&self, path: RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path.as_path()))
     }
 
     pub fn to_str(&self) -> Result<&str, PathValidationError> {
-        self.0.to_str().ok_or(PathValidationError::InvalidUnicode)
+        self.0
+            .to_str()
+            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()))
     }
 
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
@@ -153,12 +144,14 @@ impl AbsoluteSystemPathBuf {
         self.0.exists()
     }
 
-    pub fn into_path_buf(self) -> PathBuf {
-        self.0
-    }
-
     pub fn extension(&self) -> Option<&OsStr> {
         self.0.extension()
+    }
+}
+
+impl Into<PathBuf> for AbsoluteSystemPathBuf {
+    fn into(self) -> PathBuf {
+        self.0
     }
 }
 
