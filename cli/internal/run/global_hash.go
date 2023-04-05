@@ -33,6 +33,25 @@ type GlobalHashable struct {
 	envMode              util.EnvMode
 }
 
+// calculateGlobalHashFromHashable returns a hash string from the globalHashable
+func calculateGlobalHashFromHashable(named GlobalHashable) (string, error) {
+	// When we aren't in infer mode, we can hash the whole object
+	if named.envMode != util.Infer {
+		return fs.HashObject(named)
+	}
+
+	// In infer mode, if there is any passThru config (even if it is an empty array)
+	// we'll hash the whole object, so we can detect changes to that config
+	if named.envVarPassthroughs != nil {
+		return fs.HashObject(named)
+	}
+
+	// If we're in infer mode, and there is no global pass through config,
+	// we can use the old anonymous struct. this will be true for everyone not using the strict env
+	// feature, and we don't want to break their cache.
+	return fs.HashObject(getOldGlobalHashable(named))
+}
+
 // getOldGlobalHashable converts GlobalHashable into an anonymous struct.
 // This exists because the global hash was originally implemented with an anonymous
 // struct, and changing to a named struct changes the global hash (because the hash

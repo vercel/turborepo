@@ -1,9 +1,6 @@
 {
   "name": "my-app",
   "scripts": {
-    "build": "echo 'building'"
-  },
-  "dependencies": {
-    "util": "*"
+    "build": "echo \"globalpt: '$GLOBAL_VAR_PT', localpt: '$LOCAL_VAR_PT', globaldep: '$GLOBAL_VAR_DEP', localdep: '$LOCAL_VAR_DEP', other: '$OTHER_VAR'\" > out.txt"
   }
 }

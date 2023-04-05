@@ -81,7 +81,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @default []
    */
-  globalPassthroughEnv?: string[];
+  experimentalGlobalPassthroughEnv?: string[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -137,7 +137,7 @@ export interface Pipeline {
    *
    * @default []
    */
-  passthroughEnv?: string[];
+  experimentalPassthroughEnv?: string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.

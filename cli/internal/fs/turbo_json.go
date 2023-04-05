@@ -29,7 +29,7 @@ type rawTurboJSON struct {
 	GlobalEnv []string `json:"globalEnv,omitempty"`
 
 	// Global passthrough env
-	GlobalPassthroughEnv []string `json:"globalPassthroughEnv,omitempty"`
+	GlobalPassthroughEnv []string `json:"experimentalGlobalPassthroughEnv,omitempty"`
 
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
@@ -47,7 +47,7 @@ type rawTurboJSON struct {
 type pristineTurboJSON struct {
 	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
 	GlobalEnv            []string           `json:"globalEnv,omitempty"`
-	GlobalPassthroughEnv []string           `json:"globalPassthroughEnv,omitempty"`
+	GlobalPassthroughEnv []string           `json:"experimentalGlobalPassthroughEnv,omitempty"`
 	Pipeline             PristinePipeline   `json:"pipeline"`
 	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
 	Extends              []string           `json:"extends,omitempty"`
@@ -80,7 +80,7 @@ type rawTaskWithDefaults struct {
 	DependsOn      []string            `json:"dependsOn"`
 	Inputs         []string            `json:"inputs"`
 	OutputMode     util.TaskOutputMode `json:"outputMode"`
-	PassthroughEnv []string            `json:"passthroughEnv"`
+	PassthroughEnv []string            `json:"experimentalPassThroughEnv,omitempty"`
 	Env            []string            `json:"env"`
 	Persistent     bool                `json:"persistent"`
 }
@@ -94,12 +94,35 @@ type rawTask struct {
 	Inputs         []string             `json:"inputs,omitempty"`
 	OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env            []string             `json:"env,omitempty"`
-	PassthroughEnv []string             `json:"passthroughEnv,omitempty"`
+	PassthroughEnv []string             `json:"experimentalPassthroughEnv,omitempty"`
 	Persistent     *bool                `json:"persistent,omitempty"`
 }
 
-// PristinePipeline contains original TaskDefinitions without the bookkeeping
-type PristinePipeline map[string]TaskDefinition
+// taskDefinitionHashable exists as a definition for PristinePipeline, which is used down
+// stream for calculating the global hash. We want to exclude experimental fields here
+// because we don't want experimental fields to be part of the global hash.
+type taskDefinitionHashable struct {
+	Outputs                 TaskOutputs
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+	OutputMode              util.TaskOutputMode
+	Persistent              bool
+}
+
+// taskDefinitionExperiments is a list of config fields in a task definition that are considered
+// experimental. We keep these separated so we can compute a global hash without these.
+type taskDefinitionExperiments struct {
+	PassthroughEnv []string
+}
+
+// PristinePipeline is a map of task names to TaskDefinition or taskDefinitionHashable.
+// Depending on whether any experimental fields are defined, we will use either struct.
+// The purpose is to omit experimental fields when making a pristine version, so that
+// it doesn't show up in --dry/--summarize output or affect the global hash.
+type PristinePipeline map[string]interface{}
 
 // Pipeline is a struct for deserializing .pipeline in configFile
 type Pipeline map[string]BookkeepingTaskDefinition
@@ -107,8 +130,10 @@ type Pipeline map[string]BookkeepingTaskDefinition
 // BookkeepingTaskDefinition holds the underlying TaskDefinition and some bookkeeping data
 // about the TaskDefinition. This wrapper struct allows us to leave TaskDefinition untouched.
 type BookkeepingTaskDefinition struct {
-	definedFields  util.Set
-	TaskDefinition TaskDefinition
+	definedFields      util.Set
+	experimentalFields util.Set
+	experimental       taskDefinitionExperiments
+	TaskDefinition     taskDefinitionHashable
 }
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
@@ -221,7 +246,7 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 			// rather than defaulting to the 0-value of a boolean field.
 			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{
 				definedFields: util.SetFromStrings([]string{"ShouldCache"}),
-				TaskDefinition: TaskDefinition{
+				TaskDefinition: taskDefinitionHashable{
 					ShouldCache: false,
 				},
 			}
@@ -302,11 +327,11 @@ func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 // GetTaskDefinition returns a TaskDefinition from a serialized definition in configFile
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
-		return entry.TaskDefinition, true
+		return entry.GetTaskDefinition(), true
 	}
 	_, task := util.GetPackageTaskFromId(taskID)
 	entry, ok := pc[task]
-	return entry.TaskDefinition, ok
+	return entry.GetTaskDefinition(), ok
 }
 
 // HasTask returns true if the given task is defined in the pipeline, either directly or
@@ -326,11 +351,17 @@ func (pc Pipeline) HasTask(task string) bool {
 	return false
 }
 
-// Pristine returns a PristinePipeline
+// Pristine returns a PristinePipeline, this is used for printing to console and pruning
 func (pc Pipeline) Pristine() PristinePipeline {
 	pristine := PristinePipeline{}
 	for taskName, taskDef := range pc {
-		pristine[taskName] = taskDef.TaskDefinition
+		// If there are any experimental fields, we will include them with 0-values
+		// if there aren't, we will omit them entirely
+		if taskDef.hasExperimentalFields() {
+			pristine[taskName] = taskDef.GetTaskDefinition() // merges experimental fields in
+		} else {
+			pristine[taskName] = taskDef.TaskDefinition // has no experimental fields
+		}
 	}
 	return pristine
 }
@@ -339,7 +370,29 @@ func (pc Pipeline) Pristine() PristinePipeline {
 // see whether a field was actually in the underlying turbo.json
 // or whether it was initialized with its 0-value.
 func (btd BookkeepingTaskDefinition) hasField(fieldName string) bool {
-	return btd.definedFields.Includes(fieldName)
+	return btd.definedFields.Includes(fieldName) || btd.experimentalFields.Includes(fieldName)
+}
+
+// hasExperimentalFields keeps track of whether any experimental fields were found
+func (btd BookkeepingTaskDefinition) hasExperimentalFields() bool {
+	return len(btd.experimentalFields) > 0
+}
+
+// GetTaskDefinition gets a TaskDefinition by merging the experimental and non-experimental fields
+// into a single representation to use downstream.
+func (btd BookkeepingTaskDefinition) GetTaskDefinition() TaskDefinition {
+	return TaskDefinition{
+		Outputs:                 btd.TaskDefinition.Outputs,
+		ShouldCache:             btd.TaskDefinition.ShouldCache,
+		EnvVarDependencies:      btd.TaskDefinition.EnvVarDependencies,
+		TopologicalDependencies: btd.TaskDefinition.TopologicalDependencies,
+		TaskDependencies:        btd.TaskDefinition.TaskDependencies,
+		Inputs:                  btd.TaskDefinition.Inputs,
+		OutputMode:              btd.TaskDefinition.OutputMode,
+		Persistent:              btd.TaskDefinition.Persistent,
+		// From experimental fields
+		PassthroughEnv: btd.experimental.PassthroughEnv,
+	}
 }
 
 // MergeTaskDefinitions accepts an array of BookkeepingTaskDefinitions and merges them into
@@ -355,7 +408,7 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, bookkeepingTaskDef := range taskDefinitions {
-		taskDef := bookkeepingTaskDef.TaskDefinition
+		taskDef := bookkeepingTaskDef.GetTaskDefinition()
 
 		if bookkeepingTaskDef.hasField("Outputs") {
 			mergedTaskDefinition.Outputs = taskDef.Outputs
@@ -405,6 +458,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	btd.definedFields = util.Set{}
+	btd.experimentalFields = util.Set{}
 
 	if task.Outputs != nil {
 		var inclusions []string
@@ -474,14 +528,8 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	// Append env key into EnvVarDependencies
 	if task.Env != nil {
 		btd.definedFields.Add("EnvVarDependencies")
-		for _, value := range task.Env {
-			if strings.HasPrefix(value, envPipelineDelimiter) {
-				// Hard error to help people specify this correctly during migration.
-				// TODO: Remove this error after we have run summary.
-				return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"$\"", value)
-			}
-
-			envVarDependencies.Add(value)
+		if err := gatherEnvVars(task.Env, "env", &envVarDependencies); err != nil {
+			return err
 		}
 	}
 
@@ -490,21 +538,14 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	sort.Strings(btd.TaskDefinition.EnvVarDependencies)
 
 	if task.PassthroughEnv != nil {
-		btd.definedFields.Add("PassthroughEnv")
-		for _, value := range task.PassthroughEnv {
-			if strings.HasPrefix(value, envPipelineDelimiter) {
-				// Hard error to help people specify this correctly during migration.
-				// TODO: Remove this error after we have run summary.
-				return fmt.Errorf("You specified \"%s\" in the \"passthroughEnv\" key. You should not prefix your environment variables with \"$\"", value)
-			}
-
-			envVarPassthroughs.Add(value)
+		btd.experimentalFields.Add("PassthroughEnv")
+		if err := gatherEnvVars(task.PassthroughEnv, "passthrougEnv", &envVarPassthroughs); err != nil {
+			return err
 		}
 	}
 
-	btd.TaskDefinition.PassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
-
-	sort.Strings(btd.TaskDefinition.PassthroughEnv)
+	btd.experimental.PassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+	sort.Strings(btd.experimental.PassthroughEnv)
 
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
@@ -533,57 +574,38 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes taskDefinitionHashable struct into json
+func (c taskDefinitionHashable) MarshalJSON() ([]byte, error) {
+	task := makeRawTask(
+		c.Persistent,
+		c.ShouldCache,
+		c.OutputMode,
+		c.Inputs,
+		c.Outputs,
+		c.EnvVarDependencies,
+		c.TaskDependencies,
+		c.TopologicalDependencies,
+	)
+	return json.Marshal(task)
+}
+
 // MarshalJSON serializes TaskDefinition struct into json
 func (c TaskDefinition) MarshalJSON() ([]byte, error) {
-	// Initialize with empty arrays, so we get empty arrays serialized into JSON
-	task := rawTaskWithDefaults{
-		Outputs:        []string{},
-		Inputs:         []string{},
-		Env:            []string{},
-		PassthroughEnv: []string{},
-		DependsOn:      []string{},
-	}
-
-	task.Persistent = c.Persistent
-	task.Cache = &c.ShouldCache
-	task.OutputMode = c.OutputMode
-
-	if len(c.Inputs) > 0 {
-		task.Inputs = c.Inputs
-	}
-
-	if len(c.EnvVarDependencies) > 0 {
-		task.Env = append(task.Env, c.EnvVarDependencies...)
-	}
+	task := makeRawTask(
+		c.Persistent,
+		c.ShouldCache,
+		c.OutputMode,
+		c.Inputs,
+		c.Outputs,
+		c.EnvVarDependencies,
+		c.TaskDependencies,
+		c.TopologicalDependencies,
+	)
 
 	if len(c.PassthroughEnv) > 0 {
 		task.PassthroughEnv = append(task.PassthroughEnv, c.PassthroughEnv...)
 	}
-
-	if len(c.Outputs.Inclusions) > 0 {
-		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
-	}
-
-	for _, i := range c.Outputs.Exclusions {
-		task.Outputs = append(task.Outputs, "!"+i)
-	}
-
-	if len(c.TaskDependencies) > 0 {
-		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
-	}
-
-	for _, i := range c.TopologicalDependencies {
-		task.DependsOn = append(task.DependsOn, "^"+i)
-	}
-
-	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
-	// but we want to ensure they're sorted on the way out also, just in case something
-	// in the middle mutates the items.
-	sort.Strings(task.DependsOn)
-	sort.Strings(task.Outputs)
-	sort.Strings(task.Env)
 	sort.Strings(task.PassthroughEnv)
-	sort.Strings(task.Inputs)
 
 	return json.Marshal(task)
 }
@@ -599,24 +621,11 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	envVarPassthroughs := make(util.Set)
 	globalFileDependencies := make(util.Set)
 
-	for _, value := range raw.GlobalEnv {
-		if strings.HasPrefix(value, envPipelineDelimiter) {
-			// Hard error to help people specify this correctly during migration.
-			// TODO: Remove this error after we have run summary.
-			return fmt.Errorf("You specified \"%s\" in the \"globalEnv\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
-		}
-
-		envVarDependencies.Add(value)
+	if err := gatherEnvVars(raw.GlobalEnv, "globalEnv", &envVarDependencies); err != nil {
+		return err
 	}
-
-	for _, value := range raw.GlobalPassthroughEnv {
-		if strings.HasPrefix(value, envPipelineDelimiter) {
-			// Hard error to help people specify this correctly.
-			// TODO: Remove this error after we have run summary.
-			return fmt.Errorf("You specified \"%s\" in the \"globalPassthroughEnv\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
-		}
-
-		envVarPassthroughs.Add(value)
+	if err := gatherEnvVars(raw.GlobalPassthroughEnv, "experimentalGlobalPassthroughEnv", &envVarPassthroughs); err != nil {
+		return err
 	}
 
 	// TODO: In the rust port, warnings should be refactored to a post-parse validation step
@@ -653,7 +662,10 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON converts a TurboJSON into the equivalent json object in bytes
-// note: we go via rawTurboJSON so that the output format is correct
+// note: we go via rawTurboJSON so that the output format is correct.
+// This is used by `turbo prune` to generate a pruned turbo.json
+// and also by --summarize & --dry=json to serialize the known config
+// into something we can print to screen
 func (c *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw := pristineTurboJSON{}
 	raw.GlobalDependencies = c.GlobalDeps
@@ -663,4 +675,67 @@ func (c *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw.RemoteCacheOptions = c.RemoteCacheOptions
 
 	return json.Marshal(&raw)
+}
+
+func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMode, inputs []string, outputs TaskOutputs, envVarDependencies []string, taskDependencies []string, topologicalDependencies []string) *rawTaskWithDefaults {
+	// Initialize with empty arrays, so we get empty arrays serialized into JSON
+	task := &rawTaskWithDefaults{
+		Outputs:        []string{},
+		Inputs:         []string{},
+		Env:            []string{},
+		PassthroughEnv: []string{},
+		DependsOn:      []string{},
+	}
+
+	task.Persistent = persistent
+	task.Cache = &shouldCache
+	task.OutputMode = outputMode
+
+	if len(inputs) > 0 {
+		task.Inputs = inputs
+	}
+
+	if len(envVarDependencies) > 0 {
+		task.Env = append(task.Env, envVarDependencies...)
+	}
+
+	if len(outputs.Inclusions) > 0 {
+		task.Outputs = append(task.Outputs, outputs.Inclusions...)
+	}
+
+	for _, i := range outputs.Exclusions {
+		task.Outputs = append(task.Outputs, "!"+i)
+	}
+
+	if len(taskDependencies) > 0 {
+		task.DependsOn = append(task.DependsOn, taskDependencies...)
+	}
+
+	for _, i := range topologicalDependencies {
+		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
+	// but we want to ensure they're sorted on the way out also, just in case something
+	// in the middle mutates the items.
+	sort.Strings(task.DependsOn)
+	sort.Strings(task.Outputs)
+	sort.Strings(task.Env)
+	sort.Strings(task.Inputs)
+	return task
+}
+
+// gatherEnvVars puts env vars into the provided set as long as they don't have an invalid value.
+func gatherEnvVars(vars []string, key string, into *util.Set) error {
+	for _, value := range vars {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly during migration.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"%s\" key. You should not prefix your environment variables with \"%s\"", value, key, envPipelineDelimiter)
+		}
+
+		into.Add(value)
+	}
+
+	return nil
 }

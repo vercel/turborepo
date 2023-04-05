@@ -54,7 +54,7 @@ A list of environment variables for implicit global hash dependencies. The conte
 }
 ```
 
-## `globalPassthroughEnv`
+## `experimentalGlobalPassthroughEnv`
 
 `type: string[]`
 
@@ -65,7 +65,7 @@ An allowlist of environment variables that should be made available to all tasks
 ```jsonc
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassthroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
+  "experimentalGlobalPassthroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
 }
 ```
 
@@ -187,7 +187,7 @@ The list of environment variables a task depends on.
   caching](/repo/docs/core-concepts/caching#automatic-environment-variable-inclusion).
 </Callout>
 
-## `passthroughEnv`
+## `experimentalPassthroughEnv`
 
 `type: string[]`
 

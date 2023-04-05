@@ -265,20 +265,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHashable.envMode == util.Infer && globalHashable.envVarPassthroughs == nil {
-		if globalHash, err := fs.HashObject(getOldGlobalHashable(globalHashable)); err == nil {
-			r.base.Logger.Debug("global hash", "value", globalHash)
-			g.GlobalHash = globalHash
-		} else {
-			return fmt.Errorf("failed to calculate global hash: %v", err)
-		}
+	if globalHash, err := calculateGlobalHashFromHashable(globalHashable); err == nil {
+		r.base.Logger.Debug("global hash", "value", globalHash)
+		g.GlobalHash = globalHash
 	} else {
-		if globalHash, err := fs.HashObject(globalHashable); err == nil {
-			r.base.Logger.Debug("new global hash", "value", globalHash)
-			g.GlobalHash = globalHash
-		} else {
-			return fmt.Errorf("failed to calculate global hash: %v", err)
-		}
+		return fmt.Errorf("failed to calculate global hash: %v", err)
 	}
 
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)

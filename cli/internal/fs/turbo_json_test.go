@@ -39,48 +39,60 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn", "PassthroughEnv"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{"PassthroughEnv"}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{"GITHUB_TOKEN"},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
-				PassthroughEnv:          []string{"GITHUB_TOKEN"},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
 			},
 		},
 		"lint": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{"MY_VAR"},
-				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
 			},
 		},
 		"dev": {
-			definedFields: util.SetFromStrings([]string{"OutputMode", "ShouldCache"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"OutputMode", "ShouldCache"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{},
-				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             false,
 				OutputMode:              util.FullTaskOutput,
 			},
 		},
 		"publish": {
-			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
 				EnvVarDependencies:      []string{},
-				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{"admin#lint", "build"},
 				ShouldCache:             false,
 				Inputs:                  []string{"build/**/*"},
@@ -126,12 +138,15 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
-				PassthroughEnv:          []string{},
 				TaskDependencies:        []string{},
 				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
@@ -232,7 +247,7 @@ func validatePipeline(t *testing.T, actual Pipeline, expected Pipeline) {
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
-		actualTaskDefinition := bookkeepingTaskDef.TaskDefinition
+		actualTaskDefinition := bookkeepingTaskDef.GetTaskDefinition()
 		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
 		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
 		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
