@@ -33,10 +33,6 @@ impl AnchoredSystemPathBuf {
         Ok(AnchoredSystemPathBuf(stripped_path))
     }
 
-    pub unsafe fn new_unchecked(path: impl Into<PathBuf>) -> Self {
-        AnchoredSystemPathBuf(path.into())
-    }
-
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
     }

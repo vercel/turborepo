@@ -90,7 +90,7 @@ impl AbsoluteSystemPathBuf {
     /// use std::path::Path;
     /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     /// let absolute_path = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
-    /// let anchored_path = AnchoredSystemPathBuf::new_unchecked("Documents");
+    /// let anchored_path = Path::new("Documents").try_into().unwrap();
     /// let resolved_path = absolute_path.resolve(&anchored_path);
     /// #[cfg(windows)]
     /// assert_eq!(resolved_path.as_path(), Path::new("\\Users\\user\\Documents"));
