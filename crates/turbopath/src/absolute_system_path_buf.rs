@@ -171,7 +171,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::{assert_matches::assert_matches, path::Path};
 
-    use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathValidationError};
 
     #[cfg(unix)]
     #[test]
