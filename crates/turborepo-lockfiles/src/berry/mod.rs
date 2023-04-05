@@ -1,5 +1,6 @@
 mod de;
 mod identifiers;
+mod resolution;
 mod ser;
 
 use std::{
