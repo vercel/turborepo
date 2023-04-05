@@ -359,6 +359,14 @@
 <a href="#359" id="359">359</a>
 <a href="#360" id="360">360</a>
 <a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     net::SocketAddr,
     process::{Command, Stdio},
@@ -384,6 +392,14 @@
 <span class="kw">impl </span>ServerAddr {
     <span class="kw">pub fn </span>new(addr: SocketAddr) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(<span class="prelude-val">Some</span>(addr))
+    }
+
+    <span class="kw">pub fn </span>ip(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.map(|addr| addr.ip().to_string())
+    }
+
+    <span class="kw">pub fn </span>port(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u16&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.map(|addr| addr.port())
     }
 
     <span class="kw">pub fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
