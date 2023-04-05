@@ -1,9 +1,9 @@
 #![feature(min_specialization)]
 
-pub mod command_line;
-pub mod custom;
-pub mod dotenv;
-pub mod filter;
+mod command_line;
+mod custom;
+mod dotenv;
+mod filter;
 
 use std::{env, sync::Mutex};
 
