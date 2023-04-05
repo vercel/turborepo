@@ -93,10 +93,10 @@
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString};
+<span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{Chunk, ChunkVc, ChunkingContext},
+    chunk::{ChunkVc, ChunkingContext},
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{VersionedContent, VersionedContentVc},

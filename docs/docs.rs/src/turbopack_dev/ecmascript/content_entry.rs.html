@@ -115,7 +115,6 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
@@ -127,6 +126,7 @@
 <span class="kw">use </span>turbopack_core::{
     chunk::{availability_info::AvailabilityInfo, ChunkItem, ModuleIdReadRef},
     code_builder::{CodeBuilder, CodeVc},
+    error::PrettyPrintError,
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
@@ -200,8 +200,6 @@
     item: EcmascriptChunkItemVc,
     availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
-    <span class="kw">use </span>std::fmt::Write;
-
     <span class="prelude-val">Ok</span>(
         <span class="kw">match </span>module_factory(item.content_with_availability_info(availability_info))
             .resolve()
@@ -211,11 +209,11 @@
             <span class="prelude-val">Err</span>(error) =&gt; {
                 <span class="kw">let </span>id = item.id().to_string().<span class="kw">await</span>;
                 <span class="kw">let </span>id = id.as_ref().map_or_else(|<span class="kw">_</span>| <span class="string">&quot;unknown&quot;</span>, |id| <span class="kw-2">&amp;**</span>id);
-                <span class="kw">let </span><span class="kw-2">mut </span>error_message =
-                    <span class="macro">format!</span>(<span class="string">&quot;An error occurred while generating the chunk item {}&quot;</span>, id);
-                <span class="kw">for </span>err <span class="kw">in </span>error.chain() {
-                    <span class="macro">write!</span>(error_message, <span class="string">&quot;\n  at {}&quot;</span>, err)<span class="question-mark">?</span>;
-                }
+                <span class="kw">let </span>error = error.context(<span class="macro">format!</span>(
+                    <span class="string">&quot;An error occurred while generating the chunk item {}&quot;</span>,
+                    id
+                ));
+                <span class="kw">let </span>error_message = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>error));
                 <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span>error_message)<span class="question-mark">?</span>;
                 <span class="kw">let </span>issue = CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),

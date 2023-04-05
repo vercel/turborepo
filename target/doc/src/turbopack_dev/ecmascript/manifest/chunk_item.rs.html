@@ -101,15 +101,13 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    chunk::{Chunk, ChunkItem, ChunkItemVc, ChunkingContext},
+    chunk::{ChunkItem, ChunkItemVc, ChunkingContext},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
 };
