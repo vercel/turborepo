@@ -10,26 +10,27 @@ Set the env vars
   $ export LOCAL_VAR_PT=hilocalpt
   $ export LOCAL_VAR_DEP=hilocaldep
   $ export OTHER_VAR=hiother
+  $ export SYSTEMROOT=hisysroot
 
 Inferred mode as loose because no pass through configs, all vars are available
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother'
+  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
 
 Inferred mode as strict, because global pass through config, no vars available
   $ cp "$TESTDIR/fixture-configs/global_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: '', localpt: '', globaldep: '', localdep: '', other: ''
+  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
 
 Inferred mode as strict, because task pass through config, no vars available
   $ cp "$TESTDIR/fixture-configs/task_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: '', localpt: '', globaldep: '', localdep: '', other: ''
+  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
 
 Inferred mode as strict, with declared deps and pass through. all declared available, other is not available
   $ cp "$TESTDIR/fixture-configs/all.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: ''
+  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'

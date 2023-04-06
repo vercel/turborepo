@@ -300,6 +300,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		defaultPassthrough := []string{
 			"PATH",
 			"SHELL",
+			"SYSTEMROOT", // Go will always include this on Windows, but we're being explicit here
 		}
 
 		passthroughEnv.Merge(env.FromKeys(currentState, defaultPassthrough))
