@@ -21,10 +21,14 @@ pub struct RepoConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
 struct RepoConfigValue {
-    apiurl: Option<String>,
-    loginurl: Option<String>,
-    teamslug: Option<String>,
-    teamid: Option<String>,
+    #[serde(rename = "apiurl")]
+    api_url: Option<String>,
+    #[serde(rename = "loginurl")]
+    login_url: Option<String>,
+    #[serde(rename = "teamslug")]
+    team_slug: Option<String>,
+    #[serde(rename = "teamid")]
+    team_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,39 +36,42 @@ pub struct RepoConfigLoader {
     path: PathBuf,
     api: Option<String>,
     login: Option<String>,
-    teamslug: Option<String>,
+    team_slug: Option<String>,
     environment: Option<HashMap<String, String>>,
 }
 
 impl RepoConfig {
     #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
-        self.config.apiurl.as_deref().unwrap_or(DEFAULT_API_URL)
+        self.config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
     }
 
     #[allow(dead_code)]
     pub fn login_url(&self) -> &str {
-        self.config.loginurl.as_deref().unwrap_or(DEFAULT_LOGIN_URL)
+        self.config
+            .login_url
+            .as_deref()
+            .unwrap_or(DEFAULT_LOGIN_URL)
     }
 
     #[allow(dead_code)]
     pub fn team_slug(&self) -> Option<&str> {
-        self.config.teamslug.as_deref()
+        self.config.team_slug.as_deref()
     }
 
     #[allow(dead_code)]
     pub fn team_id(&self) -> Option<&str> {
-        self.config.teamid.as_deref()
+        self.config.team_id.as_deref()
     }
 
     /// Sets the team id and clears the team slug, since it may have been from
     /// an old team
     #[allow(dead_code)]
     pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<()> {
-        self.disk_config.teamslug = None;
-        self.config.teamslug = None;
-        self.disk_config.teamid = team_id.clone();
-        self.config.teamid = team_id;
+        self.disk_config.team_slug = None;
+        self.config.team_slug = None;
+        self.disk_config.team_id = team_id.clone();
+        self.config.team_id = team_id;
         self.write_to_disk()
     }
 
@@ -85,7 +92,7 @@ impl RepoConfigLoader {
             path,
             api: None,
             login: None,
-            teamslug: None,
+            team_slug: None,
             environment: None,
         }
     }
@@ -104,7 +111,7 @@ impl RepoConfigLoader {
 
     #[allow(dead_code)]
     pub fn with_team_slug(mut self, team_slug: Option<String>) -> Self {
-        self.teamslug = team_slug;
+        self.team_slug = team_slug;
         self
     }
 
@@ -120,7 +127,7 @@ impl RepoConfigLoader {
             path,
             api,
             login,
-            teamslug,
+            team_slug,
             environment,
         } = self;
         let raw_disk_config = Config::builder()
@@ -131,7 +138,7 @@ impl RepoConfigLoader {
             )
             .build()?;
 
-        let has_teamslug_override = teamslug.is_some();
+        let has_team_slug_override = team_slug.is_some();
 
         let mut config: RepoConfigValue = Config::builder()
             .add_source(raw_disk_config.clone())
@@ -144,7 +151,7 @@ impl RepoConfigLoader {
             )
             .set_override_option("apiurl", api)?
             .set_override_option("loginurl", login)?
-            .set_override_option("teamslug", teamslug)?
+            .set_override_option("teamslug", team_slug)?
             // set teamid to none if teamslug present
             .build()?
             .try_deserialize()?;
@@ -153,8 +160,8 @@ impl RepoConfigLoader {
 
         // If teamid was passed via command line flag we ignore team slug as it
         // might not match.
-        if has_teamslug_override {
-            config.teamid = None;
+        if has_team_slug_override {
+            config.team_id = None;
         }
 
         Ok(RepoConfig {
@@ -174,6 +181,14 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_repo_config_when_missing() -> Result<()> {
+        let config = RepoConfigLoader::new(PathBuf::from("missing")).load();
+        assert!(config.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_repo_config_with_team_and_api_flags() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
@@ -188,6 +203,17 @@ mod test {
         assert_eq!(config.api_url(), "http://my-login-url");
 
         Ok(())
+    }
+
+    #[test]
+    fn test_repo_config_includes_defaults() {
+        let config = RepoConfigLoader::new(PathBuf::from("missing"))
+            .load()
+            .unwrap();
+        assert_eq!(config.api_url(), DEFAULT_API_URL);
+        assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);
+        assert_eq!(config.team_slug(), None);
+        assert_eq!(config.team_id(), None);
     }
 
     #[test]

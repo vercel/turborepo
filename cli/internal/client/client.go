@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/vercel/turbo/cli/internal/ci"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
 // APIClient is the main interface for making network requests to Vercel
@@ -47,14 +48,6 @@ func (c *APIClient) SetToken(token string) {
 	c.token = token
 }
 
-// RemoteConfig holds the authentication and endpoint details for the API client
-type RemoteConfig struct {
-	Token    string
-	TeamID   string
-	TeamSlug string
-	APIURL   string
-}
-
 // Opts holds values for configuring the behavior of the API client
 type Opts struct {
 	UsePreflight bool
@@ -65,7 +58,7 @@ type Opts struct {
 const ClientTimeout uint64 = 20
 
 // NewClient creates a new APIClient
-func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *APIClient {
+func NewClient(remoteConfig turbostate.RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *APIClient {
 	client := &APIClient{
 		baseURL:      remoteConfig.APIURL,
 		turboVersion: turboVersion,

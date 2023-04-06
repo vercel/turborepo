@@ -74,12 +74,12 @@ func (h *Helper) Cleanup(cliConfig *turbostate.ParsedArgsFromRust) {
 	}
 }
 
-func (h *Helper) getUI(cliConfig *turbostate.ParsedArgsFromRust) cli.Ui {
+func (h *Helper) getUI(cliArgs *turbostate.ParsedArgsFromRust) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
-	if cliConfig.GetNoColor() {
+	if cliArgs.NoColor {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if cliConfig.GetColor() {
+	if cliArgs.Color {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -134,15 +134,15 @@ func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper
 
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
-func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase, error) {
+func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase, error) {
 	// terminal is for color/no-color output
-	terminal := h.getUI(cliConfig)
+	terminal := h.getUI(&executionState.CLIArgs)
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
 	if err != nil {
 		return nil, err
 	}
-	cwdRaw, err := cliConfig.GetCwd()
+	cwdRaw := executionState.CLIArgs.CWD
 	if err != nil {
 		return nil, err
 	}
@@ -155,15 +155,7 @@ func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase,
 	if err != nil {
 		return nil, err
 	}
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), cliConfig)
-	if err != nil {
-		return nil, err
-	}
-	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, cliConfig)
-	if err != nil {
-		return nil, err
-	}
-	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
+	remoteConfig := executionState.RemoteConfig
 	if remoteConfig.Token == "" && ui.IsCI {
 		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
 		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
@@ -176,7 +168,7 @@ func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase,
 	}
 
 	// Primacy: Arg > Env
-	timeout, err := cliConfig.GetRemoteCacheTimeout()
+	timeout, err := executionState.CLIArgs.GetRemoteCacheTimeout()
 	if err == nil {
 		h.clientOpts.Timeout = timeout
 	} else {
@@ -201,8 +193,6 @@ func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase,
 		Logger:       logger,
 		RepoRoot:     repoRoot,
 		APIClient:    apiClient,
-		RepoConfig:   repoConfig,
-		UserConfig:   userConfig,
 		RemoteConfig: remoteConfig,
 		TurboVersion: h.TurboVersion,
 	}, nil
@@ -214,9 +204,7 @@ type CmdBase struct {
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.APIClient
-	RepoConfig   *config.RepoConfig
-	UserConfig   *config.UserConfig
-	RemoteConfig client.RemoteConfig
+	RemoteConfig turbostate.RemoteConfig
 	TurboVersion string
 }
 

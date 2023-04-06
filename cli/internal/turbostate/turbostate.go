@@ -96,39 +96,18 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-// GetColor returns the value of the `color` flag.
-func (a ParsedArgsFromRust) GetColor() bool {
-	return a.Color
+// ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
+type ExecutionState struct {
+	RemoteConfig RemoteConfig       `json:"remote_config"`
+	CLIArgs      ParsedArgsFromRust `json:"cli_args"`
 }
 
-// GetNoColor returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetNoColor() bool {
-	return a.NoColor
-}
-
-// GetLogin returns the value of the `login` flag.
-func (a ParsedArgsFromRust) GetLogin() (string, error) {
-	return a.Login, nil
-}
-
-// GetAPI returns the value of the `api` flag.
-func (a ParsedArgsFromRust) GetAPI() (string, error) {
-	return a.API, nil
-}
-
-// GetTeam returns the value of the `team` flag.
-func (a ParsedArgsFromRust) GetTeam() (string, error) {
-	return a.Team, nil
-}
-
-// GetToken returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetToken() (string, error) {
-	return a.Token, nil
-}
-
-// GetCwd returns the value of the `cwd` flag.
-func (a ParsedArgsFromRust) GetCwd() (string, error) {
-	return a.CWD, nil
+// RemoteConfig holds the authentication and endpoint details for the API client
+type RemoteConfig struct {
+	Token    string `json:"token"`
+	TeamID   string `json:"team_id"`
+	TeamSlug string `json:"team_slug"`
+	APIURL   string `json:"api_url"`
 }
 
 // GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag.

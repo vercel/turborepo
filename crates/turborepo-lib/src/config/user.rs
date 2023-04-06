@@ -92,7 +92,8 @@ impl UserConfigLoader {
 
         let config = Config::builder()
             .add_source(raw_disk_config.clone())
-            .add_source(Environment::with_prefix("turbo").source(environment))
+            .add_source(Environment::with_prefix("TURBO").source(environment.clone()))
+            .add_source(Environment::with_prefix("VERCEL_ARTIFACTS").source(environment))
             .set_override_option("token", token)?
             .build()?
             .try_deserialize()?;
@@ -157,6 +158,18 @@ mod test {
             .with_environment(Some(env))
             .load()?;
         assert_eq!(config.token(), Some("bar"));
+
+        let mut config_file = NamedTempFile::new()?;
+        writeln!(&mut config_file, "{{\"token\": \"baz\"}}")?;
+        let env = {
+            let mut map = HashMap::new();
+            map.insert("VERCEL_ARTIFACTS_TOKEN".into(), "bat".into());
+            map
+        };
+        let config = UserConfigLoader::new(config_file.path().to_path_buf())
+            .with_environment(Some(env))
+            .load()?;
+        assert_eq!(config.token(), Some("bat"));
         Ok(())
     }
 }

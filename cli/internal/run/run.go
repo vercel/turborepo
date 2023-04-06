@@ -32,18 +32,18 @@ import (
 )
 
 // ExecuteRun executes the run command
-func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
-	base, err := helper.GetCmdBase(args)
+func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
+	base, err := helper.GetCmdBase(executionState)
 	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
-	tasks := args.Command.Run.Tasks
-	passThroughArgs := args.Command.Run.PassThroughArgs
+	tasks := executionState.CLIArgs.Command.Run.Tasks
+	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
-	opts, err := optsFromArgs(args)
+	opts, err := optsFromArgs(&executionState.CLIArgs)
 	if err != nil {
 		return err
 	}

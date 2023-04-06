@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -30,7 +31,7 @@ func Test_sendToServer(t *testing.T) {
 		}))
 	defer ts.Close()
 
-	remoteConfig := RemoteConfig{
+	remoteConfig := turbostate.RemoteConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
@@ -85,7 +86,7 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := RemoteConfig{
+	remoteConfig := turbostate.RemoteConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
@@ -111,7 +112,7 @@ func Test_PutWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := RemoteConfig{
+	remoteConfig := turbostate.RemoteConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
@@ -138,7 +139,7 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := RemoteConfig{
+	remoteConfig := turbostate.RemoteConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
