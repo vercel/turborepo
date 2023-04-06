@@ -705,12 +705,10 @@ jobs:
         run: |
           cargo tp-pre-test
 
-
       - name: Run nextest
         timeout-minutes: 120
         run: |
           cargo tp-test
-
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]
