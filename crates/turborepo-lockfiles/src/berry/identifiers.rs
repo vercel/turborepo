@@ -10,6 +10,7 @@ lazy_static! {
     static ref PATCH_REF: Regex = Regex::new(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$").unwrap();
     static ref MULTIKEY: Regex = Regex::new(r" *, *").unwrap();
     static ref BUILTIN: Regex = Regex::new(r"^builtin<([^>]+)>$").unwrap();
+    static ref PROTOCOL: Regex = Regex::new(r"^[A-Za-z]+:").unwrap();
 }
 
 #[derive(Debug, Error)]
@@ -99,6 +100,15 @@ impl<'a> fmt::Display for Descriptor<'a> {
 }
 
 impl<'a> Descriptor<'a> {
+    pub fn new(ident: &'a str, range: &'a str) -> Result<Self, Error> {
+        let ident = Ident::try_from(ident)?;
+        let mut range = Cow::from(range);
+        // If no protocol we use the default "npm:" protocol
+        if !PROTOCOL.is_match(&range) {
+            range.to_mut().insert_str(0, "npm:");
+        }
+        Ok(Self { ident, range })
+    }
     /// Extracts all descriptors that are present in a lockfile entry key
     pub fn from_lockfile_key(key: &'a str) -> impl Iterator<Item = Result<Descriptor<'a>, Error>> {
         MULTIKEY.split(key).map(Descriptor::try_from)
@@ -135,6 +145,14 @@ impl<'a> fmt::Display for Locator<'a> {
 }
 
 impl<'a> Locator<'a> {
+    pub fn new(ident: &'a str, reference: &'a str) -> Result<Self, Error> {
+        let ident = Ident::try_from(ident)?;
+        Ok(Self {
+            ident,
+            reference: reference.into(),
+        })
+    }
+
     pub fn is_patch_builtin(patch: &str) -> bool {
         patch.starts_with('~') || BUILTIN.is_match(patch)
     }

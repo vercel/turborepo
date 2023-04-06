@@ -12,6 +12,7 @@ use identifiers::{Descriptor, Ident, Locator};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use self::resolution::{parse_resolution, Resolution};
 use super::Lockfile;
 
 #[derive(Debug, Error)]
@@ -20,6 +21,8 @@ pub enum Error {
     Identifiers(#[from] identifiers::Error),
     #[error("unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
+    #[error("unable to parse resolutions field")]
+    Resolutions(#[from] resolution::Error),
 }
 
 // We depend on BTree iteration being sorted
@@ -33,6 +36,8 @@ pub struct BerryLockfile<'a> {
     patches: Map<Locator<'static>, Locator<'a>>,
     // Descriptors that come from default package extensions that ship with berry
     extensions: HashSet<Descriptor<'static>>,
+    // Package overrides
+    overrides: Map<Resolution<'a>, &'a str>,
 }
 
 // This is the direct representation of the lockfile as it appears on disk.
@@ -75,8 +80,16 @@ struct DependencyMeta {
     unplugged: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BerryManifest {
+    resolutions: Option<Map<String, String>>,
+}
+
 impl<'a> BerryLockfile<'a> {
-    pub fn new(lockfile: &'a LockfileData) -> Result<Self, Error> {
+    pub fn new(
+        lockfile: &'a LockfileData,
+        manifest: Option<&'a BerryManifest>,
+    ) -> Result<Self, Error> {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
@@ -101,6 +114,11 @@ impl<'a> BerryLockfile<'a> {
                 descriptor_locator.insert(descriptor, locator.clone());
             }
         }
+
+        let overrides = manifest
+            .and_then(|manifest| manifest.resolutions())
+            .transpose()?
+            .unwrap_or_default();
 
         // A temporary representation that is keyed off of the ident to allow for faster
         // finding of possible descriptor matches
@@ -162,6 +180,7 @@ impl<'a> BerryLockfile<'a> {
             locator_package,
             patches,
             extensions,
+            overrides,
         })
     }
 
@@ -178,18 +197,69 @@ impl<'a> BerryLockfile<'a> {
 impl<'a> Lockfile for BerryLockfile<'a> {
     fn resolve_package(
         &self,
-        _workspace_path: &str,
+        workspace_path: &str,
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        todo!()
+        // Retrieving the workspace package is necessary in case there's a
+        // workspace specific override.
+        // In practice, this is extremely silly since changing the version of
+        // the dependency in the workspace's package.json does the same thing.
+        let workspace_locator = self
+            .locator_package
+            .keys()
+            .find(|locator| {
+                locator.reference.starts_with("workspace:")
+                    && locator.reference.ends_with(workspace_path)
+            })
+            .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
+
+        // TODO don't unwrap here
+        let mut dependency = Descriptor::new(name, version).unwrap();
+        for (resolution, reference) in &self.overrides {
+            if let Some(override_dependency) =
+                resolution.reduce_dependency(reference, &dependency, workspace_locator)
+            {
+                dependency = override_dependency;
+            }
+        }
+
+        let locator = self
+            .resolutions
+            .get(&dependency)
+            .ok_or_else(|| crate::Error::MissingPackage(dependency.to_string()))?;
+
+        let package = self
+            .locator_package
+            .get(locator)
+            .ok_or_else(|| crate::Error::MissingPackage(dependency.to_string()))?;
+
+        Ok(Some(crate::Package {
+            key: locator.to_string(),
+            version: package.version.clone().into(),
+        }))
     }
 
     fn all_dependencies(
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, &str>>, crate::Error> {
+        // For each dependency we need to check if there's an override
         todo!()
+    }
+}
+
+impl BerryManifest {
+    pub fn resolutions(&self) -> Option<Result<Map<Resolution, &str>, Error>> {
+        self.resolutions.as_ref().map(|resolutions| {
+            resolutions
+                .iter()
+                .map(|(resolution, reference)| {
+                    let res = parse_resolution(resolution)?;
+                    Ok((res, reference.as_str()))
+                })
+                .collect()
+        })
     }
 }
 
