@@ -19,7 +19,7 @@ Make sure you have all the [prerequisites](https://github.com/cmyr/cargo-instrum
 
 ### Run the profiler
 
-By default, the next-dev CLI will keep watching for changes to your application and never exit until you manually interrupt it. However, [`cargo-instruments`] waits for your program to exit before building and opening the trace file. For this purpose, we've added a `profile` feature to `next-dev` which exits the program if no updates are detected within a given timeframe and there are no pending tasks.
+By default, the next-dev CLI will keep watching for changes to your application and never exit until you manually interrupt it. However, [`cargo-instruments`] waits for your program to exit before building and opening the trace file. For this purpose, we've added a `profile` feature to `next-dev` which exits the program if no updates are detected within a given time frame and there are no pending tasks.
 
 To profile `next-dev`, run the following command:
 

@@ -52,6 +52,19 @@ pub enum DryRunMode {
     Json,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum EnvMode {
+    Infer,
+    Loose,
+    Strict,
+}
+
+impl Default for EnvMode {
+    fn default() -> EnvMode {
+        EnvMode::Infer
+    }
+}
+
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
@@ -309,6 +322,11 @@ pub struct RunArgs {
     /// .html). Outputs dot graph to stdout when if no filename is provided
     #[clap(long, num_args = 0..=1, default_missing_value = "")]
     pub graph: Option<String>,
+    /// Environment variable mode.
+    /// Loose passes the entire environment.
+    /// Strict uses an allowlist specified in turbo.json.
+    #[clap(long = "experimental-env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
     #[clap(long)]
@@ -456,6 +474,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         current_dir()?
     };
 
+    let version = get_version();
+
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
@@ -463,7 +483,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -476,7 +496,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -493,7 +513,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }
 
             let modify_gitignore = !*no_gitignore;
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             if let Err(err) = link::link(&mut base, modify_gitignore).await {
                 error!("error: {}", err.to_string())
@@ -507,7 +527,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Rust(Ok(0)));
             }
 
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             unlink::unlink(&mut base)?;
 
@@ -518,7 +538,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             ..
         } => {
             let command = *command;
-            let base = CommandBase::new(clap_args, repo_root)?;
+            let base = CommandBase::new(clap_args, repo_root, version)?;
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },
@@ -603,7 +623,7 @@ mod test {
 
     use anyhow::Result;
 
-    use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
+    use crate::cli::{Args, Command, DryRunMode, EnvMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
     fn test_parse_run() -> Result<()> {
@@ -616,6 +636,74 @@ mod test {
                 }))),
                 ..Args::default()
             }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: default infer"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: not fully-specified"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "infer"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Infer,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified infer"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "loose"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Loose,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified loose"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "strict"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::Strict,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified strict"
         );
 
         assert_eq!(

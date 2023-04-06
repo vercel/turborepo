@@ -35,12 +35,13 @@ members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopath",
   "crates/turborepo",
+  "crates/turborepo-api-client",
   "crates/turborepo-ffi",
   "crates/turborepo-lib",
   "crates/turborepo-lockfiles",
   "crates/turborepo-scm",
-  "crates/turborepo-paths",
   "xtask",
 ]
 
@@ -132,7 +133,9 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopath = { path = "crates/turbopath" }
 turborepo = { path = "crates/turborepo" }
+turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-lib = { path = "crates/turborepo-lib" }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }

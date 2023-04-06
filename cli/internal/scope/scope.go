@@ -262,7 +262,7 @@ func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []st
 		// unable to reconstruct old lockfile, assume everything changed
 		return nil, true
 	}
-	prevLockfile, err := ctx.PackageManager.UnmarshalLockfile(prevContents)
+	prevLockfile, err := ctx.PackageManager.UnmarshalLockfile(ctx.WorkspaceInfos.PackageJSONs[util.RootPkgName], prevContents)
 	if err != nil {
 		// unable to parse old lockfile, assume everything changed
 		return nil, true

@@ -7,8 +7,8 @@ license = "MPL-2.0"
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
-native-tls = ["reqwest/native-tls", "turbo-updater/native-tls"]
-rustls-tls = ["reqwest/rustls-tls", "turbo-updater/rustls-tls"]
+native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
+rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -68,11 +68,13 @@ tonic = { version = "0.8.3", features = ["transport"] }
 tower = "0.4.13"
 uds_windows = "1.0.2"
 url = "2.3.1"
-webbrowser = { workspace = true }
 
 const_format = "0.2.30"
 turbo-updater = { workspace = true }
-turborepo-paths = { version = "0.1.0", path = "../turborepo-paths" }
+turbopath = { workspace = true }
+turborepo-api-client = { workspace = true }
+webbrowser = { workspace = true }
+
 
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"

@@ -179,7 +179,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.PackageManager = packageManager
 
-	if lockfile, err := c.PackageManager.ReadLockfile(repoRoot); err != nil {
+	if lockfile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
 		warnings.append(err)
 	} else {
 		c.Lockfile = lockfile

@@ -38,11 +38,11 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
-	cp ../crates/turborepo-ffi/target/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
+	cp ../crates/turborepo-ffi/target/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
+	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
 
 .PHONY: turborepo-ffi-copy-bindings
 turborepo-ffi-copy-bindings:
