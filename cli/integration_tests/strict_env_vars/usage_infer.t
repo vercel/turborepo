@@ -10,7 +10,14 @@ Set the env vars
   $ export LOCAL_VAR_PT=hilocalpt
   $ export LOCAL_VAR_DEP=hilocaldep
   $ export OTHER_VAR=hiother
-  $ export SYSTEMROOT=hisysroot
+
+Conditionally set these vars if they aren't already there for the purpose of the test.
+The test doesn't care about the values, it just checks that the var is available to the task
+so we just have to make sure the parent process has them set. In Github CI, for example SHELL
+isn't already set.
+  $ export SYSTEMROOT="${SYSTEMROOT:=hisysroot}"
+  $ export PATH="${PATH:=hipath}"
+  $ export SHELL="${SHELL:=hishell}"
 
 Inferred mode as loose because no pass through configs, all vars are available
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
