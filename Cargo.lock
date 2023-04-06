@@ -7819,6 +7819,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopath"
+version = "0.1.0"
+dependencies = [
+ "path-slash",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "turborepo-api-client"
 version = "0.1.0"
 dependencies = [
@@ -7828,15 +7837,6 @@ dependencies = [
  "rustc_version_runtime",
  "serde",
  "tokio",
-]
-
-[[package]]
-name = "turbopath"
-version = "0.1.0"
-dependencies = [
- "path-slash",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -7910,8 +7910,8 @@ dependencies = [
  "tonic-build",
  "tower",
  "turbo-updater",
- "turborepo-api-client",
  "turbopath",
+ "turborepo-api-client",
  "uds_windows",
  "url",
  "webbrowser",
