@@ -199,35 +199,40 @@ Controls the available environment variables to your tasks.
 
 **`infer`**
 
-In `infer` mode, Turborepo will look for [`experimentalPassThroughEnv`][r-config-experimentalPassThroughEnv] for each
+In `infer` mode, Turborepo will look for
+[`experimentalPassThroughEnv`][r-config-experimentalPassThroughEnv] for each
 task config, and
 [`experimentalGlobalPassThroughEnv`][r-config-experimentalGlobalPassThroughEnv]
 in the root of the `turbo.json` config. If either is defined, "strict" mode will
 be inferred. If neither is defined, then `loose` mode is inferred.
 
-`infer` mode is not part of the global cache key, so using the `--experimental-env-mode=infer` (or
-`--experimental-env-mode` without a value) flag will not invalidate the global cache.
+`infer` mode is not part of the global cache key, so using the
+`--experimental-env-mode=infer` (or `--experimental-env-mode` without a value)
+flag will not invalidate the global cache.
 
 **`loose`**
 
 In `loose` mode, all environment variables are made available to the task.
 
-When using this flag, if `experimentalGlobalPassThroughEnv` is set in `turbo.json`, Turborepo
-will invalidate the global cache, as it could change the behavior of all task executions.
+When using this flag, if `experimentalGlobalPassThroughEnv` is set in
+`turbo.json`, Turborepo will invalidate the global cache, as it could change the
+behavior of all task executions.
 
 **`strict`**
 
-In `strict` mode, only environment variables specified in the following keys are available to
-the task.
+In `strict` mode, only environment variables specified in the following keys are
+available to the task.
 
 - `env` and experimentalPassThroughEnv` in each task
 - `globalEnv` and experimentalGlobalPassThroughEnv` in each task
 
-When using this flag, if `experimentalGlobalPassThroughEnv` is set in `turbo.json`, Turborepo
-will invalidate the global cache, as it could change the behavior of all task executions.
+When using this flag, if `experimentalGlobalPassThroughEnv` is set in
+`turbo.json`, Turborepo will invalidate the global cache, as it could change the
+behavior of all task executions.
 
-Note that in `strict` mode, (even if it is inferred) _all_ tasks are opted into `strict` mode,
-regardless of whether `experimentalGlobalPassThroughEnv` or `globalEnv` are set.
+Note that in `strict` mode, (even if it is inferred) _all_ tasks are opted into
+`strict` mode, regardless of whether `experimentalGlobalPassThroughEnv` or
+`globalEnv` are set.
 
 #### `--filter`
 
