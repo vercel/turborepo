@@ -178,27 +178,6 @@ Task details include:
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
 
-#### `--experimental-env-mode`
-
-<Callout type="info">
-  **Warning**: This in experimental flag, so its name and behavior can change.
-</Callout>
-
-`type: string`
-
-Controls the available variables to your tasks based upon the values specified in the `globalEnvPassthrough` and `envPassthrough` fields in `turbo.json`.
-
-Default is to infer based upon the presence of `globalEnvPassthrough` and `envPassthrough`.
-
-- If `globalEnvPassthrough` is configured then `strict` mode will be enabled for _all tasks_.
-- If `envPassthrough` is configured then `strict` mode will be enabled for just the specified task.
-
-Specify `--experimental-env-mode=infer` to infer strict mode _per-task_. (Default)
-
-Specify `--experimental-env-mode=strict` to force all tasks to be in strict mode.
-
-Specify `--experimental-env-mode=loose` to enable the entire parent environment to be available in all of your tasks.
-
 #### `--filter`
 
 `type: string[]`
