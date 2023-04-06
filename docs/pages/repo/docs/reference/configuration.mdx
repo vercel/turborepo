@@ -50,7 +50,11 @@ A list of environment variables for implicit global hash dependencies. The conte
 ```jsonc
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["VERCEL_ANALYTICS_ID"] // value will impact the hashes of all tasks
+  "pipeline": {
+    // ... omitted for brevity
+  },
+
+  "globalEnv": ["GITHUB_TOKEN"] // value will impact the hashes of all tasks
 }
 ```
 

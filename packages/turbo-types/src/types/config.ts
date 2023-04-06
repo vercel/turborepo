@@ -77,7 +77,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Only applies in `--env=strict` mode.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
    *
    * @default []
    */
@@ -133,11 +133,11 @@ export interface Pipeline {
    *
    * Only applies in `--env=strict` mode.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#experimentalPassThroughEnv
    *
    * @default []
    */
-  experimentalPassthroughEnv?: string[];
+  experimentalPassThroughEnv?: string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
