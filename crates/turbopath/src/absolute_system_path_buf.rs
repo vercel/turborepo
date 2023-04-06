@@ -102,14 +102,16 @@ impl AbsoluteSystemPathBuf {
     /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     /// #[cfg(not(windows))]
     /// let absolute_path = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
-    ///
     /// #[cfg(windows)]
     /// let absolute_path = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
+    ///
     /// let anchored_path = Path::new("Documents").try_into().unwrap();
     /// let resolved_path = absolute_path.resolve(&anchored_path);
+    ///
+    /// #[cfg(not(windows))]
+    /// assert_eq!(resolved_path.as_path(), Path::new("/Users/user/Documents"));
     /// #[cfg(windows)]
     /// assert_eq!(resolved_path.as_path(), Path::new("C:\\Users\\user\\Documents"));
-    /// assert_eq!(resolved_path.as_path(), Path::new("/Users/user/Documents"));
     /// ```
     pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path.as_path()))
