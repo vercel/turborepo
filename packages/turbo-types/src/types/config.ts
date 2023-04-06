@@ -81,7 +81,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @default []
    */
-  experimentalGlobalPassthroughEnv?: string[];
+  experimentalGlobalPassThroughEnv?: string[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
