@@ -223,9 +223,10 @@ async function loadChunk(source, chunkData) {
     return loadChunkPath(source, chunkData);
   } else {
     const includedList = chunkData.included || [];
-    const promises = includedList.map((included) =>
-      availableModules.get(included)
-    );
+    const promises = includedList.map((included) => {
+      if (moduleFactories[included]) return true;
+      return availableModules.get(included);
+    });
     if (promises.length > 0 && promises.every((p) => p)) {
       // When all included items are already loaded or loading, we can skip loading ourselves
       return Promise.all(promises);
