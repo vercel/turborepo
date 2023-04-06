@@ -1238,6 +1238,7 @@ function disposeChunk(chunkPath) {
     if (noRemainingChunks) {
       moduleChunksMap.delete(moduleId);
       disposeModule(moduleId, "clear");
+      availableModules.delete(moduleId);
     }
   }
 
