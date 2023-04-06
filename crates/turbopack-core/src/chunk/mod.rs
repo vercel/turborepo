@@ -222,22 +222,32 @@ impl ParallelChunkReference for ChunkReference {
 /// A reference to multiple chunks from a [ChunkGroup]
 #[turbo_tasks::value]
 pub struct ChunkGroupReference {
-    chunks: AssetsVc,
+    chunking_context: ChunkingContextVc,
+    entry: ChunkVc,
 }
 
 #[turbo_tasks::value_impl]
 impl ChunkGroupReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(chunks: AssetsVc) -> Self {
-        Self::cell(ChunkGroupReference { chunks })
+    pub fn new(chunking_context: ChunkingContextVc, entry: ChunkVc) -> Self {
+        Self::cell(ChunkGroupReference {
+            chunking_context,
+            entry,
+        })
+    }
+
+    #[turbo_tasks::function]
+    async fn chunks(self) -> Result<AssetsVc> {
+        let this = self.await?;
+        Ok(this.chunking_context.chunk_group(this.entry))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl AssetReference for ChunkGroupReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let set = self.chunks.await?.clone_value();
+    async fn resolve_reference(self_vc: ChunkGroupReferenceVc) -> Result<ResolveResultVc> {
+        let set = self_vc.chunks().await?.clone_value();
         Ok(ResolveResult::assets(set).into())
     }
 }
@@ -248,16 +258,7 @@ impl ValueToString for ChunkGroupReference {
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
             "chunk group ({})",
-            self.chunks
-                .await?
-                .iter()
-                .map(|chunk| chunk.ident().to_string())
-                .try_join()
-                .await?
-                .into_iter()
-                .map(|s| s.clone_value())
-                .collect::<Vec<_>>()
-                .join(", ")
+            self.entry.ident().to_string().await?
         )))
     }
 }
@@ -265,7 +266,7 @@ impl ValueToString for ChunkGroupReference {
 pub struct ChunkContentResult<I> {
     pub chunk_items: Vec<I>,
     pub chunks: Vec<ChunkVc>,
-    pub async_chunk_groups: Vec<AssetsVc>,
+    pub async_chunk_group_entries: Vec<ChunkVc>,
     pub external_asset_references: Vec<AssetReferenceVc>,
     pub availability_info: AvailabilityInfo,
 }
@@ -317,7 +318,7 @@ enum ChunkContentGraphNode<I> {
     Chunk(ChunkVc),
     // Chunk groups that are referenced from the current chunk, but
     // not loaded in parallel
-    AsyncChunkGroup(AssetsVc),
+    AsyncChunkGroup(ChunkVc),
     ExternalAssetReference(AssetReferenceVc),
 }
 
@@ -443,10 +444,8 @@ where
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::AsyncChunkGroup(
-                        context.chunking_context.chunk_group(
-                            chunkable_asset
-                                .as_chunk(context.chunking_context, context.availability_info),
-                        ),
+                        chunkable_asset
+                            .as_chunk(context.chunking_context, context.availability_info),
                     ),
                 ));
             }
@@ -607,7 +606,7 @@ where
 
     let mut chunk_items = Vec::new();
     let mut chunks = Vec::new();
-    let mut async_chunk_groups = Vec::new();
+    let mut async_chunk_group_entries = Vec::new();
     let mut external_asset_references = Vec::new();
 
     for graph_node in graph_nodes {
@@ -620,7 +619,7 @@ where
                 chunks.push(chunk);
             }
             ChunkContentGraphNode::AsyncChunkGroup(chunks) => {
-                async_chunk_groups.push(chunks);
+                async_chunk_group_entries.push(chunks);
             }
             ChunkContentGraphNode::ExternalAssetReference(reference) => {
                 external_asset_references.push(reference);
@@ -631,7 +630,7 @@ where
     Ok(Some(ChunkContentResult {
         chunk_items,
         chunks,
-        async_chunk_groups,
+        async_chunk_group_entries,
         external_asset_references,
         availability_info: availability_info.into_value(),
     }))
