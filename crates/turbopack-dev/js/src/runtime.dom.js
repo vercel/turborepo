@@ -36,7 +36,7 @@ let BACKEND;
       // This wait for chunks to be loaded, but also marks included items as available.
       await Promise.all(
         params.otherChunks.map((otherChunkData) =>
-          loadChunk(undefined, otherChunkData)
+          loadChunk({ type: SourceTypeRuntime, chunkPath }, otherChunkData)
         )
       );
 
@@ -153,23 +153,6 @@ let BACKEND;
 
   function deleteResolver(chunkPath) {
     chunkResolvers.delete(chunkPath);
-  }
-
-  /**
-   * Waits for all provided chunks to load.
-   *
-   * @param {ChunkPath[]} chunks
-   * @returns {Promise<void>}
-   */
-  async function waitForChunksToLoad(chunks) {
-    const promises = [];
-    for (const chunkPath of chunks) {
-      const resolver = getOrCreateResolver(chunkPath);
-      if (!resolver.resolved) {
-        promises.push(resolver.promise);
-      }
-    }
-    await Promise.all(promises);
   }
 
   /**
