@@ -367,6 +367,21 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     net::SocketAddr,
     process::{Command, Stdio},
@@ -394,6 +409,22 @@
         <span class="self">Self</span>(<span class="prelude-val">Some</span>(addr))
     }
 
+    <span class="doccomment">/// The hostname portion of the address, without the port. Prefers
+    /// &quot;localhost&quot; when using a loopback address.
+    </span><span class="kw">pub fn </span>hostname(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.map(|addr| {
+            <span class="kw">if </span>addr.ip().is_loopback() || addr.ip().is_unspecified() {
+                <span class="string">&quot;localhost&quot;</span>.to_string()
+            } <span class="kw">else if </span>addr.is_ipv6() {
+                <span class="comment">// When using an IPv6 address, we need to surround the IP in brackets to
+                // distinguish it from the port&#39;s `:`.
+                </span><span class="macro">format!</span>(<span class="string">&quot;[{}]&quot;</span>, addr.ip())
+            } <span class="kw">else </span>{
+                addr.ip().to_string()
+            }
+        })
+    }
+
     <span class="kw">pub fn </span>ip(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
         <span class="self">self</span>.<span class="number">0</span>.map(|addr| addr.ip().to_string())
     }
@@ -402,18 +433,17 @@
         <span class="self">self</span>.<span class="number">0</span>.map(|addr| addr.port())
     }
 
-    <span class="kw">pub fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.context(<span class="string">&quot;expected some server address&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>uri = <span class="kw">if </span>addr.ip().is_loopback() || addr.ip().is_unspecified() {
-            <span class="kw">match </span>addr.port() {
-                <span class="number">80 </span>=&gt; <span class="string">&quot;http://localhost&quot;</span>.to_string(),
-                <span class="number">443 </span>=&gt; <span class="string">&quot;https://localhost&quot;</span>.to_string(),
-                <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">&quot;http://localhost:{}&quot;</span>, addr.port()),
-            }
-        } <span class="kw">else </span>{
-            <span class="macro">format!</span>(<span class="string">&quot;http://{}&quot;</span>, addr)
-        };
-        <span class="prelude-val">Ok</span>(uri)
+    <span class="doccomment">/// Constructs a URL out of the address.
+    </span><span class="kw">pub fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>(hostname, port) = <span class="self">self
+            </span>.hostname()
+            .zip(<span class="self">self</span>.port())
+            .context(<span class="string">&quot;expected some server address&quot;</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>port {
+            <span class="number">80 </span>=&gt; <span class="macro">format!</span>(<span class="string">&quot;http://{hostname}&quot;</span>),
+            <span class="number">443 </span>=&gt; <span class="macro">format!</span>(<span class="string">&quot;https://{hostname}&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">&quot;http://{hostname}:{port}&quot;</span>),
+        })
     }
 }
 
