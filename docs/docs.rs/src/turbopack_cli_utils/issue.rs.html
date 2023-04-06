@@ -947,7 +947,7 @@
             .iter_with_shortest_path()
             .map(|(issue, path)| <span class="kw">async move </span>{
                 <span class="kw">let </span>plain_issue = issue.into_plain(path);
-                <span class="kw">let </span>id = plain_issue.internal_hash().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>id = plain_issue.internal_hash(<span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((plain_issue.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">*</span>id))
             })
             .try_join()

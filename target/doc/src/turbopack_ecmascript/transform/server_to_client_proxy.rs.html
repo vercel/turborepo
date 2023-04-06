@@ -50,29 +50,6 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
 </pre><pre class="rust"><code><span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::{
@@ -87,29 +64,6 @@
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::references::TURBOPACK_HELPER;
-
-<span class="macro">macro_rules! </span>has_client_directive {
-    (<span class="macro-nonterminal">$stmts</span>:expr) =&gt; {
-        <span class="macro-nonterminal">$stmts
-            </span>.map(|item| {
-                <span class="kw">if let </span>Lit::Str(str) = item<span class="question-mark">?</span>.as_expr()<span class="question-mark">?</span>.expr.as_lit()<span class="question-mark">? </span>{
-                    <span class="prelude-val">Some</span>(str)
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">None
-                </span>}
-            })
-            .take_while(Option::is_some)
-            .map(Option::unwrap)
-            .any(|s| <span class="kw-2">&amp;*</span>s.value == <span class="string">&quot;use client&quot;</span>)
-    };
-}
-
-<span class="kw">pub fn </span>is_client_module(program: <span class="kw-2">&amp;</span>Program) -&gt; bool {
-    <span class="kw">match </span>program {
-        Program::Module(m) =&gt; <span class="macro">has_client_directive!</span>(m.body.iter().map(|item| item.as_stmt())),
-        Program::Script(s) =&gt; <span class="macro">has_client_directive!</span>(s.body.iter().map(<span class="prelude-val">Some</span>)),
-    }
-}
 
 <span class="kw">pub fn </span>create_proxy_module(transition_name: <span class="kw-2">&amp;</span>str, target_import: <span class="kw-2">&amp;</span>str) -&gt; Program {
     <span class="kw">let </span>ident = <span class="macro">private_ident!</span>(<span class="string">&quot;createProxy&quot;</span>);

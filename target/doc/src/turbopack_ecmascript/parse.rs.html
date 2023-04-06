@@ -335,6 +335,10 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -360,7 +364,7 @@
     primitives::{StringVc, U64Vc},
     Value, ValueToString,
 };
-<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
+<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
@@ -479,7 +483,8 @@
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
     <span class="kw">let </span>content = source.content();
-    <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>fs_path_vc = source.ident().path();
+    <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>fs_path_vc.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>source.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_ident(source.ident().to_string()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
     <span class="kw">let </span>ty = ty.into_value();
@@ -491,6 +496,7 @@
                     <span class="kw">let </span>transforms = <span class="kw-2">&amp;*</span>transforms.<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">match </span>parse_content(
                         string.into_owned(),
+                        fs_path_vc,
                         fs_path,
                         ident,
                         file_path_hash,
@@ -519,6 +525,7 @@
 
 <span class="kw">async fn </span>parse_content(
     string: String,
+    fs_path_vc: FileSystemPathVc,
     fs_path: <span class="kw-2">&amp;</span>FileSystemPath,
     ident: <span class="kw-2">&amp;</span>str,
     file_path_hash: u128,
@@ -634,6 +641,7 @@
                 file_path_str: <span class="kw-2">&amp;</span>fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
+                file_path: fs_path_vc,
             };
             <span class="kw">for </span>transform <span class="kw">in </span>transforms.iter() {
                 transform.apply(<span class="kw-2">&amp;mut </span>parsed_program, <span class="kw-2">&amp;</span>context).<span class="kw">await</span><span class="question-mark">?</span>;

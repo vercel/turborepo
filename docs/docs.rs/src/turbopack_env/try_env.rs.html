@@ -59,11 +59,8 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::future::IntoFuture;
-
-<span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringVc};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_env::{DotenvProcessEnvVc, EnvMapVc, ProcessEnv, ProcessEnvVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
@@ -71,42 +68,22 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>TryDotenvProcessEnv {
+    dotenv: DotenvProcessEnvVc,
     prior: ProcessEnvVc,
     path: FileSystemPathVc,
-}
-
-<span class="kw">impl </span>TryDotenvProcessEnv {
-    <span class="kw">async fn </span>with_issue&lt;T, V: Copy + IntoFuture&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        op: <span class="kw">impl </span>Fn(ProcessEnvVc) -&gt; V,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;V&gt; {
-        <span class="kw">let </span>r = op(DotenvProcessEnvVc::new(<span class="prelude-val">Some</span>(<span class="self">self</span>.prior), <span class="self">self</span>.path).as_process_env());
-        <span class="kw">match </span>r.<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(r),
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="kw">let </span>r = op(<span class="self">self</span>.prior);
-                <span class="comment">// If the prior process env also reports an error we don&#39;t want to report our
-                // issue
-                </span>r.<span class="kw">await</span><span class="question-mark">?</span>;
-
-                ProcessEnvIssue {
-                    path: <span class="self">self</span>.path,
-                    description: StringVc::cell(e.to_string()),
-                }
-                .cell()
-                .as_issue()
-                .emit();
-                <span class="prelude-val">Ok</span>(r)
-            }
-        }
-    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>TryDotenvProcessEnvVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(prior: ProcessEnvVc, path: FileSystemPathVc) -&gt; <span class="self">Self </span>{
-        TryDotenvProcessEnv { prior, path }.cell()
+        <span class="kw">let </span>dotenv = DotenvProcessEnvVc::new(<span class="prelude-val">Some</span>(prior), path);
+        TryDotenvProcessEnv {
+            dotenv,
+            prior,
+            path,
+        }
+        .cell()
     }
 }
 
@@ -114,13 +91,34 @@
 </span><span class="kw">impl </span>ProcessEnv <span class="kw">for </span>TryDotenvProcessEnv {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>read_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
-        <span class="self">self</span>.with_issue(|e| e.read_all()).<span class="kw">await
-    </span>}
+        <span class="kw">let </span>dotenv = <span class="self">self</span>.dotenv;
+        <span class="kw">let </span>prior = dotenv.read_prior();
 
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;OptionStringVc&gt; {
-        <span class="self">self</span>.with_issue(|e| e.read(name)).<span class="kw">await
-    </span>}
+        <span class="comment">// Ensure prior succeeds. If it doesn&#39;t, then we don&#39;t want to attempt to read
+        // the dotenv file (and potentially emit an Issue), just trust that the prior
+        // will have emitted its own.
+        </span>prior.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>vars = dotenv.read_all_with_prior(prior);
+        <span class="kw">match </span>vars.<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(vars),
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="comment">// If parsing the dotenv file fails (but getting the prior value didn&#39;t), then
+                // we want to emit an Issue and fall back to the prior&#39;s read.
+                </span>ProcessEnvIssue {
+                    path: <span class="self">self</span>.path,
+                    <span class="comment">// read_all_with_prior will wrap a current error with a context containing the
+                    // failing file, which we don&#39;t really care about (we report the filepath as the
+                    // Issue context, not the description). So extract the real error.
+                    </span>description: StringVc::cell(e.root_cause().to_string()),
+                }
+                .cell()
+                .as_issue()
+                .emit();
+                <span class="prelude-val">Ok</span>(prior)
+            }
+        }
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbopack_env" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

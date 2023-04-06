@@ -91,6 +91,16 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{env, sync::MutexGuard};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -115,21 +125,22 @@
     </span><span class="kw">pub fn </span>new(prior: <span class="prelude-ty">Option</span>&lt;ProcessEnvVc&gt;, path: FileSystemPathVc) -&gt; <span class="self">Self </span>{
         DotenvProcessEnv { prior, path }.cell()
     }
-}
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ProcessEnv <span class="kw">for </span>DotenvProcessEnv {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>read_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
-        <span class="kw">let </span>prior = <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = <span class="self">self</span>.prior {
-            <span class="prelude-val">Some</span>(p.read_all().<span class="kw">await</span><span class="question-mark">?</span>)
-        } <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>};
-        <span class="kw">let </span>empty = IndexMap::new();
-        <span class="kw">let </span>prior = prior.as_deref().unwrap_or(<span class="kw-2">&amp;</span>empty);
+    </span><span class="kw">pub async fn </span>read_prior(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">match </span>this.prior {
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(EnvMapVc::empty()),
+            <span class="prelude-val">Some</span>(p) =&gt; <span class="prelude-val">Ok</span>(p.read_all()),
+        }
+    }
 
-        <span class="kw">let </span>file = <span class="self">self</span>.path.read().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>read_all_with_prior(<span class="self">self</span>, prior: EnvMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>prior = prior.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>file = this.path.read().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span>FileContent::Content(f) = <span class="kw-2">&amp;*</span>file {
             <span class="kw">let </span>res;
             <span class="kw">let </span>vars;
@@ -141,7 +152,7 @@
                 // state.
                 </span><span class="kw">let </span>initial = env::vars().collect();
 
-                restore_env(<span class="kw-2">&amp;</span>initial, prior, <span class="kw-2">&amp;</span>lock);
+                restore_env(<span class="kw-2">&amp;</span>initial, <span class="kw-2">&amp;</span>prior, <span class="kw-2">&amp;</span>lock);
 
                 <span class="comment">// from_read will load parse and evalute the Read, and set variables
                 // into the global env. If a later dotenv defines an already defined
@@ -152,17 +163,26 @@
                 restore_env(<span class="kw-2">&amp;</span>vars, <span class="kw-2">&amp;</span>initial, <span class="kw-2">&amp;</span>lock);
             }
 
-            <span class="kw">if </span>res.is_err() {
-                res.context(<span class="macro">anyhow!</span>(
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = res {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(e).context(<span class="macro">anyhow!</span>(
                     <span class="string">&quot;unable to read {} for env vars&quot;</span>,
-                    <span class="self">self</span>.path.to_string().<span class="kw">await</span><span class="question-mark">?
-                </span>))<span class="question-mark">?</span>;
+                    this.path.to_string().<span class="kw">await</span><span class="question-mark">?
+                </span>));
             }
 
             <span class="prelude-val">Ok</span>(EnvMapVc::cell(vars))
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(EnvMapVc::cell(prior.clone()))
+            <span class="prelude-val">Ok</span>(EnvMapVc::cell(prior.clone_value()))
         }
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ProcessEnv <span class="kw">for </span>DotenvProcessEnv {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>read_all(self_vc: DotenvProcessEnvVc) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
+        <span class="kw">let </span>prior = self_vc.read_prior();
+        <span class="prelude-val">Ok</span>(self_vc.read_all_with_prior(prior))
     }
 }
 

@@ -188,6 +188,8 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env, fs,
@@ -221,7 +223,7 @@
     <span class="kw">let </span>expected_issues = expected(issues_path).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>seen = HashSet::new();
     <span class="kw">for </span>(plain_issue, debug_string) <span class="kw">in </span>captured_issues.into_iter() {
-        <span class="kw">let </span>hash = encode_hex(plain_issue.internal_hash());
+        <span class="kw">let </span>hash = encode_hex(plain_issue.internal_hash(<span class="bool-val">true</span>));
 
         <span class="kw">let </span>path = issues_path.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
             <span class="string">&quot;{}-{}.txt&quot;</span>,
@@ -234,7 +236,9 @@
                 .replace(<span class="string">&#39;?&#39;</span>, <span class="string">&quot;__q__&quot;</span>),
             <span class="kw-2">&amp;</span>hash[<span class="number">0</span>..<span class="number">6</span>]
         ));
-        seen.insert(path);
+        <span class="kw">if </span>!seen.insert(path) {
+            <span class="kw">continue</span>;
+        }
 
         <span class="comment">// Annoyingly, the PlainIssue.source -&gt; PlainIssueSource.asset -&gt;
         // PlainAsset.path -&gt; FileSystemPath.fs -&gt; DiskFileSystem.root changes

@@ -679,6 +679,31 @@
 <a href="#679" id="679">679</a>
 <a href="#680" id="680">680</a>
 <a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>analyze;
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">pub mod </span>package_json;
@@ -1184,42 +1209,67 @@
     <span class="kw">pub </span>processing_path: PlainIssueProcessingPathReadRef,
 }
 
+<span class="kw">fn </span>hash_plain_issue(issue: <span class="kw-2">&amp;</span>PlainIssue, hasher: <span class="kw-2">&amp;mut </span>Xxh3Hash64Hasher, full: bool) {
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.severity);
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.context);
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.category);
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.title);
+    hasher.write_ref(
+        <span class="comment">// Normalize syspaths from Windows. These appear in stack traces.
+        </span><span class="kw-2">&amp;</span>issue.description.replace(<span class="string">&#39;\\&#39;</span>, <span class="string">&quot;/&quot;</span>),
+    );
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.detail);
+    hasher.write_ref(<span class="kw-2">&amp;</span>issue.documentation_link);
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">&amp;</span>issue.source {
+        hasher.write_value(<span class="number">1_u8</span>);
+        <span class="comment">// I&#39;m assuming we don&#39;t need to hash the contents. Not 100% correct, but
+        // probably 99%.
+        </span>hasher.write_ref(<span class="kw-2">&amp;</span>source.start);
+        hasher.write_ref(<span class="kw-2">&amp;</span>source.end);
+    } <span class="kw">else </span>{
+        hasher.write_value(<span class="number">0_u8</span>);
+    }
+
+    <span class="kw">if </span>full {
+        hasher.write_value(issue.sub_issues.len());
+        <span class="kw">for </span>i <span class="kw">in </span><span class="kw-2">&amp;</span>issue.sub_issues {
+            hash_plain_issue(i, hasher, full);
+        }
+
+        hasher.write_ref(<span class="kw-2">&amp;</span>issue.processing_path);
+    }
+}
+
 <span class="kw">impl </span>PlainIssue {
     <span class="doccomment">/// We need deduplicate issues that can come from unique paths, but
     /// represent the same underlying problem. Eg, a parse error for a file
     /// that is compiled in both client and server contexts.
-    </span><span class="kw">pub fn </span>internal_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+    ///
+    /// Passing [full] will also hash any sub-issues and processing paths. While
+    /// useful for generating exact matching hashes, it&#39;s possible for the
+    /// same issue to pass from multiple processing paths, making for overly
+    /// verbose logging.
+    </span><span class="kw">pub fn </span>internal_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, full: bool) -&gt; u64 {
         <span class="kw">let </span><span class="kw-2">mut </span>hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.severity);
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.context);
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.category);
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.title);
-        hasher.write_ref(
-            <span class="comment">// Normalize syspaths from Windows. These appear in stack traces.
-            </span><span class="kw-2">&amp;</span><span class="self">self</span>.description.replace(<span class="string">&#39;\\&#39;</span>, <span class="string">&quot;/&quot;</span>),
-        );
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.detail);
-        hasher.write_ref(<span class="kw-2">&amp;</span><span class="self">self</span>.documentation_link);
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">&amp;</span><span class="self">self</span>.source {
-            hasher.write_value(<span class="number">1_u8</span>);
-            <span class="comment">// I&#39;m assuming we don&#39;t need to hash the contents. Not 100% correct, but
-            // probably 99%.
-            </span>hasher.write_ref(<span class="kw-2">&amp;</span>source.start);
-            hasher.write_ref(<span class="kw-2">&amp;</span>source.end);
-        } <span class="kw">else </span>{
-            hasher.write_value(<span class="number">0_u8</span>);
-        }
-
+        hash_plain_issue(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>hasher, full);
         hasher.finish()
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>PlainIssueVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>internal_hash(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
-        <span class="prelude-val">Ok</span>(U64Vc::cell(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.internal_hash()))
+    <span class="doccomment">/// We need deduplicate issues that can come from unique paths, but
+    /// represent the same underlying problem. Eg, a parse error for a file
+    /// that is compiled in both client and server contexts.
+    ///
+    /// Passing [full] will also hash any sub-issues and processing paths. While
+    /// useful for generating exact matching hashes, it&#39;s possible for the
+    /// same issue to pass from multiple processing paths, making for overly
+    /// verbose logging.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>internal_hash(<span class="self">self</span>, full: bool) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
+        <span class="prelude-val">Ok</span>(U64Vc::cell(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.internal_hash(full)))
     }
 }
 
@@ -1312,11 +1362,11 @@
 }
 
 <span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;none&quot;</span>)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, DeterministicHash)]
 </span><span class="kw">pub struct </span>PlainIssueProcessingPath(<span class="prelude-ty">Option</span>&lt;Vec&lt;PlainIssueProcessingPathItemReadRef&gt;&gt;);
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, DeterministicHash)]
 </span><span class="kw">pub struct </span>PlainIssueProcessingPathItem {
     <span class="kw">pub </span>context: <span class="prelude-ty">Option</span>&lt;StringReadRef&gt;,
     <span class="kw">pub </span>description: StringReadRef,
