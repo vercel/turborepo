@@ -318,7 +318,7 @@ enum ChunkContentGraphNode<I> {
     Chunk(ChunkVc),
     // Chunk groups that are referenced from the current chunk, but
     // not loaded in parallel
-    AsyncChunkGroup(ChunkVc),
+    AsyncChunkGroup { entry: ChunkVc },
     ExternalAssetReference(AssetReferenceVc),
 }
 
@@ -443,10 +443,10 @@ where
             ChunkingType::Separate => {
                 graph_nodes.push((
                     Some((asset, chunking_type)),
-                    ChunkContentGraphNode::AsyncChunkGroup(
-                        chunkable_asset
+                    ChunkContentGraphNode::AsyncChunkGroup {
+                        entry: chunkable_asset
                             .as_chunk(context.chunking_context, context.availability_info),
-                    ),
+                    },
                 ));
             }
             ChunkingType::SeparateAsync => {
@@ -618,8 +618,8 @@ where
             ChunkContentGraphNode::Chunk(chunk) => {
                 chunks.push(chunk);
             }
-            ChunkContentGraphNode::AsyncChunkGroup(chunks) => {
-                async_chunk_group_entries.push(chunks);
+            ChunkContentGraphNode::AsyncChunkGroup { entry } => {
+                async_chunk_group_entries.push(entry);
             }
             ChunkContentGraphNode::ExternalAssetReference(reference) => {
                 external_asset_references.push(reference);
