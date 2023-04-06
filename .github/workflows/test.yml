@@ -608,7 +608,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib -p turborepo-scm -p turborepo-lockfiles -p turborepo-api-client --features rustls-tls
+          cargo test -p turborepo-lib -p turborepo-scm -p turborepo-lockfiles -p turbopath -p turborepo-api-client --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -641,12 +641,12 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turborepo-paths --exclude turborepo-lockfiles --exclude turborepo-api-client
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client
 
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turborepo-paths --exclude turborepo-lockfiles --exclude turborepo-api-client
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -705,13 +705,13 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turborepo-paths --exclude turborepo-lockfiles --exclude turborepo-api-client
+          cargo nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client
 
       - name: Run nextest
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turborepo-paths --exclude turborepo-lockfiles --exclude turborepo-api-client
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]

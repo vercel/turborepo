@@ -269,7 +269,7 @@ fn enable_caching(url: &str) -> Result<()> {
     println!("Visit {} in your browser to enable Remote Caching", url);
 
     // We return an error no matter what
-    return Err(anyhow!("link after enabling caching"));
+    Err(anyhow!("link after enabling caching"))
 }
 
 fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {

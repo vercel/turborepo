@@ -80,9 +80,12 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
+
+	// Run flags
 	opts.runOpts.LogPrefix = runPayload.LogPrefix
 	opts.runOpts.Summarize = runPayload.Summarize
 	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
+	opts.runOpts.EnvMode = runPayload.EnvMode
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -253,6 +256,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
+		turboJSON.GlobalPassthroughEnv,
+		r.opts.runOpts.EnvMode,
 		r.base.Logger,
 	)
 
@@ -260,7 +265,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := fs.HashObject(getGlobalHashable(globalHashable)); err == nil {
+	if globalHash, err := calculateGlobalHashFromHashable(globalHashable); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -388,6 +393,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		engine,
 		taskHashTracker,
 		turboCache,
+		turboJSON,
 		packagesInScope,
 		r.base,
 		summary,

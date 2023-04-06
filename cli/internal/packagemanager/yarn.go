@@ -110,7 +110,7 @@ var nodejsYarn = PackageManager{
 		return packageManager.Matches(packageManager.Slug, strings.TrimSpace(string(out)))
 	},
 
-	UnmarshalLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodeYarnLockfile(contents)
 	},
 }
