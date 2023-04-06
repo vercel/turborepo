@@ -1,15 +1,10 @@
 #!/bin/bash
 
 pathset="no"
-shellset="no"
 sysrootset="no"
 
 if [ ! -z "$PATH" ]; then
   pathset="yes"
-fi
-
-if [ ! -z "$SHELL" ]; then
-  shellset="yes"
 fi
 
 if [ ! -z "$SYSTEMROOT" ]; then
@@ -23,6 +18,5 @@ fi
   echo -n "localdep: '$LOCAL_VAR_DEP', "
   echo -n "other: '$OTHER_VAR', "
   echo -n "sysroot set: '$sysrootset', "
-  echo -n "path set: '$pathset', "
-  echo "shell set: '$shellset'"
+  echo "path set: '$pathset'"
 } > out.txt

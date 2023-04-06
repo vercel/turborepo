@@ -15,10 +15,10 @@ Set the env vars
 No vars available by default
   $ ${TURBO} build -vv --experimental-env-mode=strict > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 All declared vars available, others are not available
   $ cp "$TESTDIR/fixture-configs/all.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=strict > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes'

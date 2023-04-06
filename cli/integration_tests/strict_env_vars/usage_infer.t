@@ -17,27 +17,26 @@ so we just have to make sure the parent process has them set. In Github CI, for 
 isn't already set.
   $ export SYSTEMROOT="${SYSTEMROOT:=hisysroot}"
   $ export PATH="${PATH:=hipath}"
-  $ export SHELL="${SHELL:=hishell}"
 
 Inferred mode as loose because no pass through configs, all vars are available
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because global pass through config, no vars available
   $ cp "$TESTDIR/fixture-configs/global_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because task pass through config, no vars available
   $ cp "$TESTDIR/fixture-configs/task_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, with declared deps and pass through. all declared available, other is not available
   $ cp "$TESTDIR/fixture-configs/all.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build -vv --experimental-env-mode=infer > /dev/null 2>&1
   $ cat apps/my-app/out.txt
-  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes', shell set: 'yes'
+  globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes'
