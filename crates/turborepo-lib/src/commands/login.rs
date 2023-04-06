@@ -304,9 +304,11 @@ mod test {
     use serde::Deserialize;
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
+    use turborepo_api_client::{
+        CachingStatus, CachingStatusResponse, User, UserResponse, VerificationResponse,
+    };
 
     use crate::{
-        client::{CachingStatus, CachingStatusResponse, User, UserResponse, VerificationResponse},
         commands::{
             login,
             login::{get_token_and_redirect, SsoPayload, EXPECTED_TOKEN_TEST},
@@ -345,6 +347,7 @@ mod test {
                     .unwrap(),
             ),
             args: Args::default(),
+            version: "",
         };
 
         login::login(&mut base).await.unwrap();
@@ -420,6 +423,7 @@ mod test {
                     .unwrap(),
             ),
             args: Args::default(),
+            version: "",
         };
 
         login::sso_login(&mut base, EXPECTED_SSO_TEAM_SLUG)

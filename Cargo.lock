@@ -7866,7 +7866,6 @@ dependencies = [
  "turbo-tasks-bytes",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-dev-server",
@@ -7935,6 +7934,18 @@ dependencies = [
  "turbopack-dev",
  "turbopack-env",
  "turbopack-test-utils",
+]
+
+[[package]]
+name = "turborepo-api-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "reqwest",
+ "rustc_version_runtime",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -8008,6 +8019,7 @@ dependencies = [
  "tonic-build",
  "tower",
  "turbo-updater",
+ "turborepo-api-client",
  "turborepo-paths",
  "uds_windows",
  "url",

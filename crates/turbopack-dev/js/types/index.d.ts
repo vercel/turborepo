@@ -25,6 +25,7 @@ export type ChunkRegistration = [
 
 interface Module {
   exports: Exports;
+  error: Error | undefined;
   loaded: boolean;
   id: ModuleId;
   hot?: Hot;
@@ -127,6 +128,10 @@ export type GetOrInstantiateRuntimeModule = (
   moduleId: ModuleId,
   chunkPath: ChunkPath
 ) => Module;
+export type RegisterChunkListAndMarkAsRuntime = (
+  chunkListPath: ChunkPath,
+  chunkPaths: ChunkPath[]
+) => void;
 
 export interface Loader {
   promise: Promise<undefined>;
@@ -148,12 +153,6 @@ export type ModuleEffect =
       moduleId: ModuleId;
       outdatedModules: Set<ModuleId>;
     };
-
-export type DevRuntimeParams = {
-  otherChunks: ChunkPath[];
-  runtimeModuleIds: ModuleId[];
-  chunkListPath: ChunkPath;
-};
 
 declare global {
   var TURBOPACK: ChunkRegistration[];
