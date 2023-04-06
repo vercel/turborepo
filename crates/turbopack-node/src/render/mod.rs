@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
 
@@ -19,6 +20,7 @@ pub struct RenderData {
     raw_query: String,
     raw_headers: Vec<(String, String)>,
     path: String,
+    data: Option<JsonValue>,
 }
 
 #[derive(Serialize)]
