@@ -456,6 +456,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         current_dir()?
     };
 
+    let version = get_version();
+
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
@@ -463,7 +465,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -476,7 +478,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -493,7 +495,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }
 
             let modify_gitignore = !*no_gitignore;
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             if let Err(err) = link::link(&mut base, modify_gitignore).await {
                 error!("error: {}", err.to_string())
@@ -507,7 +509,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Rust(Ok(0)));
             }
 
-            let mut base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
             unlink::unlink(&mut base)?;
 
@@ -518,7 +520,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             ..
         } => {
             let command = *command;
-            let base = CommandBase::new(clap_args, repo_root)?;
+            let base = CommandBase::new(clap_args, repo_root, version)?;
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },

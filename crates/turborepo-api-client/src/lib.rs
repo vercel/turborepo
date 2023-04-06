@@ -1,11 +1,12 @@
 use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
-use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::{get_version, retry::retry_future};
+use crate::retry::retry_future;
+
+mod retry;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
@@ -98,6 +99,7 @@ pub struct UserResponse {
 pub struct APIClient {
     client: reqwest::Client,
     base_url: String,
+    user_agent: String,
 }
 
 impl APIClient {
@@ -108,7 +110,7 @@ impl APIClient {
                 let request_builder = self
                     .client
                     .get(url)
-                    .header("User-Agent", USER_AGENT.clone())
+                    .header("User-Agent", self.user_agent.clone())
                     .header("Authorization", format!("Bearer {}", token))
                     .header("Content-Type", "application/json");
 
@@ -133,7 +135,7 @@ impl APIClient {
                 let request_builder = self
                     .client
                     .get(self.make_url("/v2/teams?limit=100"))
-                    .header("User-Agent", USER_AGENT.clone())
+                    .header("User-Agent", self.user_agent.clone())
                     .header("Content-Type", "application/json")
                     .header("Authorization", format!("Bearer {}", token));
 
@@ -157,7 +159,7 @@ impl APIClient {
             .client
             .get(self.make_url("/v2/team"))
             .query(&[("teamId", team_id)])
-            .header("User-Agent", USER_AGENT.clone())
+            .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token))
             .send()
@@ -185,7 +187,7 @@ impl APIClient {
                 let mut request_builder = self
                     .client
                     .get(self.make_url("/v8/artifacts/status"))
-                    .header("User-Agent", USER_AGENT.clone())
+                    .header("User-Agent", self.user_agent.clone())
                     .header("Content-Type", "application/json")
                     .header("Authorization", format!("Bearer {}", token));
 
@@ -218,7 +220,7 @@ impl APIClient {
                     .client
                     .get(self.make_url("/registration/verify"))
                     .query(&[("token", token), ("tokenName", token_name)])
-                    .header("User-Agent", USER_AGENT.clone());
+                    .header("User-Agent", self.user_agent.clone());
 
                 request_builder.send()
             })
@@ -264,7 +266,11 @@ impl APIClient {
         false
     }
 
-    pub fn new(base_url: impl AsRef<str>, timeout: Option<u64>) -> Result<Self> {
+    pub fn new(
+        base_url: impl AsRef<str>,
+        timeout: Option<u64>,
+        version: &'static str,
+    ) -> Result<Self> {
         let client = match timeout {
             Some(timeout) => reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
@@ -272,23 +278,21 @@ impl APIClient {
             None => reqwest::Client::builder().build()?,
         };
 
+        let user_agent = format!(
+            "turbo {} {} {} {}",
+            version,
+            rustc_version_runtime::version(),
+            env::consts::OS,
+            env::consts::ARCH
+        );
         Ok(APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
+            user_agent,
         })
     }
 
     fn make_url(&self, endpoint: &str) -> String {
         format!("{}{}", self.base_url, endpoint)
     }
-}
-
-lazy_static! {
-    static ref USER_AGENT: String = format!(
-        "turbo {} {} {} {}",
-        get_version(),
-        rustc_version_runtime::version(),
-        env::consts::OS,
-        env::consts::ARCH
-    );
 }
