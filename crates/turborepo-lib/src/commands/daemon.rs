@@ -14,11 +14,11 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join(
-            turborepo_paths::ForwardRelativePath::new("turbod.pid").expect("forward relative"),
+        pid_file: base.daemon_file_root().join_relative(
+            turbopath::RelativeSystemPathBuf::new("turbod.pid").expect("relative system"),
         ),
-        sock_file: base.daemon_file_root().join(
-            turborepo_paths::ForwardRelativePath::new("turbod.sock").expect("forward relative"),
+        sock_file: base.daemon_file_root().join_relative(
+            turbopath::RelativeSystemPathBuf::new("turbod.sock").expect("relative system"),
         ),
     };
 
@@ -65,6 +65,6 @@ pub struct DaemonStatus {
     // this comes from the daemon server, so we trust that
     // it is correct
     pub log_file: PathBuf,
-    pub pid_file: turborepo_paths::AbsoluteNormalizedPathBuf,
-    pub sock_file: turborepo_paths::AbsoluteNormalizedPathBuf,
+    pub pid_file: turbopath::AbsoluteSystemPathBuf,
+    pub sock_file: turbopath::AbsoluteSystemPathBuf,
 }
