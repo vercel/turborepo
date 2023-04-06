@@ -24,20 +24,36 @@ use crate::Error;
 pub fn changed_files(
     git_root: PathBuf,
     turbo_root: PathBuf,
-    commit_range: Option<(&str, &str)>,
+    from_commit: Option<&str>,
+    to_commit: &str,
 ) -> Result<HashSet<String>, Error> {
     // Initialize repository at repo root
     let repo = Repository::open(&git_root)?;
     let git_root = AbsoluteSystemPathBuf::new(git_root)?;
     let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
+    let anchored_turbo_root = git_root.anchor(&turbo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_unstaged_changes(&git_root, &repo, &turbo_root, &mut files)?;
-
-    if let Some((from_commit, to_commit)) = commit_range {
+    add_changed_files_from_to_commit_to_working_tree(
+        &git_root,
+        &repo,
+        &anchored_turbo_root,
+        &turbo_root,
+        to_commit,
+        &mut files,
+    )?;
+    add_changed_files_from_unstaged_changes(
+        &git_root,
+        &repo,
+        &anchored_turbo_root,
+        &turbo_root,
+        &mut files,
+    )?;
+    if let Some(from_commit) = from_commit {
         add_changed_files_from_commits(
             &git_root,
             &repo,
+            &anchored_turbo_root,
             &turbo_root,
             &mut files,
             from_commit,
@@ -59,9 +75,40 @@ fn reanchor_path_from_git_root_to_turbo_root(
     Ok(anchored_to_turbo_root_file_path)
 }
 
+// Equivalent of `git diff --name-only <to_commit> -- <turbo_root>
+fn add_changed_files_from_to_commit_to_working_tree(
+    git_root: &AbsoluteSystemPathBuf,
+    repo: &Repository,
+    anchored_turbo_root: &AnchoredSystemPathBuf,
+    turbo_root: &AbsoluteSystemPathBuf,
+    to_commit: &str,
+    files: &mut HashSet<String>,
+) -> Result<(), Error> {
+    let to_commit_ref = repo.revparse_single(to_commit)?;
+    let to_commit = to_commit_ref.peel_to_commit()?;
+    let to_tree = to_commit.tree()?;
+    let mut options = DiffOptions::new();
+    options.pathspec(anchored_turbo_root.to_str()?);
+
+    let diff = repo.diff_tree_to_workdir_with_index(Some(&to_tree), Some(&mut options))?;
+
+    for delta in diff.deltas() {
+        let file = delta.old_file();
+        if let Some(file_path) = file.path() {
+            let anchored_to_turbo_root_file_path =
+                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
+            files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
+        }
+    }
+
+    Ok(())
+}
+
+// Equivalent of `git ls-files --other --exclude-standard -- <turbo_root>`
 fn add_changed_files_from_unstaged_changes(
     git_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
+    anchored_turbo_root: &AnchoredSystemPathBuf,
     turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
 ) -> Result<(), Error> {
@@ -69,8 +116,7 @@ fn add_changed_files_from_unstaged_changes(
     options.include_untracked(true);
     options.recurse_untracked_dirs(true);
 
-    let anchored_turbo_root = git_root.anchor(turbo_root)?;
-    options.pathspec(anchored_turbo_root.to_str()?.to_string());
+    options.pathspec(anchored_turbo_root.to_str()?);
 
     let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
 
@@ -86,9 +132,17 @@ fn add_changed_files_from_unstaged_changes(
     Ok(())
 }
 
+// Equivalent of `git diff --name-only <from_commit>...<to_commit> --
+// <turbo_root>` NOTE: This is **not** the same as
+// `git diff --name-only <from_commit>..<to_commit> -- <turbo_root>`
+// (note the triple dots vs double dots)
+// The triple dot version is a diff of the most recent common ancestor (merge
+// base) of <from_commit> and <to_commit> to <to_commit>, whereas the double dot
+// version is a diff of <from_commit> to <to_commit>.
 fn add_changed_files_from_commits(
     git_root: &AbsoluteSystemPathBuf,
     repo: &Repository,
+    anchored_turbo_root: &AnchoredSystemPathBuf,
     turbo_root: &AbsoluteSystemPathBuf,
     files: &mut HashSet<String>,
     from_commit: &str,
@@ -96,16 +150,17 @@ fn add_changed_files_from_commits(
 ) -> Result<(), Error> {
     let from_commit_ref = repo.revparse_single(from_commit)?;
     let to_commit_ref = repo.revparse_single(to_commit)?;
-    let from_commit = from_commit_ref.peel_to_commit()?;
+    let mergebase_of_from_and_to = repo.merge_base(from_commit_ref.id(), to_commit_ref.id())?;
+
+    let mergebase_commit = repo.find_commit(mergebase_of_from_and_to)?;
     let to_commit = to_commit_ref.peel_to_commit()?;
-    let from_tree = from_commit.tree()?;
+    let mergebase_tree = mergebase_commit.tree()?;
     let to_tree = to_commit.tree()?;
 
     let mut options = DiffOptions::new();
-    let anchored_turbo_root = git_root.anchor(turbo_root)?;
     options.pathspec(anchored_turbo_root.to_str()?);
 
-    let diff = repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), Some(&mut options))?;
+    let diff = repo.diff_tree_to_tree(Some(&mergebase_tree), Some(&to_tree), Some(&mut options))?;
     diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
 
     for delta in diff.deltas() {
@@ -231,7 +286,7 @@ mod tests {
         let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
-        let files = changed_files(git_root, turborepo_root, Some((&first_commit_sha, "HEAD")))?;
+        let files = changed_files(git_root, turborepo_root, Some(&first_commit_sha), "HEAD")?;
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
         Ok(())
     }
@@ -260,6 +315,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
             None,
+            "HEAD",
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -272,6 +328,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
             None,
+            "HEAD",
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -282,10 +339,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            Some((
-                first_commit_oid.to_string().as_str(),
-                second_commit_oid.to_string().as_str(),
-            )),
+            Some(first_commit_oid.to_string().as_str()),
+            second_commit_oid.to_string().as_str(),
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -295,13 +350,11 @@ mod tests {
         fs::write(new_file, "let x = 2;")?;
 
         // Test that `turbo_root` filters out files not in the specified directory
-        let files = super::changed_files(
+        let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some((
-                first_commit_oid.to_string().as_str(),
-                second_commit_oid.to_string().as_str(),
-            )),
+            Some(first_commit_oid.to_string().as_str()),
+            second_commit_oid.to_string().as_str(),
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -331,6 +384,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
             None,
+            "HEAD",
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -363,6 +417,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
             None,
+            "HEAD",
         )?;
 
         #[cfg(unix)]
@@ -380,10 +435,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some((
-                first_commit.to_string().as_str(),
-                repo.head()?.peel_to_commit()?.id().to_string().as_str(),
-            )),
+            Some(first_commit.to_string().as_str()),
+            repo.head()?.peel_to_commit()?.id().to_string().as_str(),
         )?;
 
         #[cfg(unix)]
