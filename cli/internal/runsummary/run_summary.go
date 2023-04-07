@@ -26,6 +26,7 @@ const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
+const runsPatchEndpoint = "/v0/spaces/%s/runs/%s"
 const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 type runType int
@@ -144,8 +145,11 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 
 	if rsm.shouldSave {
 		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
-			if err := rsm.record(); err != nil {
-				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
+			if errs := rsm.record(); len(errs) > 0 {
+				rsm.ui.Warn("Errors recording run to Vercel")
+				for _, err := range errs {
+					rsm.ui.Warn(fmt.Sprintf("%v", err))
+				}
 			}
 		}
 	}
@@ -207,23 +211,25 @@ func (rsm *Meta) record() []error {
 	payload := newVercelRunCreatePayload(rsm.RunSummary)
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("Failed to POST to /run: %v", err))
 		} else {
 			vercelRunResponse := &vercelRunResponse{}
 			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("Failed to unmarshal response: %v", err))
 			} else {
+
 				runID = vercelRunResponse.ID
+
 			}
 		}
 	}
 
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
-
 		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
-			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
-				errs = append(errs, err)
+			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
+			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
+				errs = append(errs, fmt.Errorf("Failed to post PATCH: %s", err))
 			}
 		}
 	}
@@ -235,7 +241,8 @@ func (rsm *Meta) record() []error {
 	return nil
 }
 
-func (rsm *Meta) postTaskSummaries(runID string) {
+func (rsm *Meta) postTaskSummaries(runID string) []error {
+	errs := []error{}
 	// We make at most 8 requests at a time.
 	maxParallelRequests := 8
 	taskSummaries := rsm.RunSummary.Tasks
@@ -256,9 +263,11 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 			defer wg.Done()
 			for index := range queue {
 				task := taskSummaries[index]
-				if taskPayload, err := json.Marshal(task); err == nil {
+				payload := newVercelTaskPayload(task)
+				if taskPayload, err := json.Marshal(payload); err == nil {
+
 					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
-						rsm.ui.Warn(fmt.Sprintf("Eror uploading summary of %s", task.TaskID))
+						errs = append(errs, fmt.Errorf("Eror uploading summary of %s", task.TaskID))
 					}
 				}
 			}
@@ -270,4 +279,10 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 	}
 	close(queue)
 	wg.Wait()
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
 }
