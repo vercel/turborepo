@@ -73,7 +73,9 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	scope.OptsFromArgs(&opts.scopeOpts, args)
+	if err := scope.OptsFromArgs(&opts.scopeOpts, args); err != nil {
+		return nil, err
+	}
 
 	// Cache flags
 	opts.clientOpts.Timeout = args.RemoteCacheTimeout
@@ -358,6 +360,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
+		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
 		rs.Opts.runOpts,
@@ -369,6 +372,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
+		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
 
 	// Dry Run
