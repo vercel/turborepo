@@ -182,57 +182,50 @@ Task details include:
 
 `type: string`
 
-Controls the available environment variables to your tasks.
-
 <Callout type="info">
   **Warning**: This in experimental flag, so its name and behavior can change.
 </Callout>
 
-| option  | description                                                |
-| ------- | ---------------------------------------------------------- |
-| [blank] | Behaves same as infer                                      |
-| infer   | infers strict mode or loose mode based on allowlist config |
-| loose   | allows all environment variables                           |
-| strict  | only allow declared variables                              |
+Controls the available environment variables to your tasks.
+
+| option | description                                                |
+| ------ | ---------------------------------------------------------- |
+| infer  | infers strict mode or loose mode based on allowlist config |
+| loose  | allows all environment variables                           |
+| strict | only allow declared variables                              |
 
 `PATH`, `SHELL`, and `SYSTEMROOT` are always available to all tasks.
 
-**`infer`**
+##### `infer`
 
-In `infer` mode, Turborepo will look for
-[`experimentalPassThroughEnv`][r-config-experimentalPassThroughEnv] for each
-task config, and
-[`experimentalGlobalPassThroughEnv`][r-config-experimentalGlobalPassThroughEnv]
-in the root of the `turbo.json` config. If either is defined, "strict" mode will
-be inferred. If neither is defined, then `loose` mode is inferred.
+In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
+each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
+`turbo.json` config. If either is defined, "strict" mode is inferred. If
+neither is defined, then `loose` mode is inferred.
 
-`infer` mode is not part of the global cache key, so using the
-`--experimental-env-mode=infer` (or `--experimental-env-mode` without a value)
-flag will not invalidate the global cache.
+In this mode, the value of `experimentalGlobalPassThroughEnv` and the flag's
+value ("infer") will only be incorporated into the global hash if
+`experimentalGlobalPassThroughEnv` is set.
 
-**`loose`**
+##### `loose`
 
-In `loose` mode, all environment variables are made available to the task.
+In loose mode, all environment variables are made available to the task.
+The value of `experimentalGlobalPassThroughEnv` and the flag's value ("loose")
+itself will be incorporated into the global hash.
 
-When using this flag, if `experimentalGlobalPassThroughEnv` is set in
-`turbo.json`, Turborepo will invalidate the global cache, as it could change the
-behavior of all task executions.
+##### `strict`
 
-**`strict`**
+In strict mode, only environment variables specified in the following keys are
+available to the task:
 
-In `strict` mode, only environment variables specified in the following keys are
-available to the task.
+- `env` and `experimentalPassThroughEnv` in each task configuration
+- `globalEnv` and `experimentalGlobalPassThroughEnv` in the root of your config
 
-- `env` and experimentalPassThroughEnv` in each task
-- `globalEnv` and experimentalGlobalPassThroughEnv` in each task
+The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict")
+itself will be incorporated into the global hash.
 
-When using this flag, if `experimentalGlobalPassThroughEnv` is set in
-`turbo.json`, Turborepo will invalidate the global cache, as it could change the
-behavior of all task executions.
-
-Note that in `strict` mode, (even if it is inferred) _all_ tasks are opted into
-`strict` mode, regardless of whether `experimentalGlobalPassThroughEnv` or
-`globalEnv` are set.
+If strict mode is specified or inferred, _all_ tasks are run in strict mode,
+regardless of their configuration.
 
 #### `--filter`
 
@@ -705,5 +698,5 @@ Unlink the current directory from the Remote Cache.
 
 Get the path to the `turbo` binary.
 
-[r-config-experimentalPassThroughEnv]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
-[r-config-experimentalGlobalPassThroughEnv]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
+[1]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
+[2]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
