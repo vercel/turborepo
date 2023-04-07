@@ -27,7 +27,7 @@ message ChangedFilesReq {
   string git_root = 1;
   string turbo_root = 2;
   optional string from_commit = 3;
-  optional string to_commit = 4;
+  string to_commit = 4;
 }
 
 message ChangedFilesResp {
