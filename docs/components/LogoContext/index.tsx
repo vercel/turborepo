@@ -10,14 +10,14 @@ import { useTurboSite } from "../SiteSwitcher";
 
 function MenuDivider({ children, ...other }: { children: string }) {
   return (
-    <div
+    <h3
       className={classNames(
         "group flex items-center px-4 py-2 text-xs dark:text-gray-600 text-gray-500 font-bold"
       )}
       {...other}
     >
       {children}
-    </div>
+    </h3>
   );
 }
 
