@@ -72,6 +72,10 @@ type TaskExecutionSummary struct {
 	exitCode *int               // pointer so we can distinguish between 0 and unknown.
 }
 
+func (ts *TaskExecutionSummary) endTime() time.Time {
+	return ts.startAt.Add(ts.Duration)
+}
+
 // MarshalJSON munges the TaskExecutionSummary into a format we want
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
 func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
@@ -82,7 +86,7 @@ func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 		ExitCode *int  `json:"exitCode"`
 	}{
 		Start:    ts.startAt.UnixMilli(),
-		End:      ts.startAt.Add(ts.Duration).UnixMilli(),
+		End:      ts.endTime().UnixMilli(),
 		Err:      ts.err,
 		ExitCode: ts.exitCode,
 	}

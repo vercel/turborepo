@@ -1,11 +1,7 @@
 package runsummary
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/vercel/turbo/cli/internal/ci"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type vercelRunResponse struct {
@@ -34,13 +30,13 @@ type vercelRunPayload struct {
 	// The command that kicked off the turbo run
 	Command string `json:"command,omitempty"`
 
-	Context string `json:"context,omitempy"`
+	// Context is the host on which this Run was executed (e.g. Vercel)
+	Context string `json:"context,omitempty"`
 
 	// TODO: we need to add these in
 	// originationUser string
 	// gitBranch       string
 	// gitSha          string
-	// command         string
 }
 
 type vercelCacheStatus struct {
@@ -49,10 +45,6 @@ type vercelCacheStatus struct {
 }
 
 type vercelTask struct {
-	// id  string
-	// log string
-	// TODO: add in command
-
 	Key          string            `json:"key,omitempty"`
 	Name         string            `json:"name,omitempty"`
 	Workspace    string            `json:"workspace,omitempty"`
@@ -66,35 +58,25 @@ type vercelTask struct {
 }
 
 func newVercelRunCreatePayload(runsummary *RunSummary) *vercelRunPayload {
-	startTime := runsummary.ExecutionSummary.startedAt.UnixMilli()
-	taskNames := make(util.Set, len(runsummary.Tasks))
-	for _, task := range runsummary.Tasks {
-		taskNames.Add(task.Task)
+	startTime := int(runsummary.ExecutionSummary.startedAt.UnixMilli())
+	var context = "LOCAL"
+	if name := ci.Constant(); name != "" {
+		context = name
 	}
 	return &vercelRunPayload{
-		StartTime: int(startTime),
+		StartTime: startTime,
 		Status:    "running",
-		Command:   fmt.Sprintf("turbo run %s", strings.Join(taskNames.UnsafeListOfStrings(), " ")),
+		Command:   runsummary.command(),
 		Type:      "TURBO",
-		Context:   getContext(),
+		Context:   context,
 	}
-}
-
-func getContext() string {
-	name := ci.Constant()
-	if name == "" {
-		return "LOCAL"
-	}
-
-	return name
-
 }
 
 func newVercelDonePayload(runsummary *RunSummary) *vercelRunPayload {
-	endTime := runsummary.ExecutionSummary.endedAt.UnixMilli()
+	endTime := int(runsummary.ExecutionSummary.endedAt.UnixMilli())
 	return &vercelRunPayload{
 		Status:   "completed",
-		EndTime:  int(endTime),
+		EndTime:  endTime,
 		ExitCode: runsummary.ExecutionSummary.exitCode,
 	}
 }
@@ -108,13 +90,16 @@ func newVercelTaskPayload(taskSummary *TaskSummary) *vercelTask {
 		status = "HIT"
 	}
 
+	startTime := int(taskSummary.Execution.startAt.UnixMilli())
+	endTime := int(taskSummary.Execution.endTime().UnixMilli())
+
 	return &vercelTask{
 		Key:       taskSummary.TaskID,
 		Name:      taskSummary.Task,
 		Workspace: taskSummary.Package,
 		Hash:      taskSummary.Hash,
-		StartTime: int(taskSummary.Execution.startAt.UnixMilli()),
-		EndTime:   int(taskSummary.Execution.startAt.Add(taskSummary.Execution.Duration).UnixMilli()),
+		StartTime: startTime,
+		EndTime:   endTime,
 		Cache: vercelCacheStatus{
 			Status: status,
 			Source: source,

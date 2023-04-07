@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -180,6 +181,16 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 	return summary.ExecutionSummary.run(taskID)
 }
 
+// command returns a best guess command for the entire Run.
+// TODO: we should thread this through from the entry point rather than make it up
+func (summary *RunSummary) command() string {
+	taskNames := make(util.Set, len(summary.Tasks))
+	for _, task := range summary.Tasks {
+		taskNames.Add(task.Task)
+	}
+	return fmt.Sprintf("turbo run %s", strings.Join(taskNames.UnsafeListOfStrings(), " "))
+}
+
 // Save saves the run summary to a file
 func (rsm *Meta) save() error {
 	json, err := rsm.FormatJSON()
@@ -211,25 +222,24 @@ func (rsm *Meta) record() []error {
 	payload := newVercelRunCreatePayload(rsm.RunSummary)
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
-			errs = append(errs, fmt.Errorf("Failed to POST to /run: %v", err))
+			errs = append(errs, err)
 		} else {
 			vercelRunResponse := &vercelRunResponse{}
 			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to unmarshal response: %v", err))
+				errs = append(errs, err)
 			} else {
-
 				runID = vercelRunResponse.ID
-
 			}
 		}
 	}
 
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
+
 		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
 			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
 			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
-				errs = append(errs, fmt.Errorf("Failed to post PATCH: %s", err))
+				errs = append(errs, err)
 			}
 		}
 	}
@@ -265,7 +275,6 @@ func (rsm *Meta) postTaskSummaries(runID string) []error {
 				task := taskSummaries[index]
 				payload := newVercelTaskPayload(task)
 				if taskPayload, err := json.Marshal(payload); err == nil {
-
 					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
 						errs = append(errs, fmt.Errorf("Eror uploading summary of %s", task.TaskID))
 					}
