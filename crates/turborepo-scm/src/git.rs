@@ -213,12 +213,25 @@ mod tests {
         env::set_current_dir,
         fs,
         path::{Path, PathBuf},
+        process::Command,
     };
 
     use git2::{Oid, Repository};
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::previous_content;
-    use crate::{git::changed_files, Error};
+    use crate::{git::reanchor_path_from_git_root_to_turbo_root, Error};
+
+    fn setup_repository() -> Result<(TempDir, Repository), Error> {
+        let repo_root = tempfile::tempdir()?;
+        let repo = Repository::init(repo_root.path())?;
+        let mut config = repo.config()?;
+        config.set_str("user.name", "test")?;
+        config.set_str("user.email", "test@example.com")?;
+
+        Ok((repo_root, repo))
+    }
 
     fn commit_file(
         repo: &Repository,
@@ -266,13 +279,99 @@ mod tests {
         )?)
     }
 
+    fn add_files_from_stdout(
+        files: &mut HashSet<String>,
+        git_root: &AbsoluteSystemPathBuf,
+        turbo_root: &AbsoluteSystemPathBuf,
+        stdout: Vec<u8>,
+    ) {
+        let stdout = String::from_utf8(stdout).unwrap();
+        for line in stdout.lines() {
+            let path = Path::new(line);
+            let anchored_to_turbo_root_file_path =
+                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
+            files.insert(
+                anchored_to_turbo_root_file_path
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+    }
+
+    // An implementation that shells out to the git command like the old Go version
+    fn expected_changed_files(
+        git_root: &Path,
+        turbo_root: &Path,
+        from_commit: Option<&str>,
+        to_commit: &str,
+    ) -> Result<HashSet<String>, Error> {
+        let git_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(git_root)?)?;
+        let turbo_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(turbo_root)?)?;
+
+        let mut files = HashSet::new();
+        let output = Command::new("git")
+            .arg("diff")
+            .arg("--name-only")
+            .arg(to_commit)
+            .arg("--")
+            .arg(turbo_root.to_str().unwrap())
+            .current_dir(&git_root)
+            .output()
+            .expect("failed to execute process");
+
+        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+
+        if let Some(from_commit) = from_commit {
+            let output = Command::new("git")
+                .arg("diff")
+                .arg("--name-only")
+                .arg(format!("{}...{}", from_commit, to_commit))
+                .arg("--")
+                .arg(turbo_root.to_str().unwrap())
+                .current_dir(&git_root)
+                .output()
+                .expect("failed to execute process");
+
+            add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+        }
+
+        let output = Command::new("git")
+            .arg("ls-files")
+            .arg("--other")
+            .arg("--exclude-standard")
+            .arg("--")
+            .arg(turbo_root.to_str().unwrap())
+            .current_dir(&git_root)
+            .output()
+            .expect("failed to execute process");
+
+        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+
+        Ok(files)
+    }
+
+    // Calls git::changed_files then compares it against the expected version that
+    // shells out to git
+    fn changed_files(
+        git_root: PathBuf,
+        turbo_root: PathBuf,
+        from_commit: Option<&str>,
+        to_commit: &str,
+    ) -> Result<HashSet<String>, Error> {
+        let expected_files =
+            expected_changed_files(&git_root, &turbo_root, from_commit, to_commit)?;
+        let files =
+            super::changed_files(git_root.clone(), turbo_root.clone(), from_commit, to_commit)?;
+
+        assert_eq!(files, expected_files);
+
+        Ok(files)
+    }
+
     #[test]
     fn test_deleted_files() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let (repo_root, repo) = setup_repository()?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
@@ -287,19 +386,61 @@ mod tests {
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
         let files = changed_files(git_root, turborepo_root, Some(&first_commit_sha), "HEAD")?;
+
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
         Ok(())
     }
 
     #[test]
+    fn test_merge_base() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository()?;
+        let first_file = repo_root.path().join("foo.js");
+        fs::write(&first_file, "let z = 0;")?;
+        // Create a base commit. This will *not* be the merge base
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+
+        let second_file = repo_root.path().join("bar.js");
+        fs::write(&second_file, "let y = 1;")?;
+        // This commit will be the merge base
+        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
+
+        let third_file = repo_root.path().join("baz.js");
+        fs::write(&third_file, "let x = 2;")?;
+        // Create a first commit off of merge base
+        let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid))?;
+
+        // Move head back to merge base
+        repo.set_head_detached(second_commit_oid)?;
+        let fourth_file = repo_root.path().join("qux.js");
+        fs::write(&fourth_file, "let w = 3;")?;
+        // Create a second commit off of merge base
+        let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid))?;
+
+        repo.set_head_detached(third_commit_oid)?;
+        let merge_base = repo.merge_base(third_commit_oid, fourth_commit_oid)?;
+
+        assert_eq!(merge_base, second_commit_oid);
+
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some(&third_commit_oid.to_string()),
+            &fourth_commit_oid.to_string(),
+        )?;
+
+        assert_eq!(
+            files,
+            HashSet::from(["qux.js".to_string(), "baz.js".to_string()])
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_changed_files() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
+        let (repo_root, repo) = setup_repository()?;
         let mut index = repo.index()?;
         let turbo_root = repo_root.path();
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
@@ -363,11 +504,7 @@ mod tests {
 
     #[test]
     fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let (repo_root, repo) = setup_repository()?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
@@ -395,11 +532,7 @@ mod tests {
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
     fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let (repo_root, repo) = setup_repository()?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
         // Create additional nested directory to test that we return a system path
@@ -454,11 +587,7 @@ mod tests {
 
     #[test]
     fn test_previous_content() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let (repo_root, repo) = setup_repository()?;
 
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
@@ -504,11 +633,7 @@ mod tests {
 
     #[test]
     fn test_revparse() -> Result<(), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let (repo_root, repo) = setup_repository()?;
 
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
