@@ -28,7 +28,7 @@ SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
 turbo: go-turbo$(EXT)
-	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+	SKIP_GO_BUILD=true cargo build -p turbo
 
 turbo-prod: go-turbo$(EXT)
 	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
