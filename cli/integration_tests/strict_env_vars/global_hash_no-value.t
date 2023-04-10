@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 With --experimental-env-mode (should be the same as --experimental-env-mode=infer)
 
