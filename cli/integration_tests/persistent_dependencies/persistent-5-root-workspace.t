@@ -1,6 +1,6 @@
 # Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) 5-root-workspace
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/5-root-workspace
 
 # WorkspaceGraph: no package dependencies
 #

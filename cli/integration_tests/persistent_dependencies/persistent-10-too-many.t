@@ -1,6 +1,6 @@
 # Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) 10-too-many
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/10-too-many
 
   $ ${TURBO} run build --concurrency=1
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
