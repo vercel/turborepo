@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/_helpers/setup.sh
+  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd) invalid_turbo_json
 
 Expect warnings
   $ ${TURBO} build -v --dry > /dev/null
