@@ -149,12 +149,16 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	rsm.printExecutionSummary()
 
 	if rsm.shouldSave {
-		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
-			if errs := rsm.record(); len(errs) > 0 {
-				rsm.ui.Warn("Errors recording run to Vercel")
-				for _, err := range errs {
-					rsm.ui.Warn(fmt.Sprintf("%v", err))
+		if rsm.spaceID != "" {
+			if rsm.apiClient.IsLinked() {
+				if errs := rsm.record(); len(errs) > 0 {
+					rsm.ui.Warn("Errors recording run to Vercel")
+					for _, err := range errs {
+						rsm.ui.Warn(fmt.Sprintf("%v", err))
+					}
 				}
+			} else {
+				rsm.ui.Warn("Failed to post to space because repo is not linked to Vercel. Run `turbo link` first.")
 			}
 		}
 	}
