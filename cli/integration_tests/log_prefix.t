@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) run_logging
 
 # Run for the first time with --log-prefix=none
   $ ${TURBO} run build --log-prefix=none

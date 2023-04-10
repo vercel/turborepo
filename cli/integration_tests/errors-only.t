@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) run_logging
 
 # [ ] error exit
 # [ ] outputMode: errors-only
@@ -15,6 +15,8 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 
+
+
 # [ ] error exit
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
@@ -27,6 +29,8 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
+
 # [x] error exit
 # [ ] outputMode: errors-only
 # [x] --ouptut-logs=errors-only
@@ -53,6 +57,8 @@ Setup
    ERROR  run failed: command  exited (1)
   [1]
 
+
+
 # [x] error exit
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
@@ -78,4 +84,6 @@ Setup
   
    ERROR  run failed: command  exited (1)
   [1]
+
+
 
