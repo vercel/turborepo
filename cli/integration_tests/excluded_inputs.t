@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) inputs
 
 Running build for my-app succeeds
   $ ${TURBO} run build
