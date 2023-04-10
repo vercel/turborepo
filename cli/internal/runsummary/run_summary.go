@@ -89,7 +89,7 @@ func NewRunSummary(
 		}
 	}
 
-	executionSummary := newExecutionSummary(startAt, profile)
+	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
 	return Meta{
 		RunSummary: &RunSummary{
