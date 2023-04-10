@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Login Test Run
   $ ${TURBO} login --__test-run

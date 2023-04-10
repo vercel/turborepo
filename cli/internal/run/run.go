@@ -30,18 +30,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var _cmdLong = `
-Run tasks across projects in your monorepo.
-
-By default, turbo executes tasks in topological order (i.e.
-dependencies first) and then caches the results. Re-running commands for
-tasks already in the cache will skip re-execution and immediately move
-artifacts from the cache into the correct output folders (as if the task
-occurred again).
-
-Arguments passed after '--' will be passed through to the named tasks.
-`
-
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)

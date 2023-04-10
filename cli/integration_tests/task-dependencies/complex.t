@@ -1,7 +1,7 @@
 
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) complex
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/complex
 
 # Workspace Graph:
 # app-a -> lib-a
@@ -31,6 +31,8 @@ We can scope the run to specific packages
   \t} (esc)
   }
   
+
+
 Can't depend on unknown tasks
   $ ${TURBO} run build2
    ERROR  run failed: error preparing engine: Could not find "app-a#custom" in root turbo.json or "app-a" workspace
@@ -84,6 +86,8 @@ Complex dependency chain
   }
   
 
+
+
 Check that --only only runs leaf tasks
   $ ${TURBO} run test --only --graph
   
@@ -100,6 +104,8 @@ Check that --only only runs leaf tasks
   \t} (esc)
   }
   
+
+
 Can't depend on itself
   $ ${TURBO} run build4
    ERROR  run failed: error preparing engine: Invalid task dependency graph:
