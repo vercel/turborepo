@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) monorepo_one_script_error
 
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
