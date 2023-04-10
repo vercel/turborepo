@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
 
 # Running non-existent tasks errors
   $ ${TURBO} run doesnotexist

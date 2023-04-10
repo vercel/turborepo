@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
 
 # Run the build task with --dry flag and cut up the logs into separate files by empty lines
 # https://stackoverflow.com/a/33297878/986415

@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
 
 # Run all tests with --filter=util so we don't have any non-deterministic ordering
 

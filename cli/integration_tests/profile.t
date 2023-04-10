@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
 
 Run build and record a trace
 Ignore output since we want to focus on testing the generated profile
