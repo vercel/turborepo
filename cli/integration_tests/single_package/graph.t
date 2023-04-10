@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Graph
   $ ${TURBO} run build --single-package --graph

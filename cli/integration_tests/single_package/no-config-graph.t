@@ -1,16 +1,15 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_no_config
 
 Graph
-  $ ${TURBO} run test --single-package --graph
+  $ ${TURBO} run build --single-package --graph
   
   digraph {
   \tcompound = "true" (esc)
   \tnewrank = "true" (esc)
   \tsubgraph "root" { (esc)
   \t\t"[root] build" -> "[root] ___ROOT___" (esc)
-  \t\t"[root] test" -> "[root] build" (esc)
   \t} (esc)
   }
   

@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_no_config
 
 Check
   $ ${TURBO} run build --dry --single-package
