@@ -30,18 +30,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var _cmdLong = `
-Run tasks across projects in your monorepo.
-
-By default, turbo executes tasks in topological order (i.e.
-dependencies first) and then caches the results. Re-running commands for
-tasks already in the cache will skip re-execution and immediately move
-artifacts from the cache into the correct output folders (as if the task
-occurred again).
-
-Arguments passed after '--' will be passed through to the named tasks.
-`
-
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
@@ -73,7 +61,9 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	scope.OptsFromArgs(&opts.scopeOpts, args)
+	if err := scope.OptsFromArgs(&opts.scopeOpts, args); err != nil {
+		return nil, err
+	}
 
 	// Cache flags
 	opts.clientOpts.Timeout = args.RemoteCacheTimeout
@@ -358,6 +348,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
+		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
 		rs.Opts.runOpts,
@@ -369,6 +360,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
+		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
 
 	// Dry Run

@@ -20,9 +20,11 @@ Check
   [
     "attempted",
     "cached",
+    "command",
     "endTime",
     "exitCode",
     "failed",
+    "repoPath",
     "startTime",
     "success"
   ]

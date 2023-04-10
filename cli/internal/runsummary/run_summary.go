@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,14 +40,16 @@ const (
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
 type Meta struct {
-	RunSummary    *RunSummary
-	ui            cli.Ui
-	repoRoot      turbopath.AbsoluteSystemPath // used to write run summary
-	singlePackage bool
-	shouldSave    bool
-	apiClient     *client.APIClient
-	spaceID       string
-	runType       runType
+	RunSummary         *RunSummary
+	ui                 cli.Ui
+	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
+	repoPath           turbopath.RelativeSystemPath
+	singlePackage      bool
+	shouldSave         bool
+	apiClient          *client.APIClient
+	spaceID            string
+	runType            runType
+	synthesizedCommand string
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -67,11 +68,13 @@ func NewRunSummary(
 	startAt time.Time,
 	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
+	repoPath turbopath.RelativeSystemPath,
 	turboVersion string,
 	apiClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
 	globalHashSummary *GlobalHashSummary,
+	synthesizedCommand string,
 ) Meta {
 	singlePackage := runOpts.SinglePackage
 	profile := runOpts.Profile
@@ -86,7 +89,7 @@ func NewRunSummary(
 		}
 	}
 
-	executionSummary := newExecutionSummary(startAt, profile)
+	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
 	return Meta{
 		RunSummary: &RunSummary{
@@ -98,13 +101,14 @@ func NewRunSummary(
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},
-		ui:            ui,
-		runType:       runType,
-		repoRoot:      repoRoot,
-		singlePackage: singlePackage,
-		shouldSave:    shouldSave,
-		apiClient:     apiClient,
-		spaceID:       spaceID,
+		ui:                 ui,
+		runType:            runType,
+		repoRoot:           repoRoot,
+		singlePackage:      singlePackage,
+		shouldSave:         shouldSave,
+		apiClient:          apiClient,
+		spaceID:            spaceID,
+		synthesizedCommand: synthesizedCommand,
 	}
 }
 
@@ -181,16 +185,6 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 	return summary.ExecutionSummary.run(taskID)
 }
 
-// command returns a best guess command for the entire Run.
-// TODO: we should thread this through from the entry point rather than make it up
-func (summary *RunSummary) command() string {
-	taskNames := make(util.Set, len(summary.Tasks))
-	for _, task := range summary.Tasks {
-		taskNames.Add(task.Task)
-	}
-	return fmt.Sprintf("turbo run %s", strings.Join(taskNames.UnsafeListOfStrings(), " "))
-}
-
 // Save saves the run summary to a file
 func (rsm *Meta) save() error {
 	json, err := rsm.FormatJSON()
@@ -219,7 +213,7 @@ func (rsm *Meta) record() []error {
 	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
 	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
-	payload := newVercelRunCreatePayload(rsm.RunSummary)
+	payload := rsm.newVercelRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
 			errs = append(errs, err)
