@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
 
 With --experimental-env-mode=loose, all vars are available
 
