@@ -98,9 +98,6 @@ func RealRun(
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		taskExecutionSummary, err := ec.exec(ctx, packageTask)
-		if err != nil {
-			return err
-		}
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -115,6 +112,16 @@ func RealRun(
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
 			mu.Unlock()
+		}
+
+		// On error, we'll close out all the other tasks
+		// but then continue on so we can close out the task summaries.
+		if err != nil {
+			if !ec.rs.Opts.runOpts.ContinueOnError {
+				ec.logger.Info("%s errored, canceling other tasks", packageTask.TaskID)
+				ec.processes.Close()
+			}
+			return err
 		}
 
 		return nil
@@ -388,7 +395,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
-			ec.processes.Close()
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
 			// Set to nil so we don't short-circuit any other execution
