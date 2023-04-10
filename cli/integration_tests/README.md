@@ -16,7 +16,7 @@ Setup
   $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
 ```
 
-- `setup.sh` sets a `TURBO` environment variable that points to the locally built binary
+- `setup.sh` sets a `TURBO` environment variable that points to the locally built binary.
 - `setup_monorepo.sh` uses one of the test repos in the `_fixtures` directory to exercise
   the `TURBO` binary against.
 
