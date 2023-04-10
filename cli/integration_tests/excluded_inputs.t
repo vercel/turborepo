@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/_helpers/setup.sh
-  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) inputs
+  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd) inputs
 
 Running build for my-app succeeds
   $ ${TURBO} run build

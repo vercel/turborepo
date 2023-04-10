@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/_helpers/setup.sh
-  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
  
 Run a dry run
   $ ${TURBO} build --dry=json | jq .packages

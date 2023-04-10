@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/_helpers/setup.sh
-  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log

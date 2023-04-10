@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/../setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
   $ rm -rf .turbo/runs
 
   $ ${TURBO} run build --summarize --filter=my-app
