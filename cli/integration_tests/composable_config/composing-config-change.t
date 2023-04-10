@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 # 1. First run, check the hash
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash

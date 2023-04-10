@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 # The missing-workspace-config-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies

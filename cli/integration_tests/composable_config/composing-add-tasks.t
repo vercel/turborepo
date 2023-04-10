@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
   $ ${TURBO} run added-task --filter=add-tasks
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)

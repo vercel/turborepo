@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 This test covers:
 - [x] `persistent:true` in root, omit in workspace with turbo.json

@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 # The missing-workspace-config-task task in the root turbo.json has config. The workspace config
 # does not have a turbo.json. The tests below use `missing-workspace-config-task` to assert that:

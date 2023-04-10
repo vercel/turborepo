@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 # Put some bad JSON into the turbo.json in this app
   $ echo '{"pipeline": {"trailing-comma": {},}}' > "$TARGET_DIR/apps/bad-json/turbo.json"

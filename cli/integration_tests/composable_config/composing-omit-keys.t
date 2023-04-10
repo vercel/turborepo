@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/setup.sh $(pwd)
 
 # The omit-keys-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task, but does not override any of the keys. The tests below use `omit-keys-task`
