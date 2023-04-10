@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
 
 # The override-values-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task and overrides all the keys. The tests below use `override-values-task` to assert that:

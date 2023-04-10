@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}

@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) monorepo_with_root_dep
 
 Make sure that the internal util package is part of the prune output
   $ ${TURBO} prune --scope=docs
@@ -23,3 +23,5 @@ Make sure that the internal util package is part of the prune output
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
+

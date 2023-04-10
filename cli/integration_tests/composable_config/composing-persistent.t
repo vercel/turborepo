@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
 
 This test covers:
 - [x] `persistent:true` in root, omit in workspace with turbo.json

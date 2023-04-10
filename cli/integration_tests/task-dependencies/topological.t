@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) topological
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/topological
 
 Check my-app#build output
   $ ${TURBO} run build
@@ -26,6 +26,8 @@ Check my-app#build output
   
 
 
+
+
 Graph
   $ ${TURBO} run build --graph
   
@@ -40,3 +42,5 @@ Graph
   \t} (esc)
   }
   
+
+

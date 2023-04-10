@@ -1,6 +1,6 @@
 # Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) 4-cross-workspace
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/4-cross-workspace
 
 # Workspace Graph
 # - app-a depends on pkg-a
