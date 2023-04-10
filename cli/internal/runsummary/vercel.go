@@ -87,11 +87,15 @@ func newVercelDonePayload(runsummary *RunSummary) *vercelRunPayload {
 }
 
 func newVercelTaskPayload(taskSummary *TaskSummary) *vercelTask {
-	hit := taskSummary.CacheState.Local || taskSummary.CacheState.Remote
-	status := "MISS"
+	// Set the cache source. Local and Remote shouldn't _both_ be true.
 	var source string
-	if hit {
+	if taskSummary.CacheState.Local {
+		source = "LOCAL"
+	} else if taskSummary.CacheState.Remote {
 		source = "REMOTE"
+	}
+	status := "MISS"
+	if source != "" {
 		status = "HIT"
 	}
 
