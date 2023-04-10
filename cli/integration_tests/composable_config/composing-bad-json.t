@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 # Put some bad JSON into the turbo.json in this app

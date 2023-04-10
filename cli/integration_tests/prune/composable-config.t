@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) monorepo_with_root_dep
 
 Make sure that the internal util package is part of the prune output

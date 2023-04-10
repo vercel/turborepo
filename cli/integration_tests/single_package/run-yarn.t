@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "yarn@1.22.17"
   $ rm -rf package-lock.json || true # exists because of setup.sh script above
   $ yarn install > /dev/null 2>&1

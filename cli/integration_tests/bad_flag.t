@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Bad flag should print misuse text
   $ ${TURBO} --bad-flag

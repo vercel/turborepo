@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) 10-too-many
 
   $ ${TURBO} run build --concurrency=1

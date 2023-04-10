@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) 5-root-workspace
 
 # WorkspaceGraph: no package dependencies

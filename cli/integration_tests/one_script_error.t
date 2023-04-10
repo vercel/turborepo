@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
   $ . ${TESTDIR}/setup_monorepo.sh $(pwd) monorepo_one_script_error
 
 Check error is properly reported

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)
   $ ${TURBO} run cross-workspace-task --filter=cross-workspace
   \xe2\x80\xa2 Packages in scope: cross-workspace (esc)

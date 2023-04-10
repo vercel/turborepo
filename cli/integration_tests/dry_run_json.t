@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
   $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
 
 # Save JSON to tmp file so we don't need to keep re-running the build
