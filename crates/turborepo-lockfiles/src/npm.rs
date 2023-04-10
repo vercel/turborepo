@@ -376,4 +376,14 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn test_npm_lockfile_serialization_stable() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+        assert_eq!(
+            serde_json::to_string_pretty(&lockfile)?,
+            serde_json::to_string_pretty(&lockfile)?,
+        );
+        Ok(())
+    }
 }
