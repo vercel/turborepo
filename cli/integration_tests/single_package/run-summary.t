@@ -8,7 +8,7 @@ Check
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
-  $ source "$TESTDIR/../run-summary-utils.sh"
+  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
   $ SUMMARY=$(/bin/ls .turbo/runs/*.json | head -n1)
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")
 

@@ -50,7 +50,7 @@ Setup
   [0-9]+ (re)
 
 # Extract some task-specific summaries from each
-  $ source "$TESTDIR/../../run-summary-utils.sh"
+  $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
   $ FIRST_APP_BUILD=$(getSummaryTaskId "$FIRST" "my-app#build")
   $ SECOND_APP_BUILD=$(getSummaryTaskId "$SECOND" "my-app#build")
   $ FIRST_UTIL_BUILD=$(getSummaryTaskId "$FIRST" "util#build")
