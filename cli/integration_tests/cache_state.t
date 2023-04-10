@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/setup.sh
-  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
 
 Run a build to get a local cache.
   $ ${TURBO} run build --output-logs=none

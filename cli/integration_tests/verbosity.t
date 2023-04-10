@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/setup.sh
-  $ . ${TESTDIR}/setup_basic_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
 
 Verbosity level 1
   $ ${TURBO} build -v --filter=util --force
