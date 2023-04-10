@@ -55,7 +55,7 @@ type RunSummary struct {
 	Version           string             `json:"version"`
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"packages,omitempty"`
+	Packages          []string           `json:"packages"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
