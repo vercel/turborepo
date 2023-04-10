@@ -27,14 +27,17 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: go-turbo$(EXT)
-	SKIP_GO_BUILD=true cargo build -p turbo
+# We do not set go-turbo as a dependency because the Rust build.rs
+# script will call it for us and copy over the binary
+turbo:
+	cargo build -p turbo
 
-turbo-prod: go-turbo$(EXT)
+turbo-prod:
 	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
@@ -131,7 +134,7 @@ ifeq ($(UNAME), Windows)
 endif
 
 clean-go:
-	go clean -testcache ./...
+	go clean -testcache -r
 
 test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum turborepo-ffi-install
 	go test $(TURBO_RACE) -tags $(GO_TAG) ./...

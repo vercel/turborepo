@@ -2,9 +2,6 @@ use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
     println!("cargo:rerun-if-changed=../../cli");
-    if env::var("SKIP_GO_BUILD").is_ok() {
-        return;
-    }
     let profile = env::var("PROFILE").unwrap();
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
