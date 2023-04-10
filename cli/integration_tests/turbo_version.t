@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Test version matches that of version.txt
   $ diff <(head -n 1 ${VERSION}) <(${TURBO} --version)

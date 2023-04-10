@@ -1,7 +1,7 @@
 
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) overwriting
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/overwriting
 
 Test
   $ ${TURBO} run build > tmp.log

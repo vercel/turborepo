@@ -1,7 +1,7 @@
 
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) workspace-tasks
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/workspace-tasks
 
 Test that root tasks are included in the graph. In this case, "//#build" task should be there
   $ ${TURBO} run build1 --graph
@@ -16,6 +16,8 @@ Test that root tasks are included in the graph. In this case, "//#build" task sh
   \t} (esc)
   }
   
+
+
 
 Can depend on root tasks
   $ ${TURBO} run build2 --graph
@@ -33,6 +35,8 @@ Can depend on root tasks
   \t} (esc)
   }
   
+
+
 Can't depend on a missing root task
   $ ${TURBO} run build3 --graph
    ERROR  run failed: error preparing engine: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
@@ -52,3 +56,5 @@ Package tasks can depend on things
   \t} (esc)
   }
   
+
+
