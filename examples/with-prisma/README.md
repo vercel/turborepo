@@ -2,6 +2,10 @@
 
 This is an official starter turborepo.
 
+## Using this example
+
+Run the following command:
+
 ```sh
 npx create-turbo@latest -e with-prisma
 ```
@@ -77,14 +81,6 @@ yarn run db:seed
 ```
 
 For further more information on migrations, seeding & more, we recommend reading through the [Prisma Documentation](https://www.prisma.io/docs/).
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx create-turbo@latest -e with-prisma
-```
 
 ### Build
 

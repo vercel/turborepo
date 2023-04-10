@@ -2,6 +2,10 @@
 
 This is an official Docker starter Turborepo.
 
+## Using this example
+
+Run the following command:
+
 ```sh
 npx create-turbo@latest -e with-docker
 ```
@@ -22,14 +26,6 @@ This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package ma
 - `tsconfig`: tsconfig.json;s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx create-turbo@latest -e with-docker
-```
 
 ### Docker
 

@@ -2,6 +2,10 @@
 
 This is an official starter Turborepo.
 
+## Using this example
+
+Run the following command:
+
 ```sh
 npx create-turbo@latest -e with-react-native-web
 ```
@@ -26,11 +30,3 @@ This Turborepo has some additional tools already setup for you:
 - [Expo](https://docs.expo.dev/) for native development
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [Prettier](https://prettier.io) for code formatting
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx create-turbo@latest -e with-react-native-web
-```
