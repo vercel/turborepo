@@ -2,29 +2,12 @@ import SiteSwitcher from "./SiteSwitcher";
 import Link from "next/link";
 import styles from "./header-logo.module.css";
 import TurboAnimated from "./logos/TurboAnimated";
+import { LogoContext } from "./LogoContext";
 
 function HeaderLogo() {
   return (
     <>
-      <a
-        href="https://vercel.com"
-        target="_blank"
-        rel="noreferrer"
-        title="vercel.com homepage"
-      >
-        <svg
-          height={22}
-          viewBox="0 0 235 203"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="dark:fill-white fill-black"
-        >
-          <path
-            d="M117.082 0L234.164 202.794H0L117.082 0Z"
-            fill="currentColor"
-          />
-        </svg>
-      </a>
+      <LogoContext />
       <svg
         data-testid="geist-icon"
         fill="none"

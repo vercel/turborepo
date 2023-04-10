@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
 
+type Map<K, V> = std::collections::BTreeMap<K, V>;
+
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
@@ -12,15 +14,15 @@ use super::{Error, Lockfile, Package};
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
-    packages: HashMap<String, NpmPackage>,
+    packages: Map<String, NpmPackage>,
     // We parse this so it doesn't end up in 'other' and we don't need to worry
     // about accidentally serializing it.
     #[serde(skip_serializing, default)]
-    dependencies: HashMap<String, Value>,
+    dependencies: Map<String, Value>,
     // We want to reserialize any additional fields, but we don't use them
     // we keep them as raw values to avoid describing the correct schema.
     #[serde(flatten)]
-    other: HashMap<String, Value>,
+    other: Map<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -29,17 +31,17 @@ struct NpmPackage {
     version: Option<String>,
     resolved: Option<String>,
     #[serde(default)]
-    dependencies: HashMap<String, String>,
+    dependencies: Map<String, String>,
     #[serde(default)]
-    dev_dependencies: HashMap<String, String>,
+    dev_dependencies: Map<String, String>,
     #[serde(default)]
-    peer_dependencies: HashMap<String, String>,
+    peer_dependencies: Map<String, String>,
     #[serde(default)]
-    optional_dependencies: HashMap<String, String>,
+    optional_dependencies: Map<String, String>,
     // We want to reserialize any additional fields, but we don't use them
     // we keep them as raw values to avoid describing the correct schema.
     #[serde(flatten)]
-    other: HashMap<String, Value>,
+    other: Map<String, Value>,
 }
 
 impl Lockfile for NpmLockfile {
@@ -128,7 +130,7 @@ impl NpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Self, Error> {
-        let mut pruned_packages = HashMap::with_capacity(packages.len());
+        let mut pruned_packages = Map::new();
         for pkg_key in packages {
             let pkg = self.get_package(pkg_key)?;
             pruned_packages.insert(pkg_key.to_string(), pkg.clone());
@@ -150,7 +152,7 @@ impl NpmLockfile {
         Ok(Self {
             lockfile_version: 3,
             packages: pruned_packages,
-            dependencies: HashMap::default(),
+            dependencies: Map::default(),
             other: self.other.clone(),
         })
     }
@@ -372,6 +374,16 @@ mod test {
             "failed to persist peerDependenciesMeta"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_npm_lockfile_serialization_stable() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+        assert_eq!(
+            serde_json::to_string_pretty(&lockfile)?,
+            serde_json::to_string_pretty(&lockfile)?,
+        );
         Ok(())
     }
 }
