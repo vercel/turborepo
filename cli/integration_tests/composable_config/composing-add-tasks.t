@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
 
   $ ${TURBO} run added-task --filter=add-tasks
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)
