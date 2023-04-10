@@ -23,6 +23,22 @@ Setup
 ### Fixtures
 
 For the most part, use the `basic_monorepo`, or `single_package` fixtures to test against.
+By default the script will use `basic_monorepo`, but you can specify the fixture with a second
+argument:
+
+```bash
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) single_package
+```
+
+You can also pass a second argument to change the packageManager of a fixture:
+
+```bash
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd) basic_monorepo "yarn@1.22.17"
+```
+
+Note that if you want to customize the package mangaer, you'll have to specify the fixture name
+also since the script just uses positional arguments.
+
 You can add custom fixture monorepos as an escape hatch or if you truly need a custom monorepo.
 
 #### Custom turbo.json
