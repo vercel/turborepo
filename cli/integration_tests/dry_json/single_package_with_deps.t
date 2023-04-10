@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_deps
 
-  $ ${TURBO} run test --dry=json --single-package
+  $ ${TURBO} run test --dry=json
   {
     "id": "[a-zA-Z0-9]+", (re)
     "version": "0",
