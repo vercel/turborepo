@@ -159,6 +159,7 @@ importers:
       autoprefixer: 10.4.14
       axios: 0.27.2
       classnames: 2.3.2
+      copy-to-clipboard: ^3.3.3
       csstype: 3.1.2
       eslint: 8.10.0
       eslint-config-next: 12.3.1
@@ -188,6 +189,7 @@ importers:
       '@vercel/og': 0.0.20
       axios: 0.27.2
       classnames: 2.3.2
+      copy-to-clipboard: 3.3.3
       framer-motion: 7.3.6_biqbaboplfbrettd7655fr4n2y
       next: 13.0.3_pjwopsidmaokadturxaafygjp4
       next-themes: 0.2.0_ogpkrxaz2lg6nectum6dl66tn4
@@ -4005,6 +4007,12 @@ packages:
     transitivePeerDependencies:
       - supports-color
     dev: true
+
+  /copy-to-clipboard/3.3.3:
+    resolution: {integrity: sha512-2KV8NhB5JqC3ky0r9PMCAZKbUHSwtEo4CwCs0KXgruG43gX5PMqDEBbVU4OUzw2MuAWUfsuFmWvEKG5QRfSnJA==}
+    dependencies:
+      toggle-selection: 1.0.6
+    dev: false
 
   /core-js-pure/3.26.1:
     resolution: {integrity: sha512-VVXcDpp/xJ21KdULRq/lXdLzQAtX7+37LzpyfFM973il0tWSsDEoyzG38G14AjTpK9VTfiNM9jnFauq/CpaWGQ==}
@@ -11279,6 +11287,10 @@ packages:
       regex-not: 1.0.2
       safe-regex: 1.1.0
     dev: true
+
+  /toggle-selection/1.0.6:
+    resolution: {integrity: sha512-BiZS+C1OS8g/q2RRbJmy59xpyghNBqrr6k5L/uKBGRsTfxmu3ffiRnd8mlGPUVayg8pvfi5urfnu8TU7DVOkLQ==}
+    dev: false
 
   /tough-cookie/4.1.2:
     resolution: {integrity: sha512-G9fqXWoYFZgTc2z8Q5zaHy/vJMjm+WV0AkAeHxVCQiEB1b+dGvWzFW6QV07cY5jQ5gRkeid2qIkzkxUnmoQZUQ==}
