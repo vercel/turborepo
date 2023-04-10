@@ -1,7 +1,7 @@
 
 Setup
-  $ . ${TESTDIR}/_helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd) task_dependencies/complex
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/complex
 
 # Workspace Graph:
 # app-a -> lib-a
