@@ -2,6 +2,14 @@
 
 This is an official starter Turborepo.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest -e with-create-react-app
+```
+
 ## What's inside?
 
 This Turborepo includes the following packages/apps:
@@ -24,14 +32,3 @@ This Turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx degit vercel/turbo/examples/with-create-react-app with-create-react-app
-cd with-create-react-app
-pnpm install
-git init . && git add . && git commit -m "Init"
-```
