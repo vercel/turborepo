@@ -26,6 +26,7 @@ const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
 
 const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
+const runsPatchEndpoint = "/v0/spaces/%s/runs/%s"
 const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 type runType int
@@ -39,14 +40,16 @@ const (
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
 type Meta struct {
-	RunSummary    *RunSummary
-	ui            cli.Ui
-	repoRoot      turbopath.AbsoluteSystemPath // used to write run summary
-	singlePackage bool
-	shouldSave    bool
-	apiClient     *client.APIClient
-	spaceID       string
-	runType       runType
+	RunSummary         *RunSummary
+	ui                 cli.Ui
+	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
+	repoPath           turbopath.RelativeSystemPath
+	singlePackage      bool
+	shouldSave         bool
+	apiClient          *client.APIClient
+	spaceID            string
+	runType            runType
+	synthesizedCommand string
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
@@ -65,11 +68,13 @@ func NewRunSummary(
 	startAt time.Time,
 	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
+	repoPath turbopath.RelativeSystemPath,
 	turboVersion string,
 	apiClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
 	globalHashSummary *GlobalHashSummary,
+	synthesizedCommand string,
 ) Meta {
 	singlePackage := runOpts.SinglePackage
 	profile := runOpts.Profile
@@ -84,7 +89,7 @@ func NewRunSummary(
 		}
 	}
 
-	executionSummary := newExecutionSummary(startAt, profile)
+	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
 	return Meta{
 		RunSummary: &RunSummary{
@@ -96,13 +101,14 @@ func NewRunSummary(
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},
-		ui:            ui,
-		runType:       runType,
-		repoRoot:      repoRoot,
-		singlePackage: singlePackage,
-		shouldSave:    shouldSave,
-		apiClient:     apiClient,
-		spaceID:       spaceID,
+		ui:                 ui,
+		runType:            runType,
+		repoRoot:           repoRoot,
+		singlePackage:      singlePackage,
+		shouldSave:         shouldSave,
+		apiClient:          apiClient,
+		spaceID:            spaceID,
+		synthesizedCommand: synthesizedCommand,
 	}
 }
 
@@ -143,9 +149,16 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	rsm.printExecutionSummary()
 
 	if rsm.shouldSave {
-		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
-			if err := rsm.record(); err != nil {
-				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
+		if rsm.spaceID != "" {
+			if rsm.apiClient.IsLinked() {
+				if errs := rsm.record(); len(errs) > 0 {
+					rsm.ui.Warn("Errors recording run to Spaces")
+					for _, err := range errs {
+						rsm.ui.Warn(fmt.Sprintf("%v", err))
+					}
+				}
+			} else {
+				rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
 			}
 		}
 	}
@@ -200,20 +213,21 @@ func (rsm *Meta) record() []error {
 	errs := []error{}
 
 	// Right now we'll send the POST to create the Run and the subsequent task payloads
-	// when everything after all execution is done, but in the future, this first POST request
-	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
+	// after all execution is done, but in the future, this first POST request
+	// can happen when the Run actually starts, so we can send updates to the associated Space
+	// as tasks complete.
 	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
-	payload := newVercelRunCreatePayload(rsm.RunSummary)
+	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
 			errs = append(errs, err)
 		} else {
-			vercelRunResponse := &vercelRunResponse{}
-			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
+			spacesRunResponse := &spacesRunResponse{}
+			if err := json.Unmarshal(resp, spacesRunResponse); err != nil {
 				errs = append(errs, err)
 			} else {
-				runID = vercelRunResponse.ID
+				runID = spacesRunResponse.ID
 			}
 		}
 	}
@@ -221,8 +235,9 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
-			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
+		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
+			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
+			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -235,7 +250,8 @@ func (rsm *Meta) record() []error {
 	return nil
 }
 
-func (rsm *Meta) postTaskSummaries(runID string) {
+func (rsm *Meta) postTaskSummaries(runID string) []error {
+	errs := []error{}
 	// We make at most 8 requests at a time.
 	maxParallelRequests := 8
 	taskSummaries := rsm.RunSummary.Tasks
@@ -256,9 +272,10 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 			defer wg.Done()
 			for index := range queue {
 				task := taskSummaries[index]
-				if taskPayload, err := json.Marshal(task); err == nil {
+				payload := newSpacesTaskPayload(task)
+				if taskPayload, err := json.Marshal(payload); err == nil {
 					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
-						rsm.ui.Warn(fmt.Sprintf("Eror uploading summary of %s", task.TaskID))
+						errs = append(errs, fmt.Errorf("Eror uploading summary of %s", task.TaskID))
 					}
 				}
 			}
@@ -270,4 +287,10 @@ func (rsm *Meta) postTaskSummaries(runID string) {
 	}
 	close(queue)
 	wg.Wait()
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
 }

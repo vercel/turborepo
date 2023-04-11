@@ -9,6 +9,7 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/chrometracing"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 
 	"github.com/mitchellh/cli"
 )
@@ -72,6 +73,10 @@ type TaskExecutionSummary struct {
 	exitCode *int               // pointer so we can distinguish between 0 and unknown.
 }
 
+func (ts *TaskExecutionSummary) endTime() time.Time {
+	return ts.startAt.Add(ts.Duration)
+}
+
 // MarshalJSON munges the TaskExecutionSummary into a format we want
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
 func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
@@ -82,7 +87,7 @@ func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 		ExitCode *int  `json:"exitCode"`
 	}{
 		Start:    ts.startAt.UnixMilli(),
-		End:      ts.startAt.Add(ts.Duration).UnixMilli(),
+		End:      ts.endTime().UnixMilli(),
 		Err:      ts.err,
 		ExitCode: ts.exitCode,
 	}
@@ -108,10 +113,12 @@ type executionSummary struct {
 	profileFilename string
 
 	// These get serialized to JSON
-	success   int // number of tasks that exited successfully (does not include cache hits)
-	failure   int // number of tasks that exited with failure
-	cached    int // number of tasks that had a cache hit
-	attempted int // number of tasks that started
+	command   string                       // a synthesized turbo command to produce this invocation
+	repoPath  turbopath.RelativeSystemPath // the (possibly empty) path from the turborepo root to where the command was run
+	success   int                          // number of tasks that exited successfully (does not include cache hits)
+	failure   int                          // number of tasks that exited with failure
+	cached    int                          // number of tasks that had a cache hit
+	attempted int                          // number of tasks that started
 	startedAt time.Time
 	endedAt   time.Time
 	exitCode  int
@@ -121,14 +128,18 @@ type executionSummary struct {
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated.
 func (es *executionSummary) MarshalJSON() ([]byte, error) {
 	serializable := struct {
-		Success   int   `json:"success"`
-		Failure   int   `json:"failed"`
-		Cached    int   `json:"cached"`
-		Attempted int   `json:"attempted"`
-		StartTime int64 `json:"startTime"`
-		EndTime   int64 `json:"endTime"`
-		ExitCode  int   `json:"exitCode"`
+		Command   string `json:"command"`
+		RepoPath  string `json:"repoPath"`
+		Success   int    `json:"success"`
+		Failure   int    `json:"failed"`
+		Cached    int    `json:"cached"`
+		Attempted int    `json:"attempted"`
+		StartTime int64  `json:"startTime"`
+		EndTime   int64  `json:"endTime"`
+		ExitCode  int    `json:"exitCode"`
 	}{
+		Command:   es.command,
+		RepoPath:  es.repoPath.ToString(),
 		StartTime: es.startedAt.UnixMilli(),
 		EndTime:   es.endedAt.UnixMilli(),
 		Success:   es.success,
@@ -142,12 +153,14 @@ func (es *executionSummary) MarshalJSON() ([]byte, error) {
 }
 
 // newExecutionSummary creates a executionSummary instance to track events in a `turbo run`.`
-func newExecutionSummary(start time.Time, tracingProfile string) *executionSummary {
+func newExecutionSummary(command string, repoPath turbopath.RelativeSystemPath, start time.Time, tracingProfile string) *executionSummary {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
 
 	return &executionSummary{
+		command:         command,
+		repoPath:        repoPath,
 		success:         0,
 		failure:         0,
 		cached:          0,
