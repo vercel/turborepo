@@ -2,6 +2,14 @@
 
 This is an official Docker starter Turborepo.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest -e with-docker
+```
+
 ## What's inside?
 
 This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package manager. It includes the following packages/apps:
@@ -18,17 +26,6 @@ This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package ma
 - `tsconfig`: tsconfig.json;s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx degit vercel/turbo/examples/with-docker with-docker
-cd with-docker
-yarn install
-git init . && git add . && git commit -m "Init"
-```
 
 ### Docker
 

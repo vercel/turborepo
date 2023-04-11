@@ -17,13 +17,10 @@ As well as a few others tools preconfigured:
 
 ## Using this example
 
-Clone the design system example locally or [from GitHub](https://github.com/vercel/turbo/tree/main/examples/design-system):
+Run the following command:
 
-```bash
-npx degit vercel/turbo/examples/design-system design-system
-cd design-system
-pnpm install
-git init . && git add . && git commit -m "Init"
+```sh
+npx create-turbo@latest -e design-system
 ```
 
 ### Useful Commands
