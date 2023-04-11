@@ -159,6 +159,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
 
+	isStructuredOutput := r.opts.runOpts.GraphDot || r.opts.runOpts.DryRunJSON
+
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.SinglePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
@@ -247,6 +249,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalPassthroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.base.Logger,
+		r.base.UI,
+		isStructuredOutput,
 	)
 
 	if err != nil {

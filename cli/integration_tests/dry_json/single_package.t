@@ -31,6 +31,7 @@ Setup
     },
     "tasks": [
       {
+        "taskId": "build",
         "task": "build",
         "hash": "dd4a9a7b508b0e38",
         "inputs": {

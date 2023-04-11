@@ -131,7 +131,7 @@ export function LogoContext() {
   }, [onClickOutside]);
 
   return (
-    <div className="block">
+    <div className="block relative">
       <button onClick={toggleMenu} onContextMenu={toggleMenu} className="flex">
         <VercelLogo />
       </button>
