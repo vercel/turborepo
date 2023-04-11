@@ -178,6 +178,55 @@ Task details include:
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
 
+#### `--experimental-env-mode`
+
+`type: string`
+
+<Callout type="info">
+  **Warning**: This is an experimental flag, so its name and behavior can change.
+</Callout>
+
+Controls the available environment variables to your tasks.
+
+| option | description                                                |
+| ------ | ---------------------------------------------------------- |
+| infer  | infers strict mode or loose mode based on allowlist config |
+| loose  | allows all environment variables                           |
+| strict | only allow declared variables                              |
+
+`PATH`, `SHELL`, and `SYSTEMROOT` are always available to all tasks.
+
+##### `infer`
+
+In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
+each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
+`turbo.json` config. If either is defined, "strict" mode is inferred. If
+neither is defined, then `loose` mode is inferred.
+
+In this mode, the value of `experimentalGlobalPassThroughEnv` and the flag's
+value ("infer") will only be incorporated into the global hash if
+`experimentalGlobalPassThroughEnv` is set.
+
+##### `loose`
+
+In loose mode, all environment variables are made available to the task.
+The value of `experimentalGlobalPassThroughEnv` and the flag's value ("loose")
+itself will be incorporated into the global hash.
+
+##### `strict`
+
+In strict mode, only environment variables specified in the following keys are
+available to the task:
+
+- `env` and `experimentalPassThroughEnv` in each task configuration
+- `globalEnv` and `experimentalGlobalPassThroughEnv` in the root of your config
+
+The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict")
+itself will be incorporated into the global hash.
+
+If strict mode is specified or inferred, _all_ tasks are run in strict mode,
+regardless of their configuration.
+
 #### `--filter`
 
 `type: string[]`
@@ -659,3 +708,6 @@ Unlink the current directory from the Remote Cache.
 ## `turbo bin`
 
 Get the path to the `turbo` binary.
+
+[1]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
+[2]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
