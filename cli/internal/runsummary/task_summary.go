@@ -51,10 +51,10 @@ func (ts *TaskSummary) cleanForSinglePackage() {
 	for i, dependent := range ts.Dependents {
 		dependents[i] = util.StripPackageName(dependent)
 	}
-	taskID := util.StripPackageName(ts.TaskID)
+	task := util.StripPackageName(ts.TaskID)
 
-	ts.TaskID = taskID
-	ts.Task = taskID
+	ts.TaskID = task
+	ts.Task = task
 	ts.Dependencies = dependencies
 	ts.Dependents = dependents
 	ts.Dir = ""
