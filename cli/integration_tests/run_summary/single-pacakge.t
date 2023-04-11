@@ -67,7 +67,6 @@ Check
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": null,
     "exitCode": 0
   }
   $ echo $TASK_SUMMARY | jq '.cliArguments'
