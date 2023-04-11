@@ -210,10 +210,15 @@ impl Asset for EcmascriptBuildNodeEvaluateChunk {
     #[turbo_tasks::function]
     async fn references(self_vc: EcmascriptBuildNodeEvaluateChunkVc) -> Result<AssetReferencesVc> {
         let this = self_vc.await?;
-        let mut references = vec![
-            self_vc.runtime_reference().into(),
-            SourceMapAssetReferenceVc::new(self_vc.into()).into(),
-        ];
+        let mut references = vec![self_vc.runtime_reference().into()];
+
+        if *this
+            .chunking_context
+            .reference_chunk_source_maps(self_vc.into())
+            .await?
+        {
+            references.push(SourceMapAssetReferenceVc::new(self_vc.into()).into())
+        }
 
         let other_chunks = this.other_chunks.await?;
         for other_chunk in &*other_chunks {
