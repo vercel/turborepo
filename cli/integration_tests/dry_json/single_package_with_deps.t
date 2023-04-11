@@ -41,6 +41,7 @@ Setup
     },
     "tasks": [
       {
+        "taskId": "build",
         "task": "build",
         "hash": "8fc80cfff3b64237",
         "inputs": {
@@ -87,6 +88,7 @@ Setup
         }
       },
       {
+        "taskId": "test",
         "task": "test",
         "hash": "c71366ccd6a86465",
         "inputs": {
