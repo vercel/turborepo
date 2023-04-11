@@ -59,7 +59,6 @@ Setup
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": null,
     "exitCode": 0
   }
   $ echo $FIRST_APP_BUILD | jq '.cliArguments'
@@ -89,7 +88,6 @@ Setup
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": null,
     "exitCode": 0
   }
 

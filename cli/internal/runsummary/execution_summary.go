@@ -26,7 +26,7 @@ type executionEvent struct {
 	// Its current status
 	Status executionEventName
 	// Error, only populated for failure statuses
-	Err error
+	Err string
 
 	exitCode *int
 }
@@ -68,7 +68,7 @@ func (en executionEventName) toString() string {
 type TaskExecutionSummary struct {
 	startAt  time.Time          // set once
 	status   executionEventName // current status, updated during execution
-	err      error              // only populated for failure statuses
+	err      string             // only populated for failure statuses
 	Duration time.Duration      // updated during the task execution
 	exitCode *int               // pointer so we can distinguish between 0 and unknown.
 }
@@ -81,10 +81,10 @@ func (ts *TaskExecutionSummary) endTime() time.Time {
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated
 func (ts *TaskExecutionSummary) MarshalJSON() ([]byte, error) {
 	serializable := struct {
-		Start    int64 `json:"startTime"`
-		End      int64 `json:"endTime"`
-		Err      error `json:"error"`
-		ExitCode *int  `json:"exitCode"`
+		Start    int64  `json:"startTime"`
+		End      int64  `json:"endTime"`
+		Err      string `json:"error,omitempty"`
+		ExitCode *int   `json:"exitCode"`
 	}{
 		Start:    ts.startAt.UnixMilli(),
 		End:      ts.endTime().UnixMilli(),
@@ -197,8 +197,9 @@ func (es *executionSummary) run(taskID string) (func(outcome executionEventName,
 			// when we assign it to the taskExecutionSummary.
 			exitCode: exitCode,
 		}
+
 		if err != nil {
-			result.Err = fmt.Errorf("running %v failed: %w", taskID, err)
+			result.Err = err.Error()
 		}
 
 		// Ignore the return value here

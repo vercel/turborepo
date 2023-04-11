@@ -98,9 +98,6 @@ func RealRun(
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		taskExecutionSummary, err := ec.exec(ctx, packageTask)
-		if err != nil {
-			return err
-		}
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -115,6 +112,11 @@ func RealRun(
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
 			mu.Unlock()
+		}
+
+		// Return the error when there is one
+		if err != nil {
+			return err
 		}
 
 		return nil
