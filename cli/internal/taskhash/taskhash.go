@@ -277,7 +277,21 @@ func (th *Tracker) CalculateFileHashes(
 	return nil
 }
 
-type taskHashInputs struct {
+type taskHashable struct {
+	packageDir           turbopath.AnchoredUnixPath
+	hashOfFiles          string
+	externalDepsHash     string
+	task                 string
+	outputs              fs.TaskOutputs
+	passThruArgs         []string
+	envMode              util.EnvMode
+	passthroughEnv       []string
+	hashableEnvPairs     []string
+	globalHash           string
+	taskDependencyHashes []string
+}
+
+type oldTaskHashable struct {
 	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
@@ -287,6 +301,42 @@ type taskHashInputs struct {
 	hashableEnvPairs     []string
 	globalHash           string
 	taskDependencyHashes []string
+}
+
+// calculateTaskHashFromHashable returns a hash string from the taskHashable
+func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
+	switch full.envMode {
+	case util.Infer:
+		if full.passthroughEnv != nil {
+			// In infer mode, if there is any passThru config (even if it is an empty array)
+			// we'll hash the whole object, so we can detect changes to that config
+			// Further, resolve the envMode to the concrete value.
+			full.envMode = util.Strict
+			return fs.HashObject(full)
+		}
+
+		// If we're in infer mode, and there is no global pass through config,
+		// we can use the old anonymous struct. this will be true for everyone not using the strict env
+		// feature, and we don't want to break their cache.
+		return fs.HashObject(&oldTaskHashable{
+			packageDir:           full.packageDir,
+			hashOfFiles:          full.hashOfFiles,
+			externalDepsHash:     full.externalDepsHash,
+			task:                 full.task,
+			outputs:              full.outputs,
+			passThruArgs:         full.passThruArgs,
+			hashableEnvPairs:     full.hashableEnvPairs,
+			globalHash:           full.globalHash,
+			taskDependencyHashes: full.taskDependencyHashes,
+		})
+	case util.Loose:
+		// Remove the passthroughs from hash consideration if we're explicitly loose.
+		full.passthroughEnv = nil
+		return fs.HashObject(full)
+	default:
+		// When we aren't in infer or loose mode we can hash the whole object as is.
+		return fs.HashObject(full)
+	}
 }
 
 func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, error) {
@@ -354,13 +404,15 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	// log any auto detected env vars
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
-	hash, err := fs.HashObject(&taskHashInputs{
+	hash, err := calculateTaskHashFromHashable(&taskHashable{
 		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
 		outputs:              outputs.Sort(),
 		passThruArgs:         args,
+		envMode:              packageTask.EnvMode,
+		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
 		hashableEnvPairs:     hashableEnvPairs,
 		globalHash:           th.globalHash,
 		taskDependencyHashes: taskDependencyHashes,

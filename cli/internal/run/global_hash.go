@@ -47,28 +47,35 @@ type oldGlobalHashable struct {
 }
 
 // calculateGlobalHashFromHashable returns a hash string from the globalHashable
-func calculateGlobalHashFromHashable(named GlobalHashable) (string, error) {
-	// When we aren't in infer mode, we can hash the whole object
-	if named.envMode != util.Infer {
-		return fs.HashObject(named)
-	}
+func calculateGlobalHashFromHashable(full GlobalHashable) (string, error) {
+	switch full.envMode {
+	case util.Infer:
+		if full.envVarPassthroughs != nil {
+			// In infer mode, if there is any passThru config (even if it is an empty array)
+			// we'll hash the whole object, so we can detect changes to that config
+			// Further, resolve the envMode to the concrete value.
+			full.envMode = util.Strict
+			return fs.HashObject(full)
+		}
 
-	// In infer mode, if there is any passThru config (even if it is an empty array)
-	// we'll hash the whole object, so we can detect changes to that config
-	if named.envVarPassthroughs != nil {
-		return fs.HashObject(named)
+		// If we're in infer mode, and there is no global pass through config,
+		// we use the old struct layout. this will be true for everyone not using the strict env
+		// feature, and we don't want to break their cache.
+		return fs.HashObject(oldGlobalHashable{
+			globalFileHashMap:    full.globalFileHashMap,
+			rootExternalDepsHash: full.rootExternalDepsHash,
+			envVars:              full.envVars.All.ToHashable(),
+			globalCacheKey:       full.globalCacheKey,
+			pipeline:             full.pipeline,
+		})
+	case util.Loose:
+		// Remove the passthroughs from hash consideration if we're explicitly loose.
+		full.envVarPassthroughs = nil
+		return fs.HashObject(full)
+	default:
+		// When we aren't in infer or loose mode we can hash the whole object as is.
+		return fs.HashObject(full)
 	}
-
-	// If we're in infer mode, and there is no global pass through config,
-	// we need to use the old struct layout. This will be true for everyone
-	// not using the strict env feature and we don't want to break their cache.
-	return fs.HashObject(oldGlobalHashable{
-		globalFileHashMap:    named.globalFileHashMap,
-		rootExternalDepsHash: named.rootExternalDepsHash,
-		envVars:              named.envVars.All.ToHashable(),
-		globalCacheKey:       named.globalCacheKey,
-		pipeline:             named.pipeline,
-	})
 }
 
 func calculateGlobalHash(
@@ -138,11 +145,6 @@ func calculateGlobalHash(
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
 		return GlobalHashable{}, fmt.Errorf("error hashing files: %w", err)
-	}
-
-	// Remove the passthroughs from hash consideration if we're explicitly loose.
-	if envMode == util.Loose {
-		envVarPassthroughs = nil
 	}
 
 	return GlobalHashable{

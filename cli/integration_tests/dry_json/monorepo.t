@@ -72,6 +72,7 @@ Setup
 
   $ cat tmpjson.log | jq 'keys'
   [
+    "envMode",
     "globalCacheInputs",
     "id",
     "packages",
@@ -122,13 +123,16 @@ Setup
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
+    "envMode": "Infer",
     "environmentVariables": {
       "configured": [],
       "inferred": [],
       "global": [
         "SOME_ENV_VAR=",
         "VERCEL_ANALYTICS_ID="
-      ]
+      ],
+      "passthrough": null,
+      "globalPassthrough": null
     }
   }
 
@@ -170,6 +174,7 @@ Setup
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
+    "envMode": "Infer",
     "environmentVariables": {
       "configured": [
         "NODE_ENV="
@@ -178,7 +183,9 @@ Setup
       "global": [
         "SOME_ENV_VAR=",
         "VERCEL_ANALYTICS_ID="
-      ]
+      ],
+      "passthrough": null,
+      "globalPassthrough": null
     }
   }
 
@@ -192,7 +199,9 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
     "global": [
       "SOME_ENV_VAR=",
       "VERCEL_ANALYTICS_ID="
-    ]
+    ],
+    "passthrough": null,
+    "globalPassthrough": null
   }
 
 Tasks that don't exist throw an error

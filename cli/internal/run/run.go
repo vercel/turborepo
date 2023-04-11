@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
@@ -346,6 +347,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	var envVarPassthroughMap env.EnvironmentVariableMap
+	if globalHashable.envVarPassthroughs != nil {
+		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashable.envVarPassthroughs, nil, ""); err == nil {
+			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
+		}
+	}
+
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
@@ -361,6 +369,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,
 			globalHashable.envVars,
+			envVarPassthroughMap,
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
@@ -376,6 +385,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			engine,
 			taskHashTracker,
 			turboCache,
+			turboJSON,
 			r.base,
 			summary,
 		)
