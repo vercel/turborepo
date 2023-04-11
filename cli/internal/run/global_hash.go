@@ -107,7 +107,10 @@ func calculateGlobalHash(
 		return GlobalHashable{}, err
 	}
 
-	// The only way we can add env vars into the hash via matching is via THASH.
+	// The only way we can add env vars into the hash via matching is via THASH,
+	// so we only do a simple check here for entries in `BySource.Matching`.
+	// If we enable globalEnv to accept wildcard characters, we'll need to update this
+	// check.
 	if !isStructuredOutput && len(globalHashableEnvVars.BySource.Matching) > 0 {
 		ui.Warn(fmt.Sprintf("[DEPRECATED] Using .*THASH.* to specify an environment variable for inclusion into the hash is deprecated. You specified: %s.", strings.Join(globalHashableEnvVars.BySource.Matching.Names(), ", ")))
 	}
