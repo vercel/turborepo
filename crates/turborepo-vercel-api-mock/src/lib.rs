@@ -70,7 +70,8 @@ pub async fn start_test_server(port: u16) -> Result<()> {
             }),
         );
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-
+    // We print the port so integration tests can use it
+    println!("{}", port);
     axum_server::bind(addr)
         .serve(app.into_make_service())
         .await?;
