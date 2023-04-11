@@ -152,13 +152,13 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 		if rsm.spaceID != "" {
 			if rsm.apiClient.IsLinked() {
 				if errs := rsm.record(); len(errs) > 0 {
-					rsm.ui.Warn("Errors recording run to Vercel")
+					rsm.ui.Warn("Errors recording run to Spaces")
 					for _, err := range errs {
 						rsm.ui.Warn(fmt.Sprintf("%v", err))
 					}
 				}
 			} else {
-				rsm.ui.Warn("Failed to post to space because repo is not linked to Vercel. Run `turbo link` first.")
+				rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
 			}
 		}
 	}
@@ -213,20 +213,21 @@ func (rsm *Meta) record() []error {
 	errs := []error{}
 
 	// Right now we'll send the POST to create the Run and the subsequent task payloads
-	// when everything after all execution is done, but in the future, this first POST request
-	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
+	// after all execution is done, but in the future, this first POST request
+	// can happen when the Run actually starts, so we can send updates to the associated Space
+	// as tasks complete.
 	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
-	payload := rsm.newVercelRunCreatePayload()
+	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
 			errs = append(errs, err)
 		} else {
-			vercelRunResponse := &vercelRunResponse{}
-			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
+			spacesRunResponse := &spacesRunResponse{}
+			if err := json.Unmarshal(resp, spacesRunResponse); err != nil {
 				errs = append(errs, err)
 			} else {
-				runID = vercelRunResponse.ID
+				runID = spacesRunResponse.ID
 			}
 		}
 	}
@@ -234,7 +235,7 @@ func (rsm *Meta) record() []error {
 	if runID != "" {
 		rsm.postTaskSummaries(runID)
 
-		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
+		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
 			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
 			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
 				errs = append(errs, err)
@@ -271,7 +272,7 @@ func (rsm *Meta) postTaskSummaries(runID string) []error {
 			defer wg.Done()
 			for index := range queue {
 				task := taskSummaries[index]
-				payload := newVercelTaskPayload(task)
+				payload := newSpacesTaskPayload(task)
 				if taskPayload, err := json.Marshal(payload); err == nil {
 					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
 						errs = append(errs, fmt.Errorf("Eror uploading summary of %s", task.TaskID))
