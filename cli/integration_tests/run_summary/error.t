@@ -16,7 +16,9 @@ that behavior in this test.
 Validate that there was a failed task and exitCode is 1 (which is what we get from npm for the failed task)
   $ cat $SUMMARY | jq '.execution'
   {
-    "success": 0, (re)
+    "command": "turbo run maybefails --filter=my-app",
+    "repoPath": "",
+    "success": 0,
     "failed": 1,
     "cached": 0,
     "attempted": 1,
@@ -88,6 +90,8 @@ Don't use --filter here, so we can validate that both tasks attempted to run
 success should be 1, and attempted should be 2
   $ cat $SUMMARY | jq '.execution'
   {
+    "command": "turbo run maybefails --continue",
+    "repoPath": "",
     "success": 1,
     "failed": 1,
     "cached": 0,
