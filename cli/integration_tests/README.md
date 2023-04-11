@@ -36,7 +36,7 @@ You can also pass a second argument to change the packageManager of a fixture:
   $ . ${TESTDIR}/setup_monorepo.sh $(pwd) basic_monorepo "yarn@1.22.17"
 ```
 
-Note that if you want to customize the package mangaer, you'll have to specify the fixture name
+Note that if you want to customize the package manager, you'll have to specify the fixture name
 also since the script just uses positional arguments.
 
 You can add custom fixture monorepos as an escape hatch or if you truly need a custom monorepo.
