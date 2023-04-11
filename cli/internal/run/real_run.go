@@ -114,13 +114,8 @@ func RealRun(
 			mu.Unlock()
 		}
 
-		// On error, we'll close out all the other tasks
-		// but then continue on so we can close out the task summaries.
+		// Return the error when there is one
 		if err != nil {
-			if !ec.rs.Opts.runOpts.ContinueOnError {
-				ec.logger.Info("%s errored, canceling other tasks", packageTask.TaskID)
-				ec.processes.Close()
-			}
 			return err
 		}
 
@@ -395,6 +390,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			ec.processes.Close()
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
 			// Set to nil so we don't short-circuit any other execution
