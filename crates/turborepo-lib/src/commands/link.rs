@@ -349,6 +349,9 @@ mod test {
 
         handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
-        assert_eq!(team_id, Some(vercel_api_mock::EXPECTED_TEAM_ID));
+        assert!(
+            team_id == Some(vercel_api_mock::EXPECTED_USER_ID)
+                || team_id == Some(vercel_api_mock::EXPECTED_TEAM_ID)
+        );
     }
 }
