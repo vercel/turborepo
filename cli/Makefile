@@ -344,12 +344,12 @@ integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRAT
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
 
-# use target testbed-<some directory under integration_tests> to set up the testbed directory
-.PHONY=testbed-%
-testbed-%:
-	$(eval $@_TEST := $(@:testbed-%=%))
-	@echo "testbed setup $($@_TEST)"
+# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+.PHONY=fixture-%
+fixture-%:
+	$(eval $@_FIXTURE := $(@:fixture-%=%))
+	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/$($@_TEST)/setup.sh testbed
+	./integration_tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 
