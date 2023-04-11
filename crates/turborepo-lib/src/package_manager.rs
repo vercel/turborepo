@@ -1,10 +1,17 @@
 use std::{
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+use itertools::Itertools;
+use node_semver::{Range, Version};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+
+use crate::{commands::CommandBase, package_json::PackageJson, ui::UNDERLINE};
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspace {
@@ -41,15 +48,25 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
+#[derive(Debug, Serialize)]
 pub enum PackageManager {
-    #[allow(dead_code)]
     Berry,
     Npm,
     Pnpm,
-    #[allow(dead_code)]
     Pnpm6,
-    #[allow(dead_code)]
     Yarn,
+}
+
+impl fmt::Display for PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PackageManager::Berry => write!(f, "berry"),
+            PackageManager::Npm => write!(f, "npm"),
+            PackageManager::Pnpm => write!(f, "pnpm"),
+            PackageManager::Pnpm6 => write!(f, "pnpm6"),
+            PackageManager::Yarn => write!(f, "yarn"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -75,7 +92,7 @@ impl Globs {
             .iter()
             .any(|exclusion| glob_match::glob_match(exclusion, search_value));
 
-        Ok(*includes && !excludes)
+        Ok(*includes && !*excludes)
     }
 }
 
@@ -133,6 +150,110 @@ impl PackageManager {
             inclusions,
             exclusions,
         }))
+    }
+
+    pub fn get_package_manager(base: &mut CommandBase, pkg: &PackageJson) -> Result<Self> {
+        if let Ok(Some(package_manager)) = Self::read_package_manager(pkg) {
+            return Ok(package_manager);
+        }
+
+        Self::detect_package_manager(base)
+    }
+
+    fn detect_berry_or_yarn(version: &Version) -> Result<Self> {
+        let berry_constraint: Range = ">=2.0.0-0".parse()?;
+        if berry_constraint.satisfies(version) {
+            Ok(PackageManager::Berry)
+        } else {
+            Ok(PackageManager::Yarn)
+        }
+    }
+
+    fn detect_pnpm6_or_pnpm(version: &Version) -> Result<Self> {
+        let pnpm6_constraint: Range = "<7.0.0".parse()?;
+        if pnpm6_constraint.satisfies(version) {
+            Ok(PackageManager::Pnpm6)
+        } else {
+            Ok(PackageManager::Pnpm)
+        }
+    }
+
+    // Attempts to read the package manager from the package.json
+    fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>> {
+        let Some(package_manager) = &pkg.package_manager else {
+            return Ok(None)
+        };
+
+        let (manager, version) = Self::parse_package_manager_string(package_manager)?;
+        let version = version.parse()?;
+        let manager = match manager {
+            "npm" => Some(PackageManager::Npm),
+            "yarn" => Some(Self::detect_berry_or_yarn(&version)?),
+            "pnpm" => Some(Self::detect_pnpm6_or_pnpm(&version)?),
+            _ => None,
+        };
+
+        Ok(manager)
+    }
+
+    fn detect_package_manager(base: &mut CommandBase) -> Result<PackageManager> {
+        let mut detected_package_managers = vec![];
+        let project_directory = AbsoluteSystemPathBuf::new(&base.repo_root)?;
+        let npm_lockfile = project_directory
+            .join_relative(RelativeSystemPathBuf::new("package-lock.json").unwrap());
+        if npm_lockfile.exists() {
+            detected_package_managers.push(PackageManager::Npm);
+        }
+
+        let pnpm_lockfile =
+            project_directory.join_relative(RelativeSystemPathBuf::new("pnpm-lock.yaml").unwrap());
+        if pnpm_lockfile.exists() {
+            detected_package_managers.push(PackageManager::Pnpm);
+        }
+
+        let yarn_lockfile =
+            project_directory.join_relative(RelativeSystemPathBuf::new("yarn.lock").unwrap());
+        if yarn_lockfile.exists() {
+            let output = Command::new("yarn").arg("--version").output()?;
+            let version: Version = String::from_utf8(output.stdout)?.parse()?;
+            detected_package_managers.push(Self::detect_berry_or_yarn(&version)?);
+        }
+
+        match detected_package_managers.len() {
+            0 => {
+                let url = base.ui.apply(
+                    UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"),
+                );
+                Err(anyhow!(
+                    "We did not find a package manager specified in your root package.json. \
+                     Please set the \"packageManager\" property in your root package.json ({url}) \
+                     or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."
+                ))
+            }
+            1 => Ok(detected_package_managers.pop().unwrap()),
+            _ => Err(anyhow!(
+                "We detected multiple package managers in your repository: {}. Please remove one \
+                 of them.",
+                detected_package_managers.into_iter().join(", ")
+            )),
+        }
+    }
+
+    fn parse_package_manager_string(manager: &str) -> Result<(&str, &str)> {
+        let package_manager_pattern =
+            Regex::new(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)")?;
+        if let Some(captures) = package_manager_pattern.captures(manager) {
+            let manager = captures.name("manager").unwrap().as_str();
+            let version = captures.name("version").unwrap().as_str();
+            Ok((manager, version))
+        } else {
+            Err(anyhow!(
+                "We could not parse packageManager field in package.json, expected: {}, received: \
+                 {}",
+                package_manager_pattern,
+                manager
+            ))
+        }
     }
 }
 
