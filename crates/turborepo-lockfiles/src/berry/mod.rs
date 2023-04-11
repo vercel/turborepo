@@ -107,7 +107,7 @@ impl<'a> BerryLockfile<'a> {
                 let original_locator = locator
                     .patched_locator()
                     .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.as_owned()))?;
-                patches.insert(original_locator, locator.clone());
+                patches.insert(original_locator.as_owned(), locator.clone());
             }
 
             locator_package.insert(locator.clone(), package);
@@ -269,8 +269,11 @@ impl<'a> BerryLockfile<'a> {
                 for (name, range) in package.dependencies.iter().flatten() {
                     let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
                     // we add this dependency to the resolutions
-                    let dep_locator = self.resolutions.get(&dependency).unwrap();
-                    resolutions.insert(dependency, locator.clone());
+                    let dep_locator = self
+                        .resolutions
+                        .get(&dependency)
+                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                    resolutions.insert(dependency, dep_locator.clone());
                 }
 
                 if let Some(descriptors) = reverse_lookup.get(locator) {
@@ -292,7 +295,7 @@ impl<'a> BerryLockfile<'a> {
             for (name, range) in package.dependencies.iter().flatten() {
                 let dependency = self.resolve_dependency(&locator, &name, range.as_ref())?;
                 let dep_locator = self.resolutions.get(&dependency).unwrap();
-                resolutions.insert(dependency, locator.clone());
+                resolutions.insert(dependency, dep_locator.clone());
             }
 
             // these packages are included, we must figure out which descriptors are
@@ -350,9 +353,9 @@ impl<'a> BerryLockfile<'a> {
     fn resolve_dependency(
         &self,
         locator: &Locator,
-        name: &str,
-        range: &str,
-    ) -> Result<Descriptor, Error> {
+        name: &'a str,
+        range: &'a str,
+    ) -> Result<Descriptor<'a>, Error> {
         let mut dependency = Descriptor::new(name, range)?;
 
         for (resolution, reference) in &self.overrides {
@@ -495,5 +498,25 @@ mod test {
         let lockfile: LockfileData = serde_yaml::from_str(contents).unwrap();
         let new_contents = lockfile.to_string();
         assert_eq!(contents, new_contents);
+    }
+
+    #[test]
+    fn test_basic_descriptor_prune() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/minimal-berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        let pruned_lockfile = lockfile
+            .subgraph(
+                &["packages/a".into(), "packages/c".into()],
+                &["lodash@npm:4.17.21".into()],
+            )
+            .unwrap();
+
+        let lodash_desc = pruned_lockfile
+            .resolutions
+            .get(&Descriptor::new("lodash", "npm:^4.17.0").unwrap());
+        assert!(lodash_desc.is_some());
+        assert_eq!(lodash_desc.unwrap().reference, "npm:4.17.21");
     }
 }

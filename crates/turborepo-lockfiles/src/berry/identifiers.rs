@@ -105,8 +105,10 @@ impl<'a> Descriptor<'a> {
         let mut range = Cow::from(range);
         // If no protocol we use the default "npm:" protocol
         if !PROTOCOL.is_match(&range) {
-            range.to_mut().insert_str(0, "npm:");
+            // We don't want to do this necessarily
+            // range.to_mut().insert_str(0, "npm:");
         }
+
         Ok(Self { ident, range })
     }
     /// Extracts all descriptors that are present in a lockfile entry key
@@ -208,7 +210,7 @@ impl<'a> Locator<'a> {
             .map(|m| m.as_str())
     }
 
-    pub fn patched_locator(&self) -> Option<Locator<'a>> {
+    pub fn patched_locator(&self) -> Option<Locator> {
         Locator::from_patch_reference(&self.reference)
     }
 }

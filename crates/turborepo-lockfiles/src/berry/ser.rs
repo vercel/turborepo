@@ -43,12 +43,11 @@ impl fmt::Display for LockfileData {
 
 impl fmt::Display for Metadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "__metadata:\n  version: {}\n  cacheKey: {}",
-            self.version,
-            wrap_string(&self.cache_key)
-        )
+        write!(f, "__metadata:\n  version: {}", self.version,)?;
+        if let Some(cache_key) = &self.cache_key {
+            write!(f, "\n  cacheKey: {}", wrap_string(cache_key))?;
+        }
+        Ok(())
     }
 }
 
@@ -199,7 +198,7 @@ mod test {
     fn test_metadata_display() {
         let metadata = Metadata {
             version: 6,
-            cache_key: "8c0".to_string(),
+            cache_key: Some("8c0".to_string()),
         };
         assert_eq!(
             metadata.to_string(),
@@ -228,7 +227,7 @@ mod test {
         let lockfile = LockfileData {
             metadata: Metadata {
                 version: 6,
-                cache_key: "8".into(),
+                cache_key: Some("8".into()),
             },
             packages: [(
                 long_key.clone(),
