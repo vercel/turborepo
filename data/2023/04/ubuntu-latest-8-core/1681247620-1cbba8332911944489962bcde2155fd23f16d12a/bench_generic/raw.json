@@ -1,0 +1,4417 @@
+{
+  "name": "base",
+  "benchmarks": {
+    "analyzer/create_graph/1": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/1",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "1",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/1",
+        "directory_name": "analyzer/create_graph/1"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4912.304278051706,
+            "upper_bound": 4921.679783473385
+          },
+          "point_estimate": 4915.772487814784,
+          "standard_error": 2.6418456447880887
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4911.405124344819,
+            "upper_bound": 4913.666294088425
+          },
+          "point_estimate": 4912.674009441127,
+          "standard_error": 0.536368789272654
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.42728796179279,
+            "upper_bound": 6.416741791260972
+          },
+          "point_estimate": 5.089612022518738,
+          "standard_error": 0.7833572665909443
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4913.193258024516,
+            "upper_bound": 4915.201817592995
+          },
+          "point_estimate": 4914.215016461274,
+          "standard_error": 0.5098063605751906
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4.900987628376194,
+            "upper_bound": 44.85673078121601
+          },
+          "point_estimate": 26.54421849008659,
+          "standard_error": 13.838973349592068
+        }
+      }
+    },
+    "analyzer/create_graph/2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "2",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/2",
+        "directory_name": "analyzer/create_graph/2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1751.7898001330152,
+            "upper_bound": 1760.5309853896931
+          },
+          "point_estimate": 1754.982289540815,
+          "standard_error": 2.47921427901788
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1751.1642603254586,
+            "upper_bound": 1753.131952662722
+          },
+          "point_estimate": 1751.739997182305,
+          "standard_error": 0.46684508803201286
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.5136528947477994,
+            "upper_bound": 3.7249690395770942
+          },
+          "point_estimate": 3.0658676082918372,
+          "standard_error": 0.30731774647118676
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1751.5501425881012,
+            "upper_bound": 1754.8361604844076
+          },
+          "point_estimate": 1752.8397224434975,
+          "standard_error": 0.8653794254520025
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.1361135581458153,
+            "upper_bound": 42.17054636676065
+          },
+          "point_estimate": 24.902438038144243,
+          "standard_error": 13.154348615025064
+        }
+      }
+    },
+    "analyzer/create_graph/array": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/array",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "array",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/array",
+        "directory_name": "analyzer/create_graph/array"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6694.383587569049,
+            "upper_bound": 6720.548256414417
+          },
+          "point_estimate": 6704.298535192431,
+          "standard_error": 7.137784673973995
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6691.256554307116,
+            "upper_bound": 6697.960378474276
+          },
+          "point_estimate": 6694.827688603531,
+          "standard_error": 1.4826426630919296
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10.0577027980291,
+            "upper_bound": 16.435794166705175
+          },
+          "point_estimate": 13.588913956541573,
+          "standard_error": 1.6277357719315058
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6693.465980780067,
+            "upper_bound": 6754.407637424082
+          },
+          "point_estimate": 6715.366243186117,
+          "standard_error": 17.015300353435272
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13.150455991745227,
+            "upper_bound": 120.0818104585258
+          },
+          "point_estimate": 71.79074960643477,
+          "standard_error": 34.74975163402675
+        }
+      }
+    },
+    "analyzer/create_graph/array-map": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/array-map",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "array-map",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/array-map",
+        "directory_name": "analyzer/create_graph/array-map"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15322.505377860489,
+            "upper_bound": 15355.168799616871
+          },
+          "point_estimate": 15334.37575856525,
+          "standard_error": 9.495625376012576
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15318.148272017836,
+            "upper_bound": 15325.666979362102
+          },
+          "point_estimate": 15322.746794871797,
+          "standard_error": 1.5477306163092477
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11.351601330740134,
+            "upper_bound": 20.32031133854308
+          },
+          "point_estimate": 15.591138537303502,
+          "standard_error": 2.24798811220904
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15322.125977316182,
+            "upper_bound": 15329.230068434348
+          },
+          "point_estimate": 15325.419109403478,
+          "standard_error": 1.8206650462536291
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 14.805451062434978,
+            "upper_bound": 162.7799092483035
+          },
+          "point_estimate": 95.71225899005628,
+          "standard_error": 52.38298235618041
+        }
+      }
+    },
+    "analyzer/create_graph/arrow": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/arrow",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "arrow",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/arrow",
+        "directory_name": "analyzer/create_graph/arrow"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15109.512142940352,
+            "upper_bound": 15117.241640903929
+          },
+          "point_estimate": 15113.194161876316,
+          "standard_error": 1.9709973329584831
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15104.141049382715,
+            "upper_bound": 15114.09111111111
+          },
+          "point_estimate": 15109.19194368132,
+          "standard_error": 2.460644021761787
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11.994228467962865,
+            "upper_bound": 20.20263858942458
+          },
+          "point_estimate": 16.449131044507514,
+          "standard_error": 2.21996528663315
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15102.28334880206,
+            "upper_bound": 15106.802804051122
+          },
+          "point_estimate": 15104.43250036944,
+          "standard_error": 1.1534602341648694
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15.11306571235218,
+            "upper_bound": 24.757715055906115
+          },
+          "point_estimate": 19.826085064185676,
+          "standard_error": 2.507364062935855
+        }
+      }
+    },
+    "analyzer/create_graph/concat": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/concat",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "concat",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/concat",
+        "directory_name": "analyzer/create_graph/concat"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2976.7552625247845,
+            "upper_bound": 2978.1912522235
+          },
+          "point_estimate": 2977.364904886141,
+          "standard_error": 0.37171314815712464
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2976.794947405674,
+            "upper_bound": 2977.479734660033
+          },
+          "point_estimate": 2977.1798178226513,
+          "standard_error": 0.1888880294112056
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.1544620077467882,
+            "upper_bound": 2.271734360420164
+          },
+          "point_estimate": 1.7090238471249466,
+          "standard_error": 0.3002175300139182
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2977.0499256421776,
+            "upper_bound": 2978.139800519673
+          },
+          "point_estimate": 2977.581693130329,
+          "standard_error": 0.2781171153148683
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.6717256739470066,
+            "upper_bound": 5.891533638063751
+          },
+          "point_estimate": 3.748984207660205,
+          "standard_error": 1.3415761939856523
+        }
+      }
+    },
+    "analyzer/create_graph/cycle-cache": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/cycle-cache",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "cycle-cache",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/cycle-cache",
+        "directory_name": "analyzer/create_graph/cycle-cache"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89683.3431094721,
+            "upper_bound": 89854.30086369728
+          },
+          "point_estimate": 89744.23217446372,
+          "standard_error": 50.60348627269413
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89669.94911610128,
+            "upper_bound": 89692.35714285714
+          },
+          "point_estimate": 89683.87605247527,
+          "standard_error": 5.95492500934859
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 35.19487010372399,
+            "upper_bound": 61.086468121645865
+          },
+          "point_estimate": 45.116793902847206,
+          "standard_error": 6.375101805172007
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89668.36207286209,
+            "upper_bound": 89688.86668363558
+          },
+          "point_estimate": 89678.45128797315,
+          "standard_error": 5.23496731684562
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 57.39775377491863,
+            "upper_bound": 867.3256097273455
+          },
+          "point_estimate": 508.71807334709285,
+          "standard_error": 285.64484643823096
+        }
+      }
+    },
+    "analyzer/create_graph/declarations": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/declarations",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "declarations",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/declarations",
+        "directory_name": "analyzer/create_graph/declarations"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4986.8821270921635,
+            "upper_bound": 4995.041512124396
+          },
+          "point_estimate": 4989.801059371453,
+          "standard_error": 2.425222508815837
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4987.008522727273,
+            "upper_bound": 4988.241297270223
+          },
+          "point_estimate": 4987.446532276077,
+          "standard_error": 0.33243376752958254
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.820395363140003,
+            "upper_bound": 3.1652896793420977
+          },
+          "point_estimate": 2.478820951244816,
+          "standard_error": 0.33650250639283924
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4988.031036310563,
+            "upper_bound": 4989.130372666721
+          },
+          "point_estimate": 4988.58257127748,
+          "standard_error": 0.28027804510237
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.931222642414893,
+            "upper_bound": 41.56994440055594
+          },
+          "point_estimate": 24.35565702178935,
+          "standard_error": 13.729330049872535
+        }
+      }
+    },
+    "analyzer/create_graph/default-args": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/default-args",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "default-args",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/default-args",
+        "directory_name": "analyzer/create_graph/default-args"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4539.419465540351,
+            "upper_bound": 4540.930655692793
+          },
+          "point_estimate": 4540.150609760208,
+          "standard_error": 0.3840011827271309
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4539.252582644628,
+            "upper_bound": 4540.256887052342
+          },
+          "point_estimate": 4539.731952503761,
+          "standard_error": 0.2510571913406951
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.9802293182212776,
+            "upper_bound": 3.712350025529784
+          },
+          "point_estimate": 3.017306542787347,
+          "standard_error": 0.4580621034745973
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4538.484676821044,
+            "upper_bound": 4540.439178103324
+          },
+          "point_estimate": 4539.410977000685,
+          "standard_error": 0.4987992614723666
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.95570910541762,
+            "upper_bound": 4.660356935002826
+          },
+          "point_estimate": 3.853007355247494,
+          "standard_error": 0.4375635379626548
+        }
+      }
+    },
+    "analyzer/create_graph/esbuild": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/esbuild",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "esbuild",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/esbuild",
+        "directory_name": "analyzer/create_graph/esbuild"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 73675.98057002231,
+            "upper_bound": 74356.78194078011
+          },
+          "point_estimate": 73945.0068090102,
+          "standard_error": 178.86522431214743
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 73621.18016705516,
+            "upper_bound": 73690.94761353615
+          },
+          "point_estimate": 73657.03775800273,
+          "standard_error": 17.54463599924086
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 123.04331801756187,
+            "upper_bound": 227.13848730154967
+          },
+          "point_estimate": 187.4720523156477,
+          "standard_error": 25.573917761292343
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 73669.16229796379,
+            "upper_bound": 74569.030848164
+          },
+          "point_estimate": 73996.26319590167,
+          "standard_error": 245.90633111541027
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 253.11838876264508,
+            "upper_bound": 2951.8039019702696
+          },
+          "point_estimate": 1797.611747980964,
+          "standard_error": 766.909545836139
+        }
+      }
+    },
+    "analyzer/create_graph/esbuild-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/esbuild-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "esbuild-reduced",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/esbuild-reduced",
+        "directory_name": "analyzer/create_graph/esbuild-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 14252.467377560914,
+            "upper_bound": 14263.542948507938
+          },
+          "point_estimate": 14257.429499668824,
+          "standard_error": 2.8424593416168342
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 14251.14850686037,
+            "upper_bound": 14256.921274961598
+          },
+          "point_estimate": 14253.823326432022,
+          "standard_error": 1.3640215628714758
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8.43956201232988,
+            "upper_bound": 16.332763400511904
+          },
+          "point_estimate": 11.220276472532856,
+          "standard_error": 2.0274297555148215
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 14246.369634618808,
+            "upper_bound": 14254.81546409415
+          },
+          "point_estimate": 14250.304306473292,
+          "standard_error": 2.160007002671679
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 15.131861711371998,
+            "upper_bound": 42.01336222207754
+          },
+          "point_estimate": 28.578893981709577,
+          "standard_error": 7.495868102950359
+        }
+      }
+    },
+    "analyzer/create_graph/fn-array": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/fn-array",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "fn-array",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/fn-array",
+        "directory_name": "analyzer/create_graph/fn-array"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4192.216067233393,
+            "upper_bound": 4194.108648898155
+          },
+          "point_estimate": 4193.116405417951,
+          "standard_error": 0.48350592398780046
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4191.16691740096,
+            "upper_bound": 4192.966701262757
+          },
+          "point_estimate": 4192.248965721041,
+          "standard_error": 0.5396711506873354
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.292495958431968,
+            "upper_bound": 4.018433125513177
+          },
+          "point_estimate": 3.0299979473910454,
+          "standard_error": 0.43616951577979146
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4191.899082275076,
+            "upper_bound": 4194.216190457903
+          },
+          "point_estimate": 4192.9179827427015,
+          "standard_error": 0.5953685722287834
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.490888173052794,
+            "upper_bound": 6.1307472236570515
+          },
+          "point_estimate": 4.867379260338325,
+          "standard_error": 0.6763074990648767
+        }
+      }
+    },
+    "analyzer/create_graph/fn-array-2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/fn-array-2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "fn-array-2",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/fn-array-2",
+        "directory_name": "analyzer/create_graph/fn-array-2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4514.869828851006,
+            "upper_bound": 4539.790087317089
+          },
+          "point_estimate": 4523.817527613903,
+          "standard_error": 7.297300586887631
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4513.394810606061,
+            "upper_bound": 4516.985321969697
+          },
+          "point_estimate": 4515.529830659537,
+          "standard_error": 0.9060050774112484
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6.532933546984383,
+            "upper_bound": 12.226928425531437
+          },
+          "point_estimate": 8.748087323499398,
+          "standard_error": 1.4618928109787908
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4516.520500747593,
+            "upper_bound": 4520.124764800483
+          },
+          "point_estimate": 4518.312150565803,
+          "standard_error": 0.9202283262546684
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8.275744154369503,
+            "upper_bound": 124.48293422438006
+          },
+          "point_estimate": 73.1699049377795,
+          "standard_error": 40.42579082443027
+        }
+      }
+    },
+    "analyzer/create_graph/free-vars": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/free-vars",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "free-vars",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/free-vars",
+        "directory_name": "analyzer/create_graph/free-vars"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1633.137498812832,
+            "upper_bound": 1641.2610594460332
+          },
+          "point_estimate": 1636.0167144642878,
+          "standard_error": 2.4640956425171217
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1633.5193581915032,
+            "upper_bound": 1634.4125379032075
+          },
+          "point_estimate": 1633.814919631481,
+          "standard_error": 0.25733266898920365
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.4229428709448024,
+            "upper_bound": 2.5289218841200065
+          },
+          "point_estimate": 2.032678054755622,
+          "standard_error": 0.2800905969676127
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1633.95849350992,
+            "upper_bound": 1634.657019728698
+          },
+          "point_estimate": 1634.3020353539564,
+          "standard_error": 0.17880410796718027
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.2924728204096136,
+            "upper_bound": 42.427609037305245
+          },
+          "point_estimate": 24.81177488592807,
+          "standard_error": 14.312385558418333
+        }
+      }
+    },
+    "analyzer/create_graph/iife": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/iife",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "iife",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/iife",
+        "directory_name": "analyzer/create_graph/iife"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4911.963869171667,
+            "upper_bound": 4915.199025604934
+          },
+          "point_estimate": 4913.386255022902,
+          "standard_error": 0.8299528152421345
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4911.075570296263,
+            "upper_bound": 4912.981483418767
+          },
+          "point_estimate": 4911.921122429368,
+          "standard_error": 0.5490025061917138
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.913446512039167,
+            "upper_bound": 6.541819678030952
+          },
+          "point_estimate": 5.539204632869895,
+          "standard_error": 0.6899200925565065
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4914.46051918934,
+            "upper_bound": 4918.17167998814
+          },
+          "point_estimate": 4916.13304395297,
+          "standard_error": 0.9554408883375384
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4.134117163547418,
+            "upper_bound": 12.57370014349878
+          },
+          "point_estimate": 8.317244069897189,
+          "standard_error": 2.4430672358034693
+        }
+      }
+    },
+    "analyzer/create_graph/imports": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/imports",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "imports",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/imports",
+        "directory_name": "analyzer/create_graph/imports"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4270.395298869465,
+            "upper_bound": 4284.00166927924
+          },
+          "point_estimate": 4276.010852483847,
+          "standard_error": 3.5603472347456484
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4268.930484693878,
+            "upper_bound": 4271.907123420797
+          },
+          "point_estimate": 4270.812759861406,
+          "standard_error": 0.6331537580944868
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4.242018465062128,
+            "upper_bound": 7.042081288021665
+          },
+          "point_estimate": 5.675682530815101,
+          "standard_error": 0.7454974567160451
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4269.600970883285,
+            "upper_bound": 4272.678193463073
+          },
+          "point_estimate": 4270.96446697207,
+          "standard_error": 0.7834803842170454
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6.474039194232466,
+            "upper_bound": 56.486862013768295
+          },
+          "point_estimate": 35.91107979565069,
+          "standard_error": 13.559766739366657
+        }
+      }
+    },
+    "analyzer/create_graph/logical": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/logical",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "logical",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/logical",
+        "directory_name": "analyzer/create_graph/logical"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12335.24160327182,
+            "upper_bound": 12359.087325744951
+          },
+          "point_estimate": 12343.821323293749,
+          "standard_error": 6.908362375214595
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12332.97808047113,
+            "upper_bound": 12337.72661564626
+          },
+          "point_estimate": 12334.08189814815,
+          "standard_error": 1.1103243780938248
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 7.294219263884762,
+            "upper_bound": 12.09366300205814
+          },
+          "point_estimate": 9.050095367374716,
+          "standard_error": 1.308521725421709
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12330.13474072442,
+            "upper_bound": 12332.856333013451
+          },
+          "point_estimate": 12331.411211024088,
+          "standard_error": 0.6960196228167238
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8.486544402950715,
+            "upper_bound": 117.78253217477264
+          },
+          "point_estimate": 69.28272796771337,
+          "standard_error": 37.86002661648034
+        }
+      }
+    },
+    "analyzer/create_graph/md5": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/md5",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "md5",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/md5",
+        "directory_name": "analyzer/create_graph/md5"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 352866.86055236444,
+            "upper_bound": 353345.5724626101
+          },
+          "point_estimate": 353066.16926214716,
+          "standard_error": 123.58215833097456
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 352866.68619951035,
+            "upper_bound": 353068.5885416666
+          },
+          "point_estimate": 352940.93732493,
+          "standard_error": 47.47778499759621
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 362.90787296888936,
+            "upper_bound": 595.7427573716719
+          },
+          "point_estimate": 483.18867156523146,
+          "standard_error": 59.69715804666416
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 353113.0988214254,
+            "upper_bound": 353326.5058800437
+          },
+          "point_estimate": 353222.3472927442,
+          "standard_error": 54.382484946428995
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 511.898992942754,
+            "upper_bound": 1974.841631673242
+          },
+          "point_estimate": 1240.5072974942311,
+          "standard_error": 465.593049054603
+        }
+      }
+    },
+    "analyzer/create_graph/md5-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/md5-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "md5-reduced",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/md5-reduced",
+        "directory_name": "analyzer/create_graph/md5-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 90873.75563991712,
+            "upper_bound": 91439.79962288204
+          },
+          "point_estimate": 91076.12739547848,
+          "standard_error": 168.62545420381434
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 90827.89285714286,
+            "upper_bound": 90928.86813186812
+          },
+          "point_estimate": 90880.05094482236,
+          "standard_error": 24.938686419303465
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 142.86980081720256,
+            "upper_bound": 229.8632667565574
+          },
+          "point_estimate": 187.41544106047417,
+          "standard_error": 22.29086556715551
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 90848.9583402576,
+            "upper_bound": 90956.6894813085
+          },
+          "point_estimate": 90898.97039413964,
+          "standard_error": 27.547374959191075
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 185.01255835508488,
+            "upper_bound": 2903.7607539869937
+          },
+          "point_estimate": 1701.6630812939245,
+          "standard_error": 963.428682507927
+        }
+      }
+    },
+    "analyzer/create_graph/md5_2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/md5_2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "md5_2",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/md5_2",
+        "directory_name": "analyzer/create_graph/md5_2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 383315.0599647265,
+            "upper_bound": 383927.6631493599
+          },
+          "point_estimate": 383567.9392258725,
+          "standard_error": 159.7569315280591
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 383141.4549138805,
+            "upper_bound": 383427.51515151514
+          },
+          "point_estimate": 383242.4821714744,
+          "standard_error": 71.20847021502583
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 458.7594536586503,
+            "upper_bound": 781.4942350550418
+          },
+          "point_estimate": 636.9556615643532,
+          "standard_error": 81.38952324329271
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 383378.07696548937,
+            "upper_bound": 383726.75177748606
+          },
+          "point_estimate": 383556.1426910004,
+          "standard_error": 88.84141765381807
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 666.5595613022344,
+            "upper_bound": 2537.3513164588103
+          },
+          "point_estimate": 1597.4695176839243,
+          "standard_error": 611.74661592064
+        }
+      }
+    },
+    "analyzer/create_graph/member-call": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/member-call",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "member-call",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/member-call",
+        "directory_name": "analyzer/create_graph/member-call"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 18478.90324373671,
+            "upper_bound": 18515.56685013971
+          },
+          "point_estimate": 18493.85703593024,
+          "standard_error": 9.600569224445689
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 18474.472811341664,
+            "upper_bound": 18498.30027432964
+          },
+          "point_estimate": 18482.352073365233,
+          "standard_error": 6.496811893175642
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 36.331636956219704,
+            "upper_bound": 55.18051777035268
+          },
+          "point_estimate": 43.69939479984447,
+          "standard_error": 4.67316502245305
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 18502.254322131892,
+            "upper_bound": 18543.560974108976
+          },
+          "point_estimate": 18518.16809104791,
+          "standard_error": 11.220454261706502
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 37.37262991472819,
+            "upper_bound": 155.23820635115038
+          },
+          "point_estimate": 96.41830061838183,
+          "standard_error": 38.88743384178587
+        }
+      }
+    },
+    "analyzer/create_graph/mongoose-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/mongoose-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "mongoose-reduced",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/mongoose-reduced",
+        "directory_name": "analyzer/create_graph/mongoose-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4525.224803948552,
+            "upper_bound": 4529.126948235101
+          },
+          "point_estimate": 4526.868639197239,
+          "standard_error": 1.016811586735029
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4525.01091776728,
+            "upper_bound": 4526.984438984439
+          },
+          "point_estimate": 4525.84947169059,
+          "standard_error": 0.4956960975742926
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.7586792615467313,
+            "upper_bound": 4.678179063488137
+          },
+          "point_estimate": 3.809187462617664,
+          "standard_error": 0.49032100351114194
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4525.5769252870205,
+            "upper_bound": 4528.305984412063
+          },
+          "point_estimate": 4526.866811733412,
+          "standard_error": 0.6924875493997706
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4.21995842294809,
+            "upper_bound": 16.205253501641508
+          },
+          "point_estimate": 10.223903830686114,
+          "standard_error": 3.7752278621780992
+        }
+      }
+    },
+    "analyzer/create_graph/nested": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/nested",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "nested",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/nested",
+        "directory_name": "analyzer/create_graph/nested"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11986.836511767808,
+            "upper_bound": 11996.058662036012
+          },
+          "point_estimate": 11990.837661591671,
+          "standard_error": 2.374362910959132
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11987.78627994956,
+            "upper_bound": 11992.334327579283
+          },
+          "point_estimate": 11989.672097378278,
+          "standard_error": 1.098465843656649
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 7.440720511579436,
+            "upper_bound": 12.693028644246676
+          },
+          "point_estimate": 9.247202544162612,
+          "standard_error": 1.370152715823772
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11992.683280262696,
+            "upper_bound": 11996.340862013758
+          },
+          "point_estimate": 11994.449994325403,
+          "standard_error": 0.9297431406067012
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9.059846766489205,
+            "upper_bound": 36.06288523349593
+          },
+          "point_estimate": 23.879474758649913,
+          "standard_error": 7.276909005059773
+        }
+      }
+    },
+    "analyzer/create_graph/nested-args": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/nested-args",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "nested-args",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/nested-args",
+        "directory_name": "analyzer/create_graph/nested-args"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13328.724596043989,
+            "upper_bound": 13398.537904154206
+          },
+          "point_estimate": 13354.295987776386,
+          "standard_error": 19.76532732856018
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13323.839738562092,
+            "upper_bound": 13329.182795698924
+          },
+          "point_estimate": 13327.386752136752,
+          "standard_error": 1.366114303846757
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8.984512260247751,
+            "upper_bound": 18.88635716522088
+          },
+          "point_estimate": 14.05620329746012,
+          "standard_error": 2.628204359047037
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13319.5931642263,
+            "upper_bound": 13360.391082035843
+          },
+          "point_estimate": 13333.91395005172,
+          "standard_error": 11.49919328580622
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 17.868498008747817,
+            "upper_bound": 337.36081600000506
+          },
+          "point_estimate": 199.34756544268,
+          "standard_error": 104.92206979989956
+        }
+      }
+    },
+    "analyzer/create_graph/object": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/object",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "object",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/object",
+        "directory_name": "analyzer/create_graph/object"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25118.208077524378,
+            "upper_bound": 25130.695125187685
+          },
+          "point_estimate": 25124.389806041498,
+          "standard_error": 3.1827603928481323
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25111.29861111111,
+            "upper_bound": 25137.387784090908
+          },
+          "point_estimate": 25126.480141551,
+          "standard_error": 7.252376778260895
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25.925623965757453,
+            "upper_bound": 40.374882088101586
+          },
+          "point_estimate": 34.54728847270624,
+          "standard_error": 3.4973845602941735
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25135.029626086623,
+            "upper_bound": 25146.720920315573
+          },
+          "point_estimate": 25140.83534591892,
+          "standard_error": 2.985573642838449
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 26.373368404290467,
+            "upper_bound": 37.80368158418078
+          },
+          "point_estimate": 32.12755893522564,
+          "standard_error": 2.9245094665462417
+        }
+      }
+    },
+    "analyzer/create_graph/other-free-vars": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/other-free-vars",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "other-free-vars",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/other-free-vars",
+        "directory_name": "analyzer/create_graph/other-free-vars"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3332.9359738149597,
+            "upper_bound": 3334.389550353167
+          },
+          "point_estimate": 3333.6483622418227,
+          "standard_error": 0.3721363187861446
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3331.684218455744,
+            "upper_bound": 3334.186486408797
+          },
+          "point_estimate": 3332.5373333527814,
+          "standard_error": 0.700469823666408
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2.417030622500391,
+            "upper_bound": 4.786005501132303
+          },
+          "point_estimate": 3.2498015485967975,
+          "standard_error": 0.6003267000898599
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3331.040048862,
+            "upper_bound": 3332.062861460588
+          },
+          "point_estimate": 3331.522213316702,
+          "standard_error": 0.2610576015297671
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.1485596195729793,
+            "upper_bound": 4.287664183807725
+          },
+          "point_estimate": 3.7310334040102577,
+          "standard_error": 0.29157407078908204
+        }
+      }
+    },
+    "analyzer/create_graph/path-join": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/path-join",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "path-join",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/path-join",
+        "directory_name": "analyzer/create_graph/path-join"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10377.03467060138,
+            "upper_bound": 10387.190905450809
+          },
+          "point_estimate": 10381.136059886008,
+          "standard_error": 2.6620297285501575
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10376.01724137931,
+            "upper_bound": 10379.465692007798
+          },
+          "point_estimate": 10378.140902281895,
+          "standard_error": 1.0037854388604266
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5.575043184089829,
+            "upper_bound": 9.150424900111863
+          },
+          "point_estimate": 6.903794805013148,
+          "standard_error": 0.9306132573310152
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10373.31744351217,
+            "upper_bound": 10383.562563861213
+          },
+          "point_estimate": 10377.457339306591,
+          "standard_error": 2.69885328669253
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 7.376619221659013,
+            "upper_bound": 43.54334757497395
+          },
+          "point_estimate": 26.797384424456144,
+          "standard_error": 10.86381203781388
+        }
+      }
+    },
+    "analyzer/create_graph/peg": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/peg",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "peg",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/peg",
+        "directory_name": "analyzer/create_graph/peg"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4138359.0936875,
+            "upper_bound": 4144083.27071875
+          },
+          "point_estimate": 4141127.3525,
+          "standard_error": 1461.1202270918586
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4134828.375,
+            "upper_bound": 4139284.125
+          },
+          "point_estimate": 4136397.4375,
+          "standard_error": 1063.8037973840435
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 7869.550314350062,
+            "upper_bound": 13527.056834846737
+          },
+          "point_estimate": 10619.400298967956,
+          "standard_error": 1457.3822645965938
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11648.52579598674,
+            "upper_bound": 17472.48006548293
+          },
+          "point_estimate": 14680.57079981317,
+          "standard_error": 1491.134580468418
+        }
+      }
+    },
+    "analyzer/create_graph/process-and-os": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/process-and-os",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "process-and-os",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/process-and-os",
+        "directory_name": "analyzer/create_graph/process-and-os"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 30359.01201637345,
+            "upper_bound": 30597.38450939305
+          },
+          "point_estimate": 30453.496528814216,
+          "standard_error": 63.2972652867936
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 30335.35855263158,
+            "upper_bound": 30358.832880935508
+          },
+          "point_estimate": 30348.73922387835,
+          "standard_error": 7.01444558408594
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 32.732968397596764,
+            "upper_bound": 75.9831197816966
+          },
+          "point_estimate": 47.46338893394573,
+          "standard_error": 11.931391833109275
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 30358.56413793431,
+            "upper_bound": 30388.97952094799
+          },
+          "point_estimate": 30374.108423230384,
+          "standard_error": 7.742540110601754
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 62.9415223555058,
+            "upper_bound": 1025.5921672424531
+          },
+          "point_estimate": 636.4394612038878,
+          "standard_error": 266.01392952450414
+        }
+      }
+    },
+    "analyzer/create_graph/react-dom-production": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/react-dom-production",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "react-dom-production",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/react-dom-production",
+        "directory_name": "analyzer/create_graph/react-dom-production"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8226283.2896875,
+            "upper_bound": 8237152.2415625
+          },
+          "point_estimate": 8231324.45,
+          "standard_error": 2783.5824373186224
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8222127.5,
+            "upper_bound": 8230809.875
+          },
+          "point_estimate": 8227270.5,
+          "standard_error": 2459.4608971816756
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13507.412385195494,
+            "upper_bound": 21642.2531157732
+          },
+          "point_estimate": 17258.204993605614,
+          "standard_error": 2058.667327227941
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 16688.34524802901,
+            "upper_bound": 37085.723000182785
+          },
+          "point_estimate": 27982.242707801914,
+          "standard_error": 5114.345986289488
+        }
+      }
+    },
+    "analyzer/create_graph/try": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/try",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "try",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/try",
+        "directory_name": "analyzer/create_graph/try"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3988.582225830037,
+            "upper_bound": 3998.946620259615
+          },
+          "point_estimate": 3992.712126493643,
+          "standard_error": 2.7162233392960955
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3987.5469921577305,
+            "upper_bound": 3989.8051657514743
+          },
+          "point_estimate": 3989.0918684952826,
+          "standard_error": 0.6541873794299043
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3.172084004086871,
+            "upper_bound": 4.883304420117303
+          },
+          "point_estimate": 4.205342673027304,
+          "standard_error": 0.4471293374977344
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3989.4931113477,
+            "upper_bound": 3999.155276599103
+          },
+          "point_estimate": 3993.271523986817,
+          "standard_error": 2.549891627429847
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4.626095721663214,
+            "upper_bound": 44.84015436480663
+          },
+          "point_estimate": 27.511365850505612,
+          "standard_error": 11.499903004669248
+        }
+      }
+    },
+    "analyzer/create_graph/webpack-target-node": {
+      "baseline": "base",
+      "fullname": "base/analyzer/create_graph/webpack-target-node",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "create_graph",
+        "value_str": "webpack-target-node",
+        "throughput": null,
+        "full_id": "analyzer/create_graph/webpack-target-node",
+        "directory_name": "analyzer/create_graph/webpack-target-node"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25952.230757717138,
+            "upper_bound": 25977.01867561881
+          },
+          "point_estimate": 25963.611990506924,
+          "standard_error": 6.346591529154006
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25939.524917409,
+            "upper_bound": 25958.85617486799
+          },
+          "point_estimate": 25949.02423096752,
+          "standard_error": 4.824286418070404
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 29.077144084994448,
+            "upper_bound": 51.55267056596821
+          },
+          "point_estimate": 36.82082635265832,
+          "standard_error": 5.53784794690887
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 25935.293602827416,
+            "upper_bound": 25958.14298173244
+          },
+          "point_estimate": 25945.476412384913,
+          "standard_error": 5.8606790082088915
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 36.38948193228128,
+            "upper_bound": 88.01369902572378
+          },
+          "point_estimate": 63.82027762909702,
+          "standard_error": 13.603189848893445
+        }
+      }
+    },
+    "analyzer/link/1": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/1",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "1",
+        "throughput": null,
+        "full_id": "analyzer/link/1",
+        "directory_name": "analyzer/link/1"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 17679.692775316627,
+            "upper_bound": 20682.292824958564
+          },
+          "point_estimate": 18869.00218450379,
+          "standard_error": 810.4480332888494
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 17596.114883984155,
+            "upper_bound": 17688.34875228241
+          },
+          "point_estimate": 17615.702685503882,
+          "standard_error": 23.33210954939292
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 80.0676907944826,
+            "upper_bound": 198.82395030553437
+          },
+          "point_estimate": 140.49434761024833,
+          "standard_error": 30.979907431131583
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 17738.41001235246,
+            "upper_bound": 17797.65509047966
+          },
+          "point_estimate": 17769.63788623157,
+          "standard_error": 15.05152713791551
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 161.95952528080957,
+            "upper_bound": 12997.755337447918
+          },
+          "point_estimate": 8137.019346888669,
+          "standard_error": 3475.6406213991936
+        }
+      }
+    },
+    "analyzer/link/2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "2",
+        "throughput": null,
+        "full_id": "analyzer/link/2",
+        "directory_name": "analyzer/link/2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12616.992759922116,
+            "upper_bound": 12800.764630169604
+          },
+          "point_estimate": 12683.935682861298,
+          "standard_error": 52.86329856806676
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12591.524894732713,
+            "upper_bound": 12625.883116883117
+          },
+          "point_estimate": 12612.965549895507,
+          "standard_error": 10.237987374452972
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 43.73897232953785,
+            "upper_bound": 70.88056167010956
+          },
+          "point_estimate": 57.649936589541845,
+          "standard_error": 6.957963258130136
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12607.838733455985,
+            "upper_bound": 12640.553589763
+          },
+          "point_estimate": 12624.25661969182,
+          "standard_error": 8.320457167797983
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 70.61822757515424,
+            "upper_bound": 902.2751982142784
+          },
+          "point_estimate": 531.9637243822209,
+          "standard_error": 286.78109349625305
+        }
+      }
+    },
+    "analyzer/link/array": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/array",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "array",
+        "throughput": null,
+        "full_id": "analyzer/link/array",
+        "directory_name": "analyzer/link/array"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33360.92044728055,
+            "upper_bound": 38859.12086015584
+          },
+          "point_estimate": 35217.259956133465,
+          "standard_error": 1776.230684394816
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33277.78676470588,
+            "upper_bound": 33335.642857142855
+          },
+          "point_estimate": 33291.961745482506,
+          "standard_error": 14.469327000400565
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 57.95580647526392,
+            "upper_bound": 150.29732364329027
+          },
+          "point_estimate": 87.15794441170355,
+          "standard_error": 22.745745573037
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33387.66770371973,
+            "upper_bound": 33468.134987083286
+          },
+          "point_estimate": 33429.33828701571,
+          "standard_error": 20.453109605455182
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 146.64970683859298,
+            "upper_bound": 30586.62008561115
+          },
+          "point_estimate": 17843.110719802375,
+          "standard_error": 10984.60339335667
+        }
+      }
+    },
+    "analyzer/link/array-map": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/array-map",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "array-map",
+        "throughput": null,
+        "full_id": "analyzer/link/array-map",
+        "directory_name": "analyzer/link/array-map"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61326.3328817883,
+            "upper_bound": 62233.07962164917
+          },
+          "point_estimate": 61647.22079677019,
+          "standard_error": 270.2293582153534
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61219.40476190476,
+            "upper_bound": 61388.66066066066
+          },
+          "point_estimate": 61331.34126984127,
+          "standard_error": 35.377695654092264
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 209.18379235106065,
+            "upper_bound": 345.11216952045083
+          },
+          "point_estimate": 288.67722628909803,
+          "standard_error": 31.533686312479844
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61365.21842869819,
+            "upper_bound": 61462.65566531521
+          },
+          "point_estimate": 61417.010298343266,
+          "standard_error": 24.90439630293095
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 258.9905066323921,
+            "upper_bound": 4623.639271110417
+          },
+          "point_estimate": 2710.6603282570045,
+          "standard_error": 1534.0618180013537
+        }
+      }
+    },
+    "analyzer/link/arrow": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/arrow",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "arrow",
+        "throughput": null,
+        "full_id": "analyzer/link/arrow",
+        "directory_name": "analyzer/link/arrow"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 69436.15418410786,
+            "upper_bound": 70090.92706688092
+          },
+          "point_estimate": 69696.8314058054,
+          "standard_error": 173.00299724889248
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 69263.84910714286,
+            "upper_bound": 69674.42882744496
+          },
+          "point_estimate": 69455.58051037398,
+          "standard_error": 118.56784350017432
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 619.3588719074074,
+            "upper_bound": 948.1304525615576
+          },
+          "point_estimate": 784.4683992721999,
+          "standard_error": 80.94954753092101
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 69768.46049024673,
+            "upper_bound": 70014.46566344326
+          },
+          "point_estimate": 69902.19504026895,
+          "standard_error": 62.66023561275524
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 590.4593167499861,
+            "upper_bound": 2857.728188514789
+          },
+          "point_estimate": 1747.012154988857,
+          "standard_error": 760.4390414884099
+        }
+      }
+    },
+    "analyzer/link/concat": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/concat",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "concat",
+        "throughput": null,
+        "full_id": "analyzer/link/concat",
+        "directory_name": "analyzer/link/concat"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10972.83110017235,
+            "upper_bound": 11067.606613964668
+          },
+          "point_estimate": 11010.345144885689,
+          "standard_error": 25.060283049241026
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10935.234722222222,
+            "upper_bound": 11001.71610915493
+          },
+          "point_estimate": 10974.927058531746,
+          "standard_error": 16.683071043567512
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 65.4548224469194,
+            "upper_bound": 130.96079833030353
+          },
+          "point_estimate": 101.2468576122315,
+          "standard_error": 15.994986610029752
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 11008.301109951031,
+            "upper_bound": 11046.50811811316
+          },
+          "point_estimate": 11029.017439658144,
+          "standard_error": 9.745418933122432
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 79.09804842180044,
+            "upper_bound": 414.02534578361696
+          },
+          "point_estimate": 252.4927364969729,
+          "standard_error": 110.77035713818786
+        }
+      }
+    },
+    "analyzer/link/cycle-cache": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/cycle-cache",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "cycle-cache",
+        "throughput": null,
+        "full_id": "analyzer/link/cycle-cache",
+        "directory_name": "analyzer/link/cycle-cache"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8612321.225,
+            "upper_bound": 8620640.721375002
+          },
+          "point_estimate": 8615815.605,
+          "standard_error": 2169.1536430967967
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 8611276.875,
+            "upper_bound": 8614293.75
+          },
+          "point_estimate": 8612312.75,
+          "standard_error": 843.8548172931924
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6798.647504299879,
+            "upper_bound": 11798.3452655375
+          },
+          "point_estimate": 9223.81041124463,
+          "standard_error": 1292.7414661581292
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9220.63053537922,
+            "upper_bound": 34093.760410615934
+          },
+          "point_estimate": 21681.64756095112,
+          "standard_error": 7761.876618664926
+        }
+      }
+    },
+    "analyzer/link/declarations": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/declarations",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "declarations",
+        "throughput": null,
+        "full_id": "analyzer/link/declarations",
+        "directory_name": "analyzer/link/declarations"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33625.673660758446,
+            "upper_bound": 33927.85446459395
+          },
+          "point_estimate": 33742.42145098913,
+          "standard_error": 80.98634076207256
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33541.25304773352,
+            "upper_bound": 33724.24007936508
+          },
+          "point_estimate": 33625.23719262295,
+          "standard_error": 49.227579680793426
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 230.8352561518563,
+            "upper_bound": 352.99265629594976
+          },
+          "point_estimate": 321.74692791984444,
+          "standard_error": 32.77745704354084
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33755.30668356284,
+            "upper_bound": 33875.11809109064
+          },
+          "point_estimate": 33816.75266661741,
+          "standard_error": 30.504038143855695
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 229.6640369216007,
+            "upper_bound": 1354.036450310803
+          },
+          "point_estimate": 817.2156102667166,
+          "standard_error": 379.7025138080574
+        }
+      }
+    },
+    "analyzer/link/default-args": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/default-args",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "default-args",
+        "throughput": null,
+        "full_id": "analyzer/link/default-args",
+        "directory_name": "analyzer/link/default-args"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13363.547888753445,
+            "upper_bound": 13574.72318035863
+          },
+          "point_estimate": 13439.616329316155,
+          "standard_error": 62.26978480529067
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13333.096031746032,
+            "upper_bound": 13372.935472972971
+          },
+          "point_estimate": 13352.57951388889,
+          "standard_error": 8.935641614164382
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 67.79478953763338,
+            "upper_bound": 124.72502038508726
+          },
+          "point_estimate": 97.60561004411552,
+          "standard_error": 14.72355866114011
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13398.598456972624,
+            "upper_bound": 13435.252926595218
+          },
+          "point_estimate": 13418.120166839071,
+          "standard_error": 9.369262217853867
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 80.8129884388358,
+            "upper_bound": 1071.5650198814608
+          },
+          "point_estimate": 629.0203997844933,
+          "standard_error": 350.1957109534217
+        }
+      }
+    },
+    "analyzer/link/esbuild": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/esbuild",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "esbuild",
+        "throughput": null,
+        "full_id": "analyzer/link/esbuild",
+        "directory_name": "analyzer/link/esbuild"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1265528.512916667,
+            "upper_bound": 1266290.0289166663
+          },
+          "point_estimate": 1265888.6637499998,
+          "standard_error": 194.51427812659625
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1265180.5,
+            "upper_bound": 1266144.625
+          },
+          "point_estimate": 1265545.7708333335,
+          "standard_error": 227.05915627494616
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1072.2286559641936,
+            "upper_bound": 1897.8824038056216
+          },
+          "point_estimate": 1358.4940008816802,
+          "standard_error": 207.2628272611666
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1382.9464120069397,
+            "upper_bound": 2585.306336040246
+          },
+          "point_estimate": 1949.3502238484475,
+          "standard_error": 324.9284916932654
+        }
+      }
+    },
+    "analyzer/link/esbuild-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/esbuild-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "esbuild-reduced",
+        "throughput": null,
+        "full_id": "analyzer/link/esbuild-reduced",
+        "directory_name": "analyzer/link/esbuild-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 200735.22943159824,
+            "upper_bound": 207115.0067473841
+          },
+          "point_estimate": 203017.71091246148,
+          "standard_error": 1859.770871761257
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 200412.47186147183,
+            "upper_bound": 200598.5379403794
+          },
+          "point_estimate": 200478.9243179615,
+          "standard_error": 46.65739028956895
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 330.35669123384764,
+            "upper_bound": 610.0051825414479
+          },
+          "point_estimate": 459.26491896762826,
+          "standard_error": 70.25771447940119
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 200291.54840367983,
+            "upper_bound": 200622.1768332095
+          },
+          "point_estimate": 200424.96565981972,
+          "standard_error": 85.49792035457241
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 912.9168698678088,
+            "upper_bound": 31889.206171921996
+          },
+          "point_estimate": 18748.164196529848,
+          "standard_error": 10329.839099715466
+        }
+      }
+    },
+    "analyzer/link/fn-array": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/fn-array",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "fn-array",
+        "throughput": null,
+        "full_id": "analyzer/link/fn-array",
+        "directory_name": "analyzer/link/fn-array"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 38840.900388212794,
+            "upper_bound": 39177.73743695335
+          },
+          "point_estimate": 38969.200774124474,
+          "standard_error": 91.02046975720026
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 38765.049333333336,
+            "upper_bound": 38822.37073170732
+          },
+          "point_estimate": 38786.48105263158,
+          "standard_error": 15.29979858136061
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 59.18464579881048,
+            "upper_bound": 125.86157318542442
+          },
+          "point_estimate": 88.3353176526935,
+          "standard_error": 16.5878718737447
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 38750.54859803416,
+            "upper_bound": 38774.67101531452
+          },
+          "point_estimate": 38761.56515580513,
+          "standard_error": 6.17457637995654
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 180.45033390424885,
+            "upper_bound": 1530.0956715863545
+          },
+          "point_estimate": 918.2657739538644,
+          "standard_error": 436.9426342360826
+        }
+      }
+    },
+    "analyzer/link/fn-array-2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/fn-array-2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "fn-array-2",
+        "throughput": null,
+        "full_id": "analyzer/link/fn-array-2",
+        "directory_name": "analyzer/link/fn-array-2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 42278.22191169152,
+            "upper_bound": 42581.36030903622
+          },
+          "point_estimate": 42395.35078543344,
+          "standard_error": 81.20532588112805
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 42216.85294117647,
+            "upper_bound": 42282.02228786251
+          },
+          "point_estimate": 42252.70627911491,
+          "standard_error": 18.406879381178545
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 87.25038200307543,
+            "upper_bound": 142.72099423891913
+          },
+          "point_estimate": 119.79241984295362,
+          "standard_error": 14.054525889191146
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 42214.157289676725,
+            "upper_bound": 42256.156433796765
+          },
+          "point_estimate": 42235.50286685385,
+          "standard_error": 10.714674701967704
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 177.01630275084614,
+            "upper_bound": 1359.165181923972
+          },
+          "point_estimate": 820.1759190350281,
+          "standard_error": 378.11705503172
+        }
+      }
+    },
+    "analyzer/link/free-vars": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/free-vars",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "free-vars",
+        "throughput": null,
+        "full_id": "analyzer/link/free-vars",
+        "directory_name": "analyzer/link/free-vars"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3806.2903964796024,
+            "upper_bound": 3835.210601241333
+          },
+          "point_estimate": 3817.357032313554,
+          "standard_error": 7.779818693003733
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3797.226286533979,
+            "upper_bound": 3808.716057427421
+          },
+          "point_estimate": 3802.6074909938543,
+          "standard_error": 2.7682464494751144
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 12.02491219417196,
+            "upper_bound": 23.404372719687235
+          },
+          "point_estimate": 17.82231666670484,
+          "standard_error": 3.024912647873809
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3810.310433044181,
+            "upper_bound": 3818.794232795779
+          },
+          "point_estimate": 3814.8179667473064,
+          "standard_error": 2.1727741897064305
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 18.279971771029263,
+            "upper_bound": 130.14655425499373
+          },
+          "point_estimate": 78.29146539228523,
+          "standard_error": 36.82685214921975
+        }
+      }
+    },
+    "analyzer/link/iife": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/iife",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "iife",
+        "throughput": null,
+        "full_id": "analyzer/link/iife",
+        "directory_name": "analyzer/link/iife"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 22280.876990930563,
+            "upper_bound": 22461.774845952743
+          },
+          "point_estimate": 22352.685604363494,
+          "standard_error": 47.88456726183348
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 22229.174796747968,
+            "upper_bound": 22337.676697530864
+          },
+          "point_estimate": 22260.676906779663,
+          "standard_error": 27.533722311806997
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 144.90589345582805,
+            "upper_bound": 224.54347899371243
+          },
+          "point_estimate": 195.88263382641665,
+          "standard_error": 19.243133037215955
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 22367.390246553463,
+            "upper_bound": 22434.851059552468
+          },
+          "point_estimate": 22403.546446726763,
+          "standard_error": 17.21142260711205
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 148.44107243615403,
+            "upper_bound": 790.9078392473868
+          },
+          "point_estimate": 483.19871156076266,
+          "standard_error": 208.505770102984
+        }
+      }
+    },
+    "analyzer/link/imports": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/imports",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "imports",
+        "throughput": null,
+        "full_id": "analyzer/link/imports",
+        "directory_name": "analyzer/link/imports"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9463.493181506972,
+            "upper_bound": 9565.374277554472
+          },
+          "point_estimate": 9502.01102229918,
+          "standard_error": 27.72486221551584
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9444.116390306122,
+            "upper_bound": 9466.480308441558
+          },
+          "point_estimate": 9457.939787830412,
+          "standard_error": 5.874479694472985
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 31.77715309580625,
+            "upper_bound": 59.18705897886332
+          },
+          "point_estimate": 40.76635135958667,
+          "standard_error": 6.809010110611199
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9476.509869672684,
+            "upper_bound": 9502.954348075808
+          },
+          "point_estimate": 9490.28432023053,
+          "standard_error": 6.753136376248006
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 48.86419308507421,
+            "upper_bound": 466.3808755303507
+          },
+          "point_estimate": 278.7439954951931,
+          "standard_error": 134.8241332348468
+        }
+      }
+    },
+    "analyzer/link/logical": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/logical",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "logical",
+        "throughput": null,
+        "full_id": "analyzer/link/logical",
+        "directory_name": "analyzer/link/logical"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 57311.34998716653,
+            "upper_bound": 66176.21680653664
+          },
+          "point_estimate": 60313.67523992072,
+          "standard_error": 2857.5446103131285
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 57126.55392156863,
+            "upper_bound": 57309.83958370397
+          },
+          "point_estimate": 57196.40786582515,
+          "standard_error": 42.27164272847217
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 175.58143794277515,
+            "upper_bound": 401.6647298441976
+          },
+          "point_estimate": 277.70198866980377,
+          "standard_error": 52.23700834110023
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 57437.58035767492,
+            "upper_bound": 57645.22610084157
+          },
+          "point_estimate": 57546.93736308556,
+          "standard_error": 52.974371918842664
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 358.0030278983459,
+            "upper_bound": 49162.05317520362
+          },
+          "point_estimate": 28681.085177194353,
+          "standard_error": 17613.31637288814
+        }
+      }
+    },
+    "analyzer/link/md5": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/md5",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "md5",
+        "throughput": null,
+        "full_id": "analyzer/link/md5",
+        "directory_name": "analyzer/link/md5"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1667881.5311944445,
+            "upper_bound": 1674410.2028333338
+          },
+          "point_estimate": 1670212.7800000005,
+          "standard_error": 1931.7269317536127
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1667296.277777778,
+            "upper_bound": 1668264.1944444445
+          },
+          "point_estimate": 1667935.2222222222,
+          "standard_error": 252.45053093424923
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1456.9015741347691,
+            "upper_bound": 2403.8299406571855
+          },
+          "point_estimate": 1895.9570830066232,
+          "standard_error": 250.3428452007458
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2054.8145335772765,
+            "upper_bound": 33162.00040049102
+          },
+          "point_estimate": 19458.81292976874,
+          "standard_error": 10903.43081165399
+        }
+      }
+    },
+    "analyzer/link/md5-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/md5-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "md5-reduced",
+        "throughput": null,
+        "full_id": "analyzer/link/md5-reduced",
+        "directory_name": "analyzer/link/md5-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1357933.9646818188,
+            "upper_bound": 1358704.1292840913
+          },
+          "point_estimate": 1358309.304545455,
+          "standard_error": 196.31043000617333
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1357358.5454545454,
+            "upper_bound": 1358711.2954545454
+          },
+          "point_estimate": 1357921.8863636362,
+          "standard_error": 395.3126156908847
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1550.698486106229,
+            "upper_bound": 2557.889300042901
+          },
+          "point_estimate": 1985.3361465714663,
+          "standard_error": 257.87761335626993
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1656.2748019190212,
+            "upper_bound": 2294.8760724844738
+          },
+          "point_estimate": 1972.0350049192616,
+          "standard_error": 164.51781773435908
+        }
+      }
+    },
+    "analyzer/link/md5_2": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/md5_2",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "md5_2",
+        "throughput": null,
+        "full_id": "analyzer/link/md5_2",
+        "directory_name": "analyzer/link/md5_2"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2104788.0219000014,
+            "upper_bound": 2106398.0729166665
+          },
+          "point_estimate": 2105549.358,
+          "standard_error": 410.1814040804773
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2104973.2,
+            "upper_bound": 2105861.533333333
+          },
+          "point_estimate": 2105677.166666667,
+          "standard_error": 289.28084943968315
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1701.6677102899482,
+            "upper_bound": 3094.4826650618816
+          },
+          "point_estimate": 2389.0121775866014,
+          "standard_error": 353.51519903741865
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2814.83260208983,
+            "upper_bound": 5540.9243153534
+          },
+          "point_estimate": 4115.288006102072,
+          "standard_error": 730.5724796605564
+        }
+      }
+    },
+    "analyzer/link/member-call": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/member-call",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "member-call",
+        "throughput": null,
+        "full_id": "analyzer/link/member-call",
+        "directory_name": "analyzer/link/member-call"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 90026.24503666186,
+            "upper_bound": 91012.69797440432
+          },
+          "point_estimate": 90384.9426125525,
+          "standard_error": 280.83291229419746
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89871.98338870432,
+            "upper_bound": 90039.81168831169
+          },
+          "point_estimate": 89956.3807468042,
+          "standard_error": 41.629462703567405
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 240.6470821859912,
+            "upper_bound": 409.91580910134826
+          },
+          "point_estimate": 317.5401151594221,
+          "standard_error": 43.554859143560535
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89737.51220720731,
+            "upper_bound": 89823.7579648318
+          },
+          "point_estimate": 89777.8101855644,
+          "standard_error": 21.923068461202135
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 437.0399025247456,
+            "upper_bound": 4774.329021960582
+          },
+          "point_estimate": 2820.295465210186,
+          "standard_error": 1499.3177578744192
+        }
+      }
+    },
+    "analyzer/link/mongoose-reduced": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/mongoose-reduced",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "mongoose-reduced",
+        "throughput": null,
+        "full_id": "analyzer/link/mongoose-reduced",
+        "directory_name": "analyzer/link/mongoose-reduced"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 21293.7019922456,
+            "upper_bound": 21449.612934137174
+          },
+          "point_estimate": 21353.79604321574,
+          "standard_error": 41.401169286335374
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 21251.596866096865,
+            "upper_bound": 21278.387205387204
+          },
+          "point_estimate": 21255.998771082293,
+          "standard_error": 7.3703653248320915
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 21.723842633120324,
+            "upper_bound": 53.715008745547635
+          },
+          "point_estimate": 31.69438998210297,
+          "standard_error": 9.20737827493565
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 21245.50460623517,
+            "upper_bound": 21253.347534088098
+          },
+          "point_estimate": 21249.187599625635,
+          "standard_error": 2.003968312940394
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 93.63407050740122,
+            "upper_bound": 688.4465198790609
+          },
+          "point_estimate": 416.5488376346046,
+          "standard_error": 188.08882859082476
+        }
+      }
+    },
+    "analyzer/link/nested": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/nested",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "nested",
+        "throughput": null,
+        "full_id": "analyzer/link/nested",
+        "directory_name": "analyzer/link/nested"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 72302.98115679288,
+            "upper_bound": 73358.61512866276
+          },
+          "point_estimate": 72700.30048232185,
+          "standard_error": 289.8733784027069
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 72020.08152173914,
+            "upper_bound": 72642.06443634102
+          },
+          "point_estimate": 72452.7989311316,
+          "standard_error": 151.60998308363375
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 677.5194306440387,
+            "upper_bound": 1003.3564739136712
+          },
+          "point_estimate": 939.693283998927,
+          "standard_error": 83.97469300969226
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 72661.01825303421,
+            "upper_bound": 73038.1420550296
+          },
+          "point_estimate": 72842.19797251366,
+          "standard_error": 96.30912000026416
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 667.3692559343226,
+            "upper_bound": 4885.054676295029
+          },
+          "point_estimate": 2913.309797164019,
+          "standard_error": 1447.2357259756643
+        }
+      }
+    },
+    "analyzer/link/nested-args": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/nested-args",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "nested-args",
+        "throughput": null,
+        "full_id": "analyzer/link/nested-args",
+        "directory_name": "analyzer/link/nested-args"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 47552.451753945614,
+            "upper_bound": 60190.0706820632
+          },
+          "point_estimate": 51821.015632307346,
+          "standard_error": 4082.85327941684
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 47341.95416666667,
+            "upper_bound": 47563.867664319245
+          },
+          "point_estimate": 47392.89036521388,
+          "standard_error": 52.270985861678824
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 222.30135543964596,
+            "upper_bound": 525.0302036200407
+          },
+          "point_estimate": 349.52785485879804,
+          "standard_error": 72.57252416278581
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 47705.38740430851,
+            "upper_bound": 47903.24857428212
+          },
+          "point_estimate": 47810.02564405694,
+          "standard_error": 50.3807930036927
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 427.12741056715726,
+            "upper_bound": 70415.99208316415
+          },
+          "point_estimate": 41076.05911017096,
+          "standard_error": 25290.493965499
+        }
+      }
+    },
+    "analyzer/link/object": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/object",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "object",
+        "throughput": null,
+        "full_id": "analyzer/link/object",
+        "directory_name": "analyzer/link/object"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 257577.4699142648,
+            "upper_bound": 259241.06266411388
+          },
+          "point_estimate": 258231.96685007733,
+          "standard_error": 441.3080133588142
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 257213.23958333337,
+            "upper_bound": 257513.75940780353
+          },
+          "point_estimate": 257384.53071364047,
+          "standard_error": 73.56946656816665
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 522.0796098221426,
+            "upper_bound": 831.0882761864192
+          },
+          "point_estimate": 699.9337928712393,
+          "standard_error": 76.8871413227965
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 257189.55026553533,
+            "upper_bound": 257429.3954545873
+          },
+          "point_estimate": 257312.85079848283,
+          "standard_error": 61.32985077782494
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1191.474701643354,
+            "upper_bound": 7277.145275193879
+          },
+          "point_estimate": 4440.449817940961,
+          "standard_error": 1923.0585514945903
+        }
+      }
+    },
+    "analyzer/link/other-free-vars": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/other-free-vars",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "other-free-vars",
+        "throughput": null,
+        "full_id": "analyzer/link/other-free-vars",
+        "directory_name": "analyzer/link/other-free-vars"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10832.575782102933,
+            "upper_bound": 10927.247220110168
+          },
+          "point_estimate": 10870.479051396866,
+          "standard_error": 24.81416258821083
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10799.623157894735,
+            "upper_bound": 10850.041714285717
+          },
+          "point_estimate": 10817.18487784679,
+          "standard_error": 11.633915872851908
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 54.74541586140737,
+            "upper_bound": 102.56026682105328
+          },
+          "point_estimate": 74.36417496757912,
+          "standard_error": 12.215814981730194
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 10850.617978072354,
+            "upper_bound": 10896.76910406504
+          },
+          "point_estimate": 10874.23517121324,
+          "standard_error": 11.739132154786208
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 82.43062275668386,
+            "upper_bound": 405.2362603483672
+          },
+          "point_estimate": 249.6041521297676,
+          "standard_error": 104.13624031515658
+        }
+      }
+    },
+    "analyzer/link/path-join": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/path-join",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "path-join",
+        "throughput": null,
+        "full_id": "analyzer/link/path-join",
+        "directory_name": "analyzer/link/path-join"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61709.716255299194,
+            "upper_bound": 62129.02357645426
+          },
+          "point_estimate": 61877.303213889885,
+          "standard_error": 109.62982461797426
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61581.092483822795,
+            "upper_bound": 61681.124
+          },
+          "point_estimate": 61621.645559845565,
+          "standard_error": 27.132299327914524
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 114.11767872588575,
+            "upper_bound": 220.7296319188638
+          },
+          "point_estimate": 161.78682901188793,
+          "standard_error": 26.141460156411057
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 61548.33300424265,
+            "upper_bound": 61606.47545668434
+          },
+          "point_estimate": 61574.41662125019,
+          "standard_error": 14.909017051041666
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 318.97495344475885,
+            "upper_bound": 1784.1585952854043
+          },
+          "point_estimate": 1098.81187549548,
+          "standard_error": 453.9417086364967
+        }
+      }
+    },
+    "analyzer/link/peg": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/peg",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "peg",
+        "throughput": null,
+        "full_id": "analyzer/link/peg",
+        "directory_name": "analyzer/link/peg"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 62228251.296,
+            "upper_bound": 62288290.988
+          },
+          "point_estimate": 62257955.97,
+          "standard_error": 15314.811332064552
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 62204536.0,
+            "upper_bound": 62265455.0
+          },
+          "point_estimate": 62227293.5,
+          "standard_error": 16838.239454106322
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 99022.11094200613,
+            "upper_bound": 194352.54794955257
+          },
+          "point_estimate": 134077.4460196495,
+          "standard_error": 23635.07549824372
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 133934.34973880037,
+            "upper_bound": 172078.52875821866
+          },
+          "point_estimate": 154411.66365974693,
+          "standard_error": 9744.221928911224
+        }
+      }
+    },
+    "analyzer/link/process-and-os": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/process-and-os",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "process-and-os",
+        "throughput": null,
+        "full_id": "analyzer/link/process-and-os",
+        "directory_name": "analyzer/link/process-and-os"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 180081.84588835406,
+            "upper_bound": 180370.54786048023
+          },
+          "point_estimate": 180197.36510387016,
+          "standard_error": 75.85680422223516
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 180032.56293706293,
+            "upper_bound": 180198.56944444444
+          },
+          "point_estimate": 180139.0634920635,
+          "standard_error": 45.193481298381165
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 251.772188132439,
+            "upper_bound": 371.7216553571478
+          },
+          "point_estimate": 321.1651497329474,
+          "standard_error": 31.21403712911669
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 180063.10229816768,
+            "upper_bound": 180284.48969545576
+          },
+          "point_estimate": 180164.54059627609,
+          "standard_error": 56.90946058274223
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 258.4493150340512,
+            "upper_bound": 1238.5624409206112
+          },
+          "point_estimate": 761.2983217956299,
+          "standard_error": 320.7618673534796
+        }
+      }
+    },
+    "analyzer/link/react-dom-production": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/react-dom-production",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "react-dom-production",
+        "throughput": null,
+        "full_id": "analyzer/link/react-dom-production",
+        "directory_name": "analyzer/link/react-dom-production"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 79780673.5135,
+            "upper_bound": 79834420.14
+          },
+          "point_estimate": 79805787.74,
+          "standard_error": 13729.480222091534
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 79767279.0,
+            "upper_bound": 79807950.0
+          },
+          "point_estimate": 79777603.5,
+          "standard_error": 9927.665052632276
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 67346.9184793532,
+            "upper_bound": 111692.41031706332
+          },
+          "point_estimate": 84561.572098732,
+          "standard_error": 11261.336578144206
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 89089.56553715571,
+            "upper_bound": 189297.2097758871
+          },
+          "point_estimate": 138123.6963202333,
+          "standard_error": 26741.881867777545
+        }
+      }
+    },
+    "analyzer/link/try": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/try",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "try",
+        "throughput": null,
+        "full_id": "analyzer/link/try",
+        "directory_name": "analyzer/link/try"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9721.97152368846,
+            "upper_bound": 9771.626065565451
+          },
+          "point_estimate": 9742.217768973504,
+          "standard_error": 12.970399526775472
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9701.69746387453,
+            "upper_bound": 9714.204416302877
+          },
+          "point_estimate": 9707.266709183674,
+          "standard_error": 3.372023040152071
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 19.73488599089683,
+            "upper_bound": 40.41353911005759
+          },
+          "point_estimate": 28.591076903120992,
+          "standard_error": 5.078189225651716
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9737.93410589459,
+            "upper_bound": 9777.14324968312
+          },
+          "point_estimate": 9758.100148620406,
+          "standard_error": 9.9951903534231
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 50.00196988700607,
+            "upper_bound": 208.89094007181168
+          },
+          "point_estimate": 130.4625968363579,
+          "standard_error": 52.02413901264875
+        }
+      }
+    },
+    "analyzer/link/webpack-target-node": {
+      "baseline": "base",
+      "fullname": "base/analyzer/link/webpack-target-node",
+      "criterion_benchmark_v1": {
+        "group_id": "analyzer",
+        "function_id": "link",
+        "value_str": "webpack-target-node",
+        "throughput": null,
+        "full_id": "analyzer/link/webpack-target-node",
+        "directory_name": "analyzer/link/webpack-target-node"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 59772.7070350608,
+            "upper_bound": 72753.01005676323
+          },
+          "point_estimate": 64151.82629002331,
+          "standard_error": 4218.054203880719
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 59581.068376068375,
+            "upper_bound": 59897.705467372136
+          },
+          "point_estimate": 59831.6297948141,
+          "standard_error": 71.07636431005791
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 409.7060362166227,
+            "upper_bound": 701.3270053768231
+          },
+          "point_estimate": 628.3912597225475,
+          "standard_error": 65.394735503374
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 60029.32854744735,
+            "upper_bound": 60200.12452665322
+          },
+          "point_estimate": 60119.60212337651,
+          "standard_error": 43.39881186220432
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 407.9261661528597,
+            "upper_bound": 72353.22712264607
+          },
+          "point_estimate": 42205.29933812433,
+          "standard_error": 26077.181144141137
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/axios.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/axios.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/axios.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/axios.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_axios.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1964004.7064565215,
+            "upper_bound": 1973364.8590579708
+          },
+          "point_estimate": 1968743.291485507,
+          "standard_error": 2406.16820799206
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1960461.0844202896,
+            "upper_bound": 1976446.1956521736
+          },
+          "point_estimate": 1970089.4429347827,
+          "standard_error": 4936.182909599326
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 473.4865655069716,
+            "upper_bound": 12150.316110810296
+          },
+          "point_estimate": 10535.780854691546,
+          "standard_error": 3472.999510559371
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1961340.9047585328,
+            "upper_bound": 1972374.2629780427
+          },
+          "point_estimate": 1966262.8265386787,
+          "standard_error": 2904.12209014386
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5364.880033937602,
+            "upper_bound": 9173.602514669496
+          },
+          "point_estimate": 8034.756518323106,
+          "standard_error": 986.3574834054598
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/azure-cosmos.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/azure-cosmos.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/azure-cosmos.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/azure-cosmos.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_azure-cosmos.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1851677.9292849049,
+            "upper_bound": 1856507.7971887756
+          },
+          "point_estimate": 1854109.2516431808,
+          "standard_error": 1241.1076160341702
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1850863.5346614835,
+            "upper_bound": 1857992.657142857
+          },
+          "point_estimate": 1853752.5272108845,
+          "standard_error": 1938.1498574559669
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1295.96320377772,
+            "upper_bound": 7276.643030813999
+          },
+          "point_estimate": 5049.867254990027,
+          "standard_error": 1534.5546803809937
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1849426.9062017968,
+            "upper_bound": 1856154.2637612815
+          },
+          "point_estimate": 1852062.6919692552,
+          "standard_error": 1725.9656995459611
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2544.18874309937,
+            "upper_bound": 5010.514605112705
+          },
+          "point_estimate": 4135.575740810936,
+          "standard_error": 628.4888210961989
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/cowsay.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/cowsay.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/cowsay.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/cowsay.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_cowsay.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1957244.7414213947,
+            "upper_bound": 1960408.2218676123
+          },
+          "point_estimate": 1958933.6361820332,
+          "standard_error": 813.8679392565556
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1956437.6063829784,
+            "upper_bound": 1961056.3510638296
+          },
+          "point_estimate": 1960038.2783687944,
+          "standard_error": 1140.502586526087
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 357.22597947365267,
+            "upper_bound": 4628.299896022776
+          },
+          "point_estimate": 1621.0679765395178,
+          "standard_error": 1032.5039930704995
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1958474.8324832488,
+            "upper_bound": 1960968.2362071625
+          },
+          "point_estimate": 1960137.123017408,
+          "standard_error": 643.9090503657058
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 873.2834542985028,
+            "upper_bound": 3254.148259432749
+          },
+          "point_estimate": 2715.746896812009,
+          "standard_error": 526.278158448914
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/dynamic-in-package.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/dynamic-in-package.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/dynamic-in-package.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/dynamic-in-package.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_dynamic-in-package.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1895411.8570535711,
+            "upper_bound": 1906545.0807552089
+          },
+          "point_estimate": 1900857.1427827384,
+          "standard_error": 2851.4998015352467
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1892184.09375,
+            "upper_bound": 1910658.1770833335
+          },
+          "point_estimate": 1899199.5654761903,
+          "standard_error": 4772.471865066761
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1439.666349440583,
+            "upper_bound": 16176.041594067772
+          },
+          "point_estimate": 11991.32594961144,
+          "standard_error": 3581.9070734360303
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1894311.258687693,
+            "upper_bound": 1905828.6662997964
+          },
+          "point_estimate": 1901210.2258658009,
+          "standard_error": 2933.615394234506
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5740.430064086242,
+            "upper_bound": 11273.165493240673
+          },
+          "point_estimate": 9493.125422667565,
+          "standard_error": 1393.8699728806598
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/empty.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/empty.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/empty.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/empty.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_empty.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1445326.764347158,
+            "upper_bound": 1458947.255107527
+          },
+          "point_estimate": 1451011.8219636458,
+          "standard_error": 3581.9775570024367
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1442756.0322580645,
+            "upper_bound": 1454004.247311828
+          },
+          "point_estimate": 1448013.7282258065,
+          "standard_error": 3457.517133043293
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 888.4500269687926,
+            "upper_bound": 14007.967230341132
+          },
+          "point_estimate": 7901.916246809691,
+          "standard_error": 3238.196611191703
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1444622.0126321926,
+            "upper_bound": 1467720.1447727857
+          },
+          "point_estimate": 1454187.4065772938,
+          "standard_error": 6498.282150814082
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3928.4629796281047,
+            "upper_bound": 17619.691695748777
+          },
+          "point_estimate": 11927.575901050386,
+          "standard_error": 4347.718198115819
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/env-var.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/env-var.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/env-var.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/env-var.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_env-var.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1466082.1842359833,
+            "upper_bound": 1520485.2262252304
+          },
+          "point_estimate": 1485514.9604825908,
+          "standard_error": 16124.41556041574
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1463305.9193548388,
+            "upper_bound": 1475149.9318100358
+          },
+          "point_estimate": 1470129.1013824884,
+          "standard_error": 5247.452570476884
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1159.544627801096,
+            "upper_bound": 15292.465941891622
+          },
+          "point_estimate": 8825.847100245337,
+          "standard_error": 5407.615733580214
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1468995.7523393093,
+            "upper_bound": 1515651.6576331584
+          },
+          "point_estimate": 1482991.292626728,
+          "standard_error": 12689.466396413174
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4329.385159488859,
+            "upper_bound": 82647.5517085191
+          },
+          "point_estimate": 53746.025628031995,
+          "standard_error": 28432.433529212285
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/fast-glob.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/fast-glob.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/fast-glob.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/fast-glob.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_fast-glob.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1862192.329297052,
+            "upper_bound": 1865677.9809402332
+          },
+          "point_estimate": 1863935.0065492385,
+          "standard_error": 897.3790225396426
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1861036.7857142857,
+            "upper_bound": 1866466.823979592
+          },
+          "point_estimate": 1864356.331632653,
+          "standard_error": 1465.7851887495997
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 887.4246944491036,
+            "upper_bound": 4997.398218421473
+          },
+          "point_estimate": 3907.685346696181,
+          "standard_error": 1115.5404162125803
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1860711.5684350757,
+            "upper_bound": 1864547.4361300075
+          },
+          "point_estimate": 1862055.659793268,
+          "standard_error": 979.3981241544784
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1896.552973306589,
+            "upper_bound": 3587.721569888773
+          },
+          "point_estimate": 2999.8247927208436,
+          "standard_error": 432.9747129213439
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/react.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/react.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/react.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/react.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_react.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2065569.954639024,
+            "upper_bound": 2071079.304053301
+          },
+          "point_estimate": 2068016.671387085,
+          "standard_error": 1423.00647938605
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2064506.3636363635,
+            "upper_bound": 2069761.4704545457
+          },
+          "point_estimate": 2066985.772411616,
+          "standard_error": 1214.8801201766144
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 459.220366089647,
+            "upper_bound": 6355.178746718603
+          },
+          "point_estimate": 3841.7361706212246,
+          "standard_error": 1586.2315300668747
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2066508.917487715,
+            "upper_bound": 2070644.0251791775
+          },
+          "point_estimate": 2068310.5969893744,
+          "standard_error": 1049.3549167861534
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1705.203832236111,
+            "upper_bound": 6677.144160237946
+          },
+          "point_estimate": 4752.326011122772,
+          "standard_error": 1429.3379871313416
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/simple.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/simple.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/simple.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/simple.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_simple.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2305217.251446403,
+            "upper_bound": 2328994.47965901
+          },
+          "point_estimate": 2316170.7131369556,
+          "standard_error": 6116.784176247052
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2301031.144230769,
+            "upper_bound": 2329310.320919821
+          },
+          "point_estimate": 2307518.542735043,
+          "standard_error": 7314.701156113256
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2292.7141413477734,
+            "upper_bound": 30921.87078948852
+          },
+          "point_estimate": 9729.397118743558,
+          "standard_error": 7424.0665281384845
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 2303659.2500697,
+            "upper_bound": 2328021.821609763
+          },
+          "point_estimate": 2312608.203729604,
+          "standard_error": 6350.167060007797
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4889.746397839015,
+            "upper_bound": 25219.04543241602
+          },
+          "point_estimate": 20420.580382969827,
+          "standard_error": 4744.702489322496
+        }
+      }
+    },
+    "node-file-trace/emit/node-file-trace/integration/whatwg-url.js": {
+      "baseline": "base",
+      "fullname": "base/node-file-trace/emit/node-file-trace/integration/whatwg-url.js",
+      "criterion_benchmark_v1": {
+        "group_id": "node-file-trace",
+        "function_id": "emit",
+        "value_str": "node-file-trace/integration/whatwg-url.js",
+        "throughput": null,
+        "full_id": "node-file-trace/emit/node-file-trace/integration/whatwg-url.js",
+        "directory_name": "node-file-trace/emit/node-file-trace_integration_whatwg-url.js"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1885826.31048186,
+            "upper_bound": 1903516.4672231537
+          },
+          "point_estimate": 1894478.0060115,
+          "standard_error": 4509.066516414544
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1879034.280612245,
+            "upper_bound": 1902818.8192419824
+          },
+          "point_estimate": 1898311.0582482992,
+          "standard_error": 7437.317589887722
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1934.798008507681,
+            "upper_bound": 30445.099688062823
+          },
+          "point_estimate": 16441.207688110087,
+          "standard_error": 7891.371817342679
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1894805.2751450855,
+            "upper_bound": 1914015.628707568
+          },
+          "point_estimate": 1904786.6256559768,
+          "standard_error": 5289.754384800245
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 9159.213675688316,
+            "upper_bound": 19248.15755920862
+          },
+          "point_estimate": 14988.38672683494,
+          "standard_error": 2818.676371933832
+        }
+      }
+    },
+    "turbo-tasks-fs/bench_file_watching/change file": {
+      "baseline": "base",
+      "fullname": "base/turbo-tasks-fs/bench_file_watching/change file",
+      "criterion_benchmark_v1": {
+        "group_id": "turbo-tasks-fs",
+        "function_id": "bench_file_watching",
+        "value_str": "change file",
+        "throughput": null,
+        "full_id": "turbo-tasks-fs/bench_file_watching/change file",
+        "directory_name": "turbo-tasks-fs/bench_file_watching/change file"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 35411.998733810244,
+            "upper_bound": 43814.69196787149
+          },
+          "point_estimate": 39127.49292670683,
+          "standard_error": 2190.3107457142314
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 33790.20481927711,
+            "upper_bound": 42559.22389558233
+          },
+          "point_estimate": 37134.16905120482,
+          "standard_error": 2721.610332656181
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 760.7416954098036,
+            "upper_bound": 10388.385992075308
+          },
+          "point_estimate": 5561.980648604498,
+          "standard_error": 2676.5379389922823
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 34361.234400065696,
+            "upper_bound": 39975.67152512489
+          },
+          "point_estimate": 36309.52594273197,
+          "standard_error": 1443.2714596661503
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 3009.184261088635,
+            "upper_bound": 10269.37860079425
+          },
+          "point_estimate": 7270.318448186747,
+          "standard_error": 2164.083170918289
+        }
+      }
+    },
+    "turbo-tasks-fs/bench_rope_iteration/next collect": {
+      "baseline": "base",
+      "fullname": "base/turbo-tasks-fs/bench_rope_iteration/next collect",
+      "criterion_benchmark_v1": {
+        "group_id": "turbo-tasks-fs",
+        "function_id": "bench_rope_iteration",
+        "value_str": "next collect",
+        "throughput": null,
+        "full_id": "turbo-tasks-fs/bench_rope_iteration/next collect",
+        "directory_name": "turbo-tasks-fs/bench_rope_iteration/next collect"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4246.087178740173,
+            "upper_bound": 4249.474132310487
+          },
+          "point_estimate": 4247.7930547438755,
+          "standard_error": 0.8613103780532125
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4245.710402089747,
+            "upper_bound": 4249.586079624965
+          },
+          "point_estimate": 4247.910360205398,
+          "standard_error": 0.8855274184727234
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 0.2517148225908145,
+            "upper_bound": 5.119477445884631
+          },
+          "point_estimate": 2.8730397058508443,
+          "standard_error": 1.1892804221918871
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 4244.332557908089,
+            "upper_bound": 4250.564237518525
+          },
+          "point_estimate": 4247.203647122539,
+          "standard_error": 1.6485951815439497
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1.4089631885424714,
+            "upper_bound": 3.818641247608467
+          },
+          "point_estimate": 2.877935926461903,
+          "standard_error": 0.6130277187174031
+        }
+      }
+    }
+  }
+}
