@@ -16,10 +16,12 @@ rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
 itertools = { workspace = true }
+port_scanner = "0.1.5"
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 test-case = "3.0.0"
+vercel-api-mock = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }

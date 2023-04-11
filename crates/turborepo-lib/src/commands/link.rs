@@ -298,16 +298,11 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use std::{fs, net::SocketAddr};
+    use std::fs;
 
-    use anyhow::Result;
-    use axum::{routing::get, Json, Router};
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
-    use turborepo_api_client::{
-        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
-        UserResponse,
-    };
+    use vercel_api_mock::start_test_server;
 
     use crate::{
         commands::{link, CommandBase},
@@ -315,9 +310,6 @@ mod test {
         ui::UI,
         Args,
     };
-
-    const TEAM_ID: &str = "vercel";
-    const USER_ID: &str = "my-user-id";
 
     #[tokio::test]
     async fn test_link() {
@@ -330,7 +322,8 @@ mod test {
         )
         .unwrap();
 
-        let handle = tokio::spawn(start_test_server());
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
@@ -343,8 +336,8 @@ mod test {
             ),
             repo_config: OnceCell::from(
                 RepoConfigLoader::new(repo_config_file.path().to_path_buf())
-                    .with_api(Some("http://localhost:3000".to_string()))
-                    .with_login(Some("http://localhost:3000".to_string()))
+                    .with_api(Some(format!("http://localhost:{}", port)))
+                    .with_login(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),
             ),
@@ -356,53 +349,6 @@ mod test {
 
         handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
-        assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID));
-    }
-
-    async fn start_test_server() -> Result<()> {
-        let app = Router::new()
-            // `GET /` goes to `root`
-            .route(
-                "/v2/teams",
-                get(|| async move {
-                    Json(TeamsResponse {
-                        teams: vec![Team {
-                            id: TEAM_ID.to_string(),
-                            slug: "vercel".to_string(),
-                            name: "vercel".to_string(),
-                            created_at: 0,
-                            created: Default::default(),
-                            membership: Membership::new(Role::Owner),
-                        }],
-                    })
-                }),
-            )
-            .route(
-                "/v2/user",
-                get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: USER_ID.to_string(),
-                            username: "my_username".to_string(),
-                            email: "my_email".to_string(),
-                            name: None,
-                            created_at: Some(0),
-                        },
-                    })
-                }),
-            )
-            .route(
-                "/v8/artifacts/status",
-                get(|| async {
-                    Json(CachingStatusResponse {
-                        status: CachingStatus::Enabled,
-                    })
-                }),
-            );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
-        Ok(axum_server::bind(addr)
-            .serve(app.into_make_service())
-            .await?)
+        assert_eq!(team_id, Some(vercel_api_mock::EXPECTED_TEAM_ID));
     }
 }
