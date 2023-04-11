@@ -299,7 +299,6 @@ mod test {
     use std::{fs, net::SocketAddr};
 
     use anyhow::Result;
-    use axum::{routing::get, Json, Router};
     use reqwest::Url;
     use serde::Deserialize;
     use tempfile::NamedTempFile;
@@ -364,32 +363,6 @@ mod test {
     struct TokenRequest {
         #[cfg(not(test))]
         redirect_uri: String,
-    }
-
-    /// NOTE: Each test server should be on its own port to avoid any
-    /// concurrency bugs.
-    async fn start_test_server() -> Result<()> {
-        let app = Router::new()
-            // `GET /` goes to `root`
-            .route(
-                "/v2/user",
-                get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: "my_user_id".to_string(),
-                            username: "my_username".to_string(),
-                            email: "my_email".to_string(),
-                            name: None,
-                            created_at: Some(0),
-                        },
-                    })
-                }),
-            );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
-
-        Ok(axum_server::bind(addr)
-            .serve(app.into_make_service())
-            .await?)
     }
 
     const EXPECTED_SSO_TEAM_SLUG: &str = "vercel";

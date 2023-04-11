@@ -24,8 +24,8 @@ test-case = "3.0.0"
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 atty = { workspace = true }
-axum = "0.6.2"
-axum-server = "0.4.4"
+axum = { workspace = true }
+axum-server = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }

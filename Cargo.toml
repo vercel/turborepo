@@ -42,6 +42,7 @@ members = [
   "crates/turborepo-lib",
   "crates/turborepo-lockfiles",
   "crates/turborepo-scm",
+  "crates/vercel-api-mock",
   "xtask",
 ]
 
@@ -162,6 +163,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
 ] }
 async-trait = "0.1.64"
 atty = "0.2.14"
+axum = "0.6.2"
+axum-server = "0.4.4"
 bytes = "1.1.0"
 chrono = "0.4.23"
 clap = "4.1.6"
