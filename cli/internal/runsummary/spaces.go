@@ -4,14 +4,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/ci"
 )
 
-type vercelRunResponse struct {
+type spacesRunResponse struct {
 	ID string
 }
 
-type vercelRunPayload struct {
-	// ID is set by the backend, including it here for completeness, but we never fill this in.
-	ID string `json:"vercelId,omitempty"`
-
+type spacesRunPayload struct {
 	// StartTime is when this run was started
 	StartTime int64 `json:"startTime,omitempty"`
 
@@ -34,7 +31,7 @@ type vercelRunPayload struct {
 	// the command was invoked.
 	RepositoryPath string `json:"repositoryPath,omitempty"`
 
-	// Context is the host on which this Run was executed (e.g. Vercel)
+	// Context is the host on which this Run was executed (e.g. Github Action, Vercel, etc)
 	Context string `json:"context,omitempty"`
 
 	// TODO: we need to add these in
@@ -43,31 +40,31 @@ type vercelRunPayload struct {
 	// gitSha          string
 }
 
-type vercelCacheStatus struct {
+type spacesCacheStatus struct {
 	Status string `json:"status,omitempty"`
 	Source string `json:"source,omitempty"`
 }
 
-type vercelTask struct {
+type spacesTask struct {
 	Key          string            `json:"key,omitempty"`
 	Name         string            `json:"name,omitempty"`
 	Workspace    string            `json:"workspace,omitempty"`
 	Hash         string            `json:"hash,omitempty"`
 	StartTime    int64             `json:"startTime,omitempty"`
 	EndTime      int64             `json:"endTime,omitempty"`
-	Cache        vercelCacheStatus `json:"cache,omitempty"`
+	Cache        spacesCacheStatus `json:"cache,omitempty"`
 	ExitCode     int               `json:"exitCode,omitempty"`
 	Dependencies []string          `json:"dependencies,omitempty"`
 	Dependents   []string          `json:"dependents,omitempty"`
 }
 
-func (rsm *Meta) newVercelRunCreatePayload() *vercelRunPayload {
+func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	startTime := rsm.RunSummary.ExecutionSummary.startedAt.UnixMilli()
 	context := "LOCAL"
 	if name := ci.Constant(); name != "" {
 		context = name
 	}
-	return &vercelRunPayload{
+	return &spacesRunPayload{
 		StartTime:      startTime,
 		Status:         "running",
 		Command:        rsm.synthesizedCommand,
@@ -77,16 +74,16 @@ func (rsm *Meta) newVercelRunCreatePayload() *vercelRunPayload {
 	}
 }
 
-func newVercelDonePayload(runsummary *RunSummary) *vercelRunPayload {
+func newSpacesDonePayload(runsummary *RunSummary) *spacesRunPayload {
 	endTime := runsummary.ExecutionSummary.endedAt.UnixMilli()
-	return &vercelRunPayload{
+	return &spacesRunPayload{
 		Status:   "completed",
 		EndTime:  endTime,
 		ExitCode: runsummary.ExecutionSummary.exitCode,
 	}
 }
 
-func newVercelTaskPayload(taskSummary *TaskSummary) *vercelTask {
+func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 	// Set the cache source. Local and Remote shouldn't _both_ be true.
 	var source string
 	if taskSummary.CacheState.Local {
@@ -102,14 +99,14 @@ func newVercelTaskPayload(taskSummary *TaskSummary) *vercelTask {
 	startTime := taskSummary.Execution.startAt.UnixMilli()
 	endTime := taskSummary.Execution.endTime().UnixMilli()
 
-	return &vercelTask{
+	return &spacesTask{
 		Key:       taskSummary.TaskID,
 		Name:      taskSummary.Task,
 		Workspace: taskSummary.Package,
 		Hash:      taskSummary.Hash,
 		StartTime: startTime,
 		EndTime:   endTime,
-		Cache: vercelCacheStatus{
+		Cache: spacesCacheStatus{
 			Status: status,
 			Source: source,
 		},
