@@ -2,6 +2,14 @@
 
 This is an official starter turborepo.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest -e with-gatsby
+```
+
 ## What's inside?
 
 This Turborepo includes the following packages and apps:
