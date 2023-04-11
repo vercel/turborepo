@@ -45,7 +45,7 @@ export function ExampleCard({
     if (copiedStartBuildingCmd) {
       setDetails({
         icon: "prompt",
-        text: `Copied to Clipboard!`,
+        text: `copied to clipboard`,
       });
     } else if (isHoveringStartBuilding) {
       setDetails({
@@ -68,7 +68,7 @@ export function ExampleCard({
   return (
     <li className="col-span-1 md:col-span-2 lg:col-span-1 rounded-lg dark:bg-opacity-5 bg-white border-gray-500 text-white flex flex-col divide-y divide-[#dfdfdf] dark:divide-black shadow-lg">
       <a
-        className="flex flex-col group px-8 pt-8 gap-4 h-full"
+        className="flex flex-col group px-8 pt-8 gap-4 h-full cursor-pointer"
         href={`https://github.com/vercel/turbo/tree/main/examples/${slug}`}
         target="_blank"
         rel="noreferrer"
@@ -82,7 +82,7 @@ export function ExampleCard({
           {description}
         </span>
 
-        <div className="font-mono text-sm text-gray-900 dark:text-gray-100 flex flex-row relative h-8 my-2">
+        <div className="font-mono text-sm text-gray-500 dark:text-gray-400 flex flex-row relative h-8 my-2">
           <AnimatedIcon
             icon={details.icon}
             showCheck={copiedStartBuildingCmd}
@@ -91,6 +91,8 @@ export function ExampleCard({
             className={classNames("ml-3", {
               "group-hover:underline":
                 !isHoveringStartBuilding && !isHoveringDeployNow,
+              "text-gray-900 dark:text-gray-100":
+                isHoveringStartBuilding || isHoveringDeployNow,
             })}
           >
             {details.text}
