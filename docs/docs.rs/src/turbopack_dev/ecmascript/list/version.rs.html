@@ -67,11 +67,11 @@
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::version::{Version, VersionVc, VersionedContentMergerVc};
 
-<span class="doccomment">/// The version of a [`ChunkListContent`].
+<span class="doccomment">/// The version of a [`EcmascriptDevChunkListContent`].
 ///
-/// [`ChunkListContent`]: super::content::ChunkListContent
+/// [`EcmascriptDevChunkListContent`]: super::content::EcmascriptDevChunkListContent
 </span><span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>ChunkListVersion {
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>EcmascriptDevChunkListVersion {
     <span class="doccomment">/// A map from chunk path to its version.
     </span><span class="attr">#[turbo_tasks(trace_ignore)]
     </span><span class="kw">pub </span>by_path: IndexMap&lt;String, TraitRef&lt;VersionVc&gt;&gt;,
@@ -81,7 +81,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Version <span class="kw">for </span>ChunkListVersion {
+</span><span class="kw">impl </span>Version <span class="kw">for </span>EcmascriptDevChunkListVersion {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="kw">let </span>by_path = {

@@ -150,24 +150,13 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
-
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
@@ -178,7 +167,7 @@
 };
 
 <span class="kw">use </span><span class="kw">super</span>::chunk_item::DevManifestChunkItem;
-<span class="kw">use crate</span>::{ecmascript::list::reference::ChunkListReferenceVc, DevChunkingContextVc};
+<span class="kw">use </span><span class="kw">crate</span>::DevChunkingContextVc;
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>modifier() -&gt; StringVc {
@@ -218,13 +207,18 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>chunk_group(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkGroupVc&gt; {
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>entry_chunk(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ChunkGroupVc::from_asset(
-            this.asset,
+        <span class="prelude-val">Ok</span>(this.asset.as_chunk(
             this.chunking_context.into(),
             Value::new(this.availability_info),
         ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(this.chunking_context.chunk_group(<span class="self">self</span>.entry_chunk()))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -256,9 +250,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: DevManifestChunkAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_group = self_vc.chunk_group();
-        <span class="kw">let </span>chunks = chunk_group.chunks();
+        <span class="kw">let </span>chunks = self_vc.chunks();
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(
             chunks
@@ -269,16 +261,6 @@
                     SingleAssetReferenceVc::new(chunk, dev_manifest_chunk_reference_description())
                         .into()
                 })
-                .chain(once(
-                    <span class="comment">// This creates the chunk list corresponding to the manifest chunk&#39;s chunk
-                    // group.
-                    </span>ChunkListReferenceVc::new(
-                        this.chunking_context,
-                        chunk_group.entry(),
-                        chunk_group.chunks(),
-                    )
-                    .into(),
-                ))
                 .collect(),
         ))
     }

@@ -155,7 +155,6 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -294,8 +293,7 @@
                 __turbopack_export_value__((__turbopack_import__) =&gt; {{
                     return __turbopack_load__({chunk_server_path}).then(() =&gt; {{
                         return __turbopack_require__({item_id});
-                    }}).then(({{ chunks, list }}) =&gt; {{
-                        __turbopack_register_chunk_list__(list, chunks);
+                    }}).then((chunks) =&gt; {{
                         return Promise.all(chunks.map((chunk_path) =&gt; __turbopack_load__(chunk_path)));
                     }}).then(() =&gt; {{
                         return __turbopack_import__({dynamic_id});

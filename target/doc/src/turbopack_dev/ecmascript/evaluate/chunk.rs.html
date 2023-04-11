@@ -243,25 +243,9 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
-<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::writedoc;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
@@ -282,17 +266,17 @@
     utils::StringifyJs,
 };
 
-<span class="kw">use crate</span>::{ecmascript::list::reference::ChunkListReferenceVc, DevChunkingContextVc};
+<span class="kw">use </span><span class="kw">crate</span>::DevChunkingContextVc;
 
 <span class="doccomment">/// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
 /// * Evaluates a list of runtime entries.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EcmascriptDevEvaluateChunk {
-    <span class="kw">pub</span>(<span class="kw">super</span>) chunking_context: DevChunkingContextVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) entry_chunk: ChunkVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) other_chunks: AssetsVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) evaluatable_assets: EvaluatableAssetsVc,
+    chunking_context: DevChunkingContextVc,
+    entry_chunk: ChunkVc,
+    other_chunks: AssetsVc,
+    evaluatable_assets: EvaluatableAssetsVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -365,16 +349,7 @@
             .flatten()
             .collect();
 
-        <span class="kw">let </span>chunk_list_path = this
-            .chunking_context
-            .chunk_list_path(this.entry_chunk.ident())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_list_path = output_root
-            .get_path_to(<span class="kw-2">&amp;*</span>chunk_list_path)
-            .context(<span class="string">&quot;chunk list path is not in output root&quot;</span>)<span class="question-mark">?</span>;
-
         <span class="kw">let </span>params = EcmascriptDevChunkRuntimeParams {
-            chunk_list_path,
             other_chunks: other_chunks_paths,
             runtime_module_ids,
         };
@@ -482,13 +457,8 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(self_vc: EcmascriptDevEvaluateChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[
-            ChunkListReferenceVc::new(this.chunking_context, this.entry_chunk, this.other_chunks)
-                .into(),
-            SourceMapAssetReferenceVc::new(self_vc.into()).into(),
-        ]))
+    </span><span class="kw">fn </span>references(self_vc: EcmascriptDevEvaluateChunkVc) -&gt; AssetReferencesVc {
+        AssetReferencesVc::cell(<span class="macro">vec!</span>[SourceMapAssetReferenceVc::new(self_vc.into()).into()])
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -508,7 +478,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams {
     <span class="doccomment">/// Other chunks in the chunk group this chunk belongs to, if any. Does not
     /// include the chunk itself.
     ///
@@ -517,8 +487,6 @@
     </span>other_chunks: Vec&lt;String&gt;,
     <span class="doccomment">/// List of module IDs that this chunk should instantiate when executed.
     </span>runtime_module_ids: Vec&lt;ModuleIdReadRef&gt;,
-    <span class="doccomment">/// Path to the chunk list that this chunk should register itself with.
-    </span>chunk_list_path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="turbopack_dev" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

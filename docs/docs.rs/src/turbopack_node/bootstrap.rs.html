@@ -64,15 +64,13 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    chunk::ChunkGroupVc,
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
@@ -81,7 +79,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>NodeJsBootstrapAsset {
     <span class="kw">pub</span>(<span class="kw">super</span>) path: FileSystemPathVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) chunk_group: ChunkGroupVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) chunks: AssetsVc,
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -104,7 +102,7 @@
         // but until then this is a simple hack to make it work for now
         </span><span class="kw">let </span><span class="kw-2">mut </span>output = <span class="string">&quot;Error.stackTraceLimit = 100;\nglobal.self = global;\n&quot;</span>.to_string();
 
-        <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+        <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">let </span>path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = context_path.get_relative_path_to(path) {
                 <span class="kw">if </span>p.ends_with(<span class="string">&quot;.js&quot;</span>) {
@@ -118,7 +116,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks = <span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
             references.push(

@@ -81,30 +81,9 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::formatdoc;
-<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::{ChunkItem, ChunkItemVc, ChunkingContext},
@@ -140,8 +119,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
-        <span class="kw">let </span>chunk_group = <span class="self">self</span>.manifest.chunk_group();
-        <span class="kw">let </span>chunks = chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks = <span class="self">self</span>.manifest.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>output_root = <span class="self">self</span>.context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>chunk_server_paths = IndexSet::new();
@@ -159,29 +137,11 @@
             </span>};
         }
 
-        <span class="kw">let </span>chunk_list_path = <span class="self">self
-            </span>.context
-            .chunk_list_path(chunk_group.entry().ident())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_list_path = output_root
-            .get_path_to(<span class="kw-2">&amp;</span>chunk_list_path)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;chunk list path is not in output root&quot;</span>))<span class="question-mark">?</span>;
-
-        <span class="attr">#[derive(Serialize)]
-        #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-        </span><span class="kw">struct </span>ManifestChunkExport&lt;<span class="lifetime">&#39;a</span>&gt; {
-            chunks: IndexSet&lt;String&gt;,
-            list: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
-        }
-
         <span class="kw">let </span>code = <span class="macro">formatdoc! </span>{
             <span class="string">r#&quot;
                 __turbopack_export_value__({:#});
             &quot;#</span>,
-            StringifyJs(<span class="kw-2">&amp;</span>ManifestChunkExport {
-                chunks: chunk_server_paths,
-                list: chunk_list_path,
-            })
+            StringifyJs(<span class="kw-2">&amp;</span>chunk_server_paths)
         };
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

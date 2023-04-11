@@ -213,15 +213,13 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    chunk::ChunkGroupVc,
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{Version, VersionVc, VersionedContent, VersionedContentVc},
@@ -234,7 +232,7 @@
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>DevHtmlAsset {
     path: FileSystemPathVc,
-    chunk_groups: Vec&lt;ChunkGroupVc&gt;,
+    chunk_groups: Vec&lt;AssetsVc&gt;,
     body: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
@@ -259,7 +257,7 @@
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.chunk_groups {
-            <span class="kw">let </span>chunks = chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>chunks = chunk_group.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
                 references.push(
                     SingleAssetReferenceVc::new(<span class="kw-2">*</span>chunk, dev_html_chunk_reference_description())
@@ -278,7 +276,7 @@
 
 <span class="kw">impl </span>DevHtmlAssetVc {
     <span class="doccomment">/// Create a new dev HTML asset.
-    </span><span class="kw">pub fn </span>new(path: FileSystemPathVc, chunk_groups: Vec&lt;ChunkGroupVc&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(path: FileSystemPathVc, chunk_groups: Vec&lt;AssetsVc&gt;) -&gt; <span class="self">Self </span>{
         DevHtmlAsset {
             path,
             chunk_groups,
@@ -290,7 +288,7 @@
     <span class="doccomment">/// Create a new dev HTML asset.
     </span><span class="kw">pub fn </span>new_with_body(
         path: FileSystemPathVc,
-        chunk_groups: Vec&lt;ChunkGroupVc&gt;,
+        chunk_groups: Vec&lt;AssetsVc&gt;,
         body: String,
     ) -&gt; <span class="self">Self </span>{
         DevHtmlAsset {
@@ -328,7 +326,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>chunk_paths = <span class="macro">vec!</span>[];
         <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span>this.chunk_groups {
-            <span class="kw">for </span>chunk <span class="kw">in </span>chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">for </span>chunk <span class="kw">in </span>chunk_group.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(relative_path) = context_path.get_path_to(chunk_path) {
                     chunk_paths.push(<span class="macro">format!</span>(<span class="string">&quot;/{relative_path}&quot;</span>));

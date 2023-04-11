@@ -164,6 +164,7 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -175,7 +176,7 @@
     UpdateVc, VersionVc, VersionedContent, VersionedContentMerger, VersionedContentsVc,
 };
 
-<span class="kw">use super</span>::{content::ChunkListContentVc, version::ChunkListVersionVc};
+<span class="kw">use super</span>::{content::EcmascriptDevChunkListContentVc, version::EcmascriptDevChunkListVersionVc};
 
 <span class="doccomment">/// Update of a chunk list from one version to another.
 </span><span class="attr">#[derive(Serialize)]
@@ -216,19 +217,20 @@
 <span class="doccomment">/// Computes the update of a chunk list from one version to another.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>update_chunk_list(
-    content: ChunkListContentVc,
+    content: EcmascriptDevChunkListContentVc,
     from_version: VersionVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
     <span class="kw">let </span>to_version = content.version();
-    <span class="kw">let </span>from_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(from) = ChunkListVersionVc::resolve_from(from_version).<span class="kw">await</span><span class="question-mark">? </span>{
-        from
-    } <span class="kw">else </span>{
-        <span class="comment">// It&#39;s likely `from_version` is `NotFoundVersion`.
-        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
-            to: to_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
-        })
-        .cell());
-    };
+    <span class="kw">let </span>from_version =
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(from) = EcmascriptDevChunkListVersionVc::resolve_from(from_version).<span class="kw">await</span><span class="question-mark">? </span>{
+            from
+        } <span class="kw">else </span>{
+            <span class="comment">// It&#39;s likely `from_version` is `NotFoundVersion`.
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(Update::Total(TotalUpdate {
+                to: to_version.as_version().into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>,
+            })
+            .cell());
+        };
 
     <span class="kw">let </span>to = to_version.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>from = from_version.<span class="kw">await</span><span class="question-mark">?</span>;

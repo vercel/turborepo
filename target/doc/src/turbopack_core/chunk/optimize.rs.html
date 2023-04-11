@@ -329,7 +329,7 @@
 <span class="kw">use </span>turbo_tasks::TryJoinIterExt;
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
-<span class="kw">use super</span>::{ChunkGroupVc, ChunkVc, ChunksVc};
+<span class="kw">use super</span>::{ChunkVc, ChunksVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc},
     chunk::Chunk,
@@ -338,7 +338,7 @@
 <span class="doccomment">/// A functor to optimize a set of chunks.
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ChunkOptimizer {
-    <span class="kw">fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; ChunksVc;
+    <span class="kw">fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc) -&gt; ChunksVc;
 }
 
 <span class="doccomment">/// Trait to mark a chunk as optimizable.
@@ -349,7 +349,7 @@
 
 <span class="doccomment">/// Optimize all chunks that implement [OptimizableChunk].
 </span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+</span><span class="kw">pub async fn </span>optimize(chunks: ChunksVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span>chunks = chunks.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>by_optimizer = IndexMap::&lt;<span class="kw">_</span>, Vec&lt;<span class="kw">_</span>&gt;&gt;::new();
     <span class="kw">for </span>(chunk, optimizer) <span class="kw">in </span>chunks
@@ -376,7 +376,7 @@
             <span class="comment">// TODO keyed cell: this would benefit from keying the cell by optimizer
             </span><span class="kw">let </span>chunks = ChunksVc::cell(chunks);
             <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(optimizer) = optimizer {
-                optimizer.optimize(chunks, chunk_group).<span class="kw">await</span><span class="question-mark">?
+                optimizer.optimize(chunks).<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
                 chunks.<span class="kw">await</span><span class="question-mark">?
             </span>})

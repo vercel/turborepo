@@ -229,20 +229,15 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkVc,
-        ChunkableAsset, ChunkableAssetVc, ChunkingContextVc, EvaluatableAssetsVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     ident::AssetIdentVc,
     introspect::{
@@ -280,27 +275,22 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkGroupFilesAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_group(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkGroupVc&gt; {
+    </span><span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>chunk_group =
+        <span class="prelude-val">Ok</span>(
             <span class="kw">if let </span><span class="prelude-val">Some</span>(ecma) = EcmascriptModuleAssetVc::resolve_from(this.asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                ChunkGroupVc::evaluated(
-                    this.chunking_context,
-                    ecma.into(),
+                this.chunking_context.evaluated_chunk_group(
+                    ecma.as_root_chunk(this.chunking_context),
                     this.runtime_entries
                         .clone()
-                        .unwrap_or_else(EvaluatableAssetsVc::empty),
+                        .unwrap_or_else(EvaluatableAssetsVc::empty)
+                        .with_entry(ecma.into()),
                 )
             } <span class="kw">else </span>{
-                ChunkGroupVc::from_asset(
-                    this.asset,
-                    this.chunking_context,
-                    Value::new(AvailabilityInfo::Root {
-                        current_availability_root: this.asset.into(),
-                    }),
-                )
-            };
-        <span class="prelude-val">Ok</span>(chunk_group)
+                this.chunking_context
+                    .chunk_group(this.asset.as_root_chunk(this.chunking_context))
+            },
+        )
     }
 }
 
@@ -323,7 +313,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: ChunkGroupFilesAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>chunks = self_vc.chunk_group().chunks();
+        <span class="kw">let </span>chunks = self_vc.chunks();
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(
             chunks
@@ -402,7 +392,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.inner.chunk_group().chunks();
+        <span class="kw">let </span>chunks = <span class="self">self</span>.inner.chunks();
         <span class="kw">let </span>client_root = <span class="self">self</span>.client_root.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunks_paths = chunks
             .<span class="kw">await</span><span class="question-mark">?
@@ -460,7 +450,7 @@
     </span><span class="kw">async fn </span>children(self_vc: ChunkGroupFilesAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>children = IndexSet::new();
         <span class="kw">let </span>chunk_ty = StringVc::cell(<span class="string">&quot;chunk&quot;</span>.to_string());
-        <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>self_vc.chunk_group().chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+        <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>self_vc.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             children.insert((chunk_ty, IntrospectableAssetVc::new(chunk.into())));
         }
         children.insert((

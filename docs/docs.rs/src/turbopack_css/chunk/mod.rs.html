@@ -515,9 +515,9 @@
         availability_info::AvailabilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
-        FromChunkableAsset, ModuleId, ModuleIdVc,
+        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkReferenceVc,
+        ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::{AssetIdent, AssetIdentVc},
@@ -698,7 +698,7 @@
 </span><span class="kw">pub struct </span>CssChunkContentResult {
     <span class="kw">pub </span>chunk_items: Vec&lt;CssChunkItemVc&gt;,
     <span class="kw">pub </span>chunks: Vec&lt;ChunkVc&gt;,
-    <span class="kw">pub </span>async_chunk_groups: Vec&lt;ChunkGroupVc&gt;,
+    <span class="kw">pub </span>async_chunk_group_entries: Vec&lt;ChunkVc&gt;,
     <span class="kw">pub </span>external_asset_references: Vec&lt;AssetReferenceVc&gt;,
 }
 
@@ -707,7 +707,7 @@
         CssChunkContentResult {
             chunk_items: from.chunk_items,
             chunks: from.chunks,
-            async_chunk_groups: from.async_chunk_groups,
+            async_chunk_group_entries: from.async_chunk_group_entries,
             external_asset_references: from.external_asset_references,
         }
     }
@@ -732,26 +732,26 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>all_chunk_items = IndexSet::&lt;CssChunkItemVc&gt;::new();
     <span class="kw">let </span><span class="kw-2">mut </span>all_chunks = IndexSet::&lt;ChunkVc&gt;::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>all_async_chunk_groups = IndexSet::&lt;ChunkGroupVc&gt;::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>all_async_chunk_group_entries = IndexSet::&lt;ChunkVc&gt;::new();
     <span class="kw">let </span><span class="kw-2">mut </span>all_external_asset_references = IndexSet::&lt;AssetReferenceVc&gt;::new();
 
     <span class="kw">for </span>content <span class="kw">in </span>contents {
         <span class="kw">let </span>CssChunkContentResult {
             chunk_items,
             chunks,
-            async_chunk_groups,
+            async_chunk_group_entries,
             external_asset_references,
         } = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">?</span>;
         all_chunk_items.extend(chunk_items.iter().copied());
         all_chunks.extend(chunks.iter().copied());
-        all_async_chunk_groups.extend(async_chunk_groups.iter().copied());
+        all_async_chunk_group_entries.extend(async_chunk_group_entries.iter().copied());
         all_external_asset_references.extend(external_asset_references.iter().copied());
     }
 
     <span class="prelude-val">Ok</span>(CssChunkContentResult {
         chunk_items: all_chunk_items.into_iter().collect(),
         chunks: all_chunks.into_iter().collect(),
-        async_chunk_groups: all_async_chunk_groups.into_iter().collect(),
+        async_chunk_group_entries: all_async_chunk_group_entries.into_iter().collect(),
         external_asset_references: all_external_asset_references.into_iter().collect(),
     }
     .cell())
@@ -852,8 +852,8 @@
         <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
             references.push(ChunkReferenceVc::new_parallel(<span class="kw-2">*</span>chunk).into());
         }
-        <span class="kw">for </span>chunk_group <span class="kw">in </span>content.async_chunk_groups.iter() {
-            references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
+        <span class="kw">for </span>entry <span class="kw">in </span>content.async_chunk_group_entries.iter() {
+            references.push(ChunkGroupReferenceVc::new(this.context, <span class="kw-2">*</span>entry).into());
         }
         <span class="kw">if </span><span class="kw-2">*</span>this
             .context

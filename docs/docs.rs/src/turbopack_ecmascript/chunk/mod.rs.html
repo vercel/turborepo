@@ -808,8 +808,8 @@
         <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
             references.push(ChunkReferenceVc::new_parallel(<span class="kw-2">*</span>chunk).into());
         }
-        <span class="kw">for </span>chunk_group <span class="kw">in </span>content.async_chunk_groups.iter() {
-            references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
+        <span class="kw">for </span>entry <span class="kw">in </span>content.async_chunk_group_entries.iter() {
+            references.push(ChunkGroupReferenceVc::new(this.context.into(), <span class="kw-2">*</span>entry).into());
         }
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))

@@ -433,10 +433,6 @@
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -447,7 +443,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
-    ChunkGroupVc, ChunkVc, ChunksVc,
+    ChunkVc, ChunksVc,
 };
 
 <span class="kw">use super</span>::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc};
@@ -466,9 +462,9 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkOptimizer <span class="kw">for </span>EcmascriptChunkOptimizer {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+    </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
         optimize_by_common_parent(chunks, get_common_parent, |local, children| {
-            optimize_ecmascript(local, children, chunk_group)
+            optimize_ecmascript(local, children)
         })
         .<span class="kw">await
     </span>}
@@ -812,11 +808,7 @@
 
 <span class="doccomment">/// Chunk optimization for ecmascript chunks.
 </span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>optimize_ecmascript(
-    local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
-    children: Vec&lt;ChunksVc&gt;,
-    _chunk_group: ChunkGroupVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+</span><span class="kw">async fn </span>optimize_ecmascript(local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, children: Vec&lt;ChunksVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::&lt;(EcmascriptChunkVc, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;)&gt;::new();
     <span class="comment">// TODO optimize
     </span><span class="kw">let </span><span class="kw-2">mut </span>unoptimized_count = <span class="number">0</span>;

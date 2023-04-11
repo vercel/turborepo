@@ -52,24 +52,12 @@
 <a href="#52" id="52">52</a>
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{Value, ValueToString};
 
-<span class="kw">use super</span>::{ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc};
+<span class="kw">use super</span>::{ChunkableAsset, ChunkableAssetVc};
 <span class="kw">use crate</span>::{
-    asset::{Asset, AssetVc, AssetsVc},
+    asset::{Asset, AssetVc},
     context::{AssetContext, AssetContextVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
 };
@@ -117,18 +105,6 @@
         entries.push(entry);
         <span class="prelude-val">Ok</span>(EvaluatableAssets(entries).cell())
     }
-}
-
-<span class="doccomment">/// Trait for chunking contexts which can generate evaluated chunks.
-</span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>EvaluateChunkingContext: ChunkingContext {
-    <span class="doccomment">/// Create a chunk that evaluates the given entries.
-    </span><span class="kw">fn </span>evaluate_chunk(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        entry_chunk: ChunkVc,
-        other_assets: AssetsVc,
-        evaluatable_assets: EvaluatableAssetsVc,
-    ) -&gt; AssetVc;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

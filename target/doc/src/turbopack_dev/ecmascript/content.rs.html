@@ -158,31 +158,14 @@
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::writedoc;
-<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc},
-    chunk::{ChunkingContext, ModuleId, ModuleIdReadRef},
+    chunk::{ChunkingContext, ModuleId},
     code_builder::{CodeBuilder, CodeVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     version::{
@@ -334,21 +317,6 @@
 
         <span class="prelude-val">Ok</span>(OptionSourceMapVc::cell(<span class="prelude-val">None</span>))
     }
-}
-
-<span class="attr">#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams {
-    <span class="doccomment">/// Other chunks in the chunk group this chunk belongs to, if any. Does not
-    /// include the chunk itself.
-    ///
-    /// These chunks must be loaed before the runtime modules can be
-    /// instantiated.
-    </span>other_chunks: Vec&lt;String&gt;,
-    <span class="doccomment">/// List of module IDs that this chunk should instantiate when executed.
-    </span>runtime_module_ids: Vec&lt;ModuleIdReadRef&gt;,
-    <span class="doccomment">/// Path to the chunk list that this chunk should register itself with.
-    </span>chunk_list_path: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_dev" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

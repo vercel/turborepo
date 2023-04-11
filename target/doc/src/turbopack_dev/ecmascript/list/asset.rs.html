@@ -92,8 +92,54 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{ChunkVc, ChunkingContext},
@@ -102,49 +148,64 @@
     version::{VersionedContent, VersionedContentVc},
 };
 
-<span class="kw">use </span><span class="kw">super</span>::content::ChunkListContentVc;
+<span class="kw">use </span><span class="kw">super</span>::content::EcmascriptDevChunkListContentVc;
 <span class="kw">use </span><span class="kw">crate</span>::DevChunkingContextVc;
 
 <span class="doccomment">/// An asset that represents a list of chunks that exist together in a chunk
 /// group, and should be *updated* together.
 ///
-/// A chunk list has no actual content: all it does is merge updates from its
-/// chunks into a single update when possible. This is useful for keeping track
-/// of changes that affect more than one chunk, or affect the chunk group, e.g.:
+/// The chunk list&#39;s content registers itself as a Turbopack chunk and a chunk
+/// list.
+///
+/// Then, on updates, it merges updates from its chunks into a single update
+/// when possible. This is useful for keeping track of changes that affect more
+/// than one chunk, or affect the chunk group, e.g.:
 /// * moving a module from one chunk to another;
 /// * changing a chunk&#39;s path.
 </span><span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>ChunkListAsset {
-    chunking_context: DevChunkingContextVc,
-    entry_chunk: ChunkVc,
-    other_chunks: AssetsVc,
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EcmascriptDevChunkList {
+    <span class="kw">pub</span>(<span class="kw">super</span>) chunking_context: DevChunkingContextVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) entry_chunk: ChunkVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) chunks: AssetsVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) source: EcmascriptDevChunkListSource,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkListAssetVc {
-    <span class="doccomment">/// Creates a new [`ChunkListAsset`].
+</span><span class="kw">impl </span>EcmascriptDevChunkListVc {
+    <span class="doccomment">/// Creates a new [`EcmascriptDevChunkListVc`].
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
         chunking_context: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
+        chunks: AssetsVc,
+        source: Value&lt;EcmascriptDevChunkListSource&gt;,
     ) -&gt; <span class="self">Self </span>{
-        ChunkListAsset {
+        EcmascriptDevChunkList {
             chunking_context,
             entry_chunk,
-            other_chunks,
+            chunks,
+            source: source.into_value(),
         }
         .cell()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkListContentVc&gt; {
-        <span class="kw">let </span>this = <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ChunkListContentVc::new(
-            this.chunking_context.output_root(),
-            this.other_chunks,
-        ))
+    </span><span class="kw">fn </span>own_content(<span class="self">self</span>) -&gt; EcmascriptDevChunkListContentVc {
+        EcmascriptDevChunkListContentVc::new(<span class="self">self</span>)
     }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>EcmascriptDevChunkList {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="string">&quot;Ecmascript Dev Chunk List&quot;</span>.to_string()))
+    }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>modifier() -&gt; StringVc {
+    StringVc::cell(<span class="string">&quot;ecmascript dev chunk list&quot;</span>.to_string())
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -153,19 +214,27 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Asset <span class="kw">for </span>ChunkListAsset {
+</span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptDevChunkList {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>ident = <span class="self">self</span>.entry_chunk.ident().<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+
+        ident.add_modifier(modifier());
+
+        <span class="kw">for </span>chunk <span class="kw">in </span><span class="kw-2">&amp;*</span><span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">? </span>{
+            ident.add_modifier(chunk.ident().to_string());
+        }
+
+        <span class="kw">let </span>ident = AssetIdentVc::new(Value::new(ident));
         <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
-            <span class="self">self</span>.chunking_context
-                .chunk_list_path(<span class="self">self</span>.entry_chunk.ident()),
+            <span class="self">self</span>.chunking_context.chunk_path(ident, <span class="string">&quot;.js&quot;</span>),
         ))
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(
-            <span class="self">self</span>.other_chunks
+            <span class="self">self</span>.chunks
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
                 .map(|chunk| {
@@ -177,14 +246,35 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>content(self_vc: ChunkListAssetVc) -&gt; AssetContentVc {
-        self_vc.content().content()
+    </span><span class="kw">fn </span>content(self_vc: EcmascriptDevChunkListVc) -&gt; AssetContentVc {
+        self_vc.own_content().content()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>versioned_content(self_vc: ChunkListAssetVc) -&gt; VersionedContentVc {
-        self_vc.content().into()
+    </span><span class="kw">fn </span>versioned_content(self_vc: EcmascriptDevChunkListVc) -&gt; VersionedContentVc {
+        self_vc.own_content().into()
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+</span><span class="kw">struct </span>EcmascriptDevChunkListParams&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="doccomment">/// Path to the chunk list to register.
+    </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+    <span class="doccomment">/// All chunks that belong to the chunk list.
+    </span>chunks: Vec&lt;String&gt;,
+    <span class="doccomment">/// Where this chunk list is from.
+    </span>source: EcmascriptDevChunkListSource,
+}
+
+<span class="attr">#[derive(Debug, Clone, Copy, Ord, PartialOrd, Hash)]
+#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+</span><span class="kw">pub enum </span>EcmascriptDevChunkListSource {
+    <span class="doccomment">/// The chunk list is from a runtime entry.
+    </span>Entry,
+    <span class="doccomment">/// The chunk list is from a dynamic import.
+    </span>Dynamic,
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="turbopack_dev" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

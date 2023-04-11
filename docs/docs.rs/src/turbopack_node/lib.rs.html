@@ -288,6 +288,9 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -308,7 +311,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{
-        ChunkGroupVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
     },
     reference::primary_referenced_assets,
     source_map::GenerateSourceMapVc,
@@ -554,10 +557,13 @@
     main_entry: EvaluatableAssetVc,
     other_entries: EvaluatableAssetsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
-    <span class="kw">let </span>chunk_group = ChunkGroupVc::evaluated(chunking_context, main_entry, other_entries);
+    <span class="kw">let </span>chunks = chunking_context.evaluated_chunk_group(
+        main_entry.as_root_chunk(chunking_context),
+        other_entries.with_entry(main_entry),
+    );
     <span class="prelude-val">Ok</span>(NodeJsBootstrapAsset {
         path: chunking_context.chunk_path(main_entry.ident(), <span class="string">&quot;.js&quot;</span>),
-        chunk_group,
+        chunks,
     }
     .cell()
     .into())

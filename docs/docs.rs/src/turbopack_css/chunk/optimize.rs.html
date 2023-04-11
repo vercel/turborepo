@@ -131,7 +131,7 @@
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::chunk::{
     optimize::{ChunkOptimizer, ChunkOptimizerVc},
-    ChunkGroupVc, ChunkVc, ChunkingContextVc, ChunksVc,
+    ChunkVc, ChunkingContextVc, ChunksVc,
 };
 
 <span class="kw">use super</span>::{CssChunkPlaceablesVc, CssChunkVc};
@@ -150,7 +150,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ChunkOptimizer <span class="kw">for </span>CssChunkOptimizer {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, _chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+    </span><span class="kw">async fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
         <span class="comment">// The CSS optimizer works under the constraint that the order in which
         // CSS chunks are loaded must be preserved, as CSS rules
         // precedence is determined by the order in which they are
