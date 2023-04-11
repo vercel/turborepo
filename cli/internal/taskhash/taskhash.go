@@ -379,17 +379,30 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	}
 
 	var keyMatchers []string
-	framework := inference.InferFramework(packageTask.Pkg)
-	if framework != nil && framework.EnvMatcher != "" {
-		// log auto detected framework and env prefix
-		logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
-		keyMatchers = append(keyMatchers, framework.EnvMatcher)
+	var framework *inference.Framework
+	envVarContainingExcludePrefix := ""
+
+	// In strict environment variable mode we don't do framework env var inference.
+	// You must instead:
+	// - Specify all environment variables that you want available in your build environment.
+	// - Specify whether you want those considered for the hash or merely passed through.
+	//
+	// This allows advanced users to improve both cache hit ratio _and_ correctness with
+	// the tradeoff of increased configuration verbosity.
+	if packageTask.EnvMode != util.Strict {
+		envVarContainingExcludePrefix = "TURBO_CI_VENDOR_ENV_KEY"
+		framework := inference.InferFramework(packageTask.Pkg)
+		if framework != nil && framework.EnvMatcher != "" {
+			// log auto detected framework and env prefix
+			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
+			keyMatchers = append(keyMatchers, framework.EnvMatcher)
+		}
 	}
 
 	envVars, err := env.GetHashableEnvVars(
 		packageTask.TaskDefinition.EnvVarDependencies,
 		keyMatchers,
-		"TURBO_CI_VENDOR_ENV_KEY",
+		envVarContainingExcludePrefix,
 	)
 	if err != nil {
 		return "", err
