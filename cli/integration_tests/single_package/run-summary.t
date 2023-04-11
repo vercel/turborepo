@@ -62,7 +62,8 @@ Check
     "logFile",
     "outputs",
     "resolvedTaskDefinition",
-    "task"
+    "task",
+    "taskId"
   ]
 
   $ echo $TASK_SUMMARY | jq '.execution'
