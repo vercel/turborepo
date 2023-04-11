@@ -4,7 +4,8 @@ mod resolution;
 mod ser;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
+    iter,
     path::{Path, PathBuf},
 };
 
@@ -23,6 +24,8 @@ pub enum Error {
     PatchMissingOriginalLocator(Locator<'static>),
     #[error("unable to parse resolutions field")]
     Resolutions(#[from] resolution::Error),
+    #[error("unable to find entry for {0}")]
+    MissingPackageForLocator(Locator<'static>),
 }
 
 // We depend on BTree iteration being sorted
@@ -50,11 +53,11 @@ pub struct LockfileData {
     packages: Map<String, BerryPackage>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Metadata {
     version: u64,
-    cache_key: String,
+    cache_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Serialize, Default, Clone)]
@@ -192,6 +195,176 @@ impl<'a> BerryLockfile<'a> {
             .map(Path::new)
             .collect()
     }
+
+    fn locator_to_descriptors(&self) -> HashMap<&Locator<'a>, HashSet<&Descriptor<'a>>> {
+        let mut reverse_lookup: HashMap<&Locator, HashSet<&Descriptor>> =
+            HashMap::with_capacity(self.locator_package.len());
+
+        for (descriptor, locator) in &self.resolutions {
+            reverse_lookup
+                .entry(locator)
+                .or_default()
+                .insert(descriptor);
+        }
+
+        reverse_lookup
+    }
+
+    pub fn lockfile(&self) -> Result<LockfileData, Error> {
+        let mut packages: std::collections::BTreeMap<String, BerryPackage> = Map::new();
+        let mut metadata = self.data.metadata.clone();
+        let reverse_lookup = self.locator_to_descriptors();
+
+        for (locator, descriptors) in reverse_lookup {
+            let mut descriptors = descriptors
+                .into_iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>();
+            descriptors.sort();
+            let key = descriptors.join(", ");
+
+            let package = self
+                .locator_package
+                .get(locator)
+                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
+            packages.insert(key, (*package).clone());
+        }
+
+        // If there aren't any checksums in the lockfile, then cache key is omitted
+        if self
+            .resolutions
+            .values()
+            .map(|locator| {
+                self.locator_package
+                    .get(locator)
+                    .unwrap_or_else(|| panic!("No entry found for {locator}"))
+            })
+            .all(|pkg| pkg.checksum.is_none())
+        {
+            metadata.cache_key = None;
+        }
+
+        Ok(LockfileData { metadata, packages })
+    }
+
+    pub fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<BerryLockfile<'a>, Error> {
+        let reverse_lookup = self.locator_to_descriptors();
+
+        let mut resolutions = Map::new();
+        let mut patches = Map::new();
+
+        // Include all workspace packages and their references
+        for (locator, package) in &self.locator_package {
+            if workspace_packages
+                .iter()
+                .map(|s| s.as_str())
+                .chain(iter::once("."))
+                .any(|path| locator.is_workspace_path(path))
+            {
+                //  we need to all descriptors coming out the workspace
+                for (name, range) in package.dependencies.iter().flatten() {
+                    let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
+                    // we add this dependency to the resolutions
+                    let dep_locator = self.resolutions.get(&dependency).unwrap();
+                    resolutions.insert(dependency, locator.clone());
+                }
+
+                if let Some(descriptors) = reverse_lookup.get(locator) {
+                    for descriptor in descriptors {
+                        resolutions.insert((*descriptor).clone(), locator.clone());
+                    }
+                }
+            }
+        }
+
+        for key in packages {
+            let locator = Locator::try_from(key.as_str())?;
+
+            let package = self
+                .locator_package
+                .get(&locator)
+                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
+
+            for (name, range) in package.dependencies.iter().flatten() {
+                let dependency = self.resolve_dependency(&locator, &name, range.as_ref())?;
+                let dep_locator = self.resolutions.get(&dependency).unwrap();
+                resolutions.insert(dependency, locator.clone());
+            }
+
+            // these packages are included, we must figure out which descriptors are
+            // included we just lookup the package and calculate all of the
+            // descriptors it creates
+            if let Some(patch_locator) = self.patches.get(&locator) {
+                patches.insert(locator.as_owned(), patch_locator.clone());
+                let patch_descriptors = reverse_lookup
+                    .get(patch_locator)
+                    .unwrap_or_else(|| panic!("No descriptors found for {patch_locator}"));
+                for patch_descriptor in patch_descriptors {
+                    resolutions.insert((*patch_descriptor).clone(), patch_locator.clone());
+                }
+            }
+        }
+
+        for (primary, patch) in &self.patches {
+            let primary_descriptors = reverse_lookup.get(primary).unwrap();
+            let patch_descriptors = reverse_lookup.get(patch).unwrap();
+
+            // For each patch descriptor we extract the primary descriptor that each patch
+            // descriptor targets and check if that descriptor is present in the
+            // pruned map and add it if it is present
+            for patch_descriptor in patch_descriptors {
+                let version = patch_descriptor.primary_version().unwrap();
+                let primary_descriptor = Descriptor {
+                    ident: patch_descriptor.ident.clone(),
+                    range: version.into(),
+                };
+
+                if resolutions.contains_key(&primary_descriptor) {
+                    resolutions.insert((*patch_descriptor).clone(), patch.clone());
+                }
+            }
+        }
+
+        for descriptor in &self.extensions {
+            // TODO graceful
+            let locator = self.resolutions.get(descriptor).unwrap();
+            resolutions.insert(descriptor.clone(), locator.clone());
+        }
+
+        Ok(Self {
+            data: self.data,
+            resolutions,
+            // We rely on resolutions only containing the required locators
+            // for proper pruning.
+            locator_package: self.locator_package.clone(),
+            patches,
+            extensions: self.extensions.clone(),
+            overrides: self.overrides.clone(),
+        })
+    }
+
+    fn resolve_dependency(
+        &self,
+        locator: &Locator,
+        name: &str,
+        range: &str,
+    ) -> Result<Descriptor, Error> {
+        let mut dependency = Descriptor::new(name, range)?;
+
+        for (resolution, reference) in &self.overrides {
+            if let Some(override_dependency) =
+                resolution.reduce_dependency(reference, &dependency, locator)
+            {
+                dependency = override_dependency;
+            }
+        }
+
+        Ok(dependency)
+    }
 }
 
 impl<'a> Lockfile for BerryLockfile<'a> {
@@ -214,8 +387,8 @@ impl<'a> Lockfile for BerryLockfile<'a> {
             })
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        // TODO don't unwrap here
-        let mut dependency = Descriptor::new(name, version).unwrap();
+        let mut dependency = Descriptor::new(name, version)
+            .unwrap_or_else(|_| panic!("{name} is an invalid lockfile identifier"));
         for (resolution, reference) in &self.overrides {
             if let Some(override_dependency) =
                 resolution.reduce_dependency(reference, &dependency, workspace_locator)
@@ -243,9 +416,32 @@ impl<'a> Lockfile for BerryLockfile<'a> {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, &str>>, crate::Error> {
+    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+        let locator =
+            Locator::try_from(key).unwrap_or_else(|_| panic!("Was passed invalid locator: {key}"));
+        let package = self.locator_package.get(&locator);
+
+        if package.is_none() {
+            return Ok(None);
+        }
+
+        let package = package.unwrap();
+
+        let mut map = HashMap::new();
+        for (name, version) in package.dependencies.iter().flatten() {
+            let mut dependency = Descriptor::new(name, version.as_ref()).unwrap();
+            for (resolution, reference) in &self.overrides {
+                if let Some(override_dependency) =
+                    resolution.reduce_dependency(reference, &dependency, &locator)
+                {
+                    dependency = override_dependency;
+                    break;
+                }
+            }
+            map.insert(dependency.ident.to_string(), dependency.range.to_string());
+        }
         // For each dependency we need to check if there's an override
-        todo!()
+        Ok(Some(map))
     }
 }
 
@@ -290,7 +486,7 @@ mod test {
         let lockfile: LockfileData =
             serde_yaml::from_slice(include_bytes!("../../fixtures/berry.lock")).unwrap();
         assert_eq!(lockfile.metadata.version, 6);
-        assert_eq!(lockfile.metadata.cache_key, "8c0");
+        assert_eq!(lockfile.metadata.cache_key.as_deref(), Some("8c0"));
     }
 
     #[test]

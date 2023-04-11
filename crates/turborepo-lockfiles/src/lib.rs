@@ -28,7 +28,7 @@ pub trait Lockfile {
     ) -> Result<Option<Package>, Error>;
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error>;
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
 }
 
 // this should get replaced by petgraph in the future :)

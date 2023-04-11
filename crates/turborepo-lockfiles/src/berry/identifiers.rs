@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, ops::Index};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -119,6 +119,18 @@ impl<'a> Descriptor<'a> {
             .find(':')
             .map_or(&self.range, |colon_index| &self.range[colon_index + 1..])
     }
+
+    pub fn protocol(&self) -> Option<&str> {
+        self.range.find(':').map(|i| &self.range[0..i])
+    }
+
+    /// If the descriptor is a patch returns the version that the patch targets
+    pub fn primary_version(&self) -> Option<String> {
+        let Locator { reference, .. } = Locator::from_patch_reference(&self.range)?;
+        // This is always owned due to needing to replace '%3A' with ':' so
+        // we extract the owned string.
+        Some(reference.into_owned())
+    }
 }
 
 impl<'a> TryFrom<&'a str> for Locator<'a> {
@@ -144,6 +156,8 @@ impl<'a> fmt::Display for Locator<'a> {
     }
 }
 
+const WORKSPACE_PROTOCOL: &str = "workspace:";
+
 impl<'a> Locator<'a> {
     pub fn new(ident: &'a str, reference: &'a str) -> Result<Self, Error> {
         let ident = Ident::try_from(ident)?;
@@ -153,8 +167,30 @@ impl<'a> Locator<'a> {
         })
     }
 
+    fn from_patch_reference(patch_reference: &'a str) -> Option<Self> {
+        let caps = PATCH_REF.captures(patch_reference)?;
+        let capture_group = caps.get(1)?;
+        let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
+        // This might seem like a special case hack, but this is what yarn does
+        let mut decoded_reference = reference.replace("npm%3A", "npm:");
+        // Some older versions of yarn don't encode the npm protocol
+        if !decoded_reference.starts_with("npm:") {
+            decoded_reference.insert_str(0, "npm:");
+        }
+        Some(Locator {
+            ident,
+            reference: Cow::Owned(decoded_reference),
+        })
+    }
+
     pub fn is_patch_builtin(patch: &str) -> bool {
         patch.starts_with('~') || BUILTIN.is_match(patch)
+    }
+
+    pub fn is_workspace_path(&self, workspace_path: &str) -> bool {
+        // This is slightly awkward, but it allows us to avoid an allocation
+        self.reference.starts_with(WORKSPACE_PROTOCOL)
+            && &self.reference[WORKSPACE_PROTOCOL.len()..] == workspace_path
     }
 
     /// Converts a possibly borrowed Locator to one that must be owned
@@ -172,20 +208,8 @@ impl<'a> Locator<'a> {
             .map(|m| m.as_str())
     }
 
-    pub fn patched_locator(&self) -> Option<Locator<'static>> {
-        let caps = PATCH_REF.captures(&self.reference)?;
-        let capture_group = caps.get(1)?;
-        let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
-        // This might seem like a special case hack, but this is what yarn does
-        let mut decoded_reference = reference.replace("npm%3A", "npm:");
-        // Some older versions of yarn don't encode the npm protocol
-        if !decoded_reference.starts_with("npm:") {
-            decoded_reference.insert_str(0, "npm:");
-        }
-        Some(Locator {
-            ident: ident.into_owned(),
-            reference: Cow::Owned(decoded_reference),
-        })
+    pub fn patched_locator(&self) -> Option<Locator<'a>> {
+        Locator::from_patch_reference(&self.reference)
     }
 }
 
