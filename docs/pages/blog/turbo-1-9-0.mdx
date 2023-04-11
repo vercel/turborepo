@@ -1,6 +1,6 @@
 ---
 title: Turborepo 1.9
-date: 2023/04/10
+date: 2023/04/11
 description: Turborepo 1.9 focuses on improving observability for your task runs to better understand your caching behavior.
 tag: "web development"
 ogImage: /images/blog/turbo-1-9-0/twitter-card.png
@@ -13,7 +13,7 @@ import Badge from '../../components/Badge'
 import Date from "../../components/blog/Date";
 
 <Date>
-  Monday, April 10th, 2023
+  Monday, April 11th, 2023
 </Date>
 
 <Authors authors={[
@@ -30,13 +30,13 @@ import Date from "../../components/blog/Date";
 
 Turborepo 1.9 focuses on improving observability for your task runs to better understand your caching behavior:
 
-- [**Run Summaries**](#run-tasks-with-confidence): Use the `--summarize` flag to generate a summary of your task to compare against previous runs.
+- [**Run Summaries**](#view-and-compare-task-runs): Use the `--summarize` flag to generate a summary of your task to compare against previous runs.
 - [**Easier Starters**](#bring-your-own-starter): Use the `--example` flag with `npx create-turbo` to start from official Turborepo examples or custom repositories.
 - [**Strict Environments** <Badge>Experimental</Badge>](#strict-environments-experimental): Try enabling strict mode to restrict the environment variables your tasks have access to.
 
 Update today by running `npx @turbo/codemod migrate`.
 
-## Run tasks with confidence
+## View and compare task runs
 
 You can now produce a JSON summary of your task run using the `--summarize` flag:
 
@@ -44,7 +44,7 @@ You can now produce a JSON summary of your task run using the `--summarize` flag
 turbo build --summarize
 ```
 
-When this flag is enabled, Turborepo will generate a summary in `.turbo/runs/` that contains all the information necessary to understand how `turbo` interpreted your `turbo.json` and task run inputs.
+When this flag is enabled, Turborepo will generate a summary in `.turbo/runs/` that contains all the information necessary to understand how `turbo` interpreted your your task's configuration and code.
 
 ```bash
 Tasks:    3 successful, 3 total
@@ -70,21 +70,21 @@ In your terminal UI, choose your preferred package manager and `create-turbo` wi
 Additionally, you can use `create-turbo` with custom repository sources, allowing you to re-use your own custom starter or another starter from around the community:
 
 ```bash
-npx create-turbo -e https://github.com/your-community/turbo-starter
+npx create-turbo -e https://github.com/your-org/turbo-starter
 ```
 
 ## Strict Environments <Badge>Experimental</Badge>
 
 You can now use the `--experimental-env-mode=strict` flag to restrict the environment variables your tasks have access to. Your tasks will only be aware of the variables you explicitly state, creating a safer caching environment.
 
-In `strict` mode, Turborepo will pass all environment variables declared in:
+In `strict` mode, Turborepo will pass environment variables declared in:
 
-- `globalEnv` and `experimentalGlobalPassThroughEnv` for global configuration
+- `globalEnv` and `experimentalGlobalPassThroughEnv` to all tasks
 - `env` and `experimentalPassThroughEnv` for each task
 
 ```json
 {
-	// Available to all tasks
+  // Available to all tasks
   "experimentalGlobalPassThroughEnv": ["GLOBAL_VAR_1"],
 
   // Available to all tasks and invalidates caches
@@ -92,8 +92,7 @@ In `strict` mode, Turborepo will pass all environment variables declared in:
 
   "pipeline": {
     "build": {
-
-			// Only available to `build` task
+      // Only available to `build` tasks
       "experimentalPassThroughEnv": ["VAR_1"],
 
       // Available to `build` task and invalidates caches
@@ -103,9 +102,9 @@ In `strict` mode, Turborepo will pass all environment variables declared in:
 }
 ```
 
-In `strict` mode, this configuration will only expose four environment variables to your `build` task, helping you to catch missing variables earlier in the development process.
+In `strict` mode, this configuration will only expose four environment variables to your `build` tasks, helping you catch missing variables earlier in the development process.
 
-The `--experimental-env-mode` also supports `loose` and `infer`, `infer` being the default behavior of Turborepo today.
+`--experimental-env-mode` also supports `loose` and `infer`.
 
 Learn more in the [docs](/repo/docs/reference/command-line-reference#--experimental-env-mode).
 
