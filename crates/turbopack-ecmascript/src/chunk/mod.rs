@@ -18,8 +18,7 @@ use turbopack_core::{
     chunk::{
         availability_info::AvailabilityInfo,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContextVc,
-        ModuleIdsVc,
+        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkVc, ChunkingContextVc, ChunksVc, ModuleIdsVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -222,6 +221,22 @@ impl Chunk for EcmascriptChunk {
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context.into()
     }
+
+    #[turbo_tasks::function]
+    async fn parallel_chunks(&self) -> Result<ChunksVc> {
+        let content = ecmascript_chunk_content(
+            self.context,
+            self.main_entries,
+            self.omit_entries,
+            Value::new(self.availability_info),
+        )
+        .await?;
+        let mut chunks = Vec::new();
+        for chunk in content.chunks.iter() {
+            chunks.push(*chunk);
+        }
+        Ok(ChunksVc::cell(chunks))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -381,9 +396,6 @@ impl Asset for EcmascriptChunk {
         let mut references = Vec::new();
         for r in content.external_asset_references.iter() {
             references.push(*r);
-        }
-        for chunk in content.chunks.iter() {
-            references.push(ChunkReferenceVc::new_parallel(*chunk).into());
         }
         for entry in content.async_chunk_group_entries.iter() {
             references.push(ChunkGroupReferenceVc::new(this.context.into(), *entry).into());
