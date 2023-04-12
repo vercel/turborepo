@@ -108,7 +108,8 @@ type TaskCache struct {
 }
 
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
-// Returns true if successful.
+// Returns the cacheStatus, the timeSaved, and error values, so the consumer can understand
+// what happened in here.
 func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, int, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
