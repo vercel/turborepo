@@ -1,6 +1,6 @@
 import child_process from "child_process";
 import { checkCommit } from "../src/checkCommit";
-import { mockEnv } from "turbo-test-utils";
+import { mockEnv } from "@turbo/test-utils";
 
 describe("checkCommit()", () => {
   describe("on Vercel", () => {

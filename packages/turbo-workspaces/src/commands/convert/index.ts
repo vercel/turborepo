@@ -2,7 +2,7 @@ import { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 import inquirer from "inquirer";
 import { Logger } from "../../logger";
 import chalk from "chalk";
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import { directoryInfo } from "../../utils";
 import getWorkspaceDetails from "../../getWorkspaceDetails";
 import { PackageManager } from "../../types";
