@@ -18,7 +18,9 @@ type TaskCacheSummary struct {
 }
 
 // NewTaskCacheSummary decorates a cache.ItemStatus into a TaskCacheSummary
-// Importantly, it adds the
+// Importantly, it adds the derived keys of `source` and `status` based on
+// the local/remote booleans. It would be nice if these were just included
+// from upstream, but that is a more invasive change.
 func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
 	status := cache.CacheEventMiss
 	if itemStatus.Local || itemStatus.Remote {
